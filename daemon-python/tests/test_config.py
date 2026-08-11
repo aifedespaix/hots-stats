@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from src.config import ConfigError, default_replays_dir, load_config
+from src.config import ConfigError, config_exists, config_file_path, default_replays_dir, load_config, save_config
 
 
 @pytest.fixture(autouse=True)
@@ -86,3 +86,28 @@ def test_default_replays_dir_returns_none_when_absent(monkeypatch, tmp_path):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
     assert default_replays_dir() is None
+
+
+def test_config_exists_false_before_save_true_after(monkeypatch, tmp_path):
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
+
+    assert config_exists() is False
+
+    save_config("https://api.example.com", "hots_pat_abc", str(tmp_path))
+
+    assert config_exists() is True
+    saved = json.loads(config_file_path().read_text(encoding="utf-8"))
+    assert saved == {
+        "apiBaseUrl": "https://api.example.com",
+        "accessToken": "hots_pat_abc",
+        "replaysDir": str(tmp_path),
+    }
+
+
+def test_save_config_strips_trailing_slash_from_api_base_url(monkeypatch, tmp_path):
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
+
+    save_config("https://api.example.com/", "hots_pat_abc", str(tmp_path))
+
+    saved = json.loads(config_file_path().read_text(encoding="utf-8"))
+    assert saved["apiBaseUrl"] == "https://api.example.com"

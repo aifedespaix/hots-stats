@@ -92,3 +92,42 @@ def _safe_json(response: requests.Response) -> object:
         return response.json()
     except ValueError:
         return response.text
+
+
+# --- Lightweight, non-retrying helpers for the settings window -------------
+#
+# These back the live green/red status indicators in gui.py. Unlike
+# `ApiClient.post_replay` (used for real ingestion), they fail fast and
+# silently: a flaky connection while the user is mid-typing should just show
+# a red dot, not retry with backoff and block the UI.
+
+
+def ping_health(base_url: str, timeout: float = 3.0) -> bool:
+    """True iff `GET {base_url}/health` responds 200. Used to validate the
+    API Base URL field without needing a token."""
+    try:
+        response = requests.get(f"{base_url.rstrip('/')}/health", timeout=timeout)
+    except requests.RequestException:
+        return False
+    return response.status_code == 200
+
+
+def fetch_summary(base_url: str, access_token: str, timeout: float = 5.0) -> dict | None:
+    """Best-effort `GET {base_url}/ingest/summary` fetch, used to validate the
+    Access Token field and to show the "games recorded" stat. Returns None on
+    any failure (network error, timeout, invalid/expired token) — the caller
+    only uses this for UI feedback, never for the daemon's actual config."""
+    try:
+        response = requests.get(
+            f"{base_url.rstrip('/')}/ingest/summary",
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=timeout,
+        )
+    except requests.RequestException:
+        return None
+    if response.status_code != 200:
+        return None
+    try:
+        return response.json()
+    except ValueError:
+        return None
