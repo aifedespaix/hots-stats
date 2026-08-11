@@ -15,10 +15,27 @@ import datetime as dt
 import importlib
 import logging
 import re
+import sys
+import types
 from pathlib import Path
 from typing import Any
 
 import mpyq
+
+# `heroprotocol`'s `versions/__init__.py` still does `import imp` at module
+# scope -- solely to reach `imp.find_module`/`imp.load_module` inside its
+# `list_all()`/`latest()`/`build()` helpers, none of which we call (see
+# `_protocol_module` below, which imports a named submodule via `importlib`
+# instead). `imp` was removed from the stdlib in Python 3.12 (PEP 594), so on
+# 3.12+ that bare `import imp` blows up as soon as anything imports
+# `heroprotocol.versions` (or a submodule of it) -- even though nothing we do
+# ever calls into the code paths that need it. Stub it in `sys.modules` so
+# that import succeeds; the stub is never actually used.
+if "imp" not in sys.modules:
+    try:
+        import imp  # noqa: F401
+    except ModuleNotFoundError:
+        sys.modules["imp"] = types.ModuleType("imp")
 
 from . import constants
 from ._protocol_versions import KNOWN_PROTOCOL_BUILDS
