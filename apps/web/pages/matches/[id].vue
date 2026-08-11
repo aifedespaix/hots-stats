@@ -17,7 +17,7 @@ const talentTiers = [1, 4, 7, 10, 13, 16, 20] as const;
 
   <div v-else-if="data" class="space-y-8">
     <div>
-      <NuxtLink to="/matches" class="text-sm text-primary hover:underline">
+      <NuxtLink to="/matches" class="text-sm text-brand hover:underline">
         &larr; Retour à l'historique
       </NuxtLink>
       <h1 class="mt-2 font-heading text-2xl font-semibold">{{ data.match.mapName }}</h1>

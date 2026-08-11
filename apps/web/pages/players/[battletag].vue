@@ -38,7 +38,7 @@ function goToMatch(row: Record<string, unknown>) {
 
   <div v-else-if="data" class="space-y-8">
     <div>
-      <NuxtLink to="/players" class="text-sm text-primary hover:underline">&larr; Retour aux joueurs</NuxtLink>
+      <NuxtLink to="/players" class="text-sm text-brand hover:underline">&larr; Retour aux joueurs</NuxtLink>
       <h1 class="mt-2 font-heading text-2xl font-semibold font-mono">{{ data.player.battletag }}</h1>
     </div>
 
