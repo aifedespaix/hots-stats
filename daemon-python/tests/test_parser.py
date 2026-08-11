@@ -35,6 +35,15 @@ def test_build_protocol_raises_replay_parse_error_for_unsupported_build():
         _build_protocol({"m_version": {"m_baseBuild": 1}})
 
 
+def test_build_protocol_falls_back_to_newest_known_build_for_newer_replays():
+    # A replay recorded with a patch newer than anything `heroprotocol` has
+    # published a decoder for yet shouldn't hard-fail: fall back to the
+    # newest known build instead (see `_build_protocol`'s fallback comment).
+    newest_build = max(KNOWN_PROTOCOL_BUILDS)
+    module = _build_protocol({"m_version": {"m_baseBuild": newest_build + 1000}})
+    assert module.__name__ == f"heroprotocol.versions.protocol{newest_build:05d}"
+
+
 def test_slugify():
     assert _slugify("Li-Ming") == "li-ming"
     assert _slugify("Cursed Hollow") == "cursed-hollow"
