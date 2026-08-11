@@ -150,6 +150,26 @@ def _build_protocol(header: dict):
         ) from err
 
 
+_HERO_ATTRIBUTE_ID = 4002
+
+
+def _hero_attribute_code(attributes_events: dict, tracker_id: int) -> str | None:
+    """Resolves a player's hero via `replay.attributes.events` (attribute id
+    4002, scoped by tracker player id) -- the same source `hots-parser` reads
+    it from (`attributeevents.scopes[trackerId]['4002'][0].value`).
+
+    Deliberately *not* `m_playerList[i].m_hero` in `replay.details`: that
+    field holds the *localized* hero display name (e.g. "Fénix", "Aile de
+    mort" on a French client, "Lúcio" with its accent on some locales) rather
+    than the stable short code `HERO_DISPLAY_NAMES` is keyed by, so using it
+    directly makes every non-English replay fail hero resolution.
+    """
+    entries = attributes_events.get("scopes", {}).get(tracker_id, {}).get(_HERO_ATTRIBUTE_ID)
+    if not entries:
+        return None
+    return _s(entries[0]["value"])
+
+
 def _apply_score_event(tracker_events: list[dict], tracker_id_to_toon: dict[int, str], players: dict) -> None:
     for event in tracker_events:
         if event.get("_event") != "NNet.Replay.Tracker.SScoreResultEvent":
@@ -192,6 +212,7 @@ def parse_replay(path: Path) -> dict[str, Any]:
         details = protocol.decode_replay_details(archive.read_file("replay.details"))
         initdata = protocol.decode_replay_initdata(archive.read_file("replay.initData"))
         tracker_events = list(protocol.decode_replay_tracker_events(archive.read_file("replay.tracker.events")))
+        attributes_events = protocol.decode_replay_attributes_events(archive.read_file("replay.attributes.events"))
         battletags = _extract_battletags(archive, details["m_playerList"])
 
         return build_payload(
@@ -199,6 +220,7 @@ def parse_replay(path: Path) -> dict[str, Any]:
             details=details,
             initdata=initdata,
             tracker_events=tracker_events,
+            attributes_events=attributes_events,
             battletags=battletags,
             replay_hash=hash_replay_file(path),
         )
@@ -217,6 +239,7 @@ def build_payload(
     details: dict,
     initdata: dict,
     tracker_events: list[dict],
+    attributes_events: dict,
     battletags: dict[str, str],
     replay_hash: str,
 ) -> dict[str, Any]:
@@ -228,10 +251,29 @@ def build_payload(
     """
     player_list = details["m_playerList"]
 
+    # Built first (rather than inline in the `EndOfGameTalentChoices`/score
+    # handling below) because hero resolution also needs it: `attributes_events`
+    # is scoped by tracker player id, not by toon handle.
+    tracker_id_to_toon: dict[int, str] = {}
+    for event in tracker_events:
+        if event.get("_event") != "NNet.Replay.Tracker.SStatGameEvent":
+            continue
+        if _s(event["m_eventName"]) != "PlayerInit":
+            continue
+        if _s(event["m_stringData"][0]["m_value"]) == "Computer":
+            raise ReplayParseError("Replay includes a computer (AI) player; only real-player matches are ingested.")
+        tracker_id = event["m_intData"][0]["m_value"]
+        toon_handle = _s(event["m_stringData"][1]["m_value"])
+        tracker_id_to_toon[tracker_id] = toon_handle
+    toon_to_tracker_id = {toon: tracker_id for tracker_id, toon in tracker_id_to_toon.items()}
+
     players: dict[str, dict[str, Any]] = {}
     for player in player_list:
         toon_handle = _toon_handle(player["m_toon"])
-        hero_code = _s(player["m_hero"])
+        tracker_id = toon_to_tracker_id.get(toon_handle)
+        hero_code = _hero_attribute_code(attributes_events, tracker_id) if tracker_id is not None else None
+        if hero_code is None:
+            raise ReplayParseError(f"Could not determine hero for player {_s(player['m_name'])!r}.")
         hero_name = constants.HERO_DISPLAY_NAMES.get(hero_code)
         if hero_name is None:
             raise ReplayParseError(f"Unknown hero attribute code: {hero_code!r}")
@@ -253,7 +295,6 @@ def build_payload(
             "talents": [],
         }
 
-    tracker_id_to_toon: dict[int, str] = {}
     map_internal_name: str | None = None
     gates_open_loop = 0
 
@@ -262,14 +303,7 @@ def build_payload(
             continue
         event_name = _s(event["m_eventName"])
 
-        if event_name == "PlayerInit":
-            if _s(event["m_stringData"][0]["m_value"]) == "Computer":
-                raise ReplayParseError("Replay includes a computer (AI) player; only real-player matches are ingested.")
-            tracker_id = event["m_intData"][0]["m_value"]
-            toon_handle = _s(event["m_stringData"][1]["m_value"])
-            tracker_id_to_toon[tracker_id] = toon_handle
-
-        elif event_name == "GatesOpen":
+        if event_name == "GatesOpen":
             gates_open_loop = event["_gameloop"]
 
         elif event_name == "EndOfGameTalentChoices":

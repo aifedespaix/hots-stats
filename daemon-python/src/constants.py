@@ -55,8 +55,12 @@ MAP_DISPLAY_NAMES: dict[str, str] = {
     "AlteracPass": "Alterac Pass",
 }
 
-# `replay.details.m_playerList[i].m_hero` attribute code -> display hero name.
-# Slugified at parse time to match `heroes.id`.
+# `replay.attributes.events` attribute id 4002 ("Hero") value -> display hero
+# name. This is a stable, locale-independent short code (e.g. "Auri" for
+# Auriel) -- unlike `m_playerList[i].m_hero` in `replay.details`, which holds
+# the *localized* hero display name and must not be used as the lookup key
+# here (see `_hero_attribute_code` in parser.py). Slugified at parse time to
+# match `heroes.id`.
 HERO_DISPLAY_NAMES: dict[str, str] = {
     "Abat": "Abathur",
     "Alar": "Alarak",
