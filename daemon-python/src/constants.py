@@ -1,0 +1,164 @@
+"""Static lookup tables used to translate raw replay data into the API's payload shape.
+
+Values here are cross-checked against the community-maintained `hots-parser`
+project (https://github.com/ebshimizu/hots-parser, MIT) and its real-replay
+test fixtures, since the Blizzard `heroprotocol` package only exposes the
+binary encoding, not what game-specific event names/ids mean.
+"""
+
+from __future__ import annotations
+
+# Bump whenever parser.py's output shape changes in a way that should
+# override previously-ingested matches (see replay-upsert.service.ts).
+PARSER_VERSION = "1.0"
+
+# HotS talent tiers are always at these character levels, in pick order.
+TALENT_TIER_LEVELS = (1, 4, 7, 10, 13, 16, 20)
+
+# `m_ammId` from replay.initData -> our `gameMode` enum (packages/shared-types).
+# Confirmed against hots-parser's constants.js. AI/Practice lobbies are
+# intentionally excluded: they have no `gameMode` counterpart and are
+# rejected by the parser (see parser.ReplayParseError).
+GAME_MODE_BY_AMM_ID: dict[int, str] = {
+    50001: "QuickMatch",
+    50051: "UnrankedDraft",
+    50061: "HeroLeague",
+    50071: "TeamLeague",
+    50091: "StormLeague",
+    50031: "Brawl",
+}
+# ARAM has no confirmed dedicated ammId as of this writing; matches that
+# don't resolve to a known id above fall back to "Custom" rather than being
+# mis-tagged. Revisit with a real ARAM replay if this matters.
+DEFAULT_GAME_MODE = "Custom"
+
+# Internal map identifier (as reported by the EndOfGameTalentChoices tracker
+# event) -> display name. Slugified at parse time to match `maps.id`.
+MAP_DISPLAY_NAMES: dict[str, str] = {
+    "ControlPoints": "Sky Temple",
+    "TowersOfDoom": "Towers of Doom",
+    "HauntedMines": "Haunted Mines",
+    "BattlefieldOfEternity": "Battlefield of Eternity",
+    "BlackheartsBay": "Blackheart's Bay",
+    "CursedHollow": "Cursed Hollow",
+    "DragonShire": "Dragon Shire",
+    "HauntedWoods": "Garden of Terror",
+    "Shrines": "Infernal Shrines",
+    "Crypts": "Tomb of the Spider Queen",
+    "Volskaya": "Volskaya Foundry",
+    "Warhead Junction": "Warhead Junction",
+    "BraxisHoldout": "Braxis Holdout",
+    "Hanamura": "Hanamura Temple",
+    "AlteracPass": "Alterac Pass",
+}
+
+# `replay.details.m_playerList[i].m_hero` attribute code -> display hero name.
+# Slugified at parse time to match `heroes.id`.
+HERO_DISPLAY_NAMES: dict[str, str] = {
+    "Abat": "Abathur",
+    "Alar": "Alarak",
+    "Alex": "Alexstrasza",
+    "HANA": "Ana",
+    "Andu": "Anduin",
+    "Anub": "Anub'arak",
+    "Arts": "Artanis",
+    "Arth": "Arthas",
+    "Auri": "Auriel",
+    "Azmo": "Azmodan",
+    "Fire": "Blaze",
+    "Faer": "Brightwing",
+    "Amaz": "Cassia",
+    "Chen": "Chen",
+    "CCho": "Cho",
+    "Chro": "Chromie",
+    "DEAT": "Deathwing",
+    "DECK": "Deckard",
+    "Deha": "Dehaka",
+    "Diab": "Diablo",
+    "DVA0": "D.Va",
+    "L90E": "E.T.C.",
+    "Fals": "Falstad",
+    "FENX": "Fenix",
+    "Gall": "Gall",
+    "Garr": "Garrosh",
+    "Tink": "Gazlowe",
+    "Genj": "Genji",
+    "Genn": "Greymane",
+    "Guld": "Gul'dan",
+    "Hanz": "Hanzo",
+    "HOGG": "Hogger",
+    "Illi": "Illidan",
+    "IMPE": "Imperius",
+    "Jain": "Jaina",
+    "Crus": "Johanna",
+    "Junk": "Junkrat",
+    "Kael": "Kael'thas",
+    "KelT": "Kel'Thuzad",
+    "Kerr": "Kerrigan",
+    "Monk": "Kharazim",
+    "Leor": "Leoric",
+    "LiLi": "Li Li",
+    "Wiza": "Li-Ming",
+    "Medi": "Lt. Morales",
+    "Luci": "Lucio",
+    "Drya": "Lunara",
+    "Maie": "Maiev",
+    "Malf": "Malfurion",
+    "MalG": "Mal'Ganis",
+    "MALT": "Malthael",
+    "Mdvh": "Medivh",
+    "HMEI": "Mei",
+    "MEPH": "Mephisto",
+    "Mura": "Muradin",
+    "Murk": "Murky",
+    "Witc": "Nazeebo",
+    "Nova": "Nova",
+    "ORPH": "Orphea",
+    "Prob": "Probius",
+    "NXHU": "Qhira",
+    "Ragn": "Ragnaros",
+    "Rayn": "Raynor",
+    "Rehg": "Rehgar",
+    "Rexx": "Rexxar",
+    "Samu": "Samuro",
+    "Sgth": "Sgt. Hammer",
+    "Barb": "Sonya",
+    "Stit": "Stitches",
+    "STUK": "Stukov",
+    "Sylv": "Sylvanas",
+    "Tass": "Tassadar",
+    "Butc": "The Butcher",
+    "Lost": "The Lost Vikings",
+    "Thra": "Thrall",
+    "Tra0": "Tracer",
+    "Tych": "Tychus",
+    "Tyrl": "Tyrael",
+    "Tyrd": "Tyrande",
+    "Uthe": "Uther",
+    "VALE": "Valeera",
+    "Demo": "Valla",
+    "Vari": "Varian",
+    "Necr": "Xul",
+    "WHIT": "Whitemane",
+    "YREL": "Yrel",
+    "Zaga": "Zagara",
+    "Zary": "Zarya",
+    "Zera": "Zeratul",
+    "ZULJ": "Zul'jin",
+}
+
+# NNet.Replay.Tracker.SScoreResultEvent m_instanceList[i].m_name -> our
+# ReplayPlayer field name. Any stat name not listed here is ignored.
+SCORE_FIELD_BY_STAT_NAME: dict[str, str] = {
+    "SoloKill": "kills",
+    "Deaths": "deaths",
+    "Assists": "assists",
+    "HeroDamage": "heroDamage",
+    "SiegeDamage": "siegeDamage",
+    "Healing": "healing",
+    "SelfHealing": "selfHealing",
+    "DamageTaken": "damageTaken",
+    "ExperienceContribution": "experienceContribution",
+}
+
+REQUIRED_SCORE_FIELDS = tuple(SCORE_FIELD_BY_STAT_NAME.values())

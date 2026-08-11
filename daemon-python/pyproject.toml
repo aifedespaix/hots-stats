@@ -1,0 +1,18 @@
+[project]
+name = "hots-analytics-daemon"
+version = "1.0.0"
+description = "Windows client that watches for new HotS replays and uploads parsed stats to the HotS Analytics API."
+requires-python = ">=3.11"
+dependencies = [
+    "heroprotocol>=2.55",
+    "watchdog>=4.0",
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

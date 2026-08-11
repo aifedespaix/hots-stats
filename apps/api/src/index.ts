@@ -4,6 +4,7 @@ import { logger } from "hono/logger";
 import { env } from "./lib/env";
 import { authRoute } from "./routes/auth";
 import { healthRoute } from "./routes/health";
+import { ingestRoute } from "./routes/ingest";
 import { tokensRoute } from "./routes/tokens";
 
 const app = new Hono();
@@ -20,6 +21,7 @@ app.use(
 app.route("/health", healthRoute);
 app.route("/auth", authRoute);
 app.route("/tokens", tokensRoute);
+app.route("/ingest", ingestRoute);
 
 export default {
   port: env.PORT,

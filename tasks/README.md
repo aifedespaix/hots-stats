@@ -14,17 +14,24 @@ rappelle donc le contexte nécessaire plutôt que de supposer une continuité.
   `claude/hots-analytics-app-6qkjor`.
 - **Epic 2 — Authentification & Comptes** : Google Auth, Personal Access
   Tokens, page Settings, middleware Bearer pour l'ingestion.
+- **Epic 3 — Daemon Python & pipeline d'ingestion** : route `POST /ingest`
+  (Hono, protégée par PAT, upsert par `replayHash`/`parserVersion` dans
+  `apps/api/src/services/replay-upsert.service.ts`), et daemon
+  `daemon-python/` (watcher, parser `heroprotocol`, hasher SHA-256, client
+  API avec retries, config via env/`config.json`). Voir
+  `daemon-python/README.md` pour l'usage. Notes pour la suite : le mapping
+  `m_ammId` -> `ARAM` n'est pas confirmé (fallback `"Custom"`), et
+  `talentId`/`talentName` réutilisent le même identifiant interne brut faute
+  d'une table de traduction des talents — à affiner si besoin en Epic 6.
 
 ## À faire, dans cet ordre
 
-1. [`epic-3-daemon-ingestion.md`](./epic-3-daemon-ingestion.md) — Daemon
-   Python & pipeline d'ingestion (upsert des replays).
-2. [`epic-4-daemon-cicd.md`](./epic-4-daemon-cicd.md) — Build CI/CD du
+1. [`epic-4-daemon-cicd.md`](./epic-4-daemon-cicd.md) — Build CI/CD du
    daemon en `.exe` Windows (dépend de l'Epic 3).
-3. [`epic-5-web-core.md`](./epic-5-web-core.md) — Dashboard, Historique des
+2. [`epic-5-web-core.md`](./epic-5-web-core.md) — Dashboard, Historique des
    parties, Détail d'une partie (dépend des Epics 2 et 3 pour avoir de la
    donnée réelle à afficher).
-4. [`epic-6-web-analytics.md`](./epic-6-web-analytics.md) — Analytics Héros
+3. [`epic-6-web-analytics.md`](./epic-6-web-analytics.md) — Analytics Héros
    & Talents, Radar des Joueurs, Profil joueur + page publique SSR (dépend
    de l'Epic 5).
 

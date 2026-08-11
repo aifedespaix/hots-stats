@@ -18,3 +18,5 @@ daemon-python/__pycache__/
 daemon-python/*.spec
 daemon-python/build/
 daemon-python/dist/
+daemon-python/**/*.egg-info/
+daemon-python/.pytest_cache/
