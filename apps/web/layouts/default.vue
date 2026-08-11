@@ -17,6 +17,7 @@ const navItems: NavItem[] = [
   { to: "/matches", label: "Historique", icon: "i-heroicons-clock" },
   { to: "/heroes", label: "Héros", icon: "i-heroicons-fire" },
   { to: "/players", label: "Joueurs", icon: "i-heroicons-user-group" },
+  { to: "/friends", label: "Amis", icon: "i-heroicons-users" },
   { to: "/settings", label: "Paramètres", icon: "i-heroicons-cog-6-tooth" },
 ];
 

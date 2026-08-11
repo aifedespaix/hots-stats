@@ -1,5 +1,5 @@
 import { db, heroes, matchPlayers, matches, talentPicks } from "@hots-stats/db";
-import type { GameMode, TalentTierStats } from "@hots-stats/shared-types";
+import type { GameMode, HeroStatsScope, TalentTierStats } from "@hots-stats/shared-types";
 import { and, eq, sql } from "drizzle-orm";
 
 export interface HeroStatsRow {
@@ -19,7 +19,12 @@ export interface HeroStatsRow {
  * Kill participation needs each match's team total kills, so we aggregate
  * per (match, team) first and join back onto the connected user's rows.
  */
-async function heroStatsQuery(userId: string, heroId?: string, mode?: GameMode) {
+async function heroStatsQuery(
+  userId: string,
+  heroId?: string,
+  mode?: GameMode,
+  scope: HeroStatsScope = "personal",
+) {
   const teamKills = db.$with("team_kills").as(
     db
       .select({
@@ -31,7 +36,7 @@ async function heroStatsQuery(userId: string, heroId?: string, mode?: GameMode) 
       .groupBy(matchPlayers.matchId, matchPlayers.team),
   );
 
-  const conditions = [eq(matchPlayers.userId, userId)];
+  const conditions = scope === "personal" ? [eq(matchPlayers.userId, userId)] : [];
   if (heroId) conditions.push(eq(matchPlayers.heroId, heroId));
   if (mode) conditions.push(eq(matches.gameMode, mode));
 
@@ -61,16 +66,24 @@ async function heroStatsQuery(userId: string, heroId?: string, mode?: GameMode) 
     .groupBy(matchPlayers.heroId, heroes.name, heroes.role);
 }
 
-export async function getHeroSummaries(userId: string, mode?: GameMode): Promise<HeroStatsRow[]> {
-  const rows = await heroStatsQuery(userId, undefined, mode);
+export async function getHeroSummaries(
+  userId: string,
+  mode?: GameMode,
+  scope: HeroStatsScope = "personal",
+): Promise<HeroStatsRow[]> {
+  const rows = await heroStatsQuery(userId, undefined, mode, scope);
   return rows.map((row) => ({
     ...row,
     winrate: row.gamesPlayed > 0 ? row.wins / row.gamesPlayed : 0,
   }));
 }
 
-export async function getHeroSummary(userId: string, heroId: string): Promise<HeroStatsRow | null> {
-  const rows = await heroStatsQuery(userId, heroId);
+export async function getHeroSummary(
+  userId: string,
+  heroId: string,
+  scope: HeroStatsScope = "personal",
+): Promise<HeroStatsRow | null> {
+  const rows = await heroStatsQuery(userId, heroId, undefined, scope);
   const row = rows[0];
   if (!row) return null;
   return { ...row, winrate: row.gamesPlayed > 0 ? row.wins / row.gamesPlayed : 0 };

@@ -22,6 +22,7 @@ const { sortKey, sortDir, onSort } = useSortState<SortableColumn>("gamesTogether
 
 const mode = ref<GameMode | "">("");
 const search = ref("");
+const config = useRuntimeConfig();
 
 const query = computed(() => ({
   sortBy: sortKey.value,
@@ -29,7 +30,24 @@ const query = computed(() => ({
   ...(mode.value ? { mode: mode.value } : {}),
 }));
 
-const { data } = await useApiFetch<PlayerListResponse>("/players", { query });
+const { data, refresh } = await useApiFetch<PlayerListResponse>("/players", { query });
+
+const sendingIds = reactive<Record<string, boolean>>({});
+
+async function addFriend(accountUserId: string) {
+  sendingIds[accountUserId] = true;
+  try {
+    await $fetch("/friends/requests", {
+      method: "POST",
+      baseURL: config.public.apiBase,
+      credentials: "include",
+      body: { userId: accountUserId },
+    });
+    await refresh();
+  } finally {
+    sendingIds[accountUserId] = false;
+  }
+}
 
 const modeOptions = [{ value: "" as const, label: "Tous les modes" }, ...gameModeOptions()];
 
@@ -59,6 +77,7 @@ const columns = [
   { key: "gamesAsOpponent", label: "Adversaire", numeric: true, sortable: true },
   { key: "wins", label: "Victoires", numeric: true, sortable: true },
   { key: "losses", label: "Défaites", numeric: true, sortable: true },
+  { key: "account", label: "Compte" },
 ];
 
 function goToPlayer(row: Record<string, unknown>) {
@@ -100,6 +119,39 @@ function goToPlayer(row: Record<string, unknown>) {
       </template>
       <template #cell-losses="{ row }">
         <span class="text-danger">{{ row.losses }}</span>
+      </template>
+      <template #cell-account="{ row }">
+        <NuxtLink
+          v-if="row.friendshipStatus === 'friends'"
+          :to="`/friends/${row.accountUserId}`"
+          class="inline-flex items-center gap-1 text-xs font-medium text-success"
+          @click.stop
+        >
+          <UIcon name="i-heroicons-check-badge" class="h-4 w-4" />
+          Ami
+        </NuxtLink>
+        <span v-else-if="row.friendshipStatus === 'pending_outgoing'" class="text-xs text-muted">
+          Demande envoyée
+        </span>
+        <NuxtLink
+          v-else-if="row.friendshipStatus === 'pending_incoming'"
+          to="/friends"
+          class="text-xs font-medium text-brand"
+          @click.stop
+        >
+          À répondre
+        </NuxtLink>
+        <UButton
+          v-else-if="row.accountUserId"
+          size="2xs"
+          variant="soft"
+          icon="i-heroicons-user-plus"
+          :loading="sendingIds[row.accountUserId as string]"
+          @click.stop="addFriend(row.accountUserId as string)"
+        >
+          Ajouter
+        </UButton>
+        <span v-else class="text-xs text-muted">-</span>
       </template>
     </UiDataTable>
 

@@ -6,8 +6,9 @@ definePageMeta({ middleware: "auth" });
 
 const route = useRoute();
 const battletag = route.params.battletag as string;
+const config = useRuntimeConfig();
 
-const { data, error } = await useApiFetch<PlayerDetailResponse>(
+const { data, error, refresh } = await useApiFetch<PlayerDetailResponse>(
   `/players/${encodeURIComponent(battletag)}`,
 );
 
@@ -41,24 +42,29 @@ const columns = [
   { key: "result", label: "Résultat" },
 ];
 
-// heroBreakdown is already sorted by gamesPlayed desc by the API.
-const topHeroPlayed = computed(() => data.value?.heroBreakdown[0] ?? null);
+const topHeroes = computed(() => data.value?.heroBreakdown ?? []);
 
-const topHeroWon = computed(() => {
-  const list = data.value?.heroBreakdown ?? [];
-  return list.reduce<(typeof list)[number] | null>(
-    (best, hero) => (!best || hero.wins > best.wins ? hero : best),
-    null,
-  );
-});
+const sendingRequest = ref(false);
+const requestError = ref("");
 
-const topHeroLost = computed(() => {
-  const list = data.value?.heroBreakdown ?? [];
-  return list.reduce<(typeof list)[number] | null>(
-    (best, hero) => (!best || hero.losses > best.losses ? hero : best),
-    null,
-  );
-});
+async function addFriend() {
+  if (!data.value?.player.accountUserId) return;
+  sendingRequest.value = true;
+  requestError.value = "";
+  try {
+    await $fetch("/friends/requests", {
+      method: "POST",
+      baseURL: config.public.apiBase,
+      credentials: "include",
+      body: { userId: data.value.player.accountUserId },
+    });
+    await refresh();
+  } catch (err) {
+    requestError.value = (err as { data?: { error?: string } })?.data?.error ?? "Erreur lors de l'envoi";
+  } finally {
+    sendingRequest.value = false;
+  }
+}
 
 function goToMatch(row: Record<string, unknown>) {
   navigateTo(`/matches/${row.id}`);
@@ -73,7 +79,41 @@ function goToMatch(row: Record<string, unknown>) {
   <div v-else-if="data" class="space-y-8">
     <div>
       <NuxtLink to="/players" class="text-sm text-brand hover:underline">&larr; Retour aux joueurs</NuxtLink>
-      <h1 class="mt-2 break-all font-heading text-2xl font-semibold font-mono">{{ data.player.battletag }}</h1>
+      <div class="mt-2 flex flex-wrap items-center gap-3">
+        <h1 class="break-all font-heading text-2xl font-semibold font-mono">{{ data.player.battletag }}</h1>
+
+        <NuxtLink
+          v-if="data.player.friendshipStatus === 'friends'"
+          :to="`/friends/${data.player.accountUserId}`"
+          class="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-3 py-1 text-xs font-medium text-success"
+        >
+          <UIcon name="i-heroicons-check-badge" class="h-4 w-4" />
+          Ami · voir ses stats
+        </NuxtLink>
+        <span
+          v-else-if="data.player.friendshipStatus === 'pending_outgoing'"
+          class="inline-flex items-center gap-1.5 rounded-full bg-background px-3 py-1 text-xs text-muted"
+        >
+          Demande envoyée
+        </span>
+        <NuxtLink
+          v-else-if="data.player.friendshipStatus === 'pending_incoming'"
+          to="/friends"
+          class="inline-flex items-center gap-1.5 rounded-full bg-brand/15 px-3 py-1 text-xs font-medium text-brand"
+        >
+          T'a demandé en ami · répondre
+        </NuxtLink>
+        <UButton
+          v-else-if="data.player.accountUserId"
+          size="xs"
+          icon="i-heroicons-user-plus"
+          :loading="sendingRequest"
+          @click="addFriend"
+        >
+          Ajouter en ami
+        </UButton>
+      </div>
+      <p v-if="requestError" class="mt-2 text-sm text-danger">{{ requestError }}</p>
     </div>
 
     <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -95,24 +135,9 @@ function goToMatch(row: Record<string, unknown>) {
       />
     </div>
 
-    <div v-if="topHeroPlayed" class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-      <UiStatTile
-        label="Top héros joué"
-        :value="topHeroPlayed.heroName"
-        :sublabel="`${topHeroPlayed.gamesPlayed} parties`"
-      />
-      <UiStatTile
-        label="Top héros gagné"
-        :value="topHeroWon && topHeroWon.wins > 0 ? topHeroWon.heroName : '-'"
-        :sublabel="topHeroWon && topHeroWon.wins > 0 ? `${topHeroWon.wins} victoires` : undefined"
-        tone="success"
-      />
-      <UiStatTile
-        label="Top héros perdu"
-        :value="topHeroLost && topHeroLost.losses > 0 ? topHeroLost.heroName : '-'"
-        :sublabel="topHeroLost && topHeroLost.losses > 0 ? `${topHeroLost.losses} défaites` : undefined"
-        tone="danger"
-      />
+    <div v-if="topHeroes.length > 0">
+      <h2 class="mb-3 font-heading text-lg font-medium">Top héros face à ce joueur</h2>
+      <UiTopHeroesTop3 :heroes="topHeroes" />
     </div>
 
     <div>

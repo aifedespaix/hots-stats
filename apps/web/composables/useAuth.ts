@@ -1,3 +1,5 @@
+import type { HeroStatsScope } from "@hots-stats/shared-types";
+
 export interface AuthUser {
   id: string;
   email: string;
@@ -5,6 +7,7 @@ export interface AuthUser {
   avatarUrl: string | null;
   battletag: string | null;
   publicHandle: string | null;
+  heroStatsScope: HeroStatsScope;
 }
 
 export function useAuthUser() {
