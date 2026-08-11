@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@hots-stats/shared-types": "workspace:*",
+    "@nuxt/fonts": "^0.14.0",
     "@nuxt/ui": "^2.20.0",
     "nuxt": "^3.15.0",
     "vue": "^3.5.13",

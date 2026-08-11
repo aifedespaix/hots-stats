@@ -40,18 +40,29 @@ rappelle donc le contexte nécessaire plutôt que de supposer une continuité.
   de s'y fier pour une vraie release — c'est le jalon testable défini dans
   le brief de l'Epic.
 
+- **Epic 5 — Cœur applicatif Web** : design system finalisé (polices Space
+  Grotesk/Outfit/JetBrains Mono via `@nuxt/fonts`, composants
+  `components/ui/` — `StatTile`, `DataTable`, `ThemeSwitcher` —, layout
+  applicatif avec sidebar de navigation dans `layouts/default.vue`, layout
+  `blank.vue` dédié à `/login`). Côté API : `apps/api/src/routes/matches.ts`
+  (`GET /matches` paginé + filtres mode/héros/carte/période/joueur croisé,
+  `GET /matches/:id` détail complet par équipe, `GET /matches/filters` pour
+  peupler les dropdowns avec les héros/cartes réellement joués par
+  l'utilisateur) et `apps/api/src/routes/stats.ts` (`GET /stats/summary`).
+  Toutes ces routes sont scopées à l'utilisateur connecté (session cookie).
+  Côté web : `pages/index.vue` (Dashboard), `pages/matches/index.vue`
+  (Historique filtrable + paginé), `pages/matches/[id].vue` (détail :
+  compositions d'équipe, scoreboard, talents par palier). Testé
+  manuellement en local (Postgres + données de seed) via captures d'écran
+  Playwright dans les 3 thèmes. Note pour la suite : pas de timeline
+  temporelle de partie (Epic 3 n'extrait pas encore ces events) — à
+  ajouter en Epic 6 si les données deviennent disponibles.
+
 ## À faire, dans cet ordre
 
-1. [`epic-5-web-core.md`](./epic-5-web-core.md) — Dashboard, Historique des
-   parties, Détail d'une partie (dépend des Epics 2 et 3 pour avoir de la
-   donnée réelle à afficher).
-2. [`epic-6-web-analytics.md`](./epic-6-web-analytics.md) — Analytics Héros
+1. [`epic-6-web-analytics.md`](./epic-6-web-analytics.md) — Analytics Héros
    & Talents, Radar des Joueurs, Profil joueur + page publique SSR (dépend
    de l'Epic 5).
-
-Chaque brief est indépendant dans sa rédaction, mais l'ordre ci-dessus est
-la dépendance logique réelle : ne pas lancer l'Epic 5/6 avant d'avoir de la
-vraie donnée en base (Epic 2 + 3).
 
 Une fois un Epic terminé dans sa session, mettre à jour ce README (cocher
 dans "Déjà fait") avant de lancer le suivant.

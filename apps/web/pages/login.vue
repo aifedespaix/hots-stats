@@ -1,4 +1,6 @@
 <script setup lang="ts">
+definePageMeta({ layout: "blank" });
+
 const { data } = await useAuthUser();
 if (data.value?.user) {
   await navigateTo("/");
