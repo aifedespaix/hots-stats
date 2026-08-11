@@ -67,6 +67,7 @@ jobs:
           --assume-yes-for-downloads
           --enable-plugin=tk-inter
           --windows-console-mode=attach
+          --windows-icon-from-ico=assets/app-icon.ico
           --include-package=heroprotocol
           --include-package=watchdog
           --include-package=pystray
@@ -95,6 +96,13 @@ jobs:
         # updates. --assume-yes-for-downloads lets Nuitka fetch it
         # non-interactively in CI.
         #
+        # --windows-icon-from-ico=assets/app-icon.ico: the web app's favicon
+        # (apps/web/public/favicon.svg, rasterized -- see daemon-python/assets/
+        # for how it was generated), so the .exe shows the same mark in
+        # Explorer/the taskbar instead of Nuitka's default icon. The
+        # pystray tray icon uses a separate copy of the same mark, embedded
+        # in src/_icon_data.py so it survives --onefile packaging.
+        #
         # --enable-plugin=tk-inter: bundles Tcl/Tk so the settings window
         # (src/gui.py) runs standalone. --windows-console-mode=attach: this
         # app is both a double-clicked tray app (no console, so `attach`
@@ -122,6 +130,31 @@ jobs:
       - name: Smoke test the executable
         shell: bash
         run: ./dist/hots-analytics-daemon-v${{ steps.version.outputs.version }}.exe --help
+
+      # Opt-in Authenticode signing: no-ops (via the `if:`) until the repo
+      # has a WINDOWS_CODESIGN_PFX_BASE64 secret, so this is safe to leave
+      # in place unsigned. Once you have a code-signing certificate (.pfx):
+      #   1. Base64-encode it: `[Convert]::ToBase64String([IO.File]::ReadAllBytes("cert.pfx"))`
+      #      (PowerShell) and save the result as the repo secret
+      #      WINDOWS_CODESIGN_PFX_BASE64.
+      #   2. Save the .pfx's password as WINDOWS_CODESIGN_PASSWORD.
+      # Signing alone stops Windows SmartScreen from showing "Unknown
+      # publisher" and gives it a real, verifiable identity; it does *not*
+      # immediately clear the separate "Windows protected your PC" warning
+      # for a brand-new binary -- that's reputation-based and builds up over
+      # real-world downloads of files signed with the same certificate. An
+      # EV certificate (hardware-token-backed, pricier) gets instant
+      # SmartScreen trust; a cheaper OV certificate (or a cloud-HSM signing
+      # service like Azure Trusted Signing / SignPath, which sidestep the
+      # hardware-token requirement) still helps and accrues reputation
+      # faster than staying unsigned.
+      - name: Code-sign the executable
+        if: ${{ secrets.WINDOWS_CODESIGN_PFX_BASE64 != '' }}
+        uses: dlemstra/code-sign-action@v1
+        with:
+          certificate: ${{ secrets.WINDOWS_CODESIGN_PFX_BASE64 }}
+          password: ${{ secrets.WINDOWS_CODESIGN_PASSWORD }}
+          folder: daemon-python/dist
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

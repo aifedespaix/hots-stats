@@ -150,18 +150,39 @@ HERO_DISPLAY_NAMES: dict[str, str] = {
     "ZULJ": "Zul'jin",
 }
 
-# NNet.Replay.Tracker.SScoreResultEvent m_instanceList[i].m_name -> our
-# ReplayPlayer field name. Any stat name not listed here is ignored.
-SCORE_FIELD_BY_STAT_NAME: dict[str, str] = {
+# NNet.Replay.Tracker.SScoreResultEvent m_instanceList[i].m_name values whose
+# desired API field name doesn't already match `stat_field_name`'s generic
+# `name[0].lower() + name[1:]` conversion (only "SoloKill" -> "kills" as of
+# this writing). Every *other* stat name the tracker reports (MinionKills,
+# Level, MercCampCaptures, TeamTakedowns, ...) is still forwarded, generically
+# camelCased, in each player's payload -- see `_apply_score_event` in
+# parser.py. That's what lets the API start reading a stat it didn't use
+# before without needing a daemon rebuild: the daemon is already sending it,
+# the field was just being dropped (zod strips unrecognized keys) until the
+# API's schema/storage catches up. A rebuild is only needed when
+# `heroprotocol` itself can't decode a replay build, which this can't fix.
+STAT_FIELD_RENAMES: dict[str, str] = {
     "SoloKill": "kills",
-    "Deaths": "deaths",
-    "Assists": "assists",
-    "HeroDamage": "heroDamage",
-    "SiegeDamage": "siegeDamage",
-    "Healing": "healing",
-    "SelfHealing": "selfHealing",
-    "DamageTaken": "damageTaken",
-    "ExperienceContribution": "experienceContribution",
 }
 
-REQUIRED_SCORE_FIELDS = tuple(SCORE_FIELD_BY_STAT_NAME.values())
+REQUIRED_SCORE_FIELDS = (
+    "kills",
+    "deaths",
+    "assists",
+    "heroDamage",
+    "siegeDamage",
+    "healing",
+    "selfHealing",
+    "damageTaken",
+    "experienceContribution",
+)
+
+
+def stat_field_name(raw_name: str) -> str:
+    """Tracker stat name (e.g. "HeroDamage") -> API payload field name (e.g.
+    "heroDamage"), applying `STAT_FIELD_RENAMES` first for the few names that
+    don't already fit the generic camelCase conversion."""
+    renamed = STAT_FIELD_RENAMES.get(raw_name)
+    if renamed is not None:
+        return renamed
+    return raw_name[:1].lower() + raw_name[1:] if raw_name else raw_name
