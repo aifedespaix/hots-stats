@@ -9,6 +9,19 @@ interface PatSummary {
   revokedAt: string | null;
 }
 
+useSeoMeta({
+  title: "Paramètres",
+  description:
+    "Gère ton BattleTag, ton profil public et tes tokens d'accès personnels pour HotS Analytics.",
+  ogTitle: "Paramètres - HotS Analytics",
+  ogDescription:
+    "Gère ton BattleTag, ton profil public et tes tokens d'accès personnels pour HotS Analytics.",
+  ogImage: "/og/settings-index.png",
+  twitterCard: "summary_large_image",
+  twitterImage: "/og/settings-index.png",
+  robots: "noindex, follow",
+});
+
 const config = useRuntimeConfig();
 const { data: authData, refresh: refreshAuth } = await useAuthUser();
 
@@ -20,7 +33,7 @@ async function saveBattletag() {
   savingBattletag.value = true;
   battletagError.value = "";
   try {
-    await $fetch("/me", {
+    await $fetch("/auth/me", {
       method: "PATCH",
       baseURL: config.public.apiBase,
       credentials: "include",
@@ -43,7 +56,7 @@ async function savePublicHandle() {
   savingPublicHandle.value = true;
   publicHandleError.value = "";
   try {
-    await $fetch("/me", {
+    await $fetch("/auth/me", {
       method: "PATCH",
       baseURL: config.public.apiBase,
       credentials: "include",
@@ -110,7 +123,7 @@ async function revokeToken(id: string) {
       <p class="text-muted text-sm">
         Défini, ton profil devient consultable sans connexion sur
         <code class="font-mono text-xs">/u/{{ publicHandle || "..." }}</code>
-        — pratique pour le partager sur Discord.
+        - pratique pour le partager sur Discord.
       </p>
       <div class="flex gap-2">
         <UInput v-model="publicHandle" placeholder="mon-pseudo" class="font-mono flex-1" />

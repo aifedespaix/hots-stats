@@ -11,6 +11,21 @@ const { data, error } = await useApiFetch<PlayerDetailResponse>(
   `/players/${encodeURIComponent(battletag)}`,
 );
 
+const playerSeoDescription = computed(
+  () => `Statistiques des parties partagées avec ${battletag} sur Heroes of the Storm.`,
+);
+
+useSeoMeta({
+  title: battletag,
+  description: () => playerSeoDescription.value,
+  ogTitle: `${battletag} - HotS Analytics`,
+  ogDescription: () => playerSeoDescription.value,
+  ogImage: "/og/players-[battletag].png",
+  twitterCard: "summary_large_image",
+  twitterImage: "/og/players-[battletag].png",
+  robots: "noindex, follow",
+});
+
 const page = ref(1);
 const pageSize = 20;
 

@@ -9,6 +9,23 @@ const heroId = route.params.slug as string;
 const { data, error } = await useApiFetch<HeroDetailResponse>(`/heroes/${heroId}`);
 const { data: talentsData } = await useApiFetch<HeroTalentsResponse>(`/heroes/${heroId}/talents`);
 
+const heroName = computed(() => data.value?.hero.heroName ?? "Héros");
+const heroSeoDescription = computed(
+  () =>
+    `Statistiques de ${heroName.value} sur Heroes of the Storm : winrate, KDA moyen et talents les plus performants.`,
+);
+
+useSeoMeta({
+  title: () => heroName.value,
+  description: () => heroSeoDescription.value,
+  ogTitle: () => `${heroName.value} - HotS Analytics`,
+  ogDescription: () => heroSeoDescription.value,
+  ogImage: "/og/heroes-[slug].png",
+  twitterCard: "summary_large_image",
+  twitterImage: "/og/heroes-[slug].png",
+  robots: "noindex, follow",
+});
+
 const talentTiers = [1, 4, 7, 10, 13, 16, 20] as const;
 
 const talentsByTier = computed(() => {
@@ -27,7 +44,7 @@ const talentsByTier = computed(() => {
 
 <template>
   <div v-if="error" class="rounded-lg border border-border bg-surface p-8 text-center text-muted">
-    Héros introuvable — tu n'as pas encore de partie enregistrée avec ce héros.
+    Héros introuvable - tu n'as pas encore de partie enregistrée avec ce héros.
   </div>
 
   <div v-else-if="data" class="space-y-8">

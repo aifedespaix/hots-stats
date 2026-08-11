@@ -4,6 +4,38 @@
  * Theme switch is attribute-driven: [data-theme="dark|light|contrasted"] on <html>.
  */
 
+@font-face {
+  font-family: "BW Modelica";
+  src: url("/fonts/Bw%20Modelica/otf/BwModelica-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "BW Modelica";
+  src: url("/fonts/Bw%20Modelica/otf/BwModelica-Medium.otf") format("opentype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "BW Modelica";
+  src: url("/fonts/Bw%20Modelica/otf/BwModelica-Bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "BW Modelica";
+  src: url("/fonts/Bw%20Modelica/otf/BwModelica-ExtraBold.otf") format("opentype");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   /* dark (default) */
   --color-background: 0.16 0.03 265;
@@ -16,7 +48,7 @@
   --color-success: 0.72 0.17 150;
   --color-danger: 0.63 0.21 25;
 
-  --font-heading: "Space Grotesk", "Bricolage Grotesque", sans-serif;
+  --font-heading: "BW Modelica", "Space Grotesk", "Bricolage Grotesque", sans-serif;
   --font-body: "Outfit", "Geist", sans-serif;
   --font-mono: "JetBrains Mono", monospace;
 

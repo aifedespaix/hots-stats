@@ -15,17 +15,18 @@ if (error.value) {
 const profile = data.value!.profile;
 const summary = data.value!.summary;
 
-const title = `${profile.displayName} — HotS Analytics`;
 const description = `${profile.displayName} a joué ${summary.gamesPlayed} parties (${formatPercent(summary.winrate)} de victoires) sur Heroes of the Storm.`;
 
 useSeoMeta({
-  title,
+  title: profile.displayName,
   description,
-  ogTitle: title,
+  ogTitle: `${profile.displayName} - HotS Analytics`,
   ogDescription: description,
   ogType: "profile",
   twitterCard: "summary",
-  ...(profile.avatarUrl ? { ogImage: profile.avatarUrl, twitterImage: profile.avatarUrl } : {}),
+  ogImage: profile.avatarUrl ?? "/og/u-[handle].png",
+  twitterImage: profile.avatarUrl ?? "/og/u-[handle].png",
+  robots: "index, follow",
 });
 </script>
 
