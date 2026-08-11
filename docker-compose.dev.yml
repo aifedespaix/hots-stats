@@ -1,0 +1,22 @@
+# Local development only: spins up Postgres so `bun run dev:api` / `dev:web`
+# can run directly on the host against a real database.
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-hots_stats}
+    ports:
+      - "5432:5432"
+    volumes:
+      - hots_stats_dev_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  hots_stats_dev_pgdata:

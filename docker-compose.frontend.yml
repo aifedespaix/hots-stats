@@ -1,0 +1,16 @@
+# Dokploy "frontend" application: Nuxt web app.
+# Deploy separately from docker-compose.backend.yml, per Dokploy project.
+services:
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NUXT_PUBLIC_API_BASE: ${NUXT_PUBLIC_API_BASE}
+    restart: unless-stopped
+    environment:
+      NUXT_PUBLIC_API_BASE: ${NUXT_PUBLIC_API_BASE}
+    # Dokploy maps its assigned domain to this container port — configure it
+    # in the app's "Domains" tab rather than publishing a host port here.
+    expose:
+      - "3000"

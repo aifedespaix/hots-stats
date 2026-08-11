@@ -1,0 +1,24 @@
+{
+  "name": "hots-stats",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run --filter '*' dev",
+    "dev:api": "bun run --filter './apps/api' dev",
+    "dev:web": "bun run --filter './apps/web' dev",
+    "build": "bun run --filter '*' build",
+    "db:generate": "bun run --filter './packages/db' generate",
+    "db:migrate": "bun run --filter './packages/db' migrate",
+    "db:studio": "bun run --filter './packages/db' studio",
+    "typecheck": "bun run --filter '*' typecheck",
+    "docker:dev:up": "docker compose -f docker-compose.dev.yml up -d",
+    "docker:dev:down": "docker compose -f docker-compose.dev.yml down"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

@@ -1,0 +1,9 @@
+[install]
+peer = true
+exact = false
+# "isolated" (bun's default) breaks packages that assume a flat/hoisted
+# node_modules via ad-hoc require() of sibling packages (e.g. @nuxtjs/tailwindcss).
+linker = "hoisted"
+
+[install.cache]
+disable = false

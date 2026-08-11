@@ -1,0 +1,20 @@
+node_modules/
+.output/
+.nuxt/
+.data/
+dist/
+build/
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+coverage/
+*.tsbuildinfo
+
+# Python daemon
+daemon-python/.venv/
+daemon-python/__pycache__/
+daemon-python/*.spec
+daemon-python/build/
+daemon-python/dist/
