@@ -40,11 +40,7 @@ const { sortKey, sortDir, onSort } = useSortState<SortableColumn>("playedAt", "d
 // `winner` boolean server-side, which isn't its own visible column.
 const apiSortBy = computed(() => (sortKey.value === "result" ? "winner" : sortKey.value));
 
-const query = computed(() => ({
-  page: page.value,
-  pageSize,
-  sortBy: apiSortBy.value,
-  sortDir: sortDir.value,
+const activeFilters = computed(() => ({
   ...(mode.value ? { mode: mode.value } : {}),
   ...(heroId.value ? { heroId: heroId.value } : {}),
   ...(mapId.value ? { mapId: mapId.value } : {}),
@@ -53,7 +49,17 @@ const query = computed(() => ({
   ...(opponentBattletag.value ? { opponentBattletag: opponentBattletag.value } : {}),
 }));
 
+const query = computed(() => ({
+  page: page.value,
+  pageSize,
+  sortBy: apiSortBy.value,
+  sortDir: sortDir.value,
+  ...activeFilters.value,
+}));
+
 const { data: matchesData, pending } = await useApiFetch<MatchListResponse>("/matches", { query });
+
+const isChartOpen = ref(false);
 
 watch([mode, heroId, mapId, dateFrom, dateTo, opponentBattletag], () => {
   page.value = 1;
@@ -81,7 +87,12 @@ function goToMatch(row: Record<string, unknown>) {
 
 <template>
   <div class="space-y-6">
-    <h1 class="font-heading text-2xl font-semibold">Historique des parties</h1>
+    <div class="flex items-center justify-between gap-3">
+      <h1 class="font-heading text-2xl font-semibold">Historique des parties</h1>
+      <UButton icon="i-lucide-line-chart" color="gray" variant="outline" @click="isChartOpen = true">
+        Voir le graphique
+      </UButton>
+    </div>
 
     <div class="grid grid-cols-2 gap-3 rounded-lg border border-border bg-surface p-4 sm:grid-cols-3 lg:grid-cols-6">
       <USelectMenu
@@ -137,5 +148,7 @@ function goToMatch(row: Record<string, unknown>) {
         :disabled="pending"
       />
     </div>
+
+    <ChartsWinrateTrendModal :open="isChartOpen" :filters="activeFilters" @update:open="isChartOpen = $event" />
   </div>
 </template>

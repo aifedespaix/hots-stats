@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { GameMode } from "@hots-stats/shared-types";
 import type { PlayerListResponse } from "~/types/analytics";
 
 definePageMeta({ middleware: "auth" });
@@ -16,27 +17,38 @@ useSeoMeta({
   robots: "noindex, follow",
 });
 
-const { sortKey, sortDir, onSort } = useSortState<"battletag" | "gamesTogether" | "wins" | "losses">(
-  "gamesTogether",
-  "desc",
-);
+type SortableColumn = "battletag" | "gamesTogether" | "gamesAsAlly" | "gamesAsOpponent" | "wins" | "losses";
+const { sortKey, sortDir, onSort } = useSortState<SortableColumn>("gamesTogether", "desc");
 
-const query = computed(() => ({ sortBy: sortKey.value, sortDir: sortDir.value }));
+const mode = ref<GameMode | "">("");
+const search = ref("");
+
+const query = computed(() => ({
+  sortBy: sortKey.value,
+  sortDir: sortDir.value,
+  ...(mode.value ? { mode: mode.value } : {}),
+}));
 
 const { data } = await useApiFetch<PlayerListResponse>("/players", { query });
 
-const rows = computed(
-  () =>
-    data.value?.players.map((player) => ({
+const modeOptions = [{ value: "" as const, label: "Tous les modes" }, ...gameModeOptions()];
+
+const rows = computed(() => {
+  const searchTerm = search.value.trim().toLowerCase();
+  return (data.value?.players ?? [])
+    .filter((player) => (searchTerm ? player.battletag.toLowerCase().includes(searchTerm) : true))
+    .map((player) => ({
       ...player,
       wins: player.winsAsAlly + player.winsAsOpponent,
       losses: player.gamesTogether - (player.winsAsAlly + player.winsAsOpponent),
-    })) ?? [],
-);
+    }));
+});
 
 const columns = [
   { key: "battletag", label: "Joueur", sortable: true },
   { key: "gamesTogether", label: "Rencontres", numeric: true, sortable: true },
+  { key: "gamesAsAlly", label: "Allié", numeric: true, sortable: true },
+  { key: "gamesAsOpponent", label: "Adversaire", numeric: true, sortable: true },
   { key: "wins", label: "Victoires", numeric: true, sortable: true },
   { key: "losses", label: "Défaites", numeric: true, sortable: true },
 ];
@@ -50,6 +62,17 @@ function goToPlayer(row: Record<string, unknown>) {
   <div class="space-y-6">
     <h1 class="font-heading text-2xl font-semibold">Radar des joueurs</h1>
     <p class="text-sm text-muted">Tous les joueurs croisés (alliés ou adversaires) dans tes parties.</p>
+
+    <div class="grid grid-cols-1 gap-3 rounded-lg border border-border bg-surface p-4 sm:grid-cols-2">
+      <USelectMenu
+        v-model="mode"
+        :options="modeOptions"
+        value-attribute="value"
+        option-attribute="label"
+        placeholder="Mode"
+      />
+      <UInput v-model="search" placeholder="Rechercher un joueur (Pseudo#12345)" icon="i-lucide-search" />
+    </div>
 
     <UiDataTable
       :columns="columns"

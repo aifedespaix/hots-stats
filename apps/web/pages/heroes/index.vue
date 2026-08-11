@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { GameMode } from "@hots-stats/shared-types";
 import type { HeroListResponse, HeroStats } from "~/types/analytics";
 
 definePageMeta({ middleware: "auth" });
@@ -16,12 +17,24 @@ useSeoMeta({
   robots: "noindex, follow",
 });
 
-const { data } = await useApiFetch<HeroListResponse>("/heroes");
+const mode = ref<GameMode | "">("");
+const search = ref("");
+
+const query = computed(() => ({
+  ...(mode.value ? { mode: mode.value } : {}),
+}));
+
+const { data } = await useApiFetch<HeroListResponse>("/heroes", { query });
 
 const { sortKey, sortDir, onSort } = useSortState<keyof HeroStats>("gamesPlayed", "desc");
 
+const modeOptions = [{ value: "" as const, label: "Tous les modes" }, ...gameModeOptions()];
+
 const sortedHeroes = computed(() => {
-  const heroes = [...(data.value?.heroes ?? [])];
+  const searchTerm = search.value.trim().toLowerCase();
+  const heroes = (data.value?.heroes ?? []).filter((hero) =>
+    searchTerm ? hero.heroName.toLowerCase().includes(searchTerm) : true,
+  );
   const dir = sortDir.value === "asc" ? 1 : -1;
   return heroes.sort((a, b) => {
     const av = a[sortKey.value];
@@ -50,6 +63,17 @@ function goToHero(row: Record<string, unknown>) {
 <template>
   <div class="space-y-6">
     <h1 class="font-heading text-2xl font-semibold">Héros</h1>
+
+    <div class="grid grid-cols-1 gap-3 rounded-lg border border-border bg-surface p-4 sm:grid-cols-2">
+      <USelectMenu
+        v-model="mode"
+        :options="modeOptions"
+        value-attribute="value"
+        option-attribute="label"
+        placeholder="Mode"
+      />
+      <UInput v-model="search" placeholder="Rechercher un héros" icon="i-lucide-search" />
+    </div>
 
     <UiDataTable
       :columns="columns"

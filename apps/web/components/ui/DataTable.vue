@@ -14,8 +14,9 @@ const props = withDefaults(
     clickable?: boolean;
     sortKey?: string;
     sortDir?: "asc" | "desc";
+    rowClass?: (row: Record<string, unknown>) => string;
   }>(),
-  { rowKey: "id", clickable: false, sortKey: undefined, sortDir: "desc" },
+  { rowKey: "id", clickable: false, sortKey: undefined, sortDir: "desc", rowClass: undefined },
 );
 
 const rows = computed(() => props.rows as Record<string, unknown>[]);
@@ -54,7 +55,7 @@ const emit = defineEmits<{
           v-for="row in rows"
           :key="String(row[props.rowKey])"
           class="border-b border-border last:border-0"
-          :class="clickable ? 'cursor-pointer hover:bg-surface' : ''"
+          :class="[clickable ? 'cursor-pointer hover:bg-surface' : '', rowClass ? rowClass(row) : '']"
           @click="clickable && emit('row-click', row)"
         >
           <td
