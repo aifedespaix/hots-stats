@@ -58,6 +58,7 @@ jobs:
       # payload format, which would otherwise force a re-upsert of every
       # already-ingested replay. Do not derive one from the other.
       - name: Build with Nuitka
+        shell: bash
         run: >
           python -m nuitka
           --onefile
