@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from pathlib import Path
 from typing import Callable
@@ -49,18 +50,30 @@ class _ReplayHandler(FileSystemEventHandler):
         self._on_replay_ready(path)
 
 
-def watch_replays(replays_dir: Path, on_replay_ready: Callable[[Path], None]) -> None:
-    """Blocks, calling `on_replay_ready(path)` for each new stable `.StormReplay` file."""
+def watch_replays(
+    replays_dir: Path,
+    on_replay_ready: Callable[[Path], None],
+    stop_event: threading.Event | None = None,
+) -> None:
+    """Blocks, calling `on_replay_ready(path)` for each new stable `.StormReplay` file.
+
+    Returns once `stop_event` is set (or on Ctrl+C, when run without one),
+    stopping the underlying observer thread cleanly first. Passing a
+    `stop_event` lets a caller running this on a background thread (e.g. the
+    tray app) request a clean shutdown instead of relying on a signal.
+    """
     handler = _ReplayHandler(on_replay_ready)
     observer = Observer()
     observer.schedule(handler, str(replays_dir), recursive=False)
     observer.start()
     logger.info("Watching %s for new replays...", replays_dir)
+    event = stop_event or threading.Event()
     try:
-        while True:
-            time.sleep(1)
+        while not event.is_set():
+            event.wait(1)
     except KeyboardInterrupt:
         pass
     finally:
         observer.stop()
         observer.join()
+        logger.info("Stopped watching %s", replays_dir)

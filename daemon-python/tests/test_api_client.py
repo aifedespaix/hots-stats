@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from src.api_client import ApiClient, ApiClientError, AuthError, ValidationError
+from src.api_client import ApiClient, ApiClientError, AuthError, ValidationError, fetch_summary, ping_health
 from src.config import Config
 
 
@@ -101,3 +101,36 @@ def test_post_replay_retries_5xx_then_raises(tmp_path):
                 client.post_replay({"replayHash": "abc"})
 
     assert post.call_count == 4
+
+
+def test_ping_health_true_on_200():
+    with patch("src.api_client.requests.get", return_value=_response(200, {"status": "ok"})) as get:
+        assert ping_health("https://api.example.com/") is True
+    get.assert_called_once_with("https://api.example.com/health", timeout=3.0)
+
+
+def test_ping_health_false_on_non_200():
+    with patch("src.api_client.requests.get", return_value=_response(503, {})):
+        assert ping_health("https://api.example.com") is False
+
+
+def test_ping_health_false_on_network_error():
+    with patch("src.api_client.requests.get", side_effect=requests.ConnectionError("offline")):
+        assert ping_health("https://api.example.com") is False
+
+
+def test_fetch_summary_returns_body_on_200():
+    body = {"gamesPlayed": 42, "wins": 20, "winrate": 0.47, "avgDurationSeconds": 1200}
+    with patch("src.api_client.requests.get", return_value=_response(200, body)) as get:
+        assert fetch_summary("https://api.example.com", "hots_pat_abc") == body
+    assert get.call_args.kwargs["headers"] == {"Authorization": "Bearer hots_pat_abc"}
+
+
+def test_fetch_summary_none_on_401():
+    with patch("src.api_client.requests.get", return_value=_response(401, {"error": "Invalid token"})):
+        assert fetch_summary("https://api.example.com", "bad-token") is None
+
+
+def test_fetch_summary_none_on_network_error():
+    with patch("src.api_client.requests.get", side_effect=requests.ConnectionError("offline")):
+        assert fetch_summary("https://api.example.com", "hots_pat_abc") is None

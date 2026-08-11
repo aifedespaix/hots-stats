@@ -14,7 +14,7 @@ coverage/
 
 # Python daemon
 daemon-python/.venv/
-daemon-python/__pycache__/
+daemon-python/**/__pycache__/
 daemon-python/*.spec
 daemon-python/build/
 daemon-python/dist/
