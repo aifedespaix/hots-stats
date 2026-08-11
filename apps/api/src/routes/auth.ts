@@ -113,12 +113,16 @@ export const authRoute = new Hono()
       sameSite: "Lax",
       path: "/",
       maxAge: SESSION_COOKIE_MAX_AGE,
+      ...(env.COOKIE_DOMAIN ? { domain: env.COOKIE_DOMAIN } : {}),
     });
 
     return c.redirect(env.WEB_ORIGIN);
   })
   .post("/logout", (c) => {
-    deleteCookie(c, SESSION_COOKIE_NAME, { path: "/" });
+    deleteCookie(c, SESSION_COOKIE_NAME, {
+      path: "/",
+      ...(env.COOKIE_DOMAIN ? { domain: env.COOKIE_DOMAIN } : {}),
+    });
     return c.json({ status: "ok" });
   })
   .get("/me", authSession, (c) => {

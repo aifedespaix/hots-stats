@@ -121,7 +121,7 @@ async function revokeToken(id: string) {
         v-if="authData?.user?.publicHandle"
         :to="`/u/${authData.user.publicHandle}`"
         target="_blank"
-        class="inline-block text-sm text-primary hover:underline"
+        class="inline-block text-sm text-brand hover:underline"
       >
         Voir mon profil public &rarr;
       </NuxtLink>
@@ -133,7 +133,7 @@ async function revokeToken(id: string) {
         Utilisé par le daemon Windows pour envoyer tes statistiques de partie.
       </p>
 
-      <div v-if="createdToken" class="bg-surface border border-primary rounded-md p-4">
+      <div v-if="createdToken" class="bg-surface border border-brand rounded-md p-4">
         <p class="text-sm mb-2">Copie ce token maintenant, il ne sera plus jamais affiché :</p>
         <code class="font-mono text-sm break-all">{{ createdToken }}</code>
       </div>

@@ -25,7 +25,11 @@ COPY --from=deps /app/node_modules /app/node_modules
 COPY --from=build /app/apps/api/dist /app/apps/api/dist
 COPY --from=build /app/packages/db /app/packages/db
 COPY --from=build /app/packages/shared-types /app/packages/shared-types
+COPY apps/api/docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
 
 EXPOSE 3001
 USER bun
-CMD ["bun", "run", "apps/api/dist/index.js"]
+# Applies pending Drizzle migrations, then starts the server — no more
+# manual `docker exec ... bun run src/migrate.ts` after every deploy.
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

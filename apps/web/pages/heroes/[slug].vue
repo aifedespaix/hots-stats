@@ -32,7 +32,7 @@ const talentsByTier = computed(() => {
 
   <div v-else-if="data" class="space-y-8">
     <div>
-      <NuxtLink to="/heroes" class="text-sm text-primary hover:underline">&larr; Retour aux héros</NuxtLink>
+      <NuxtLink to="/heroes" class="text-sm text-brand hover:underline">&larr; Retour aux héros</NuxtLink>
       <h1 class="mt-2 font-heading text-2xl font-semibold">{{ data.hero.heroName }}</h1>
       <p class="mt-1 text-sm text-muted">{{ formatHeroRole(data.hero.heroRole) }}</p>
     </div>

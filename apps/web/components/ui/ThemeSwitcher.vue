@@ -15,7 +15,7 @@ const themes = [
       :key="theme.value"
       type="button"
       class="rounded p-1.5 text-muted transition-colors"
-      :class="colorMode.preference === theme.value ? 'bg-primary/20 text-primary' : 'hover:text-foreground'"
+      :class="colorMode.preference === theme.value ? 'bg-brand/20 text-brand' : 'hover:text-foreground'"
       :title="theme.label"
       :aria-pressed="colorMode.preference === theme.value"
       @click="colorMode.preference = theme.value"

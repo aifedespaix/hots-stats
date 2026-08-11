@@ -51,7 +51,7 @@ function goToMatch(row: Record<string, unknown>) {
     <div>
       <div class="mb-3 flex items-center justify-between">
         <h2 class="font-heading text-lg font-medium">Dernières parties</h2>
-        <NuxtLink to="/matches" class="text-sm text-primary hover:underline">
+        <NuxtLink to="/matches" class="text-sm text-brand hover:underline">
           Voir tout l'historique
         </NuxtLink>
       </div>

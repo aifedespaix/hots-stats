@@ -42,6 +42,7 @@ multi-arch et tournent nativement en arm64, sans émulation.
    | `POSTGRES_DB` | `hots_stats` |
    | `WEB_ORIGIN` | `https://app.mondomaine.fr` |
    | `API_PUBLIC_URL` | `https://api.mondomaine.fr` |
+   | `COOKIE_DOMAIN` | `.mondomaine.fr` |
    | `GOOGLE_CLIENT_ID` | (Google Cloud Console) |
    | `GOOGLE_CLIENT_SECRET` | (Google Cloud Console) |
    | `SESSION_SECRET` | `openssl rand -hex 32` |
@@ -50,24 +51,27 @@ multi-arch et tournent nativement en arm64, sans émulation.
    construit automatiquement à partir des variables `POSTGRES_*` (service
    `postgres` résolu par son nom DNS interne au réseau du compose).
 
+   `COOKIE_DOMAIN` est nécessaire dès que `WEB_ORIGIN` et `API_PUBLIC_URL`
+   sont sur des sous-domaines différents (cas normal ici) : sans elle, le
+   cookie de session n'est visible que par l'API elle-même, et le rendu
+   SSR du frontend (qui vérifie la session en relayant l'en-tête `Cookie`
+   reçu du navigateur) ne le voit jamais — l'utilisateur reste bloqué sur
+   `/login` après une connexion Google pourtant réussie. Utiliser le domaine
+   parent commun avec un point en préfixe, ex : `.mondomaine.fr`.
+
 5. Onglet **Domains** : ajouter `api.mondomaine.fr` -> port conteneur `3001`,
    activer HTTPS (Let's Encrypt géré par Dokploy).
 6. Déployer. Dokploy build les images (`apps/api/Dockerfile`) puis démarre
    `postgres` et `api`.
-7. **Appliquer les migrations** (première fois et après chaque changement de
-   schéma). Les fichiers SQL de migration sont générés en local avec
-   `bun run db:generate` puis **committés** dans `packages/db/drizzle/` — le
-   build de l'image `api` les embarque donc automatiquement. Pour les
-   appliquer sur le Pi, depuis le terminal du Pi :
-
-   ```bash
-   docker exec -it -w /app/packages/db \
-     $(docker ps -qf "name=hots-stats-backend.*api") \
-     bun run src/migrate.ts
-   ```
-
-   Ou via le terminal intégré de Dokploy (onglet **Advanced -> Terminal**)
-   sur le service `api`, en lançant la même commande dans `/app/packages/db`.
+7. **Les migrations s'appliquent automatiquement** au démarrage du conteneur
+   `api` (`docker-entrypoint.sh` lance `bun run src/migrate.ts` avant de
+   démarrer le serveur) — aucune action manuelle n'est nécessaire, ni au
+   premier déploiement ni après un changement de schéma. Les fichiers SQL de
+   migration restent générés en local avec `bun run db:generate` puis
+   **committés** dans `packages/db/drizzle/` ; le build de l'image `api` les
+   embarque. Si une migration échoue, le conteneur s'arrête (voir les logs
+   Dokploy du service `api`) plutôt que de démarrer avec un schéma
+   incohérent.
 
 8. Vérifier : `https://api.mondomaine.fr/health` doit renvoyer `{"status":"ok"}`
    et `https://api.mondomaine.fr/health/db` doit renvoyer `{"status":"ok","db":"reachable"}`.
@@ -98,8 +102,9 @@ multi-arch et tournent nativement en arm64, sans émulation.
   Dokploy (webhook GitHub), les deux apps se redéploient automatiquement.
   Sinon, bouton **Redeploy** sur chacune des deux apps.
 - Toujours redéployer le **backend** en premier si la mise à jour touche le
-  schéma DB ou l'API, puis lancer les migrations (étape 7 ci-dessus), avant
-  de redéployer le **frontend**.
+  schéma DB ou l'API — les migrations s'appliquent automatiquement au
+  démarrage du conteneur `api` (voir étape 7 ci-dessus) — avant de
+  redéployer le **frontend**.
 
 ## Sauvegardes
 

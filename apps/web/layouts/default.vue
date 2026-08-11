@@ -33,7 +33,7 @@ async function handleLogout() {
             :class="[
               item.enabled
                 ? route.path === item.to
-                  ? 'bg-primary/15 text-primary'
+                  ? 'bg-brand/15 text-brand'
                   : 'text-muted hover:bg-background hover:text-foreground'
                 : 'cursor-not-allowed text-muted/50',
             ]"
