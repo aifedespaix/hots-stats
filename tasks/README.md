@@ -23,22 +23,35 @@ rappelle donc le contexte nécessaire plutôt que de supposer une continuité.
   `m_ammId` -> `ARAM` n'est pas confirmé (fallback `"Custom"`), et
   `talentId`/`talentName` réutilisent le même identifiant interne brut faute
   d'une table de traduction des talents — à affiner si besoin en Epic 6.
+- **Epic 4 — CI/CD du Daemon** : `.github/workflows/build-daemon.yml`,
+  compile `daemon-python` en `.exe` Windows standalone avec Nuitka
+  (`--standalone --onefile`, cf. commentaires du workflow pour la
+  justification du choix vs `--standalone` + zip et vs PyInstaller),
+  déclenché sur tag `v*`, `workflow_dispatch`, et push sur
+  `daemon-python/**`. Upload systématique en artifact ; sur tag `v*`,
+  publie aussi une GitHub Release avec l'exe attaché
+  (`softprops/action-gh-release`). Version du binaire (tag Git) et
+  `PARSER_VERSION` (`daemon-python/src/constants.py`) sont volontairement
+  indépendantes. Au passage, `mpyq` (utilisé par `parser.py` mais absent de
+  `pyproject.toml`) a été ajouté aux dépendances — c'était un bug latent
+  qui aurait fait échouer `pip install -e .` en CI. **Non vérifié
+  end-to-end sur un vrai runner Windows** (pas d'accès à `windows-latest`
+  depuis cette session) : à valider via un `workflow_dispatch` manuel avant
+  de s'y fier pour une vraie release — c'est le jalon testable défini dans
+  le brief de l'Epic.
 
 ## À faire, dans cet ordre
 
-1. [`epic-4-daemon-cicd.md`](./epic-4-daemon-cicd.md) — Build CI/CD du
-   daemon en `.exe` Windows (dépend de l'Epic 3).
-2. [`epic-5-web-core.md`](./epic-5-web-core.md) — Dashboard, Historique des
+1. [`epic-5-web-core.md`](./epic-5-web-core.md) — Dashboard, Historique des
    parties, Détail d'une partie (dépend des Epics 2 et 3 pour avoir de la
    donnée réelle à afficher).
-3. [`epic-6-web-analytics.md`](./epic-6-web-analytics.md) — Analytics Héros
+2. [`epic-6-web-analytics.md`](./epic-6-web-analytics.md) — Analytics Héros
    & Talents, Radar des Joueurs, Profil joueur + page publique SSR (dépend
    de l'Epic 5).
 
 Chaque brief est indépendant dans sa rédaction, mais l'ordre ci-dessus est
 la dépendance logique réelle : ne pas lancer l'Epic 5/6 avant d'avoir de la
-vraie donnée en base (Epic 2 + 3), et ne pas lancer l'Epic 4 avant que le
-daemon de l'Epic 3 existe.
+vraie donnée en base (Epic 2 + 3).
 
 Une fois un Epic terminé dans sa session, mettre à jour ce README (cocher
 dans "Déjà fait") avant de lancer le suivant.

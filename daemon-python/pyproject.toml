@@ -7,11 +7,15 @@ dependencies = [
     "heroprotocol>=2.55",
     "watchdog>=4.0",
     "requests>=2.31",
+    "mpyq>=0.2.5",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+]
+build = [
+    "nuitka>=2.4",
 ]
 
 [tool.pytest.ini_options]
