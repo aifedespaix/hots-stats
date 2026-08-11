@@ -25,9 +25,11 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      NODE_ENV: production
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       PORT: 3001
       WEB_ORIGIN: ${WEB_ORIGIN}
+      API_PUBLIC_URL: ${API_PUBLIC_URL}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       SESSION_SECRET: ${SESSION_SECRET}

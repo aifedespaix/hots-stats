@@ -41,6 +41,7 @@ multi-arch et tournent nativement en arm64, sans émulation.
    | `POSTGRES_PASSWORD` | (générer un mot de passe fort) |
    | `POSTGRES_DB` | `hots_stats` |
    | `WEB_ORIGIN` | `https://app.mondomaine.fr` |
+   | `API_PUBLIC_URL` | `https://api.mondomaine.fr` |
    | `GOOGLE_CLIENT_ID` | (Google Cloud Console) |
    | `GOOGLE_CLIENT_SECRET` | (Google Cloud Console) |
    | `SESSION_SECRET` | `openssl rand -hex 32` |
