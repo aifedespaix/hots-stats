@@ -33,10 +33,6 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       SESSION_SECRET: ${SESSION_SECRET}
-    # Dokploy maps its assigned domain to this container port — configure it
-    # in the app's "Domains" tab rather than publishing a host port here.
-    expose:
-      - "3001"
 
 volumes:
   hots_stats_pgdata:
