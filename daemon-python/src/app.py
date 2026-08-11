@@ -21,6 +21,7 @@ from . import api_client
 from .config import Config, ConfigError, config_exists, load_config
 from .ingestion import ingest_file
 from .status import StatusTracker
+from .sync_state import SyncState
 from .watcher import watch_replays
 
 # gui/tray need tkinter/pystray (a display), same as main.py's lazy `from
@@ -74,11 +75,12 @@ class _DaemonRunner:
         self.status = StatusTracker()  # fresh counters for this run
 
         client = api_client.ApiClient(config)
+        sync_state = SyncState()
         stop_event = threading.Event()
 
         def _ingest_and_track(path: Path) -> None:
             self.status.start_syncing(path.name)
-            outcome = ingest_file(client, path)
+            outcome = ingest_file(client, path, sync_state)
             self.status.finish_syncing(
                 ok=outcome.status in ("uploaded", "skipped"),
                 error=outcome.detail if outcome.status == "error" else None,

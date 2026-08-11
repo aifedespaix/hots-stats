@@ -15,6 +15,7 @@ from pathlib import Path
 from . import api_client
 from .config import ConfigError, load_config
 from .ingestion import resync
+from .sync_state import SyncState
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         client = api_client.ApiClient(config)
         target_dir = Path(args.resync) if isinstance(args.resync, str) else config.replays_dir
-        resync(client, target_dir)
+        resync(client, target_dir, SyncState())
         return 0
 
     # Default (no flags): the tray app — settings window on first run (or

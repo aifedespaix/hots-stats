@@ -11,8 +11,10 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import api_client
+from . import api_client, constants
 from . import parser as replay_parser
+from .hasher import hash_replay_file
+from .sync_state import SyncState
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +29,30 @@ class IngestOutcome:
     detail: str | None = None
 
 
-def ingest_file(client: api_client.ApiClient, path: Path) -> IngestOutcome:
+def ingest_file(
+    client: api_client.ApiClient, path: Path, sync_state: SyncState | None = None
+) -> IngestOutcome:
+    """Parses and uploads one replay.
+
+    When `sync_state` is given, a replay already recorded as synced at the
+    current (or a newer) `constants.PARSER_VERSION` is skipped without
+    re-parsing or re-uploading it, and any replay successfully confirmed by
+    the server (newly uploaded, or already up to date there) is recorded so
+    future calls skip it too. Only successes are recorded -- a replay that
+    errors (e.g. an unparseable file, or a server rejection) is retried on
+    the next call, since fixing the underlying issue (a code update, a
+    reachable API) is exactly what should make it sync next time.
+    """
+    if sync_state is not None:
+        try:
+            replay_hash = hash_replay_file(path)
+        except OSError as err:
+            logger.warning("Could not hash %s, parsing it in full: %s", path, err)
+        else:
+            if sync_state.is_up_to_date(replay_hash, constants.PARSER_VERSION):
+                logger.debug("Skipping %s: already synced", path)
+                return IngestOutcome("skipped", "already synced")
+
     try:
         payload = replay_parser.parse_replay(path)
     except replay_parser.ReplayParseError as err:
@@ -49,6 +74,9 @@ def ingest_file(client: api_client.ApiClient, path: Path) -> IngestOutcome:
         logger.error("Failed to ingest %s: %s", path, err)
         return IngestOutcome("error", str(err))
 
+    if sync_state is not None:
+        sync_state.mark_synced(payload["replayHash"], payload["parserVersion"])
+
     if result.upserted:
         logger.info("Ingested %s -> match %s", path, result.match_id)
         return IngestOutcome("uploaded")
@@ -56,17 +84,19 @@ def ingest_file(client: api_client.ApiClient, path: Path) -> IngestOutcome:
     return IngestOutcome("skipped", result.reason)
 
 
-def resync(client: api_client.ApiClient, replays_dir: Path) -> None:
+def resync(client: api_client.ApiClient, replays_dir: Path, sync_state: SyncState | None = None) -> None:
     """Parses and (re-)uploads every replay in `replays_dir`.
 
     Safe to run repeatedly: the API upserts by `replayHash`, so re-posting
-    an already-ingested replay is a no-op rather than a duplicate.
+    an already-ingested replay is a no-op rather than a duplicate. Passing
+    `sync_state` also skips replays already known to be up to date, instead
+    of reparsing and reposting all of them every time.
     """
     replay_files = sorted(replays_dir.glob("*.StormReplay"))
     logger.info("Resyncing %d replay(s) from %s", len(replay_files), replays_dir)
     uploaded = skipped = failed = 0
     for path in replay_files:
-        outcome = ingest_file(client, path)
+        outcome = ingest_file(client, path, sync_state)
         if outcome.status == "uploaded":
             uploaded += 1
         elif outcome.status == "skipped":

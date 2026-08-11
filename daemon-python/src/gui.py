@@ -36,6 +36,15 @@ logger = logging.getLogger(__name__)
 _DEBOUNCE_MS = 600
 _LIVE_STATS_POLL_MS = 500
 
+# Dynamic labels (currently-syncing filename, last sync error) are fed
+# unbounded text from the filesystem/API — without a cap the window would
+# keep growing to fit whatever comes in. Truncating to these lengths keeps
+# the window's locked size (see `_center`) valid for any content it'll ever
+# show.
+_SYNCING_LABEL_MAX_CHARS = 60
+_ERROR_LABEL_MAX_CHARS = 220
+_LABEL_WRAPLENGTH = 460
+
 # A small, dark, "gamer tool" palette. Kept in one place so the whole window
 # reads as one deliberate look rather than default-tk gray.
 _BG = "#1c1f2e"
@@ -48,6 +57,15 @@ _ACCENT = "#6c8cff"
 _OK = "#4cd97b"
 _ERROR = "#ef5b5b"
 _NEUTRAL = "#8b90ad"
+
+
+def _truncate(text: str, max_chars: int) -> str:
+    """Caps `text` at `max_chars`, replacing anything cut off with an
+    ellipsis, so a label fed unbounded text (a long file name, a verbose
+    server error) can't keep growing the window it lives in."""
+    if len(text) <= max_chars:
+        return text
+    return text[: max_chars - 1].rstrip() + "…"
 
 
 def run_settings_window(is_first_run: bool, status_tracker: StatusTracker | None = None) -> bool:
@@ -185,7 +203,9 @@ class _SettingsWindow:
         browse = ttk.Button(card_inner, text="Parcourir…", style="Ghost.TButton", command=self._browse_replays_dir)
         browse.grid(row=grid_row, column=0, columnspan=3, sticky="w", pady=(0, 4))
 
-        self._error_label = ttk.Label(outer, text="", style="Muted.TLabel", foreground=_ERROR)
+        self._error_label = ttk.Label(
+            outer, text="", style="Muted.TLabel", foreground=_ERROR, wraplength=_LABEL_WRAPLENGTH, justify="left"
+        )
         self._error_label.pack(anchor="w", pady=(10, 0))
 
         if not self._is_first_run:
@@ -264,11 +284,18 @@ class _SettingsWindow:
             ttk.Label(inner, text="En cours de synchronisation", style="PanelMuted.TLabel").grid(
                 row=2, column=1, columnspan=2, sticky="w", pady=(14, 0), padx=(40, 0)
             )
-            self._currently_syncing_label = ttk.Label(inner, text="—", style="Panel.TLabel")
+            self._currently_syncing_label = ttk.Label(
+                inner, text="—", style="Panel.TLabel", wraplength=_LABEL_WRAPLENGTH, justify="left"
+            )
             self._currently_syncing_label.grid(row=3, column=1, columnspan=2, sticky="w", padx=(40, 0))
 
             self._sync_error_label = ttk.Label(
-                inner, text="", style="PanelMuted.TLabel", foreground=_ERROR, wraplength=460, justify="left"
+                inner,
+                text="",
+                style="PanelMuted.TLabel",
+                foreground=_ERROR,
+                wraplength=_LABEL_WRAPLENGTH,
+                justify="left",
             )
             self._sync_error_label.grid(row=4, column=0, columnspan=3, sticky="w", pady=(14, 0))
 
@@ -280,10 +307,12 @@ class _SettingsWindow:
         self._synced_count_label.configure(
             text=f"{status.synced} ok" + (f", {status.failed} échouées" if status.failed else "")
         )
-        self._currently_syncing_label.configure(text=status.currently_syncing or "—")
+        syncing_text = _truncate(status.currently_syncing, _SYNCING_LABEL_MAX_CHARS) if status.currently_syncing else "—"
+        self._currently_syncing_label.configure(text=syncing_text)
 
         if status.last_error:
-            self._sync_error_label.configure(text=f"✗ Dernière erreur de synchronisation : {status.last_error}")
+            error_text = _truncate(status.last_error, _ERROR_LABEL_MAX_CHARS)
+            self._sync_error_label.configure(text=f"✗ Dernière erreur de synchronisation : {error_text}")
         else:
             self._sync_error_label.configure(text="")
 
@@ -409,11 +438,44 @@ class _SettingsWindow:
         webbrowser.open(guess_settings_url(self._api_var.get() or DEFAULT_API_BASE_URL))
 
     def _center(self) -> None:
-        self._root.update_idletasks()
-        width, height = self._root.winfo_reqwidth(), self._root.winfo_reqheight()
+        """Locks the window to a fixed size and centers it.
+
+        Without an explicit "WxH", Tk keeps auto-growing the window every
+        time a dynamic label's text changes (see `_refresh_live_stats`) --
+        `resizable(False, False)` only blocks *manual* dragging, it doesn't
+        stop that auto-layout growth. The size is computed from worst-case
+        label content (see `_measure_worst_case_size`), not whatever
+        happens to be showing right now, so it stays valid for anything
+        those labels go on to display.
+        """
+        width, height = self._measure_worst_case_size()
         x = (self._root.winfo_screenwidth() - width) // 2
         y = (self._root.winfo_screenheight() - height) // 3
-        self._root.geometry(f"+{x}+{y}")
+        self._root.geometry(f"{width}x{height}+{x}+{y}")
+
+    def _measure_worst_case_size(self) -> tuple[int, int]:
+        """Temporarily fills every dynamically-updated label with
+        max-length placeholder text, measures the window's required size
+        with that worst case in place, then restores the real text.
+        """
+        placeholders: list[tuple[ttk.Label, str]] = [(self._error_label, "x" * _ERROR_LABEL_MAX_CHARS)]
+        if self._status_tracker is not None:
+            placeholders.append((self._currently_syncing_label, "x" * _SYNCING_LABEL_MAX_CHARS))
+            placeholders.append(
+                (self._sync_error_label, "✗ Dernière erreur de synchronisation : " + "x" * _ERROR_LABEL_MAX_CHARS)
+            )
+
+        originals = [(label, label.cget("text")) for label, _ in placeholders]
+        for label, placeholder in placeholders:
+            label.configure(text=placeholder)
+
+        self._root.update_idletasks()
+        width, height = self._root.winfo_reqwidth(), self._root.winfo_reqheight()
+
+        for label, original in originals:
+            label.configure(text=original)
+
+        return width, height
 
     def _save(self) -> None:
         api_base_url = self._api_var.get().strip()
@@ -437,7 +499,7 @@ class _SettingsWindow:
         self._root.destroy()
 
     def _show_error(self, message: str) -> None:
-        self._error_label.configure(text=message)
+        self._error_label.configure(text=_truncate(message, _ERROR_LABEL_MAX_CHARS))
 
     def _stop_live_stats(self) -> None:
         if self._live_stats_job is not None:

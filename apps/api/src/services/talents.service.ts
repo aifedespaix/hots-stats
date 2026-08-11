@@ -5,7 +5,7 @@ import { and, eq, sql } from "drizzle-orm";
 export interface HeroStatsRow {
   heroId: string;
   heroName: string;
-  heroRole: string;
+  heroRole: string | null;
   gamesPlayed: number;
   wins: number;
   winrate: number;

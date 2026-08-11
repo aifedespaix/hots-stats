@@ -2,7 +2,7 @@ import type { User } from "@hots-stats/db";
 import { replayPayloadSchema } from "@hots-stats/shared-types";
 import { Hono } from "hono";
 import { authToken } from "../middleware/auth-token";
-import { UnknownReferenceError, upsertReplay } from "../services/replay-upsert.service";
+import { upsertReplay } from "../services/replay-upsert.service";
 import { getStatsSummary } from "../services/stats.service";
 
 type Env = { Variables: { user: User } };
@@ -35,13 +35,6 @@ export const ingestRoute = new Hono<Env>()
 
     const user = c.get("user");
 
-    try {
-      const result = await upsertReplay(parsed.data, user.id);
-      return c.json(result, result.upserted ? 201 : 200);
-    } catch (err) {
-      if (err instanceof UnknownReferenceError) {
-        return c.json({ error: err.message }, 400);
-      }
-      throw err;
-    }
+    const result = await upsertReplay(parsed.data, user.id);
+    return c.json(result, result.upserted ? 201 : 200);
   });

@@ -12,7 +12,10 @@ export const heroRoleEnum = pgEnum("hero_role", [
 export const heroes = pgTable("heroes", {
   id: text("id").primaryKey(), // slug, e.g. "li-ming"
   name: text("name").notNull(),
-  role: heroRoleEnum("role").notNull(),
+  // Nullable: auto-created placeholder rows (unknown hero slug ingested
+  // before the seed list knows its role) leave this unset rather than
+  // guessing — see replay-upsert.service.ts's `ensureHero`.
+  role: heroRoleEnum("role"),
   iconUrl: text("icon_url"),
 });
 

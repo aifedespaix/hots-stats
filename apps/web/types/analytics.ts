@@ -3,7 +3,7 @@ import type { PlayerEncounterStats, TalentTierStats } from "@hots-stats/shared-t
 export interface HeroStats {
   heroId: string;
   heroName: string;
-  heroRole: string;
+  heroRole: string | null;
   gamesPlayed: number;
   wins: number;
   winrate: number;

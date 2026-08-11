@@ -6,12 +6,19 @@ export type UpsertResult =
   | { upserted: true; matchId: string }
   | { upserted: false; reason: "stale_version"; matchId: string };
 
-/** Thrown when the payload references a hero/map slug that doesn't exist yet. */
-export class UnknownReferenceError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "UnknownReferenceError";
-  }
+/**
+ * Slug ("industrial-district") -> best-effort display name ("Industrial
+ * District"), used to auto-create a placeholder row for a map/hero the
+ * daemon reports that isn't in the DB yet (a new map/hero shipped in the
+ * game before the seed list was updated). Good enough to be usable in the
+ * UI immediately; can be corrected later with a real name/icon/role.
+ */
+function displayNameFromSlug(slug: string): string {
+  return slug
+    .split("-")
+    .filter(Boolean)
+    .map((word) => word[0]!.toUpperCase() + word.slice(1))
+    .join(" ");
 }
 
 /** Simple numeric-segment comparison, e.g. "1.10" > "1.9". */
@@ -29,21 +36,30 @@ function isVersionGreater(incoming: string, stored: string): boolean {
 /**
  * Upserts a replay payload from the daemon.
  *
- * Unknown map/hero slugs are rejected (UnknownReferenceError) rather than
- * created on the fly, to avoid orphaned placeholder rows — see Epic 3 brief.
+ * Unknown map/hero slugs are auto-created with a best-effort display name
+ * (derived from the slug) rather than rejected, so a new battleground or
+ * hero the daemon already knows how to parse doesn't block every replay
+ * that features it until someone manually updates the seed list. Heroes
+ * created this way get a `null` role (unknown) — see schema/heroes.ts.
  */
 export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: string): Promise<UpsertResult> {
   const [map] = await db.select({ id: maps.id }).from(maps).where(eq(maps.id, payload.map)).limit(1);
   if (!map) {
-    throw new UnknownReferenceError(`Unknown map slug: ${payload.map}`);
+    await db
+      .insert(maps)
+      .values({ id: payload.map, name: displayNameFromSlug(payload.map) })
+      .onConflictDoNothing();
   }
 
   const heroIds = [...new Set(payload.players.map((p) => p.heroId))];
   const foundHeroes = await db.select({ id: heroes.id }).from(heroes).where(inArray(heroes.id, heroIds));
   const foundHeroIds = new Set(foundHeroes.map((h) => h.id));
-  const missingHeroId = heroIds.find((id) => !foundHeroIds.has(id));
-  if (missingHeroId) {
-    throw new UnknownReferenceError(`Unknown hero slug: ${missingHeroId}`);
+  const missingHeroIds = heroIds.filter((id) => !foundHeroIds.has(id));
+  if (missingHeroIds.length > 0) {
+    await db
+      .insert(heroes)
+      .values(missingHeroIds.map((id) => ({ id, name: displayNameFromSlug(id), role: null })))
+      .onConflictDoNothing();
   }
 
   const battletags = payload.players.map((p) => p.battletag);
