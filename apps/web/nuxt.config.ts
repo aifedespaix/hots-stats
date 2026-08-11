@@ -1,7 +1,7 @@
 export default defineNuxtConfig({
   compatibilityDate: "2025-01-01",
   devtools: { enabled: true },
-  modules: ["@nuxt/ui"],
+  modules: ["@nuxt/ui", "@nuxt/fonts"],
   css: ["~/assets/css/globals.css"],
   ssr: true,
   colorMode: {
@@ -9,6 +9,13 @@ export default defineNuxtConfig({
     fallback: "dark",
     classSuffix: "",
     dataValue: "theme",
+  },
+  fonts: {
+    families: [
+      { name: "Space Grotesk", provider: "google", weights: [500, 600, 700] },
+      { name: "Outfit", provider: "google", weights: [400, 500, 600] },
+      { name: "JetBrains Mono", provider: "google", weights: [400, 500, 600] },
+    ],
   },
   runtimeConfig: {
     public: {
