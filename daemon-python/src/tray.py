@@ -55,6 +55,16 @@ class TrayController:
         """Blocks for the app's whole lifetime, pumping the tray icon's message loop."""
         self._icon.run()
 
+    def notify(self, message: str, title: str | None = None) -> None:
+        """Shows a balloon/toast notification from the tray icon. Best-effort:
+        not every platform/backend pystray runs on supports notifications, so
+        failures are logged and swallowed rather than raised -- a missed
+        notification must never crash the caller (e.g. the auto-updater)."""
+        try:
+            self._icon.notify(message, title or "")
+        except Exception:
+            logger.debug("Tray notification failed (non-fatal)", exc_info=True)
+
     def _handle_open_settings(self, _icon: pystray.Icon, _item: pystray.MenuItem) -> None:
         if self._settings_open.locked():
             logger.debug("Settings window already open, ignoring click.")

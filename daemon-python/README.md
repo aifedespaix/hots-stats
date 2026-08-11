@@ -49,18 +49,52 @@ gets synced too, not just future games.
 
 From the tray icon: **Ouvrir les paramètres** reopens the settings window
 (pre-filled, live connection/token status, current games-recorded count,
-plus live found/synced/currently-syncing counters and the last sync error,
-if any, while the daemon is running); saving restarts the background
-watcher with the new config. **Quitter** stops the watcher thread cleanly
-before exiting.
+daemon + API versions, plus live found/synced/currently-syncing counters and
+the last sync error, if any, while the daemon is running); saving restarts
+the background watcher with the new config. A **Debug** button opens a
+read-only report of every replay currently in an error state (file path,
+whether the source file still exists, the error, and its full traceback),
+with a **Copier** button to grab it in one click for a bug report. **Quitter**
+stops the watcher thread cleanly before exiting.
+
+On Windows, a **"Lancer au démarrage de Windows"** checkbox registers (or
+unregisters) the built `.exe` under the current user's Run key
+(`HKCU\...\CurrentVersion\Run`, `src/autostart.py`) — no admin rights
+needed. Since the daemon only opens the settings window when it has no
+config yet (see `app.run_app`), a configured daemon launched this way starts
+straight into the tray and syncs in the background, no window shown.
+
+## Sync state
+
+Which replays are already synced (and which failed) is tracked in
+`%APPDATA%\hots-analytics\sync_state.db`, a small SQLite database
+(`src/sync_state.py`) rather than a flat JSON file — replays can number in
+the thousands, and a per-replay write there would mean rewriting the whole
+file every time. Per replay it stores: content hash, file path, sync status,
+the parser/API version it was last synced against, when, its match id, and
+—for a failed replay— the error message and full traceback (this is what
+backs the settings window's Debug button).
+
+On every daemon start, `app._sync_api_version` asks the API its version via
+`GET /ingest/version`. The API — not the daemon — decides when previously
+synced replays need to be resent: it reports a `minParserVersion`, and any
+locally-synced replay recorded below that version is dropped from the
+"already synced" cache (`SyncState.invalidate_stale`) so it's reparsed and
+re-uploaded on this run; everything already at or above it is left alone.
+This call is best-effort — if the API can't be reached at startup, existing
+sync state is kept as-is rather than guessed at. The startup scan also
+refreshes, per tracked replay, whether its source file is still present on
+disk (`SyncState.refresh_file_existence`), so a moved/deleted replay shows
+up as such in the Debug report instead of just going stale silently.
 
 ## Auto-update
 
 The packaged `.exe` checks GitHub Releases for a newer daemon build shortly
 after startup and every few hours after that (`src/updater.py`). If one is
-found, it downloads it and relaunches itself as the new version — no user
-action needed. This only runs in the compiled build; `python -m src.main`
-in dev never self-updates.
+found, a tray notification announces it, then it's downloaded and the app
+relaunches itself as the new version — no user action needed beyond
+acknowledging the notification. This only runs in the compiled build;
+`python -m src.main` in dev never self-updates.
 
 ## Releases
 
@@ -83,9 +117,11 @@ src/
   watcher.py    Watches the replays folder (watchdog), stoppable via threading.Event
   ingestion.py  Parses + uploads one replay; shared by --resync and the tray daemon
   parser.py     .StormReplay -> API payload
-  api_client.py HTTP client (retrying, for real ingestion) + light ping/summary helpers (for the settings UI)
+  api_client.py HTTP client (retrying, for real ingestion) + light ping/summary/version helpers (for the settings UI)
+  sync_state.py SQLite-backed "already synced" cache + per-replay error log, keyed by content hash
   status.py     Thread-safe found/synced/currently-syncing/last-error snapshot, for the settings window
   updater.py    Checks GitHub Releases for a newer build and self-updates when running as the compiled .exe
+  autostart.py  Registers/unregisters the .exe in the Windows Run key ("launch at startup")
 ```
 
 ## Icon
