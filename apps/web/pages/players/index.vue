@@ -3,6 +3,19 @@ import type { PlayerListResponse } from "~/types/analytics";
 
 definePageMeta({ middleware: "auth" });
 
+useSeoMeta({
+  title: "Joueurs",
+  description:
+    "Radar des joueurs croisés, alliés ou adversaires, dans tes parties Heroes of the Storm : victoires, défaites et rencontres.",
+  ogTitle: "Joueurs - HotS Analytics",
+  ogDescription:
+    "Radar des joueurs croisés, alliés ou adversaires, dans tes parties Heroes of the Storm : victoires, défaites et rencontres.",
+  ogImage: "/og/players-index.png",
+  twitterCard: "summary_large_image",
+  twitterImage: "/og/players-index.png",
+  robots: "noindex, follow",
+});
+
 const sortKey = ref<"battletag" | "gamesTogether" | "wins" | "losses">("gamesTogether");
 const sortDir = ref<"asc" | "desc">("desc");
 

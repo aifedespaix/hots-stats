@@ -4,6 +4,17 @@ export default defineNuxtConfig({
   modules: ["@nuxt/ui", "@nuxt/fonts"],
   css: ["~/assets/css/globals.css"],
   ssr: true,
+  app: {
+    head: {
+      htmlAttrs: { lang: "fr" },
+      titleTemplate: "%s - HotS Analytics",
+      link: [{ rel: "icon", type: "image/svg+xml", href: "/favicon.svg" }],
+      meta: [
+        { name: "theme-color", content: "#5500ff" },
+        { name: "format-detection", content: "telephone=no" },
+      ],
+    },
+  },
   colorMode: {
     preference: "dark",
     fallback: "dark",
@@ -12,7 +23,6 @@ export default defineNuxtConfig({
   },
   fonts: {
     families: [
-      { name: "Space Grotesk", provider: "google", weights: [500, 600, 700] },
       { name: "Outfit", provider: "google", weights: [400, 500, 600] },
       { name: "JetBrains Mono", provider: "google", weights: [400, 500, 600] },
     ],
