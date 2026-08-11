@@ -46,6 +46,14 @@ const sortedHeroes = computed(() => {
   });
 });
 
+// Pagination slices sortedHeroes, which is already filtered by `search` -
+// the search box keeps matching across the whole list, not just the current page.
+const { page, pageSize, total, paginated: pagedHeroes } = usePagination(sortedHeroes, 20);
+
+watch([mode, search], () => {
+  page.value = 1;
+});
+
 const columns = [
   { key: "heroName", label: "Héros", sortable: true },
   { key: "heroRole", label: "Rôle", sortable: true },
@@ -77,11 +85,13 @@ function goToHero(row: Record<string, unknown>) {
 
     <UiDataTable
       :columns="columns"
-      :rows="sortedHeroes"
+      :rows="pagedHeroes"
       row-key="heroId"
       clickable
       :sort-key="sortKey"
       :sort-dir="sortDir"
+      mobile-secondary-key="heroRole"
+      mobile-badge-key="winrate"
       @row-click="goToHero"
       @sort="onSort"
     >
@@ -99,5 +109,9 @@ function goToHero(row: Record<string, unknown>) {
         {{ formatPercent(row.avgKillParticipation as number) }}
       </template>
     </UiDataTable>
+
+    <div v-if="total > pageSize" class="flex justify-center">
+      <UPagination v-model="page" :page-count="pageSize" :total="total" />
+    </div>
   </div>
 </template>

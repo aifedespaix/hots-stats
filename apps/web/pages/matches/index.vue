@@ -87,14 +87,20 @@ function goToMatch(row: Record<string, unknown>) {
 
 <template>
   <div class="space-y-6">
-    <div class="flex items-center justify-between gap-3">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <h1 class="font-heading text-2xl font-semibold">Historique des parties</h1>
-      <UButton icon="i-lucide-line-chart" color="gray" variant="outline" @click="isChartOpen = true">
+      <UButton
+        icon="i-lucide-line-chart"
+        color="gray"
+        variant="outline"
+        class="justify-center"
+        @click="isChartOpen = true"
+      >
         Voir le graphique
       </UButton>
     </div>
 
-    <div class="grid grid-cols-2 gap-3 rounded-lg border border-border bg-surface p-4 sm:grid-cols-3 lg:grid-cols-6">
+    <div class="grid grid-cols-1 gap-3 rounded-lg border border-border bg-surface p-4 sm:grid-cols-3 lg:grid-cols-6">
       <USelectMenu
         v-model="mode"
         :options="modeOptions"
@@ -127,6 +133,9 @@ function goToMatch(row: Record<string, unknown>) {
       clickable
       :sort-key="sortKey"
       :sort-dir="sortDir"
+      mobile-primary-key="mapName"
+      mobile-secondary-key="playedAt"
+      mobile-badge-key="result"
       @row-click="goToMatch"
       @sort="onSort"
     >

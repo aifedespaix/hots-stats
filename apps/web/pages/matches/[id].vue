@@ -126,6 +126,8 @@ const columns = [
       :sort-key="sortKey"
       :sort-dir="sortDir"
       :row-class="rowClass"
+      mobile-primary-key="heroName"
+      mobile-secondary-key="battletag"
       @sort="onSort"
     >
       <template #cell-heroName="{ row }">

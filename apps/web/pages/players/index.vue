@@ -44,6 +44,14 @@ const rows = computed(() => {
     }));
 });
 
+// Pagination slices `rows`, which is already filtered by `search` - the
+// search box keeps matching across the whole list, not just the current page.
+const { page, pageSize, total, paginated: pagedRows } = usePagination(rows, 20);
+
+watch([mode, search], () => {
+  page.value = 1;
+});
+
 const columns = [
   { key: "battletag", label: "Joueur", sortable: true },
   { key: "gamesTogether", label: "Rencontres", numeric: true, sortable: true },
@@ -76,7 +84,7 @@ function goToPlayer(row: Record<string, unknown>) {
 
     <UiDataTable
       :columns="columns"
-      :rows="rows"
+      :rows="pagedRows"
       row-key="battletag"
       clickable
       :sort-key="sortKey"
@@ -94,5 +102,9 @@ function goToPlayer(row: Record<string, unknown>) {
         <span class="text-danger">{{ row.losses }}</span>
       </template>
     </UiDataTable>
+
+    <div v-if="total > pageSize" class="flex justify-center">
+      <UPagination v-model="page" :page-count="pageSize" :total="total" />
+    </div>
   </div>
 </template>

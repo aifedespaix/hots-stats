@@ -11,10 +11,10 @@ withDefaults(
 </script>
 
 <template>
-  <div class="rounded-lg border border-border bg-surface p-4">
+  <div class="rounded-lg border border-border bg-surface p-3 sm:p-4">
     <p class="text-xs uppercase tracking-wide text-muted">{{ label }}</p>
     <p
-      class="mt-2 font-mono text-2xl font-semibold"
+      class="mt-2 break-words font-mono text-lg font-semibold sm:text-2xl"
       :class="{
         'text-success': tone === 'success',
         'text-danger': tone === 'danger',

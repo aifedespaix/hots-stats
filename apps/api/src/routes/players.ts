@@ -3,7 +3,11 @@ import { gameModeSchema } from "@hots-stats/shared-types";
 import { Hono } from "hono";
 import { z } from "zod";
 import { authSession, requireUser } from "../middleware/auth-session";
-import { getPlayerEncounter, listPlayerEncounters } from "../services/players.service";
+import {
+  getPlayerEncounter,
+  getPlayerHeroBreakdown,
+  listPlayerEncounters,
+} from "../services/players.service";
 
 type Env = { Variables: { user: User } };
 
@@ -37,5 +41,6 @@ export const playersRoute = new Hono<Env>()
     if (!encounter) {
       return c.json({ error: "No shared games with this player" }, 404);
     }
-    return c.json({ player: encounter });
+    const heroBreakdown = await getPlayerHeroBreakdown(user.id, c.req.param("battletag"));
+    return c.json({ player: encounter, heroBreakdown });
   });
