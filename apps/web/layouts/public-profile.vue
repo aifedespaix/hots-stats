@@ -1,0 +1,13 @@
+<template>
+  <div class="min-h-screen bg-background text-foreground font-body">
+    <header class="border-b border-border">
+      <div class="mx-auto flex max-w-3xl items-center justify-between px-6 py-4">
+        <NuxtLink to="/" class="font-heading text-lg font-semibold">HotS Analytics</NuxtLink>
+        <UiThemeSwitcher />
+      </div>
+    </header>
+    <main class="mx-auto max-w-3xl px-6 py-10">
+      <slot />
+    </main>
+  </div>
+</template>

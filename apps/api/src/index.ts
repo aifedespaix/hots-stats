@@ -4,8 +4,11 @@ import { logger } from "hono/logger";
 import { env } from "./lib/env";
 import { authRoute } from "./routes/auth";
 import { healthRoute } from "./routes/health";
+import { heroesRoute } from "./routes/heroes";
 import { ingestRoute } from "./routes/ingest";
 import { matchesRoute } from "./routes/matches";
+import { playersRoute } from "./routes/players";
+import { publicRoute } from "./routes/public";
 import { statsRoute } from "./routes/stats";
 import { tokensRoute } from "./routes/tokens";
 
@@ -26,6 +29,9 @@ app.route("/tokens", tokensRoute);
 app.route("/ingest", ingestRoute);
 app.route("/matches", matchesRoute);
 app.route("/stats", statsRoute);
+app.route("/heroes", heroesRoute);
+app.route("/players", playersRoute);
+app.route("/public", publicRoute);
 
 export default {
   port: env.PORT,

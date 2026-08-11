@@ -5,8 +5,8 @@ const route = useRoute();
 const navItems = [
   { to: "/", label: "Dashboard", icon: "i-heroicons-squares-2x2", enabled: true },
   { to: "/matches", label: "Historique", icon: "i-heroicons-clock", enabled: true },
-  { to: "/heroes", label: "Héros", icon: "i-heroicons-fire", enabled: false },
-  { to: "/players", label: "Joueurs", icon: "i-heroicons-user-group", enabled: false },
+  { to: "/heroes", label: "Héros", icon: "i-heroicons-fire", enabled: true },
+  { to: "/players", label: "Joueurs", icon: "i-heroicons-user-group", enabled: true },
 ];
 
 async function handleLogout() {
