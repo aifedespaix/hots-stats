@@ -106,9 +106,10 @@ def _apply_score_event(tracker_events: list[dict], tracker_id_to_toon: dict[int,
         if event.get("_event") != "NNet.Replay.Tracker.SScoreResultEvent":
             continue
         for instance in event["m_instanceList"]:
-            field = constants.SCORE_FIELD_BY_STAT_NAME.get(_s(instance["m_name"]))
-            if field is None:
-                continue
+            # Every stat the tracker reports is forwarded (generically
+            # camelCased), not just the ones the API currently reads -- see
+            # constants.stat_field_name's docstring.
+            field = constants.stat_field_name(_s(instance["m_name"]))
             real_index = 0
             for values in instance["m_values"]:
                 if not values:

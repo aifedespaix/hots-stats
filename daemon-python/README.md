@@ -42,10 +42,17 @@ python -m src.main --resync D:\Replays   # resync a specific folder instead
 `--resync` is safe to re-run: the API upserts by replay hash, so already
 up-to-date matches are skipped rather than duplicated.
 
+On start (or after saving new settings), the daemon uploads every replay
+already sitting in the replays folder before it starts watching for new
+ones — a folder full of replays from before the daemon was ever configured
+gets synced too, not just future games.
+
 From the tray icon: **Ouvrir les paramètres** reopens the settings window
-(pre-filled, live connection/token status, current games-recorded count);
-saving restarts the background watcher with the new config. **Quitter**
-stops the watcher thread cleanly before exiting.
+(pre-filled, live connection/token status, current games-recorded count,
+plus live found/synced/currently-syncing counters and the last sync error,
+if any, while the daemon is running); saving restarts the background
+watcher with the new config. **Quitter** stops the watcher thread cleanly
+before exiting.
 
 ## Architecture
 
@@ -60,7 +67,15 @@ src/
   ingestion.py  Parses + uploads one replay; shared by --resync and the tray daemon
   parser.py     .StormReplay -> API payload
   api_client.py HTTP client (retrying, for real ingestion) + light ping/summary helpers (for the settings UI)
+  status.py     Thread-safe found/synced/currently-syncing/last-error snapshot, for the settings window
 ```
+
+## Icon
+
+The .exe's file icon and the system tray icon are both generated from the
+web app's `apps/web/public/favicon.svg`. See `assets/generate_icons.py` for
+how to regenerate them after the favicon changes (needs `cairosvg` +
+`pillow`, not otherwise required to build the daemon).
 
 ## Tests
 

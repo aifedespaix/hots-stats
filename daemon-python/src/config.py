@@ -67,15 +67,34 @@ def save_config(api_base_url: str, access_token: str, replays_dir: str) -> None:
 
 
 def default_replays_dir() -> Path | None:
-    """Best-effort guess at the default HotS replays folder.
+    """Best-effort guess at the default HotS replays folder, e.g.
+    `C:\\Users\\<account>\\Documents\\Heroes of the Storm\\Accounts\\<account-id>\\<region-id>\\Replays\\Multiplayer`.
 
-    The real path includes account-id and region-id segments that vary per
-    installation (`Documents/Heroes of the Storm/Accounts/<id>/<region>/Replays/Multiplayer`),
-    so we glob for it and return the first match.
+    `Path.home()` already resolves to the real Windows account name (there's
+    no separate lookup needed for that). The account-id/region-id segments
+    vary per installation -- and a player can have several, e.g. smurf
+    accounts -- so we glob for all of them and prefer, in order: one that
+    already has replays in it, then the most recently modified, then
+    whichever sorts first. Returns None if none exist, so callers (the
+    settings window) can leave the field empty rather than prefill a guess
+    that doesn't exist on disk.
     """
     documents = Path.home() / "Documents"
-    matches = sorted(documents.glob("Heroes of the Storm/Accounts/*/*/Replays/Multiplayer"))
-    return matches[0] if matches else None
+    matches = list(documents.glob("Heroes of the Storm/Accounts/*/*/Replays/Multiplayer"))
+    if not matches:
+        return None
+    if len(matches) == 1:
+        return matches[0]
+
+    def _rank(folder: Path) -> tuple[bool, float, str]:
+        has_replays = next(folder.glob("*.StormReplay"), None) is not None
+        try:
+            mtime = folder.stat().st_mtime
+        except OSError:
+            mtime = 0.0
+        return (has_replays, mtime, str(folder))
+
+    return max(matches, key=_rank)
 
 
 def load_config() -> Config:

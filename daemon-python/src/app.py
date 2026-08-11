@@ -14,15 +14,51 @@ from __future__ import annotations
 
 import logging
 import threading
+from pathlib import Path
+from typing import Callable
 
 from . import api_client
 from .config import Config, ConfigError, config_exists, load_config
-from .gui import run_settings_window
 from .ingestion import ingest_file
-from .tray import TrayController
+from .status import StatusTracker
 from .watcher import watch_replays
 
+# gui/tray need tkinter/pystray (a display), same as main.py's lazy `from
+# .app import run_app` for `--resync`: importing them only inside run_app()
+# keeps the rest of this module (in particular `_DaemonRunner` /
+# `_run_sync_loop`, which is where the actual sync logic lives) importable
+# and unit-testable headlessly.
+
 logger = logging.getLogger(__name__)
+
+
+def _run_sync_loop(
+    replays_dir: Path,
+    ingest: Callable[[Path], None],
+    stop_event: threading.Event,
+    status: StatusTracker,
+) -> None:
+    """Uploads every replay already on disk, then hands off to `watch_replays`
+    for new ones.
+
+    Without this initial pass, a folder full of replays from before the
+    daemon was ever configured would sit there forever: `watch_replays` only
+    reacts to files *created* while it's watching, so plugging in an already
+    populated folder looked like "configured the daemon, nothing uploads".
+    """
+    existing = sorted(replays_dir.glob("*.StormReplay"))
+    status.set_found(len(existing))
+    logger.info("Found %d replay(s) already on disk in %s", len(existing), replays_dir)
+    for path in existing:
+        if stop_event.is_set():
+            return
+        ingest(path)
+
+    def _on_new_replay(path: Path) -> None:
+        status.bump_found()
+        ingest(path)
+
+    watch_replays(replays_dir, on_replay_ready=_on_new_replay, stop_event=stop_event)
 
 
 class _DaemonRunner:
@@ -31,16 +67,26 @@ class _DaemonRunner:
     def __init__(self) -> None:
         self._thread: threading.Thread | None = None
         self._stop_event: threading.Event | None = None
+        self.status = StatusTracker()
 
     def start(self, config: Config) -> None:
         self.stop()  # ensure any previous thread is fully stopped before starting a new one
+        self.status = StatusTracker()  # fresh counters for this run
 
         client = api_client.ApiClient(config)
         stop_event = threading.Event()
+
+        def _ingest_and_track(path: Path) -> None:
+            self.status.start_syncing(path.name)
+            outcome = ingest_file(client, path)
+            self.status.finish_syncing(
+                ok=outcome.status in ("uploaded", "skipped"),
+                error=outcome.detail if outcome.status == "error" else None,
+            )
+
         thread = threading.Thread(
-            target=watch_replays,
-            args=(config.replays_dir,),
-            kwargs={"on_replay_ready": lambda path: ingest_file(client, path), "stop_event": stop_event},
+            target=_run_sync_loop,
+            args=(config.replays_dir, _ingest_and_track, stop_event, self.status),
             name="hots-replay-watcher",
             daemon=True,
         )
@@ -60,6 +106,9 @@ class _DaemonRunner:
 
 
 def run_app() -> int:
+    from .gui import run_settings_window
+    from .tray import TrayController
+
     if not config_exists():
         logger.info("No configuration found, opening first-run setup window.")
         if not run_settings_window(is_first_run=True):
@@ -76,7 +125,7 @@ def run_app() -> int:
     daemon.start(config)
 
     def _on_open_settings() -> None:
-        if run_settings_window(is_first_run=False):
+        if run_settings_window(is_first_run=False, status_tracker=daemon.status):
             try:
                 new_config = load_config()
             except ConfigError as err:

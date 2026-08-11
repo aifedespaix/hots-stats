@@ -28,11 +28,13 @@ from tkinter import filedialog, messagebox, ttk
 from . import api_client
 from .config import config_file_path, default_replays_dir, read_config_file, save_config
 from .constants import APP_VERSION
+from .status import StatusTracker
 from .urls import DEFAULT_API_BASE_URL, guess_settings_url
 
 logger = logging.getLogger(__name__)
 
 _DEBOUNCE_MS = 600
+_LIVE_STATS_POLL_MS = 500
 
 # A small, dark, "gamer tool" palette. Kept in one place so the whole window
 # reads as one deliberate look rather than default-tk gray.
@@ -48,22 +50,31 @@ _ERROR = "#ef5b5b"
 _NEUTRAL = "#8b90ad"
 
 
-def run_settings_window(is_first_run: bool) -> bool:
+def run_settings_window(is_first_run: bool, status_tracker: StatusTracker | None = None) -> bool:
     """Opens the settings window and blocks (on the calling thread) until
-    it's closed. Returns True if the user saved a valid configuration."""
+    it's closed. Returns True if the user saved a valid configuration.
+
+    `status_tracker`, when the daemon is already running (reopened from the
+    tray), lets the window show live found/synced/currently-syncing counts
+    instead of just the one-off "games recorded" summary fetched from the API.
+    """
     result = {"saved": False}
     root = tk.Tk()
-    _SettingsWindow(root, is_first_run=is_first_run, result=result)
+    _SettingsWindow(root, is_first_run=is_first_run, result=result, status_tracker=status_tracker)
     root.mainloop()
     return result["saved"]
 
 
 class _SettingsWindow:
-    def __init__(self, root: tk.Tk, *, is_first_run: bool, result: dict) -> None:
+    def __init__(
+        self, root: tk.Tk, *, is_first_run: bool, result: dict, status_tracker: StatusTracker | None = None
+    ) -> None:
         self._root = root
         self._is_first_run = is_first_run
         self._result = result
+        self._status_tracker = status_tracker
         self._debounce_job: str | None = None
+        self._live_stats_job: str | None = None
 
         root.title("HotS Analytics — Configuration")
         root.configure(bg=_BG)
@@ -81,6 +92,8 @@ class _SettingsWindow:
         self._check_connection()
         if not is_first_run:
             self._load_stats()
+            if self._status_tracker is not None:
+                self._refresh_live_stats()
 
         root.after(50, lambda: self._api_entry.focus_set())
 
@@ -235,6 +248,47 @@ class _SettingsWindow:
         self._games_count_label = ttk.Label(inner, text="…", style="Panel.TLabel")
         self._games_count_label.grid(row=1, column=1, sticky="w", padx=(40, 0))
 
+        if self._status_tracker is not None:
+            ttk.Label(inner, text="Trouvées dans le dossier", style="PanelMuted.TLabel").grid(
+                row=0, column=2, sticky="w", padx=(40, 0)
+            )
+            self._found_count_label = ttk.Label(inner, text="…", style="Panel.TLabel")
+            self._found_count_label.grid(row=1, column=2, sticky="w", padx=(40, 0))
+
+            ttk.Label(inner, text="Synchronisées (cette session)", style="PanelMuted.TLabel").grid(
+                row=2, column=0, sticky="w", pady=(14, 0)
+            )
+            self._synced_count_label = ttk.Label(inner, text="…", style="Panel.TLabel")
+            self._synced_count_label.grid(row=3, column=0, sticky="w")
+
+            ttk.Label(inner, text="En cours de synchronisation", style="PanelMuted.TLabel").grid(
+                row=2, column=1, columnspan=2, sticky="w", pady=(14, 0), padx=(40, 0)
+            )
+            self._currently_syncing_label = ttk.Label(inner, text="—", style="Panel.TLabel")
+            self._currently_syncing_label.grid(row=3, column=1, columnspan=2, sticky="w", padx=(40, 0))
+
+            self._sync_error_label = ttk.Label(
+                inner, text="", style="PanelMuted.TLabel", foreground=_ERROR, wraplength=460, justify="left"
+            )
+            self._sync_error_label.grid(row=4, column=0, columnspan=3, sticky="w", pady=(14, 0))
+
+    def _refresh_live_stats(self) -> None:
+        assert self._status_tracker is not None
+        status = self._status_tracker.snapshot()
+
+        self._found_count_label.configure(text=str(status.found))
+        self._synced_count_label.configure(
+            text=f"{status.synced} ok" + (f", {status.failed} échouées" if status.failed else "")
+        )
+        self._currently_syncing_label.configure(text=status.currently_syncing or "—")
+
+        if status.last_error:
+            self._sync_error_label.configure(text=f"✗ Dernière erreur de synchronisation : {status.last_error}")
+        else:
+            self._sync_error_label.configure(text="")
+
+        self._live_stats_job = self._root.after(_LIVE_STATS_POLL_MS, self._refresh_live_stats)
+
     # -- prefill ----------------------------------------------------------
 
     def _prefill(self) -> None:
@@ -247,7 +301,11 @@ class _SettingsWindow:
         self._token_var.set(existing.get("accessToken") or "")
 
         replays_dir = existing.get("replaysDir")
-        if not replays_dir:
+        if not replays_dir or not Path(replays_dir).is_dir():
+            # Nothing saved, or the saved folder no longer exists (e.g. the
+            # game/account moved) -- re-run autodetection rather than
+            # prefilling a path that's known to be wrong. Left blank if that
+            # doesn't find anything either, so the user browses manually.
             guessed = default_replays_dir()
             replays_dir = str(guessed) if guessed else ""
         self._replays_var.set(replays_dir)
@@ -375,10 +433,16 @@ class _SettingsWindow:
         save_config(api_base_url, access_token, replays_dir)
         logger.info("Configuration saved to %s", config_file_path())
         self._result["saved"] = True
+        self._stop_live_stats()
         self._root.destroy()
 
     def _show_error(self, message: str) -> None:
         self._error_label.configure(text=message)
+
+    def _stop_live_stats(self) -> None:
+        if self._live_stats_job is not None:
+            self._root.after_cancel(self._live_stats_job)
+            self._live_stats_job = None
 
     def _on_close(self) -> None:
         if self._is_first_run:
@@ -386,4 +450,5 @@ class _SettingsWindow:
                 "Quitter", "Aucune configuration n'a été enregistrée. Quitter quand même ?", parent=self._root
             ):
                 return
+        self._stop_live_stats()
         self._root.destroy()

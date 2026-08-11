@@ -13,32 +13,26 @@ open at once.
 
 from __future__ import annotations
 
+import base64
+import io
 import logging
 import threading
 from typing import Callable
 
 import pystray
-from PIL import Image, ImageDraw
+from PIL import Image
+
+from ._icon_data import TRAY_ICON_PNG_BASE64
 
 logger = logging.getLogger(__name__)
 
-_ICON_SIZE = 64
-_ICON_BG = (28, 31, 46, 255)  # matches gui.py's _BG panel color
-_ICON_FG = (108, 140, 255, 255)  # matches gui.py's _ACCENT color
-
 
 def _build_icon_image() -> Image.Image:
-    """Procedurally draws a simple round badge, so the build doesn't need to
-    ship and correctly bundle a separate .ico asset through Nuitka."""
-    image = Image.new("RGBA", (_ICON_SIZE, _ICON_SIZE), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(image)
-    margin = 4
-    draw.ellipse((margin, margin, _ICON_SIZE - margin, _ICON_SIZE - margin), fill=_ICON_BG)
-    inner_margin = _ICON_SIZE * 0.32
-    draw.ellipse(
-        (inner_margin, inner_margin, _ICON_SIZE - inner_margin, _ICON_SIZE - inner_margin), fill=_ICON_FG
-    )
-    return image
+    """Loads the app's icon (the web app's favicon, composited onto a small
+    dark backdrop disc for legibility on any taskbar theme) from the PNG
+    embedded in `_icon_data.py`. Embedded rather than a bundled data file so
+    it survives Nuitka's --onefile packaging with no extra build flag."""
+    return Image.open(io.BytesIO(base64.b64decode(TRAY_ICON_PNG_BASE64)))
 
 
 class TrayController:

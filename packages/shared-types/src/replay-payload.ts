@@ -49,6 +49,16 @@ export type ReplayPlayer = z.infer<typeof replayPlayerSchema>;
  * Payload posted by the Python daemon to POST /api/ingest.
  * `parserVersion` drives the upsert logic: a match is only overwritten
  * when the incoming version is strictly greater than the stored one.
+ *
+ * Forward-compat contract with the daemon: the daemon forwards every stat
+ * the game's replay tracker reports for a player, not just the fields below
+ * (see daemon-python/src/parser.py's `_apply_score_event` /
+ * constants.stat_field_name). `z.object()` without `.strict()` silently
+ * drops keys it doesn't recognize, so adding a new field here to start
+ * reading a stat the daemon already sends (plus a matching DB column and
+ * `replay-upsert.service.ts` write) is enough on its own -- no daemon
+ * rebuild needed. A rebuild is only required when the daemon can't *decode*
+ * a stat at all (a `heroprotocol` update for a new replay build).
  */
 export const replayPayloadSchema = z.object({
   replayHash: z.string().min(32),

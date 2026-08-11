@@ -166,6 +166,30 @@ def test_build_payload_happy_path():
     assert bar["kills"] == 1
 
 
+def test_build_payload_forwards_stats_the_api_does_not_use_yet():
+    """A tracker stat the API doesn't read (yet) is still sent, generically
+    camelCased -- so the API can start using it without a daemon rebuild."""
+    stats = dict(REQUIRED_STATS)
+    stats["MinionKills"] = [12, 7]
+
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=[
+            *_base_tracker_events()[:3],
+            _score_event(stats),
+            *_base_tracker_events()[4:],
+        ],
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+    )
+
+    players_by_tag = {p["battletag"]: p for p in payload["players"]}
+    assert players_by_tag["Foo#1111"]["minionKills"] == 12
+    assert players_by_tag["Bar#2222"]["minionKills"] == 7
+
+
 def test_build_payload_unknown_ammid_falls_back_to_custom():
     payload = build_payload(
         header=_header(610 + 16 * 600),

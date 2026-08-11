@@ -82,6 +82,18 @@ def test_default_replays_dir_globs_account_folders(monkeypatch, tmp_path):
     assert default_replays_dir() == replay_dir
 
 
+def test_default_replays_dir_prefers_account_with_replays(monkeypatch, tmp_path):
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    accounts = tmp_path / "Documents" / "Heroes of the Storm" / "Accounts"
+    empty_dir = accounts / "11111" / "1-Hero-1-1" / "Replays" / "Multiplayer"
+    populated_dir = accounts / "99999" / "1-Hero-1-2" / "Replays" / "Multiplayer"
+    empty_dir.mkdir(parents=True)
+    populated_dir.mkdir(parents=True)
+    (populated_dir / "Game.StormReplay").write_bytes(b"")
+
+    assert default_replays_dir() == populated_dir
+
+
 def test_default_replays_dir_returns_none_when_absent(monkeypatch, tmp_path):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
