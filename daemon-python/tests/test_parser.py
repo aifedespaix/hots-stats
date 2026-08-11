@@ -2,12 +2,37 @@ import datetime as dt
 
 import pytest
 
-from src.parser import ReplayParseError, _slugify, _toon_handle, _windows_filetime_to_iso8601, build_payload
+from src._protocol_versions import KNOWN_PROTOCOL_BUILDS
+from src.parser import (
+    ReplayParseError,
+    _build_protocol,
+    _protocol_module,
+    _slugify,
+    _toon_handle,
+    _windows_filetime_to_iso8601,
+    build_payload,
+)
 
 
 def _filetime(iso: str) -> int:
     seconds = dt.datetime.fromisoformat(iso).replace(tzinfo=dt.timezone.utc).timestamp()
     return round((seconds + 11_644_473_600) * 10_000_000)
+
+
+def test_protocol_module_imports_a_known_build_by_name():
+    # Regression test for the daemon's onefile packaging bug: this must go
+    # through `importlib.import_module` (works under Nuitka's --onefile
+    # build), not `heroprotocol.versions.build()`/`.latest()` (which
+    # `os.listdir` next to their own `__file__` and fail there instead).
+    latest_build = max(KNOWN_PROTOCOL_BUILDS)
+    module = _protocol_module(latest_build)
+    assert module.__name__ == f"heroprotocol.versions.protocol{latest_build:05d}"
+    assert hasattr(module, "decode_replay_header")
+
+
+def test_build_protocol_raises_replay_parse_error_for_unsupported_build():
+    with pytest.raises(ReplayParseError, match="Unsupported replay base build"):
+        _build_protocol({"m_version": {"m_baseBuild": 1}})
 
 
 def test_slugify():

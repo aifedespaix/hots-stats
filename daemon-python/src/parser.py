@@ -12,6 +12,7 @@ fixtures, since they aren't documented anywhere in `heroprotocol` itself.
 from __future__ import annotations
 
 import datetime as dt
+import importlib
 import re
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,7 @@ from typing import Any
 import mpyq
 
 from . import constants
+from ._protocol_versions import KNOWN_PROTOCOL_BUILDS
 from .hasher import hash_replay_file
 
 _GAMELOOPS_PER_SECOND = 16
@@ -89,12 +91,25 @@ def _extract_battletags(archive: mpyq.MPQArchive, player_list: list[dict]) -> di
     return result
 
 
-def _build_protocol(header: dict):
-    from heroprotocol.versions import build as build_protocol
+def _protocol_module(build_number: int):
+    """Imports `heroprotocol.versions.protocolNNNNN` by name.
 
+    Deliberately not `heroprotocol.versions.build()`/`.latest()`: those pick
+    the module by `os.listdir`-ing the directory next to their own
+    `__file__`, which breaks under Nuitka's `--onefile` packaging (the
+    compiled module's `__file__` points into the app's onefile temp
+    extraction dir, but the actual protocol `.py` sources live compiled
+    inside the executable, not extracted on disk at that path -- see
+    `_protocol_versions.py`). A plain `importlib.import_module` goes through
+    Nuitka's compiled-module registry instead, which resolves correctly.
+    """
+    return importlib.import_module(f"heroprotocol.versions.protocol{build_number:05d}")
+
+
+def _build_protocol(header: dict):
     base_build = header["m_version"]["m_baseBuild"]
     try:
-        return build_protocol(base_build)
+        return _protocol_module(base_build)
     except Exception as err:
         raise ReplayParseError(
             f"Unsupported replay base build {base_build}; upgrade the `heroprotocol` package."
@@ -129,13 +144,15 @@ def parse_replay(path: Path) -> dict[str, Any]:
     or that we can't confidently extract (AI players, incomplete games,
     unrecognized hero/map codes).
     """
-    import heroprotocol.versions as hp_versions
-
     try:
         archive = mpyq.MPQArchive(str(path))
 
         header_contents = archive.header["user_data_header"]["content"]
-        header = hp_versions.latest().decode_replay_header(header_contents)
+        # Header format is stable across protocol versions, so any build's
+        # decoder works here; we just need one that's actually importable
+        # (see `_protocol_module`), hence the newest known build rather than
+        # `heroprotocol.versions.latest()`.
+        header = _protocol_module(max(KNOWN_PROTOCOL_BUILDS)).decode_replay_header(header_contents)
         protocol = _build_protocol(header)
 
         details = protocol.decode_replay_details(archive.read_file("replay.details"))
