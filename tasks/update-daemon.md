@@ -17,7 +17,7 @@ Interface et Statistiques : Lorsque l'on réouvre la fenêtre depuis la traybar,
 Rédige l'architecture du code complet, de manière propre et commentée, en t'assurant que la fermeture depuis la traybar arrête proprement le thread du daemon.
 
 Faut une interface simple et agréable à regarder
-et si faut update le github worflow tu peux le faire
+
 le github plante au build voici ce que son ia me dis :
 
 I'll retrieve the job logs to identify the failure and provide a solution.
@@ -91,3 +91,5 @@ File "C:\Users\RUNNER~1\AppData\Local\Temp\onefile_5504_194344_neY5vXnzuKs\main.
 ImportError: attempted relative import with no known parent package
 Error: Process completed with exit code 1.)
 )
+
+Donc répare si tu peux, cherhcec les bonnes rpatiques etc et adapte ajsutemetn avec les modifs qu'on a ajouté.
