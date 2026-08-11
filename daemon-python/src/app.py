@@ -22,6 +22,7 @@ from .config import Config, ConfigError, config_exists, load_config
 from .ingestion import ingest_file
 from .status import StatusTracker
 from .sync_state import SyncState
+from .updater import watch_for_updates
 from .watcher import watch_replays
 
 # gui/tray need tkinter/pystray (a display), same as main.py's lazy `from
@@ -126,6 +127,14 @@ def run_app() -> int:
     daemon = _DaemonRunner()
     daemon.start(config)
 
+    update_stop_event = threading.Event()
+    threading.Thread(
+        target=watch_for_updates,
+        args=(update_stop_event,),
+        name="hots-update-checker",
+        daemon=True,
+    ).start()
+
     def _on_open_settings() -> None:
         if run_settings_window(is_first_run=False, status_tracker=daemon.status):
             try:
@@ -138,6 +147,7 @@ def run_app() -> int:
 
     def _on_quit() -> None:
         logger.info("Stopping the replay watcher before exit...")
+        update_stop_event.set()
         daemon.stop()
 
     tray = TrayController(on_open_settings=_on_open_settings, on_quit=_on_quit)

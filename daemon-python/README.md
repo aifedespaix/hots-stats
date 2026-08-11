@@ -54,6 +54,23 @@ if any, while the daemon is running); saving restarts the background
 watcher with the new config. **Quitter** stops the watcher thread cleanly
 before exiting.
 
+## Auto-update
+
+The packaged `.exe` checks GitHub Releases for a newer daemon build shortly
+after startup and every few hours after that (`src/updater.py`). If one is
+found, it downloads it and relaunches itself as the new version — no user
+action needed. This only runs in the compiled build; `python -m src.main`
+in dev never self-updates.
+
+## Releases
+
+Every push to `main` that touches `daemon-python`'s code (not just
+`tests/`/`README.md`) is automatically released: CI bumps the patch version
+in `pyproject.toml` + `constants.py`'s `APP_VERSION`, commits it, tags it
+`vX.Y.Z`, builds the `.exe`, and publishes it as a GitHub Release — see
+`.github/workflows/build-daemon.yml`. There's nothing manual to do; just
+merge the change.
+
 ## Architecture
 
 ```
@@ -68,6 +85,7 @@ src/
   parser.py     .StormReplay -> API payload
   api_client.py HTTP client (retrying, for real ingestion) + light ping/summary helpers (for the settings UI)
   status.py     Thread-safe found/synced/currently-syncing/last-error snapshot, for the settings window
+  updater.py    Checks GitHub Releases for a newer build and self-updates when running as the compiled .exe
 ```
 
 ## Icon
