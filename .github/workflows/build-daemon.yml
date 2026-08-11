@@ -3,12 +3,30 @@ name: Build Daemon
 # Compiles daemon-python into a standalone Windows .exe (no Python required
 # on the player's machine) and publishes it as a workflow artifact, plus a
 # GitHub Release asset on version tags.
+#
+# Every push to main that touches daemon-python's actual code (not just
+# tests/docs) is treated as a release: `bump_version` bumps the patch
+# version in pyproject.toml + constants.py, commits it, and creates the
+# `vX.Y.Z` tag the release step below needs -- there's no other source of
+# truth for "what's the next version" (no conventional-commit parsing, no
+# manual tagging), which is the simplification that keeps this workflow the
+# only place versioning happens. `build-windows` then always builds off
+# that tag (falling back to the pushed tag itself, or a dev version, for
+# the manual-tag / workflow_dispatch paths) and publishes a GitHub Release
+# unconditionally for any tagged build.
+#
+# This single workflow owns both steps (rather than having `bump_version`'s
+# tag push trigger a separate build workflow) because pushes made with the
+# default GITHUB_TOKEN don't trigger new `on: push`/`on: tag` workflow runs
+# -- see https://docs.github.com/actions/security-guides/automatic-token-authentication#using-the-github_token-in-a-workflow.
 
 on:
   push:
     branches: [main]
     paths:
       - "daemon-python/**"
+      - "!daemon-python/README.md"
+      - "!daemon-python/tests/**"
       - ".github/workflows/build-daemon.yml"
     tags:
       - "v*"
@@ -21,8 +39,56 @@ env:
   PYTHON_VERSION: "3.11"
 
 jobs:
+  bump_version:
+    name: Bump version and tag
+    # Only for a plain push to main -- a manual "vX.Y.Z" tag push or a
+    # workflow_dispatch run already carries (or doesn't need) a version, so
+    # don't bump again. The message check is belt-and-suspenders: it's the
+    # commit this job itself creates, and per the GITHUB_TOKEN note above
+    # that push can't actually retrigger this workflow anyway.
+    if: "github.event_name == 'push' && github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'chore(daemon): release v')"
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+      tag: ${{ steps.bump.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Bump patch version in pyproject.toml + constants.py
+        id: bump
+        working-directory: daemon-python
+        run: |
+          set -euo pipefail
+          current=$(grep -m1 '^version = ' pyproject.toml | sed -E 's/version = "(.*)"/\1/')
+          IFS='.' read -r major minor patch <<< "$current"
+          new="$major.$minor.$((patch + 1))"
+
+          sed -i "s/^version = \"$current\"/version = \"$new\"/" pyproject.toml
+          sed -i "s/^APP_VERSION = \"$current\"/APP_VERSION = \"$new\"/" src/constants.py
+
+          echo "version=$new" >> "$GITHUB_OUTPUT"
+          echo "tag=v$new" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and tag
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add daemon-python/pyproject.toml daemon-python/src/constants.py
+          git commit -m "chore(daemon): release ${{ steps.bump.outputs.tag }}"
+          git tag "${{ steps.bump.outputs.tag }}"
+          git push origin HEAD:main
+          git push origin "${{ steps.bump.outputs.tag }}"
+
   build-windows:
     name: Build Windows executable
+    needs: [bump_version]
+    # Runs whether bump_version made a new release (push to main) or was
+    # skipped (manual "vX.Y.Z" tag push, or workflow_dispatch).
+    if: always() && (needs.bump_version.result == 'success' || needs.bump_version.result == 'skipped')
     # Cross-compiling a native Windows .exe from Linux isn't reliable for
     # this use case, so the build must run on a real Windows runner.
     runs-on: windows-latest
@@ -33,6 +99,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.bump_version.outputs.tag || github.ref }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -46,7 +114,9 @@ jobs:
         id: version
         shell: bash
         run: |
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+          if [[ -n "${{ needs.bump_version.outputs.version }}" ]]; then
+            echo "version=${{ needs.bump_version.outputs.version }}" >> "$GITHUB_OUTPUT"
+          elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
           else
             echo "version=0.0.0-dev.${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
@@ -139,9 +209,10 @@ jobs:
           if-no-files-found: error
 
       - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: needs.bump_version.outputs.tag != '' || startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.bump_version.outputs.tag || github.ref_name }}
           files: daemon-python/dist/hots-analytics-daemon-v${{ steps.version.outputs.version }}.exe
           name: Daemon v${{ steps.version.outputs.version }}
           generate_release_notes: true
