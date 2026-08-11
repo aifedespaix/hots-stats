@@ -12,6 +12,7 @@
   "dependencies": {
     "@hots-stats/db": "workspace:*",
     "@hots-stats/shared-types": "workspace:*",
+    "arctic": "^2.3.0",
     "drizzle-orm": "^0.38.3",
     "hono": "^4.6.14",
     "zod": "^3.24.1"
