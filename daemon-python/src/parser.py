@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import datetime as dt
 import importlib
+import logging
 import re
 from pathlib import Path
 from typing import Any
@@ -22,6 +23,8 @@ import mpyq
 from . import constants
 from ._protocol_versions import KNOWN_PROTOCOL_BUILDS
 from .hasher import hash_replay_file
+
+logger = logging.getLogger(__name__)
 
 _GAMELOOPS_PER_SECOND = 16
 # "Name#12345" — display names can contain most unicode letters/digits.
@@ -111,6 +114,20 @@ def _build_protocol(header: dict):
     try:
         return _protocol_module(base_build)
     except Exception as err:
+        newest_known = max(KNOWN_PROTOCOL_BUILDS)
+        if base_build > newest_known:
+            # Blizzard shipped a patch before `heroprotocol` published a decoder
+            # for it -- that upstream lag is routinely days to weeks. The wire
+            # format essentially never changes between consecutive builds, so
+            # best-effort decode with the newest build we do have rather than
+            # refusing every replay until the next `heroprotocol` bump.
+            logger.warning(
+                "No `heroprotocol` decoder for replay base build %d yet; "
+                "falling back to newest known build %d.",
+                base_build,
+                newest_known,
+            )
+            return _protocol_module(newest_known)
         raise ReplayParseError(
             f"Unsupported replay base build {base_build}; upgrade the `heroprotocol` package."
         ) from err

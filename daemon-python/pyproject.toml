@@ -4,7 +4,11 @@ version = "1.0.0"
 description = "Windows client that watches for new HotS replays and uploads parsed stats to the HotS Analytics API."
 requires-python = ">=3.11"
 dependencies = [
-    "heroprotocol>=2.55",
+    # PyPI's `heroprotocol` hasn't been published since 2.55.4.91756 (Jan 2024)
+    # even though Blizzard keeps releasing new builds on GitHub, so pin
+    # directly to their latest tag instead. Bump the tag (and rerun
+    # `assets/generate_protocol_manifest.py`) whenever a newer one ships.
+    "heroprotocol @ git+https://github.com/Blizzard/heroprotocol.git@v2.55.15.96477",
     "watchdog>=4.0",
     "requests>=2.31",
     "mpyq>=0.2.5",
