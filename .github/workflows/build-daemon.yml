@@ -1,0 +1,115 @@
+name: Build Daemon
+
+# Compiles daemon-python into a standalone Windows .exe (no Python required
+# on the player's machine) and publishes it as a workflow artifact, plus a
+# GitHub Release asset on version tags.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "daemon-python/**"
+      - ".github/workflows/build-daemon.yml"
+    tags:
+      - "v*"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  build-windows:
+    name: Build Windows executable
+    # Cross-compiling a native Windows .exe from Linux isn't reliable for
+    # this use case, so the build must run on a real Windows runner.
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: daemon-python
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install daemon + build dependencies
+        run: pip install -e ".[build]"
+
+      - name: Resolve binary version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=0.0.0-dev.${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The binary version (this tag / dev build) and PARSER_VERSION (in
+      # src/constants.py) are intentionally independent: the daemon can ship
+      # a patch (network fix, watcher fix) without bumping the ingestion
+      # payload format, which would otherwise force a re-upsert of every
+      # already-ingested replay. Do not derive one from the other.
+      - name: Build with Nuitka
+        run: >
+          python -m nuitka
+          --onefile
+          --standalone
+          --mingw64
+          --assume-yes-for-downloads
+          --include-package=heroprotocol
+          --include-package=watchdog
+          --output-dir=dist
+          --output-filename=hots-analytics-daemon-v${{ steps.version.outputs.version }}.exe
+          src/main.py
+        # Nuitka over PyInstaller: it compiles to native C rather than
+        # embedding a zipped interpreter, which triggers far fewer AV false
+        # positives on Windows.
+        #
+        # --onefile (not plain --standalone + zip): the daemon is a
+        # long-running background watcher a player launches a handful of
+        # times, not a script invoked thousands of times per session, so
+        # onefile's one-time self-extraction cost at startup is irrelevant,
+        # and a single double-clickable .exe is much friendlier to ship than
+        # a folder of files. If onefile ever proves more AV-flagged in
+        # practice than a plain --standalone build, switch to publishing the
+        # --standalone folder as a zip instead — the rest of this workflow
+        # (versioning, artifact upload, release publishing) stays the same.
+        #
+        # --mingw64: forces Nuitka's bundled MinGW64 toolchain instead of
+        # relying on whatever MSVC install happens to be on windows-latest,
+        # so the build doesn't silently change behavior on runner image
+        # updates. --assume-yes-for-downloads lets Nuitka fetch it
+        # non-interactively in CI.
+        #
+        # --include-package on heroprotocol/watchdog: both pick their actual
+        # implementation dynamically at runtime (heroprotocol loads a
+        # protocol module per replay build number; watchdog picks an OS
+        # backend), which Nuitka's static import analysis can miss — this
+        # forces the full package tree into the build regardless.
+
+      - name: Smoke test the executable
+        shell: bash
+        run: ./dist/hots-analytics-daemon-v${{ steps.version.outputs.version }}.exe --help
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hots-analytics-daemon-v${{ steps.version.outputs.version }}
+          path: daemon-python/dist/hots-analytics-daemon-v${{ steps.version.outputs.version }}.exe
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: daemon-python/dist/hots-analytics-daemon-v${{ steps.version.outputs.version }}.exe
+          name: Daemon v${{ steps.version.outputs.version }}
+          generate_release_notes: true

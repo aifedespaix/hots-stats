@@ -22,7 +22,6 @@ FROM base AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=deps /app/node_modules /app/node_modules
-COPY --from=deps /app/apps/api/node_modules /app/apps/api/node_modules
 COPY --from=build /app/apps/api/dist /app/apps/api/dist
 COPY --from=build /app/packages/db /app/packages/db
 COPY --from=build /app/packages/shared-types /app/packages/shared-types
