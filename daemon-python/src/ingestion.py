@@ -8,6 +8,7 @@ becoming a circular import.
 from __future__ import annotations
 
 import logging
+import traceback
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -30,7 +31,10 @@ class IngestOutcome:
 
 
 def ingest_file(
-    client: api_client.ApiClient, path: Path, sync_state: SyncState | None = None
+    client: api_client.ApiClient,
+    path: Path,
+    sync_state: SyncState | None = None,
+    api_version: str | None = None,
 ) -> IngestOutcome:
     """Parses and uploads one replay.
 
@@ -38,11 +42,15 @@ def ingest_file(
     current (or a newer) `constants.PARSER_VERSION` is skipped without
     re-parsing or re-uploading it, and any replay successfully confirmed by
     the server (newly uploaded, or already up to date there) is recorded so
-    future calls skip it too. Only successes are recorded -- a replay that
-    errors (e.g. an unparseable file, or a server rejection) is retried on
-    the next call, since fixing the underlying issue (a code update, a
-    reachable API) is exactly what should make it sync next time.
+    future calls skip it too, tagged with `api_version` (the version
+    `GET /ingest/version` reported at daemon startup, see `app.py`) for the
+    Debug report. A replay that errors (e.g. an unparseable file, or a
+    server rejection) is recorded with its error and full traceback instead
+    -- shown in the Debug window (gui.py) -- and retried on the next call,
+    since fixing the underlying issue (a code update, a reachable API) is
+    exactly what should make it sync next time.
     """
+    replay_hash: str | None = None
     if sync_state is not None:
         try:
             replay_hash = hash_replay_file(path)
@@ -57,6 +65,8 @@ def ingest_file(
         payload = replay_parser.parse_replay(path)
     except replay_parser.ReplayParseError as err:
         logger.warning("Skipping %s: %s", path, err)
+        if sync_state is not None and replay_hash is not None:
+            sync_state.mark_error(replay_hash, str(path), str(err), traceback.format_exc())
         return IngestOutcome("error", str(err))
 
     try:
@@ -66,16 +76,30 @@ def ingest_file(
         # callback runs on a background thread, so we can only log loudly
         # here and keep going rather than cleanly stop the daemon.
         logger.error("%s", err)
+        if sync_state is not None:
+            sync_state.mark_error(payload["replayHash"], str(path), str(err), traceback.format_exc())
         return IngestOutcome("error", str(err))
     except api_client.ValidationError as err:
         logger.error("Server rejected %s: %s (detail: %s)", path, err, err.detail)
+        if sync_state is not None:
+            sync_state.mark_error(
+                payload["replayHash"], str(path), f"{err} ({err.detail})", traceback.format_exc()
+            )
         return IngestOutcome("error", f"{err} ({err.detail})")
     except api_client.ApiClientError as err:
         logger.error("Failed to ingest %s: %s", path, err)
+        if sync_state is not None:
+            sync_state.mark_error(payload["replayHash"], str(path), str(err), traceback.format_exc())
         return IngestOutcome("error", str(err))
 
     if sync_state is not None:
-        sync_state.mark_synced(payload["replayHash"], payload["parserVersion"])
+        sync_state.mark_synced(
+            payload["replayHash"],
+            payload["parserVersion"],
+            file_path=str(path),
+            api_version=api_version,
+            match_id=result.match_id,
+        )
 
     if result.upserted:
         logger.info("Ingested %s -> match %s", path, result.match_id)

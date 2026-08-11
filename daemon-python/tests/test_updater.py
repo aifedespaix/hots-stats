@@ -1,9 +1,11 @@
+import threading
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
 
-from src.updater import AvailableUpdate, check_for_update, find_update, parse_version
+from src.updater import AvailableUpdate, check_for_update, find_update, parse_version, watch_for_updates
 
 
 def _release(tag_name: str, assets: list[dict]) -> dict:
@@ -97,3 +99,43 @@ def test_check_for_update_none_on_network_error():
 def test_check_for_update_none_on_malformed_response():
     with patch("src.updater.requests.get", return_value=_response(200, {"unexpected": "shape"})):
         assert check_for_update("1.0.0") is None
+
+
+def test_watch_for_updates_notifies_before_applying(monkeypatch):
+    """`on_update_found` must fire once an update is confirmed, before the
+    download/relaunch handoff -- this is what backs the tray notification
+    in app.py, so the (fully automatic) self-update isn't invisible."""
+    update = AvailableUpdate(version="2.0.0", download_url="https://example.com/a.exe", asset_name="a.exe")
+    applied: list[Path] = []
+
+    monkeypatch.setattr("src.updater.IS_FROZEN", True)
+    monkeypatch.setattr("src.updater.check_for_update", lambda: update)
+    monkeypatch.setattr("src.updater.download_update", lambda *_a, **_k: Path("/tmp/fake.exe"))
+    monkeypatch.setattr("src.updater.apply_update_and_exit", applied.append)
+
+    stop_event = threading.Event()
+    found: list[AvailableUpdate] = []
+    with patch.object(stop_event, "wait", side_effect=[False, True]):
+        watch_for_updates(stop_event, on_update_found=found.append)
+
+    assert found == [update]
+    assert applied == [Path("/tmp/fake.exe")]
+
+
+def test_watch_for_updates_notification_failure_does_not_block_update(monkeypatch):
+    update = AvailableUpdate(version="2.0.0", download_url="https://example.com/a.exe", asset_name="a.exe")
+    applied: list[Path] = []
+
+    monkeypatch.setattr("src.updater.IS_FROZEN", True)
+    monkeypatch.setattr("src.updater.check_for_update", lambda: update)
+    monkeypatch.setattr("src.updater.download_update", lambda *_a, **_k: Path("/tmp/fake.exe"))
+    monkeypatch.setattr("src.updater.apply_update_and_exit", applied.append)
+
+    def _boom(_update: AvailableUpdate) -> None:
+        raise RuntimeError("notification backend unavailable")
+
+    stop_event = threading.Event()
+    with patch.object(stop_event, "wait", side_effect=[False, True]):
+        watch_for_updates(stop_event, on_update_found=_boom)
+
+    assert applied == [Path("/tmp/fake.exe")]

@@ -3,7 +3,15 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from src.api_client import ApiClient, ApiClientError, AuthError, ValidationError, fetch_summary, ping_health
+from src.api_client import (
+    ApiClient,
+    ApiClientError,
+    AuthError,
+    ValidationError,
+    fetch_summary,
+    fetch_version,
+    ping_health,
+)
 from src.config import Config
 
 
@@ -134,3 +142,21 @@ def test_fetch_summary_none_on_401():
 def test_fetch_summary_none_on_network_error():
     with patch("src.api_client.requests.get", side_effect=requests.ConnectionError("offline")):
         assert fetch_summary("https://api.example.com", "hots_pat_abc") is None
+
+
+def test_fetch_version_returns_body_on_200():
+    body = {"apiVersion": "1.1.0", "minParserVersion": "1.0"}
+    with patch("src.api_client.requests.get", return_value=_response(200, body)) as get:
+        assert fetch_version("https://api.example.com", "hots_pat_abc") == body
+    assert get.call_args.args[0] == "https://api.example.com/ingest/version"
+    assert get.call_args.kwargs["headers"] == {"Authorization": "Bearer hots_pat_abc"}
+
+
+def test_fetch_version_none_on_401():
+    with patch("src.api_client.requests.get", return_value=_response(401, {"error": "Invalid token"})):
+        assert fetch_version("https://api.example.com", "bad-token") is None
+
+
+def test_fetch_version_none_on_network_error():
+    with patch("src.api_client.requests.get", side_effect=requests.ConnectionError("offline")):
+        assert fetch_version("https://api.example.com", "hots_pat_abc") is None

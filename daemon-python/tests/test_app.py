@@ -1,8 +1,10 @@
 import threading
 from unittest.mock import patch
 
-from src.app import _run_sync_loop
+from src.app import _run_sync_loop, _sync_api_version
+from src.config import Config
 from src.status import StatusTracker
+from src.sync_state import SyncState
 
 
 def _touch_replay(tmp_path, name: str):
@@ -60,3 +62,47 @@ def test_run_sync_loop_new_replay_callback_bumps_found_and_ingests(tmp_path):
 
     assert ingested == [new_file]
     assert status.snapshot().found == 1
+
+
+def _config(tmp_path) -> Config:
+    return Config(api_base_url="https://api.example.com", access_token="hots_pat_abc", replays_dir=tmp_path)
+
+
+def test_sync_api_version_invalidates_stale_replays(tmp_path):
+    sync_state = SyncState(tmp_path / "sync_state.db")
+    sync_state.mark_synced("old", "1.0", file_path="a")
+
+    with patch(
+        "src.app.api_client.fetch_version",
+        return_value={"apiVersion": "1.5.0", "minParserVersion": "1.1"},
+    ):
+        api_version = _sync_api_version(_config(tmp_path), sync_state)
+
+    assert api_version == "1.5.0"
+    assert sync_state.is_up_to_date("old", "1.0") is False
+    assert sync_state.get_meta("api_version") == "1.5.0"
+
+
+def test_sync_api_version_leaves_state_untouched_when_api_unreachable(tmp_path):
+    sync_state = SyncState(tmp_path / "sync_state.db")
+    sync_state.mark_synced("old", "1.0", file_path="a")
+    sync_state.set_meta("api_version", "1.4.0")
+
+    with patch("src.app.api_client.fetch_version", return_value=None):
+        api_version = _sync_api_version(_config(tmp_path), sync_state)
+
+    assert api_version == "1.4.0"  # falls back to the last known value
+    assert sync_state.is_up_to_date("old", "1.0") is True
+
+
+def test_sync_api_version_keeps_replays_at_or_above_min_version(tmp_path):
+    sync_state = SyncState(tmp_path / "sync_state.db")
+    sync_state.mark_synced("current", "1.1", file_path="a")
+
+    with patch(
+        "src.app.api_client.fetch_version",
+        return_value={"apiVersion": "1.5.0", "minParserVersion": "1.1"},
+    ):
+        _sync_api_version(_config(tmp_path), sync_state)
+
+    assert sync_state.is_up_to_date("current", "1.1") is True

@@ -25,10 +25,11 @@ import webbrowser
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from . import api_client
+from . import api_client, autostart
 from .config import config_file_path, default_replays_dir, read_config_file, save_config
 from .constants import APP_VERSION
 from .status import StatusTracker
+from .sync_state import SyncState
 from .urls import DEFAULT_API_BASE_URL, guess_settings_url
 
 logger = logging.getLogger(__name__)
@@ -68,29 +69,43 @@ def _truncate(text: str, max_chars: int) -> str:
     return text[: max_chars - 1].rstrip() + "…"
 
 
-def run_settings_window(is_first_run: bool, status_tracker: StatusTracker | None = None) -> bool:
+def run_settings_window(
+    is_first_run: bool,
+    status_tracker: StatusTracker | None = None,
+    sync_state: SyncState | None = None,
+) -> bool:
     """Opens the settings window and blocks (on the calling thread) until
     it's closed. Returns True if the user saved a valid configuration.
 
     `status_tracker`, when the daemon is already running (reopened from the
     tray), lets the window show live found/synced/currently-syncing counts
     instead of just the one-off "games recorded" summary fetched from the API.
+    `sync_state`, same condition, backs the Debug button's error report.
     """
     result = {"saved": False}
     root = tk.Tk()
-    _SettingsWindow(root, is_first_run=is_first_run, result=result, status_tracker=status_tracker)
+    _SettingsWindow(
+        root, is_first_run=is_first_run, result=result, status_tracker=status_tracker, sync_state=sync_state
+    )
     root.mainloop()
     return result["saved"]
 
 
 class _SettingsWindow:
     def __init__(
-        self, root: tk.Tk, *, is_first_run: bool, result: dict, status_tracker: StatusTracker | None = None
+        self,
+        root: tk.Tk,
+        *,
+        is_first_run: bool,
+        result: dict,
+        status_tracker: StatusTracker | None = None,
+        sync_state: SyncState | None = None,
     ) -> None:
         self._root = root
         self._is_first_run = is_first_run
         self._result = result
         self._status_tracker = status_tracker
+        self._sync_state = sync_state
         self._debounce_job: str | None = None
         self._live_stats_job: str | None = None
 
@@ -203,6 +218,27 @@ class _SettingsWindow:
         browse = ttk.Button(card_inner, text="Parcourir…", style="Ghost.TButton", command=self._browse_replays_dir)
         browse.grid(row=grid_row, column=0, columnspan=3, sticky="w", pady=(0, 4))
 
+        if autostart.is_supported():
+            self._autostart_var = tk.BooleanVar(value=autostart.is_enabled())
+            autostart_check = tk.Checkbutton(
+                card_inner,
+                text="Lancer au démarrage de Windows (en arrière-plan, sans ouvrir cette fenêtre)",
+                variable=self._autostart_var,
+                command=self._on_autostart_toggled,
+                bg=_PANEL,
+                fg=_TEXT,
+                selectcolor=_FIELD_BG,
+                activebackground=_PANEL,
+                activeforeground=_TEXT,
+                highlightthickness=0,
+                borderwidth=0,
+                font=("Segoe UI", 9),
+                anchor="w",
+                wraplength=420,
+                justify="left",
+            )
+            autostart_check.grid(row=grid_row + 1, column=0, columnspan=3, sticky="w", pady=(10, 0))
+
         self._error_label = ttk.Label(
             outer, text="", style="Muted.TLabel", foreground=_ERROR, wraplength=_LABEL_WRAPLENGTH, justify="left"
         )
@@ -213,6 +249,10 @@ class _SettingsWindow:
 
         buttons = ttk.Frame(outer, style="TFrame")
         buttons.pack(fill="x", pady=(20, 0))
+        if not self._is_first_run and self._sync_state is not None:
+            ttk.Button(buttons, text="Debug", style="Ghost.TButton", command=self._open_debug_window).pack(
+                side="left"
+            )
         cancel_text = "Quitter" if self._is_first_run else "Annuler"
         ttk.Button(buttons, text=cancel_text, style="Ghost.TButton", command=self._on_close).pack(side="right")
         ttk.Button(buttons, text="Enregistrer", style="Accent.TButton", command=self._save).pack(
@@ -259,21 +299,27 @@ class _SettingsWindow:
         inner = ttk.Frame(stats, style="Panel.TFrame", padding=16)
         inner.pack(fill="x")
 
-        ttk.Label(inner, text="Version", style="PanelMuted.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(inner, text="Version daemon", style="PanelMuted.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(inner, text=APP_VERSION, style="Panel.TLabel").grid(row=1, column=0, sticky="w")
 
-        ttk.Label(inner, text="Parties enregistrées", style="PanelMuted.TLabel").grid(
+        ttk.Label(inner, text="Version API", style="PanelMuted.TLabel").grid(
             row=0, column=1, sticky="w", padx=(40, 0)
         )
+        self._api_version_label = ttk.Label(inner, text="…", style="Panel.TLabel")
+        self._api_version_label.grid(row=1, column=1, sticky="w", padx=(40, 0))
+
+        ttk.Label(inner, text="Parties enregistrées", style="PanelMuted.TLabel").grid(
+            row=0, column=2, sticky="w", padx=(40, 0)
+        )
         self._games_count_label = ttk.Label(inner, text="…", style="Panel.TLabel")
-        self._games_count_label.grid(row=1, column=1, sticky="w", padx=(40, 0))
+        self._games_count_label.grid(row=1, column=2, sticky="w", padx=(40, 0))
 
         if self._status_tracker is not None:
             ttk.Label(inner, text="Trouvées dans le dossier", style="PanelMuted.TLabel").grid(
-                row=0, column=2, sticky="w", padx=(40, 0)
+                row=0, column=3, sticky="w", padx=(40, 0)
             )
             self._found_count_label = ttk.Label(inner, text="…", style="Panel.TLabel")
-            self._found_count_label.grid(row=1, column=2, sticky="w", padx=(40, 0))
+            self._found_count_label.grid(row=1, column=3, sticky="w", padx=(40, 0))
 
             ttk.Label(inner, text="Synchronisées (cette session)", style="PanelMuted.TLabel").grid(
                 row=2, column=0, sticky="w", pady=(14, 0)
@@ -282,12 +328,12 @@ class _SettingsWindow:
             self._synced_count_label.grid(row=3, column=0, sticky="w")
 
             ttk.Label(inner, text="En cours de synchronisation", style="PanelMuted.TLabel").grid(
-                row=2, column=1, columnspan=2, sticky="w", pady=(14, 0), padx=(40, 0)
+                row=2, column=1, columnspan=3, sticky="w", pady=(14, 0), padx=(40, 0)
             )
             self._currently_syncing_label = ttk.Label(
                 inner, text="—", style="Panel.TLabel", wraplength=_LABEL_WRAPLENGTH, justify="left"
             )
-            self._currently_syncing_label.grid(row=3, column=1, columnspan=2, sticky="w", padx=(40, 0))
+            self._currently_syncing_label.grid(row=3, column=1, columnspan=3, sticky="w", padx=(40, 0))
 
             self._sync_error_label = ttk.Label(
                 inner,
@@ -297,7 +343,7 @@ class _SettingsWindow:
                 wraplength=_LABEL_WRAPLENGTH,
                 justify="left",
             )
-            self._sync_error_label.grid(row=4, column=0, columnspan=3, sticky="w", pady=(14, 0))
+            self._sync_error_label.grid(row=4, column=0, columnspan=4, sticky="w", pady=(14, 0))
 
     def _refresh_live_stats(self) -> None:
         assert self._status_tracker is not None
@@ -399,6 +445,13 @@ class _SettingsWindow:
         summary = api_client.fetch_summary(base_url, token)
         self._root.after(0, self._apply_token_status, summary if summary is not None else "invalid")
 
+        version_info = api_client.fetch_version(base_url, token)
+        self._root.after(0, self._apply_api_version, version_info)
+
+    def _apply_api_version(self, info: dict | None) -> None:
+        if hasattr(self, "_api_version_label"):
+            self._api_version_label.configure(text=str(info.get("apiVersion", "—")) if info else "—")
+
     def _apply_api_status(self, reachable: bool) -> None:
         if reachable:
             self._set_status(self._api_status, "✓ Connexion OK", _OK)
@@ -428,6 +481,82 @@ class _SettingsWindow:
         summary = api_client.fetch_summary(base_url, token)
         games = summary.get("gamesPlayed", "—") if summary else "—"
         self._root.after(0, lambda: self._games_count_label.configure(text=str(games)))
+
+        version_info = api_client.fetch_version(base_url, token)
+        self._root.after(0, self._apply_api_version, version_info)
+
+    # -- debug report ---------------------------------------------------------
+
+    def _open_debug_window(self) -> None:
+        if self._sync_state is None:
+            return
+        records = self._sync_state.get_error_records()
+        report = self._format_debug_report(records)
+
+        win = tk.Toplevel(self._root)
+        win.title(f"HotS Analytics — Debug ({len(records)} erreur(s))")
+        win.configure(bg=_BG)
+        win.geometry("760x520")
+        win.transient(self._root)
+
+        body = ttk.Frame(win, padding=16)
+        body.pack(fill="both", expand=True)
+
+        text_frame = tk.Frame(body, bg=_FIELD_BG, highlightthickness=1, highlightbackground=_FIELD_BG)
+        text_frame.pack(fill="both", expand=True)
+
+        scrollbar = ttk.Scrollbar(text_frame, orient="vertical")
+        text = tk.Text(
+            text_frame,
+            bg=_FIELD_BG,
+            fg=_TEXT,
+            insertbackground=_TEXT,
+            relief="flat",
+            wrap="word",
+            font=("Consolas", 9),
+            yscrollcommand=scrollbar.set,
+        )
+        scrollbar.configure(command=text.yview)
+        scrollbar.pack(side="right", fill="y")
+        text.pack(side="left", fill="both", expand=True, padx=(10, 0), pady=10)
+        text.insert("1.0", report)
+        text.configure(state="disabled")
+
+        button_row = ttk.Frame(body, style="TFrame")
+        button_row.pack(fill="x", pady=(12, 0))
+
+        def _copy() -> None:
+            win.clipboard_clear()
+            win.clipboard_append(report)
+
+        ttk.Button(button_row, text="Fermer", style="Ghost.TButton", command=win.destroy).pack(side="right")
+        ttk.Button(button_row, text="Copier", style="Accent.TButton", command=_copy).pack(
+            side="right", padx=(0, 10)
+        )
+
+    def _format_debug_report(self, records: list) -> str:
+        header = [f"HotS Analytics — rapport de debug — daemon v{APP_VERSION}", f"{len(records)} partie(s) en erreur"]
+        if not records:
+            return "\n".join([*header, "", "Aucune erreur de synchronisation enregistrée."])
+
+        lines = [*header, ""]
+        for record in records:
+            lines.append("-" * 70)
+            lines.append(f"Fichier         : {record.file_path}")
+            lines.append(f"Hash            : {record.replay_hash}")
+            lines.append(f"Fichier présent : {'oui' if record.file_exists else 'non (déplacé ou supprimé)'}")
+            lines.append(f"Dernière tentative : {record.last_attempt_at}")
+            lines.append(f"Erreur          : {record.error_message or '(inconnue)'}")
+            if record.error_log:
+                lines.append("Log complet :")
+                lines.append(record.error_log)
+            lines.append("")
+        return "\n".join(lines)
+
+    # -- autostart --------------------------------------------------------
+
+    def _on_autostart_toggled(self) -> None:
+        autostart.set_enabled(self._autostart_var.get())
 
     # -- misc ---------------------------------------------------------------
 

@@ -112,6 +112,31 @@ def ping_health(base_url: str, timeout: float = 3.0) -> bool:
     return response.status_code == 200
 
 
+def fetch_version(base_url: str, access_token: str, timeout: float = 5.0) -> dict | None:
+    """Best-effort `GET {base_url}/ingest/version` fetch: `{"apiVersion":
+    ..., "minParserVersion": ...}`. Used both at daemon startup (to decide
+    whether previously-synced replays need reprocessing -- see app.py's
+    `_sync_api_version` and `sync_state.invalidate_stale`) and in the
+    settings window (to display the API's version). Returns None on any
+    failure; callers must treat that as "unknown", not "API wants nothing
+    resynced" -- see `_sync_api_version`, which leaves existing sync state
+    untouched in that case."""
+    try:
+        response = requests.get(
+            f"{base_url.rstrip('/')}/ingest/version",
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=timeout,
+        )
+    except requests.RequestException:
+        return None
+    if response.status_code != 200:
+        return None
+    try:
+        return response.json()
+    except ValueError:
+        return None
+
+
 def fetch_summary(base_url: str, access_token: str, timeout: float = 5.0) -> dict | None:
     """Best-effort `GET {base_url}/ingest/summary` fetch, used to validate the
     Access Token field and to show the "games recorded" stat. Returns None on

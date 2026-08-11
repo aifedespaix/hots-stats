@@ -21,6 +21,7 @@ import tempfile
 import threading
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 import requests
 
@@ -160,12 +161,20 @@ def apply_update_and_exit(new_exe: Path) -> None:
     os._exit(0)
 
 
-def watch_for_updates(stop_event: threading.Event) -> None:
+def watch_for_updates(
+    stop_event: threading.Event, on_update_found: Callable[[AvailableUpdate], None] | None = None
+) -> None:
     """Runs for the app's lifetime on a background thread: checks for a
     newer release shortly after startup, then every few hours, and applies
     it (see `apply_update_and_exit`) as soon as one is found. No-ops when
     not running as the compiled .exe (e.g. `python -m src.main` in dev),
     since there's no installed binary to replace.
+
+    `on_update_found`, when given, is called once a newer build is
+    confirmed available, before it's downloaded -- app.py wires this to a
+    tray balloon notification so the (fully automatic) update doesn't
+    happen invisibly. Best-effort: an exception from it is logged and never
+    stops the update from proceeding.
     """
     if not IS_FROZEN:
         return
@@ -175,6 +184,11 @@ def watch_for_updates(stop_event: threading.Event) -> None:
         update = check_for_update()
         if update is not None:
             logger.info("Update v%s available, downloading...", update.version)
+            if on_update_found is not None:
+                try:
+                    on_update_found(update)
+                except Exception:
+                    logger.warning("Update-found notification callback failed", exc_info=True)
             try:
                 new_exe = download_update(update, Path(tempfile.gettempdir()) / "hots-analytics-updates")
             except requests.RequestException as err:
