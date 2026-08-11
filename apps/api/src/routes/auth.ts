@@ -33,6 +33,12 @@ function toPublicUser(user: User) {
 }
 
 const updateMeSchema = z.object({
+  displayName: z
+    .string()
+    .trim()
+    .min(2, "2 caractères minimum")
+    .max(24, "24 caractères maximum")
+    .optional(),
   battletag: z
     .string()
     .regex(/^.{2,24}#\d{4,10}$/, "Format attendu : Pseudo#12345")
@@ -48,6 +54,13 @@ interface GoogleUserInfo {
   email: string;
   name: string;
   picture?: string;
+}
+
+// Google's real name is never used as the account's public-facing pseudo -
+// we seed a neutral placeholder instead and let the user pick their own.
+function generateDefaultPseudo(): string {
+  const suffix = Math.floor(1000 + Math.random() * 9000);
+  return `Joueur${suffix}`;
 }
 
 export const authRoute = new Hono()
@@ -96,7 +109,7 @@ export const authRoute = new Hono()
           .values({
             googleId: googleUser.sub,
             email: googleUser.email,
-            displayName: googleUser.name,
+            displayName: generateDefaultPseudo(),
             avatarUrl: googleUser.picture,
           })
           .returning()
@@ -165,6 +178,7 @@ export const authRoute = new Hono()
     const [updated] = await db
       .update(users)
       .set({
+        ...(parsed.data.displayName ? { displayName: parsed.data.displayName } : {}),
         ...(parsed.data.battletag ? { battletag: parsed.data.battletag } : {}),
         ...(parsed.data.publicHandle ? { publicHandle: parsed.data.publicHandle } : {}),
         updatedAt: new Date(),

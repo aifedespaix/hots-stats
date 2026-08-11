@@ -11,13 +11,25 @@ interface NavItem {
   featured?: boolean;
 }
 
+// Logical order for the desktop sidebar (home first, settings last).
 const navItems: NavItem[] = [
+  { to: "/", label: "Dashboard", icon: "i-heroicons-squares-2x2", featured: true },
   { to: "/matches", label: "Historique", icon: "i-heroicons-clock" },
   { to: "/heroes", label: "Héros", icon: "i-heroicons-fire" },
-  { to: "/", label: "Dashboard", icon: "i-heroicons-squares-2x2", featured: true },
   { to: "/players", label: "Joueurs", icon: "i-heroicons-user-group" },
   { to: "/settings", label: "Paramètres", icon: "i-heroicons-cog-6-tooth" },
 ];
+
+// The mobile app bar renders the featured item as a centered FAB, so it
+// needs the featured item moved to the middle of the row instead.
+const mobileNavItems = computed(() => {
+  const featuredIndex = navItems.findIndex((item) => item.featured);
+  if (featuredIndex === -1) return navItems;
+  const featured = navItems[featuredIndex]!;
+  const rest = navItems.filter((_, index) => index !== featuredIndex);
+  const middle = Math.ceil(rest.length / 2);
+  return [...rest.slice(0, middle), featured, ...rest.slice(middle)];
+});
 
 function isActive(to: string) {
   if (to === "/") return route.path === "/";
@@ -122,7 +134,7 @@ async function handleLogout() {
       style="padding-bottom: env(safe-area-inset-bottom)"
     >
       <NuxtLink
-        v-for="item in navItems"
+        v-for="item in mobileNavItems"
         :key="item.to"
         :to="item.to"
         :aria-current="isActive(item.to) ? 'page' : undefined"

@@ -31,4 +31,8 @@ export async function logout(): Promise<void> {
     baseURL: config.public.apiBase,
     credentials: "include",
   });
+  // useAuthUser() is keyed "auth-user" and shared across pages/middleware;
+  // without clearing it, navigating to /login re-reads the stale cached
+  // user and bounces straight back to "/".
+  clearNuxtData("auth-user");
 }
