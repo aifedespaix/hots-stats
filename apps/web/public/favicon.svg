@@ -1,10 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="512" height="512">
   <defs>
+    <style>
+      /* Default (light tab bar): deeper, more saturated stops for contrast on white. */
+      .stop-a { stop-color: #0086c7; }
+      .stop-b { stop-color: #4300cc; }
+      .stop-c { stop-color: #7a00cc; }
+      /* Browser/OS switched to dark: brighter stops that pop on dark tab bars. */
+      @media (prefers-color-scheme: dark) {
+        .stop-a { stop-color: #00aeff; }
+        .stop-b { stop-color: #5500ff; }
+        .stop-c { stop-color: #9d00ff; }
+      }
+    </style>
     <linearGradient id="hotsGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0" stop-color="#00aeff"/>
-      <stop offset="0.5" stop-color="#5500ff"/>
-      <stop offset="1" stop-color="#9d00ff"/>
+      <stop class="stop-a" offset="0"/>
+      <stop class="stop-b" offset="0.5"/>
+      <stop class="stop-c" offset="1"/>
     </linearGradient>
   </defs>
   <polygon points="128,24 218,76 218,180 128,232 38,180 38,76" fill="none" stroke="url(#hotsGradient)" stroke-width="16" stroke-linejoin="round"/>
