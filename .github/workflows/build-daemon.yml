@@ -68,7 +68,8 @@ jobs:
           --include-package=watchdog
           --output-dir=dist
           --output-filename=hots-analytics-daemon-v${{ steps.version.outputs.version }}.exe
-          src/main.py
+          --module
+          src.main
         # Nuitka over PyInstaller: it compiles to native C rather than
         # embedding a zipped interpreter, which triggers far fewer AV false
         # positives on Windows.
