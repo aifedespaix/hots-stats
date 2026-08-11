@@ -1,4 +1,5 @@
 import { type User, db, users } from "@hots-stats/db";
+import { heroStatsScopeSchema } from "@hots-stats/shared-types";
 import { generateCodeVerifier, generateState } from "arctic";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
@@ -29,6 +30,7 @@ function toPublicUser(user: User) {
     avatarUrl: user.avatarUrl,
     battletag: user.battletag,
     publicHandle: user.publicHandle,
+    heroStatsScope: user.heroStatsScope,
   };
 }
 
@@ -47,6 +49,7 @@ const updateMeSchema = z.object({
     .string()
     .regex(/^[a-z0-9-]{3,32}$/, "3 à 32 caractères : lettres minuscules, chiffres, tirets")
     .optional(),
+  heroStatsScope: heroStatsScopeSchema.optional(),
 });
 
 interface GoogleUserInfo {
@@ -181,6 +184,7 @@ export const authRoute = new Hono()
         ...(parsed.data.displayName ? { displayName: parsed.data.displayName } : {}),
         ...(parsed.data.battletag ? { battletag: parsed.data.battletag } : {}),
         ...(parsed.data.publicHandle ? { publicHandle: parsed.data.publicHandle } : {}),
+        ...(parsed.data.heroStatsScope ? { heroStatsScope: parsed.data.heroStatsScope } : {}),
         updatedAt: new Date(),
       })
       .where(eq(users.id, user.id))

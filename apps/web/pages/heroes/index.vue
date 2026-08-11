@@ -20,8 +20,11 @@ useSeoMeta({
 const mode = ref<GameMode | "">("");
 const search = ref("");
 
+const { scope, saving: scopeSaving, setScope } = useHeroStatsScope();
+
 const query = computed(() => ({
   ...(mode.value ? { mode: mode.value } : {}),
+  scope: scope.value,
 }));
 
 const { data } = await useApiFetch<HeroListResponse>("/heroes", { query });
@@ -71,6 +74,13 @@ function goToHero(row: Record<string, unknown>) {
 <template>
   <div class="space-y-6">
     <h1 class="font-heading text-2xl font-semibold">Héros</h1>
+
+    <UiStatsScopeToggle
+      :model-value="scope"
+      :loading="scopeSaving"
+      personal-description="Uniquement tes propres parties"
+      @update:model-value="setScope"
+    />
 
     <div class="grid grid-cols-1 gap-3 rounded-lg border border-border bg-surface p-4 sm:grid-cols-2">
       <USelectMenu

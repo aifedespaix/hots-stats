@@ -1,7 +1,8 @@
-import { db, heroes, matches, matchPlayers } from "@hots-stats/db";
-import type { GameMode, PlayerEncounterStats } from "@hots-stats/shared-types";
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { db, heroes, matches, matchPlayers, users } from "@hots-stats/db";
+import type { GameMode, PlayerEncounterStats, PlayerFriendshipStatus } from "@hots-stats/shared-types";
+import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import { getFriendshipStatuses } from "./friendships.service";
 
 export interface PlayerHeroBreakdown {
   heroId: string;
@@ -72,6 +73,42 @@ function encounterBase(userId: string, mode?: GameMode) {
   );
 }
 
+/**
+ * Resolves which of the given battletags belong to a registered account, and
+ * (relative to `userId`) the friendship status with that account -- powers
+ * the "add as friend" prompt on the players list/detail pages.
+ */
+async function resolveAccountLinks(
+  userId: string,
+  battletags: string[],
+): Promise<Map<string, { accountUserId: string | null; friendshipStatus: PlayerFriendshipStatus }>> {
+  const links = new Map<string, { accountUserId: string | null; friendshipStatus: PlayerFriendshipStatus }>();
+  if (battletags.length === 0) return links;
+
+  const accounts = await db
+    .select({ id: users.id, battletag: users.battletag })
+    .from(users)
+    .where(inArray(users.battletag, battletags));
+
+  const statuses = await getFriendshipStatuses(
+    userId,
+    accounts.filter((a) => a.id !== userId).map((a) => a.id),
+  );
+
+  for (const battletag of battletags) {
+    const account = accounts.find((a) => a.battletag === battletag);
+    if (!account) {
+      links.set(battletag, { accountUserId: null, friendshipStatus: "none" });
+      continue;
+    }
+    links.set(battletag, {
+      accountUserId: account.id,
+      friendshipStatus: account.id === userId ? "self" : (statuses.get(account.id) ?? "none"),
+    });
+  }
+  return links;
+}
+
 export async function listPlayerEncounters(
   userId: string,
   sortBy: PlayerSortBy,
@@ -82,6 +119,10 @@ export async function listPlayerEncounters(
   const order = sortDir === "asc" ? sql`${sortColumn[sortBy]} asc` : sql`${sortColumn[sortBy]} desc`;
 
   const rows = await db.with(encounters).select().from(encounters).orderBy(order);
+  const links = await resolveAccountLinks(
+    userId,
+    rows.map((row) => row.battletag),
+  );
 
   return rows.map((row) => ({
     battletag: row.battletag,
@@ -90,6 +131,8 @@ export async function listPlayerEncounters(
     gamesAsOpponent: row.gamesAsOpponent,
     winsAsAlly: row.winsAsAlly,
     winsAsOpponent: row.winsAsOpponent,
+    accountUserId: links.get(row.battletag)?.accountUserId ?? null,
+    friendshipStatus: links.get(row.battletag)?.friendshipStatus ?? "none",
   }));
 }
 
@@ -114,6 +157,9 @@ export async function getPlayerEncounter(
 
   if (!row || row.gamesAsAlly + row.gamesAsOpponent === 0) return null;
 
+  const links = await resolveAccountLinks(userId, [battletag]);
+  const link = links.get(battletag);
+
   return {
     battletag,
     gamesTogether: row.gamesAsAlly + row.gamesAsOpponent,
@@ -121,6 +167,8 @@ export async function getPlayerEncounter(
     gamesAsOpponent: row.gamesAsOpponent,
     winsAsAlly: row.winsAsAlly,
     winsAsOpponent: row.winsAsOpponent,
+    accountUserId: link?.accountUserId ?? null,
+    friendshipStatus: link?.friendshipStatus ?? "none",
   };
 }
 
