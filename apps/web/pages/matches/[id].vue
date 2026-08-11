@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import type { MatchDetailResponse } from "~/types/matches";
+import type { MatchDetailPlayer, MatchDetailResponse } from "~/types/matches";
 
 definePageMeta({ middleware: "auth" });
 
 const route = useRoute();
 
 const { data, error } = await useApiFetch<MatchDetailResponse>(`/matches/${route.params.id}`);
+const { data: authData } = useAuthUser();
 
 const talentTiers = [1, 4, 7, 10, 13, 16, 20] as const;
 
@@ -26,6 +27,80 @@ useSeoMeta({
   twitterImage: "/og/matches-[id].png",
   robots: "noindex, follow",
 });
+
+const myBattletag = computed(() => authData.value?.user?.battletag ?? null);
+const allPlayers = computed(() => data.value?.teams.flatMap((team) => team.players) ?? []);
+const myTeam = computed(
+  () => allPlayers.value.find((player) => player.battletag === myBattletag.value)?.team ?? null,
+);
+
+function isMe(player: MatchDetailPlayer): boolean {
+  return player.battletag === myBattletag.value;
+}
+
+function isAlly(player: MatchDetailPlayer): boolean {
+  return myTeam.value !== null && player.team === myTeam.value;
+}
+
+/** Priority order for the default sort: me, then my teammates, then opponents. */
+function rank(player: MatchDetailPlayer): number {
+  if (isMe(player)) return 0;
+  return isAlly(player) ? 1 : 2;
+}
+
+type SortableColumn =
+  | "battletag"
+  | "heroName"
+  | "kills"
+  | "deaths"
+  | "assists"
+  | "heroDamage"
+  | "siegeDamage"
+  | "healing"
+  | "selfHealing"
+  | "experienceContribution"
+  | "damageTaken";
+
+const { sortKey, sortDir, onSort } = useSortState<SortableColumn | "default">("default", "desc");
+
+const sortedPlayers = computed(() => {
+  const players = [...allPlayers.value];
+  if (sortKey.value === "default") {
+    return players.sort((a, b) => rank(a) - rank(b));
+  }
+  const key = sortKey.value;
+  const dir = sortDir.value === "asc" ? 1 : -1;
+  return players.sort((a, b) => {
+    const av = a[key];
+    const bv = b[key];
+    if (typeof av === "string" && typeof bv === "string") {
+      return av.localeCompare(bv) * dir;
+    }
+    return ((av as number) - (bv as number)) * dir;
+  });
+});
+
+function rowClass(row: Record<string, unknown>): string {
+  const player = row as unknown as MatchDetailPlayer;
+  const teamClass = isAlly(player)
+    ? "bg-blue-500/10 hover:bg-blue-500/15"
+    : "bg-red-500/10 hover:bg-red-500/15";
+  return isMe(player) ? `${teamClass} ring-1 ring-inset ring-brand` : teamClass;
+}
+
+const columns = [
+  { key: "heroName", label: "Héros", sortable: true },
+  { key: "battletag", label: "Joueur", sortable: true },
+  { key: "kills", label: "Kills", numeric: true, sortable: true },
+  { key: "assists", label: "Assists", numeric: true, sortable: true },
+  { key: "deaths", label: "Morts", numeric: true, sortable: true },
+  { key: "siegeDamage", label: "Dégâts siège", numeric: true, sortable: true },
+  { key: "heroDamage", label: "Dégâts héros", numeric: true, sortable: true },
+  { key: "healing", label: "Soin", numeric: true, sortable: true },
+  { key: "selfHealing", label: "Auto-soin", numeric: true, sortable: true },
+  { key: "experienceContribution", label: "Contribution XP", numeric: true, sortable: true },
+  { key: "damageTaken", label: "Dégâts subis", numeric: true, sortable: true },
+];
 </script>
 
 <template>
@@ -45,47 +120,45 @@ useSeoMeta({
       </p>
     </div>
 
-    <div class="grid gap-6 lg:grid-cols-2">
-      <div v-for="team in data.teams" :key="team.team" class="space-y-4">
-        <h2
-          class="font-heading text-lg font-medium"
-          :class="team.players[0]?.winner ? 'text-success' : 'text-danger'"
-        >
-          Équipe {{ team.team + 1 }} - {{ team.players[0]?.winner ? "Victoire" : "Défaite" }}
-        </h2>
+    <UiDataTable
+      :columns="columns"
+      :rows="sortedPlayers"
+      :sort-key="sortKey"
+      :sort-dir="sortDir"
+      :row-class="rowClass"
+      @sort="onSort"
+    >
+      <template #cell-heroName="{ row }">
+        <span class="font-medium">{{ row.heroName }}</span>
+        <span class="ml-1 text-xs text-muted">{{ (row as unknown as MatchDetailPlayer).heroRole }}</span>
+      </template>
+      <template #cell-battletag="{ row }">
+        <span class="font-mono">{{ row.battletag }}</span>
+      </template>
+      <template #cell-heroDamage="{ row }">{{ (row.heroDamage as number).toLocaleString() }}</template>
+      <template #cell-siegeDamage="{ row }">{{ (row.siegeDamage as number).toLocaleString() }}</template>
+      <template #cell-healing="{ row }">{{ (row.healing as number).toLocaleString() }}</template>
+      <template #cell-selfHealing="{ row }">{{ (row.selfHealing as number).toLocaleString() }}</template>
+      <template #cell-experienceContribution="{ row }">
+        {{ (row.experienceContribution as number).toLocaleString() }}
+      </template>
+      <template #cell-damageTaken="{ row }">{{ (row.damageTaken as number).toLocaleString() }}</template>
+    </UiDataTable>
 
-        <div
-          v-for="player in team.players"
-          :key="player.id"
-          class="rounded-lg border border-border bg-surface p-4"
-        >
-          <div class="flex flex-wrap items-baseline justify-between gap-2">
-            <div>
-              <p class="font-medium">{{ player.heroName }}</p>
-              <p class="text-xs text-muted">{{ player.battletag }} · {{ player.heroRole }}</p>
-            </div>
-            <div class="font-mono text-sm">
-              <span>{{ player.kills }}</span> / <span class="text-danger">{{ player.deaths }}</span> /
-              <span>{{ player.assists }}</span>
-            </div>
-          </div>
-
-          <div class="mt-3 grid grid-cols-2 gap-2 font-mono text-xs text-muted sm:grid-cols-4">
-            <div>Dégâts héros: <span class="text-foreground">{{ player.heroDamage.toLocaleString() }}</span></div>
-            <div>Dégâts siège: <span class="text-foreground">{{ player.siegeDamage.toLocaleString() }}</span></div>
-            <div>Soin: <span class="text-foreground">{{ player.healing.toLocaleString() }}</span></div>
-            <div>Dégâts subis: <span class="text-foreground">{{ player.damageTaken.toLocaleString() }}</span></div>
-          </div>
-
-          <div v-if="player.talents.length > 0" class="mt-3 flex flex-wrap gap-2">
-            <div
-              v-for="tier in talentTiers"
-              :key="tier"
-              class="rounded border border-border px-2 py-1 text-xs"
-            >
-              <span class="text-muted">{{ tier }}:</span>
-              {{ player.talents.find((t) => t.tier === tier)?.talentName ?? "-" }}
-            </div>
+    <div class="space-y-3">
+      <h2 class="font-heading text-lg font-medium">Talents</h2>
+      <div
+        v-for="player in sortedPlayers"
+        :key="player.id"
+        class="rounded-lg border border-border bg-surface p-4"
+      >
+        <p class="text-sm font-medium">
+          {{ player.heroName }} <span class="font-mono text-xs text-muted">({{ player.battletag }})</span>
+        </p>
+        <div v-if="player.talents.length > 0" class="mt-2 flex flex-wrap gap-2">
+          <div v-for="tier in talentTiers" :key="tier" class="rounded border border-border px-2 py-1 text-xs">
+            <span class="text-muted">{{ tier }}:</span>
+            {{ player.talents.find((t) => t.tier === tier)?.talentName ?? "-" }}
           </div>
         </div>
       </div>

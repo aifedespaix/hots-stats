@@ -1,15 +1,23 @@
 import type { User } from "@hots-stats/db";
+import { gameModeSchema } from "@hots-stats/shared-types";
 import { Hono } from "hono";
+import { z } from "zod";
 import { authSession, requireUser } from "../middleware/auth-session";
 import { getHeroSummaries, getHeroSummary, getTalentTierStats } from "../services/talents.service";
 
 type Env = { Variables: { user: User } };
 
+const listQuerySchema = z.object({ mode: gameModeSchema.optional() });
+
 export const heroesRoute = new Hono<Env>()
   .use("*", authSession, requireUser)
   .get("/", async (c) => {
     const user = c.get("user");
-    const heroes = await getHeroSummaries(user.id);
+    const parsed = listQuerySchema.safeParse(c.req.query());
+    if (!parsed.success) {
+      return c.json({ error: parsed.error.flatten() }, 400);
+    }
+    const heroes = await getHeroSummaries(user.id, parsed.data.mode);
     return c.json({ heroes });
   })
   .get("/:heroId", async (c) => {

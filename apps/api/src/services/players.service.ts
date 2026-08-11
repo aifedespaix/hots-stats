@@ -1,14 +1,22 @@
-import { db, matchPlayers } from "@hots-stats/db";
-import type { PlayerEncounterStats } from "@hots-stats/shared-types";
+import { db, matches, matchPlayers } from "@hots-stats/db";
+import type { GameMode, PlayerEncounterStats } from "@hots-stats/shared-types";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
-export type PlayerSortBy = "battletag" | "gamesTogether" | "wins" | "losses";
+export type PlayerSortBy =
+  | "battletag"
+  | "gamesTogether"
+  | "gamesAsAlly"
+  | "gamesAsOpponent"
+  | "wins"
+  | "losses";
 export type SortDir = "asc" | "desc";
 
 const sortColumn: Record<PlayerSortBy, ReturnType<typeof sql>> = {
   battletag: sql`battletag`,
   gamesTogether: sql`games_together`,
+  gamesAsAlly: sql`games_as_ally`,
+  gamesAsOpponent: sql`games_as_opponent`,
   wins: sql`wins`,
   losses: sql`losses`,
 };
@@ -17,8 +25,11 @@ const sortColumn: Record<PlayerSortBy, ReturnType<typeof sql>> = {
  * Self-joins the connected user's rows against every other player row in the
  * same match to build cross-encounter stats (ally when same team, opponent otherwise).
  */
-function encounterBase(userId: string) {
+function encounterBase(userId: string, mode?: GameMode) {
   const other = alias(matchPlayers, "other");
+
+  const conditions = [eq(matchPlayers.userId, userId), ne(other.battletag, matchPlayers.battletag)];
+  if (mode) conditions.push(eq(matches.gameMode, mode));
 
   return db.$with("encounters").as(
     db
@@ -46,8 +57,9 @@ function encounterBase(userId: string) {
           sql<number>`count(*) filter (where not ${matchPlayers.winner})::int`.as("losses"),
       })
       .from(matchPlayers)
+      .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
       .innerJoin(other, and(eq(other.matchId, matchPlayers.matchId), ne(other.id, matchPlayers.id)))
-      .where(and(eq(matchPlayers.userId, userId), ne(other.battletag, matchPlayers.battletag)))
+      .where(and(...conditions))
       .groupBy(other.battletag),
   );
 }
@@ -56,8 +68,9 @@ export async function listPlayerEncounters(
   userId: string,
   sortBy: PlayerSortBy,
   sortDir: SortDir,
+  mode?: GameMode,
 ): Promise<PlayerEncounterStats[]> {
-  const encounters = encounterBase(userId);
+  const encounters = encounterBase(userId, mode);
   const order = sortDir === "asc" ? sql`${sortColumn[sortBy]} asc` : sql`${sortColumn[sortBy]} desc`;
 
   const rows = await db.with(encounters).select().from(encounters).orderBy(order);
