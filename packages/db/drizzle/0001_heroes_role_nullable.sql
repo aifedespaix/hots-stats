@@ -1,0 +1,1 @@
+ALTER TABLE "heroes" ALTER COLUMN "role" DROP NOT NULL;

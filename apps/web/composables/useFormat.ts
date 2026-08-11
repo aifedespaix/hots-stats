@@ -51,7 +51,8 @@ const heroRoleLabels: Record<string, string> = {
   Support: "Soutien",
 };
 
-export function formatHeroRole(role: string): string {
+export function formatHeroRole(role: string | null): string {
+  if (role === null) return "Rôle inconnu";
   return heroRoleLabels[role] ?? role;
 }
 

@@ -1,8 +1,9 @@
 from unittest.mock import MagicMock, patch
 
-from src import api_client
+from src import api_client, constants
 from src.config import Config
 from src.ingestion import IngestOutcome, ingest_file, resync
+from src.sync_state import SyncState
 
 
 def _config(tmp_path) -> Config:
@@ -58,13 +59,65 @@ def test_ingest_file_auth_error_returns_error_outcome(tmp_path):
     assert outcome.status == "error"
 
 
+def test_ingest_file_skips_already_synced_replay_without_parsing(tmp_path):
+    client = api_client.ApiClient(_config(tmp_path))
+    replay = tmp_path / "game.StormReplay"
+    replay.write_bytes(b"some replay bytes")
+
+    from src.hasher import hash_replay_file
+
+    sync_state = SyncState(tmp_path / "synced.json")
+    sync_state.mark_synced(hash_replay_file(replay), constants.PARSER_VERSION)
+
+    with patch("src.ingestion.replay_parser.parse_replay") as parse:
+        outcome = ingest_file(client, replay, sync_state)
+
+    parse.assert_not_called()
+    assert outcome.status == "skipped"
+
+
+def test_ingest_file_marks_synced_on_success(tmp_path):
+    client = api_client.ApiClient(_config(tmp_path))
+    replay = tmp_path / "game.StormReplay"
+    replay.write_bytes(b"some replay bytes")
+    sync_state = SyncState(tmp_path / "synced.json")
+
+    from src.hasher import hash_replay_file
+
+    replay_hash = hash_replay_file(replay)
+
+    with patch(
+        "src.ingestion.replay_parser.parse_replay",
+        return_value={"replayHash": replay_hash, "parserVersion": constants.PARSER_VERSION},
+    ):
+        with patch.object(client, "post_replay", return_value=api_client.IngestResult(upserted=True, match_id="m1")):
+            ingest_file(client, replay, sync_state)
+
+    assert sync_state.is_up_to_date(replay_hash, constants.PARSER_VERSION) is True
+
+
+def test_ingest_file_does_not_mark_synced_on_error(tmp_path):
+    client = api_client.ApiClient(_config(tmp_path))
+    bad_file = tmp_path / "not-a-replay.StormReplay"
+    bad_file.write_bytes(b"not an mpq archive")
+    sync_state = SyncState(tmp_path / "synced.json")
+
+    from src.hasher import hash_replay_file
+
+    replay_hash = hash_replay_file(bad_file)
+
+    ingest_file(client, bad_file, sync_state)
+
+    assert sync_state.is_up_to_date(replay_hash, constants.PARSER_VERSION) is False
+
+
 def test_resync_logs_summary(tmp_path, caplog):
     client = MagicMock()
     (tmp_path / "a.StormReplay").write_bytes(b"")
     (tmp_path / "b.StormReplay").write_bytes(b"")
 
     outcomes = iter([IngestOutcome("uploaded"), IngestOutcome("error", "boom")])
-    with patch("src.ingestion.ingest_file", side_effect=lambda _c, _p: next(outcomes)):
+    with patch("src.ingestion.ingest_file", side_effect=lambda _c, _p, _s=None: next(outcomes)):
         with caplog.at_level("INFO"):
             resync(client, tmp_path)
 

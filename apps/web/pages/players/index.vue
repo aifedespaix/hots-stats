@@ -16,21 +16,14 @@ useSeoMeta({
   robots: "noindex, follow",
 });
 
-const sortKey = ref<"battletag" | "gamesTogether" | "wins" | "losses">("gamesTogether");
-const sortDir = ref<"asc" | "desc">("desc");
+const { sortKey, sortDir, onSort } = useSortState<"battletag" | "gamesTogether" | "wins" | "losses">(
+  "gamesTogether",
+  "desc",
+);
 
 const query = computed(() => ({ sortBy: sortKey.value, sortDir: sortDir.value }));
 
 const { data } = await useApiFetch<PlayerListResponse>("/players", { query });
-
-function onSort(key: string) {
-  if (sortKey.value === key) {
-    sortDir.value = sortDir.value === "asc" ? "desc" : "asc";
-  } else {
-    sortKey.value = key as typeof sortKey.value;
-    sortDir.value = "desc";
-  }
-}
 
 const rows = computed(
   () =>

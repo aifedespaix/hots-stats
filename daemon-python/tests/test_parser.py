@@ -242,6 +242,30 @@ def test_build_payload_forwards_stats_the_api_does_not_use_yet():
     assert players_by_tag["Bar#2222"]["minionKills"] == 7
 
 
+def test_build_payload_unknown_map_falls_back_to_prettified_slug():
+    """Regression test: a map internal name not yet in
+    constants.MAP_DISPLAY_NAMES (a new battleground) must not produce a
+    malformed, wordless slug like "industrialdistrict" -- see
+    `_prettify_pascal_case`."""
+    events = [
+        *_base_tracker_events()[:4],
+        _end_of_game_event(1, b"Win", b"IndustrialDistrict", {1: "TalentA", 2: "TalentB"}),
+        _end_of_game_event(2, b"Loss", b"IndustrialDistrict", {1: "TalentC"}),
+    ]
+
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=events,
+        attributes_events=_base_attributes_events(),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+    )
+
+    assert payload["map"] == "industrial-district"
+
+
 def test_build_payload_unknown_ammid_falls_back_to_custom():
     payload = build_payload(
         header=_header(610 + 16 * 600),

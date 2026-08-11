@@ -8,7 +8,17 @@ import { authSession, requireUser } from "../middleware/auth-session";
 
 type Env = { Variables: { user: User } };
 
-const listQuerySchema = z.object({
+/** Column a `/matches` list result can be sorted by -- kept to columns already selected in the row shape below. */
+const SORTABLE_COLUMNS = {
+  playedAt: matches.playedAt,
+  durationSeconds: matches.durationSeconds,
+  gameMode: matches.gameMode,
+  mapName: maps.name,
+  heroName: heroes.name,
+  winner: matchPlayers.winner,
+} as const;
+
+const filtersQuerySchema = z.object({
   mode: gameModeSchema.optional(),
   heroId: z.string().optional(),
   mapId: z.string().optional(),
@@ -16,9 +26,60 @@ const listQuerySchema = z.object({
   dateTo: z.string().datetime().optional(),
   opponentBattletag: z.string().optional(),
   allyBattletag: z.string().optional(),
+});
+
+const listQuerySchema = filtersQuerySchema.extend({
+  sortBy: z.enum(["playedAt", "durationSeconds", "gameMode", "mapName", "heroName", "winner"]).default("playedAt"),
+  sortDir: z.enum(["asc", "desc"]).default("desc"),
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(50).default(20),
 });
+
+/**
+ * Builds the same set of match filter conditions used by `GET /matches`,
+ * shared with `GET /matches/trend` (win-rate evolution chart) so both
+ * always agree on what a given set of filters matches.
+ */
+function buildMatchConditions(userId: string, filters: z.infer<typeof filtersQuerySchema>) {
+  const { mode, heroId, mapId, dateFrom, dateTo, opponentBattletag, allyBattletag } = filters;
+  const opponent = alias(matchPlayers, "opponent");
+  const ally = alias(matchPlayers, "ally");
+
+  const conditions = [eq(matchPlayers.userId, userId)];
+  if (mode) conditions.push(eq(matches.gameMode, mode));
+  if (heroId) conditions.push(eq(matchPlayers.heroId, heroId));
+  if (mapId) conditions.push(eq(matches.mapId, mapId));
+  if (dateFrom) conditions.push(gte(matches.playedAt, new Date(dateFrom)));
+  if (dateTo) conditions.push(lte(matches.playedAt, new Date(dateTo)));
+  if (opponentBattletag) {
+    conditions.push(
+      exists(
+        db
+          .select({ one: sql`1` })
+          .from(opponent)
+          .where(and(eq(opponent.matchId, matches.id), eq(opponent.battletag, opponentBattletag))),
+      ),
+    );
+  }
+  if (allyBattletag) {
+    conditions.push(
+      exists(
+        db
+          .select({ one: sql`1` })
+          .from(ally)
+          .where(
+            and(
+              eq(ally.matchId, matches.id),
+              eq(ally.battletag, allyBattletag),
+              eq(ally.team, matchPlayers.team),
+            ),
+          ),
+      ),
+    );
+  }
+
+  return and(...conditions);
+}
 
 export const matchesRoute = new Hono<Env>()
   .use("*", authSession, requireUser)
@@ -28,46 +89,8 @@ export const matchesRoute = new Hono<Env>()
     if (!parsed.success) {
       return c.json({ error: parsed.error.flatten() }, 400);
     }
-    const { mode, heroId, mapId, dateFrom, dateTo, opponentBattletag, allyBattletag, page, pageSize } =
-      parsed.data;
-
-    const opponent = alias(matchPlayers, "opponent");
-    const ally = alias(matchPlayers, "ally");
-
-    const conditions = [eq(matchPlayers.userId, user.id)];
-    if (mode) conditions.push(eq(matches.gameMode, mode));
-    if (heroId) conditions.push(eq(matchPlayers.heroId, heroId));
-    if (mapId) conditions.push(eq(matches.mapId, mapId));
-    if (dateFrom) conditions.push(gte(matches.playedAt, new Date(dateFrom)));
-    if (dateTo) conditions.push(lte(matches.playedAt, new Date(dateTo)));
-    if (opponentBattletag) {
-      conditions.push(
-        exists(
-          db
-            .select({ one: sql`1` })
-            .from(opponent)
-            .where(and(eq(opponent.matchId, matches.id), eq(opponent.battletag, opponentBattletag))),
-        ),
-      );
-    }
-    if (allyBattletag) {
-      conditions.push(
-        exists(
-          db
-            .select({ one: sql`1` })
-            .from(ally)
-            .where(
-              and(
-                eq(ally.matchId, matches.id),
-                eq(ally.battletag, allyBattletag),
-                eq(ally.team, matchPlayers.team),
-              ),
-            ),
-        ),
-      );
-    }
-
-    const where = and(...conditions);
+    const { sortBy, sortDir, page, pageSize, ...filters } = parsed.data;
+    const where = buildMatchConditions(user.id, filters);
 
     const [rows, countRows] = await Promise.all([
       db
@@ -87,7 +110,7 @@ export const matchesRoute = new Hono<Env>()
         .innerJoin(maps, eq(maps.id, matches.mapId))
         .innerJoin(heroes, eq(heroes.id, matchPlayers.heroId))
         .where(where)
-        .orderBy(desc(matches.playedAt))
+        .orderBy((sortDir === "asc" ? asc : desc)(SORTABLE_COLUMNS[sortBy]))
         .limit(pageSize)
         .offset((page - 1) * pageSize),
       db
@@ -120,6 +143,26 @@ export const matchesRoute = new Hono<Env>()
     ]);
 
     return c.json({ heroes: heroRows, maps: mapRows });
+  })
+  // Every match matching the given filters (no pagination), ordered
+  // chronologically, for the "win rate evolution" chart on the matches
+  // page -- it needs the full filtered history, not just one page of it.
+  .get("/trend", async (c) => {
+    const user = c.get("user");
+    const parsed = filtersQuerySchema.safeParse(c.req.query());
+    if (!parsed.success) {
+      return c.json({ error: parsed.error.flatten() }, 400);
+    }
+    const where = buildMatchConditions(user.id, parsed.data);
+
+    const rows = await db
+      .select({ playedAt: matches.playedAt, winner: matchPlayers.winner })
+      .from(matchPlayers)
+      .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
+      .where(where)
+      .orderBy(asc(matches.playedAt));
+
+    return c.json({ points: rows });
   })
   .get("/:id", async (c) => {
     const user = c.get("user");

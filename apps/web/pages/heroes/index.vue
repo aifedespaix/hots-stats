@@ -18,17 +18,7 @@ useSeoMeta({
 
 const { data } = await useApiFetch<HeroListResponse>("/heroes");
 
-const sortKey = ref<keyof HeroStats>("gamesPlayed");
-const sortDir = ref<"asc" | "desc">("desc");
-
-function onSort(key: string) {
-  if (sortKey.value === key) {
-    sortDir.value = sortDir.value === "asc" ? "desc" : "asc";
-  } else {
-    sortKey.value = key as keyof HeroStats;
-    sortDir.value = "desc";
-  }
-}
+const { sortKey, sortDir, onSort } = useSortState<keyof HeroStats>("gamesPlayed", "desc");
 
 const sortedHeroes = computed(() => {
   const heroes = [...(data.value?.heroes ?? [])];
@@ -71,7 +61,7 @@ function goToHero(row: Record<string, unknown>) {
       @row-click="goToHero"
       @sort="onSort"
     >
-      <template #cell-heroRole="{ row }">{{ formatHeroRole(row.heroRole as string) }}</template>
+      <template #cell-heroRole="{ row }">{{ formatHeroRole(row.heroRole as string | null) }}</template>
       <template #cell-winrate="{ row }">
         <span :class="(row.winrate as number) >= 0.5 ? 'text-success' : 'text-danger'">
           {{ formatPercent(row.winrate as number) }}

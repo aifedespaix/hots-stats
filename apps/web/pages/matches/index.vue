@@ -33,9 +33,18 @@ const opponentBattletag = ref("");
 const page = ref(1);
 const pageSize = 20;
 
+type SortableColumn = "playedAt" | "durationSeconds" | "gameMode" | "mapName" | "heroName" | "result";
+const { sortKey, sortDir, onSort } = useSortState<SortableColumn>("playedAt", "desc");
+
+// The "result" column (shown as Victoire/Défaite) sorts by the underlying
+// `winner` boolean server-side, which isn't its own visible column.
+const apiSortBy = computed(() => (sortKey.value === "result" ? "winner" : sortKey.value));
+
 const query = computed(() => ({
   page: page.value,
   pageSize,
+  sortBy: apiSortBy.value,
+  sortDir: sortDir.value,
   ...(mode.value ? { mode: mode.value } : {}),
   ...(heroId.value ? { heroId: heroId.value } : {}),
   ...(mapId.value ? { mapId: mapId.value } : {}),
@@ -50,15 +59,19 @@ watch([mode, heroId, mapId, dateFrom, dateTo, opponentBattletag], () => {
   page.value = 1;
 });
 
+watch([sortKey, sortDir], () => {
+  page.value = 1;
+});
+
 const modeOptions = [{ value: "" as const, label: "Tous les modes" }, ...gameModeOptions()];
 
 const columns = [
-  { key: "playedAt", label: "Date" },
-  { key: "mapName", label: "Carte" },
-  { key: "gameMode", label: "Mode" },
-  { key: "heroName", label: "Héros" },
-  { key: "durationSeconds", label: "Durée", numeric: true },
-  { key: "result", label: "Résultat" },
+  { key: "playedAt", label: "Date", sortable: true },
+  { key: "mapName", label: "Carte", sortable: true },
+  { key: "gameMode", label: "Mode", sortable: true },
+  { key: "heroName", label: "Héros", sortable: true },
+  { key: "durationSeconds", label: "Durée", numeric: true, sortable: true },
+  { key: "result", label: "Résultat", sortable: true },
 ];
 
 function goToMatch(row: Record<string, unknown>) {
@@ -101,7 +114,10 @@ function goToMatch(row: Record<string, unknown>) {
       :columns="columns"
       :rows="matchesData?.matches ?? []"
       clickable
+      :sort-key="sortKey"
+      :sort-dir="sortDir"
       @row-click="goToMatch"
+      @sort="onSort"
     >
       <template #cell-playedAt="{ row }">{{ formatDate(row.playedAt as string) }}</template>
       <template #cell-gameMode="{ row }">{{ formatGameMode(row.gameMode as never) }}</template>

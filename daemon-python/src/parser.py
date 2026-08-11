@@ -64,6 +64,18 @@ def _slugify(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
 
+def _prettify_pascal_case(name: str) -> str:
+    """Best-effort "IndustrialDistrict" -> "Industrial District".
+
+    Used as a fallback when a map's internal tracker name isn't a key in
+    `constants.MAP_DISPLAY_NAMES` yet (a new battleground shipped before the
+    lookup table was updated). Without this, `_slugify` would run directly
+    on the unspaced PascalCase name and produce a malformed, wordless slug
+    like "industrialdistrict" instead of "industrial-district".
+    """
+    return re.sub(r"(?<!^)(?=[A-Z])", " ", name).strip()
+
+
 def _toon_handle(toon: dict) -> str:
     """Formats a player's Battle.net toon handle the same way the game itself
     does internally — this exact string also shows up as-is in the
@@ -345,7 +357,15 @@ def build_payload(
 
     if map_internal_name is None:
         raise ReplayParseError("Could not determine the map played.")
-    map_display_name = constants.MAP_DISPLAY_NAMES.get(map_internal_name, map_internal_name)
+    map_display_name = constants.MAP_DISPLAY_NAMES.get(map_internal_name)
+    if map_display_name is None:
+        map_display_name = _prettify_pascal_case(map_internal_name)
+        logger.warning(
+            "Unknown map internal name %r; using best-effort display name %r "
+            "(add it to constants.MAP_DISPLAY_NAMES for a curated one).",
+            map_internal_name,
+            map_display_name,
+        )
 
     game_options = (
         initdata.get("m_syncLobbyState", {}).get("m_gameDescription", {}).get("m_gameOptions", {})

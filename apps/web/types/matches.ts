@@ -32,7 +32,7 @@ export interface MatchDetailPlayer {
   battletag: string;
   heroId: string;
   heroName: string;
-  heroRole: string;
+  heroRole: string | null;
   team: number;
   winner: boolean;
   kills: number;
