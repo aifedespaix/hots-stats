@@ -35,6 +35,29 @@ async function saveBattletag() {
   }
 }
 
+const publicHandle = ref(authData.value?.user?.publicHandle ?? "");
+const savingPublicHandle = ref(false);
+const publicHandleError = ref("");
+
+async function savePublicHandle() {
+  savingPublicHandle.value = true;
+  publicHandleError.value = "";
+  try {
+    await $fetch("/me", {
+      method: "PATCH",
+      baseURL: config.public.apiBase,
+      credentials: "include",
+      body: { publicHandle: publicHandle.value },
+    });
+    await refreshAuth();
+  } catch (err) {
+    publicHandleError.value =
+      (err as { data?: { error?: string } })?.data?.error ?? "Erreur lors de la mise à jour";
+  } finally {
+    savingPublicHandle.value = false;
+  }
+}
+
 const { data: tokensData, refresh: refreshTokens } = await useFetch<{ tokens: PatSummary[] }>(
   "/tokens",
   {
@@ -80,6 +103,28 @@ async function revokeToken(id: string) {
         <UButton :loading="savingBattletag" @click="saveBattletag">Enregistrer</UButton>
       </div>
       <p v-if="battletagError" class="text-danger text-sm">{{ battletagError }}</p>
+    </section>
+
+    <section class="border border-border rounded-lg p-6 space-y-4">
+      <h2 class="font-heading text-lg">Profil public</h2>
+      <p class="text-muted text-sm">
+        Défini, ton profil devient consultable sans connexion sur
+        <code class="font-mono text-xs">/u/{{ publicHandle || "..." }}</code>
+        — pratique pour le partager sur Discord.
+      </p>
+      <div class="flex gap-2">
+        <UInput v-model="publicHandle" placeholder="mon-pseudo" class="font-mono flex-1" />
+        <UButton :loading="savingPublicHandle" @click="savePublicHandle">Enregistrer</UButton>
+      </div>
+      <p v-if="publicHandleError" class="text-danger text-sm">{{ publicHandleError }}</p>
+      <NuxtLink
+        v-if="authData?.user?.publicHandle"
+        :to="`/u/${authData.user.publicHandle}`"
+        target="_blank"
+        class="inline-block text-sm text-primary hover:underline"
+      >
+        Voir mon profil public &rarr;
+      </NuxtLink>
     </section>
 
     <section class="border border-border rounded-lg p-6 space-y-4">

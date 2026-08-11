@@ -15,6 +15,7 @@ const listQuerySchema = z.object({
   dateFrom: z.string().datetime().optional(),
   dateTo: z.string().datetime().optional(),
   opponentBattletag: z.string().optional(),
+  allyBattletag: z.string().optional(),
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(50).default(20),
 });
@@ -27,9 +28,11 @@ export const matchesRoute = new Hono<Env>()
     if (!parsed.success) {
       return c.json({ error: parsed.error.flatten() }, 400);
     }
-    const { mode, heroId, mapId, dateFrom, dateTo, opponentBattletag, page, pageSize } = parsed.data;
+    const { mode, heroId, mapId, dateFrom, dateTo, opponentBattletag, allyBattletag, page, pageSize } =
+      parsed.data;
 
     const opponent = alias(matchPlayers, "opponent");
+    const ally = alias(matchPlayers, "ally");
 
     const conditions = [eq(matchPlayers.userId, user.id)];
     if (mode) conditions.push(eq(matches.gameMode, mode));
@@ -44,6 +47,22 @@ export const matchesRoute = new Hono<Env>()
             .select({ one: sql`1` })
             .from(opponent)
             .where(and(eq(opponent.matchId, matches.id), eq(opponent.battletag, opponentBattletag))),
+        ),
+      );
+    }
+    if (allyBattletag) {
+      conditions.push(
+        exists(
+          db
+            .select({ one: sql`1` })
+            .from(ally)
+            .where(
+              and(
+                eq(ally.matchId, matches.id),
+                eq(ally.battletag, allyBattletag),
+                eq(ally.team, matchPlayers.team),
+              ),
+            ),
         ),
       );
     }

@@ -3,6 +3,7 @@ export interface DataTableColumn {
   key: string;
   label: string;
   numeric?: boolean;
+  sortable?: boolean;
 }
 
 const props = withDefaults(
@@ -11,13 +12,18 @@ const props = withDefaults(
     rows: unknown[];
     rowKey?: string;
     clickable?: boolean;
+    sortKey?: string;
+    sortDir?: "asc" | "desc";
   }>(),
-  { rowKey: "id", clickable: false },
+  { rowKey: "id", clickable: false, sortKey: undefined, sortDir: "desc" },
 );
 
 const rows = computed(() => props.rows as Record<string, unknown>[]);
 
-const emit = defineEmits<{ (e: "row-click", row: Record<string, unknown>): void }>();
+const emit = defineEmits<{
+  (e: "row-click", row: Record<string, unknown>): void;
+  (e: "sort", key: string): void;
+}>();
 </script>
 
 <template>
@@ -29,9 +35,17 @@ const emit = defineEmits<{ (e: "row-click", row: Record<string, unknown>): void 
             v-for="col in props.columns"
             :key="col.key"
             class="px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted"
-            :class="col.numeric ? 'text-right' : 'text-left'"
+            :class="[col.numeric ? 'text-right' : 'text-left', col.sortable ? 'cursor-pointer select-none hover:text-foreground' : '']"
+            @click="col.sortable && emit('sort', col.key)"
           >
-            {{ col.label }}
+            <span class="inline-flex items-center gap-1" :class="col.numeric ? 'flex-row-reverse' : ''">
+              {{ col.label }}
+              <UIcon
+                v-if="col.sortable && sortKey === col.key"
+                :name="sortDir === 'asc' ? 'i-heroicons-chevron-up' : 'i-heroicons-chevron-down'"
+                class="h-3 w-3"
+              />
+            </span>
           </th>
         </tr>
       </thead>

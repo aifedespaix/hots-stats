@@ -57,12 +57,45 @@ rappelle donc le contexte nécessaire plutôt que de supposer une continuité.
   Playwright dans les 3 thèmes. Note pour la suite : pas de timeline
   temporelle de partie (Epic 3 n'extrait pas encore ces events) — à
   ajouter en Epic 6 si les données deviennent disponibles.
+- **Epic 6 — Analytics Héros/Talents, Radar des Joueurs, Profil public** :
+  côté API, `apps/api/src/services/talents.service.ts` (stats héros +
+  talents par palier, participation aux kills calculée via une CTE
+  `team_kills` qui agrège les kills par match/équipe) et
+  `apps/api/src/services/players.service.ts` (stats de rencontre par
+  battletag via self-join sur `match_players`, tri serveur), en plus de
+  `apps/api/src/services/stats.service.ts` qui isole désormais le calcul
+  du résumé du Dashboard (déplacé depuis `routes/stats.ts` sans changement
+  de comportement). Nouvelles routes : `GET /heroes`, `GET /heroes/:heroId`,
+  `GET /heroes/:heroId/talents`, `GET /players` (`sortBy`/`sortDir` en
+  query), `GET /players/:battletag`, et `GET /public/u/:handle`
+  (`apps/api/src/routes/public.ts`, seule route non authentifiée du repo
+  avec `/health`, pour le profil partageable). `GET /matches` accepte
+  désormais aussi `allyBattletag` (en plus de `opponentBattletag`) pour que
+  la page profil réutilise la liste de parties sans dupliquer la logique.
+  `PATCH /me` accepte `publicHandle` (le champ existait déjà en base depuis
+  l'Epic 2, il manquait juste l'UI). Choix documenté : les stats
+  héros/talents restent scopées à l'utilisateur connecté (pas de vue
+  communautaire globale, cf. "Hors périmètre" du brief). Côté web :
+  `pages/heroes/index.vue` + `[slug].vue`, `pages/players/index.vue`
+  (Radar, tri serveur via `UiDataTable` étendu avec des colonnes
+  `sortable` cliquables) + `[battletag].vue`, `pages/u/[handle].vue` en
+  SSR avec `layouts/public-profile.vue` dédié et meta SEO/OpenGraph via
+  `useSeoMeta` (404 propre via `createError({ fatal: true })` si le handle
+  n'existe pas). Section "Profil public" ajoutée à `pages/settings/index.vue`
+  pour définir son `publicHandle`. Nav sidebar : Héros/Joueurs passés en
+  `enabled: true`. Non vérifié en conditions réelles dans cette session
+  (pas d'accès Docker/Postgres local ici, contrairement aux epics
+  précédents) — seul `bun run typecheck` (répo entier) a pu être exécuté ;
+  à valider manuellement avec de vraies données avant de considérer le
+  jalon testable du brief comme acquis.
 
-## À faire, dans cet ordre
+## À faire
 
-1. [`epic-6-web-analytics.md`](./epic-6-web-analytics.md) — Analytics Héros
-   & Talents, Radar des Joueurs, Profil joueur + page publique SSR (dépend
-   de l'Epic 5).
+Tous les epics du roadmap initial (1 à 6) sont marqués comme faits
+ci-dessus. Prochaines pistes possibles, à transformer en brief si besoin :
+stats communautaires globales, timeline temporelle de partie (nécessite
+d'étendre le parser de l'Epic 3), vérification end-to-end du CI/CD daemon
+sur un vrai runner Windows (cf. note Epic 4).
 
 Une fois un Epic terminé dans sa session, mettre à jour ce README (cocher
 dans "Déjà fait") avant de lancer le suivant.

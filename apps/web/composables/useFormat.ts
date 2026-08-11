@@ -41,3 +41,20 @@ export function formatDate(iso: string): string {
 export function formatPercent(ratio: number): string {
   return `${Math.round(ratio * 100)}%`;
 }
+
+const heroRoleLabels: Record<string, string> = {
+  Tank: "Tank",
+  Bruiser: "Bagarreur",
+  RangedAssassin: "Assassin à distance",
+  MeleeAssassin: "Assassin au corps à corps",
+  Healer: "Soigneur",
+  Support: "Soutien",
+};
+
+export function formatHeroRole(role: string): string {
+  return heroRoleLabels[role] ?? role;
+}
+
+export function formatAvg(value: number): string {
+  return value.toFixed(1);
+}

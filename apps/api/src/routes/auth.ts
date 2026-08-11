@@ -35,7 +35,12 @@ function toPublicUser(user: User) {
 const updateMeSchema = z.object({
   battletag: z
     .string()
-    .regex(/^.{2,24}#\d{4,10}$/, "Format attendu : Pseudo#12345"),
+    .regex(/^.{2,24}#\d{4,10}$/, "Format attendu : Pseudo#12345")
+    .optional(),
+  publicHandle: z
+    .string()
+    .regex(/^[a-z0-9-]{3,32}$/, "3 à 32 caractères : lettres minuscules, chiffres, tirets")
+    .optional(),
 });
 
 interface GoogleUserInfo {
@@ -131,18 +136,35 @@ export const authRoute = new Hono()
       return c.json({ error: parsed.error.flatten() }, 400);
     }
 
-    const conflicting = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.battletag, parsed.data.battletag))
-      .limit(1);
-    if (conflicting[0] && conflicting[0].id !== user.id) {
-      return c.json({ error: "Ce BattleTag est déjà lié à un autre compte" }, 409);
+    if (parsed.data.battletag) {
+      const conflicting = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.battletag, parsed.data.battletag))
+        .limit(1);
+      if (conflicting[0] && conflicting[0].id !== user.id) {
+        return c.json({ error: "Ce BattleTag est déjà lié à un autre compte" }, 409);
+      }
+    }
+
+    if (parsed.data.publicHandle) {
+      const conflicting = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.publicHandle, parsed.data.publicHandle))
+        .limit(1);
+      if (conflicting[0] && conflicting[0].id !== user.id) {
+        return c.json({ error: "Ce nom public est déjà pris" }, 409);
+      }
     }
 
     const [updated] = await db
       .update(users)
-      .set({ battletag: parsed.data.battletag, updatedAt: new Date() })
+      .set({
+        ...(parsed.data.battletag ? { battletag: parsed.data.battletag } : {}),
+        ...(parsed.data.publicHandle ? { publicHandle: parsed.data.publicHandle } : {}),
+        updatedAt: new Date(),
+      })
       .where(eq(users.id, user.id))
       .returning();
 
