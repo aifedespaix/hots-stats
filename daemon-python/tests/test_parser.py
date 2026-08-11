@@ -96,6 +96,14 @@ def _end_of_game_event(tracker_id: int, result: bytes, map_name: bytes, talents:
     }
 
 
+def _attributes_events(hero_by_tracker_id: dict[int, bytes]) -> dict:
+    return {
+        "scopes": {
+            tracker_id: {4002: [{"value": hero_code}]} for tracker_id, hero_code in hero_by_tracker_id.items()
+        }
+    }
+
+
 def _score_event(stats_by_name: dict[str, list[int]]) -> dict:
     return {
         "_event": "NNet.Replay.Tracker.SScoreResultEvent",
@@ -125,13 +133,17 @@ def _details() -> dict:
             {
                 "m_name": b"Foo",
                 "m_toon": {"m_region": 1, "m_programId": b"Hero", "m_realm": 1, "m_id": 1001},
-                "m_hero": b"Wiza",
+                # Deliberately the *localized* display name, not the "Wiza"
+                # attribute code -- hero resolution must ignore this field
+                # entirely (see `_hero_attribute_code`) and use
+                # `attributes_events` instead, same as a real French client.
+                "m_hero": b"Li-Ming",
                 "m_teamId": 0,
             },
             {
                 "m_name": b"Bar",
                 "m_toon": {"m_region": 1, "m_programId": b"Hero", "m_realm": 1, "m_id": 1002},
-                "m_hero": b"Malf",
+                "m_hero": b"Malfurion",
                 "m_teamId": 1,
             },
         ],
@@ -156,6 +168,10 @@ def _base_tracker_events() -> list[dict]:
     ]
 
 
+def _base_attributes_events() -> dict:
+    return _attributes_events({1: b"Wiza", 2: b"Malf"})
+
+
 def _battletags() -> dict[str, str]:
     return {"1-Hero-1-1001": "Foo#1111", "1-Hero-1-1002": "Bar#2222"}
 
@@ -170,6 +186,7 @@ def test_build_payload_happy_path():
         details=_details(),
         initdata=_initdata(),
         tracker_events=_base_tracker_events(),
+        attributes_events=_base_attributes_events(),
         battletags=_battletags(),
         replay_hash="a" * 64,
     )
@@ -215,6 +232,7 @@ def test_build_payload_forwards_stats_the_api_does_not_use_yet():
             _score_event(stats),
             *_base_tracker_events()[4:],
         ],
+        attributes_events=_base_attributes_events(),
         battletags=_battletags(),
         replay_hash="a" * 64,
     )
@@ -230,6 +248,7 @@ def test_build_payload_unknown_ammid_falls_back_to_custom():
         details=_details(),
         initdata=_initdata(amm_id=999999),
         tracker_events=_base_tracker_events(),
+        attributes_events=_base_attributes_events(),
         battletags=_battletags(),
         replay_hash="a" * 64,
     )
@@ -249,21 +268,20 @@ def test_build_payload_rejects_computer_player():
             details=_details(),
             initdata=_initdata(),
             tracker_events=events,
+            attributes_events=_base_attributes_events(),
             battletags=_battletags(),
             replay_hash="a" * 64,
         )
 
 
 def test_build_payload_rejects_unknown_hero():
-    details = _details()
-    details["m_playerList"][0]["m_hero"] = b"ZZZZ"
-
     with pytest.raises(ReplayParseError, match="hero"):
         build_payload(
             header=_header(610 + 16 * 600),
-            details=details,
+            details=_details(),
             initdata=_initdata(),
             tracker_events=_base_tracker_events(),
+            attributes_events=_attributes_events({1: b"ZZZZ", 2: b"Malf"}),
             battletags=_battletags(),
             replay_hash="a" * 64,
         )
@@ -278,6 +296,7 @@ def test_build_payload_rejects_incomplete_game():
             details=_details(),
             initdata=_initdata(),
             tracker_events=events,
+            attributes_events=_base_attributes_events(),
             battletags=_battletags(),
             replay_hash="a" * 64,
         )
@@ -290,6 +309,7 @@ def test_build_payload_rejects_missing_battletag():
             details=_details(),
             initdata=_initdata(),
             tracker_events=_base_tracker_events(),
+            attributes_events=_base_attributes_events(),
             battletags={},
             replay_hash="a" * 64,
         )
