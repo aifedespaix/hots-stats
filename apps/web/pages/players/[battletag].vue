@@ -41,6 +41,25 @@ const columns = [
   { key: "result", label: "Résultat" },
 ];
 
+// heroBreakdown is already sorted by gamesPlayed desc by the API.
+const topHeroPlayed = computed(() => data.value?.heroBreakdown[0] ?? null);
+
+const topHeroWon = computed(() => {
+  const list = data.value?.heroBreakdown ?? [];
+  return list.reduce<(typeof list)[number] | null>(
+    (best, hero) => (!best || hero.wins > best.wins ? hero : best),
+    null,
+  );
+});
+
+const topHeroLost = computed(() => {
+  const list = data.value?.heroBreakdown ?? [];
+  return list.reduce<(typeof list)[number] | null>(
+    (best, hero) => (!best || hero.losses > best.losses ? hero : best),
+    null,
+  );
+});
+
 function goToMatch(row: Record<string, unknown>) {
   navigateTo(`/matches/${row.id}`);
 }
@@ -54,7 +73,7 @@ function goToMatch(row: Record<string, unknown>) {
   <div v-else-if="data" class="space-y-8">
     <div>
       <NuxtLink to="/players" class="text-sm text-brand hover:underline">&larr; Retour aux joueurs</NuxtLink>
-      <h1 class="mt-2 font-heading text-2xl font-semibold font-mono">{{ data.player.battletag }}</h1>
+      <h1 class="mt-2 break-all font-heading text-2xl font-semibold font-mono">{{ data.player.battletag }}</h1>
     </div>
 
     <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -76,10 +95,38 @@ function goToMatch(row: Record<string, unknown>) {
       />
     </div>
 
+    <div v-if="topHeroPlayed" class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <UiStatTile
+        label="Top héros joué"
+        :value="topHeroPlayed.heroName"
+        :sublabel="`${topHeroPlayed.gamesPlayed} parties`"
+      />
+      <UiStatTile
+        label="Top héros gagné"
+        :value="topHeroWon && topHeroWon.wins > 0 ? topHeroWon.heroName : '-'"
+        :sublabel="topHeroWon && topHeroWon.wins > 0 ? `${topHeroWon.wins} victoires` : undefined"
+        tone="success"
+      />
+      <UiStatTile
+        label="Top héros perdu"
+        :value="topHeroLost && topHeroLost.losses > 0 ? topHeroLost.heroName : '-'"
+        :sublabel="topHeroLost && topHeroLost.losses > 0 ? `${topHeroLost.losses} défaites` : undefined"
+        tone="danger"
+      />
+    </div>
+
     <div>
       <h2 class="mb-3 font-heading text-lg font-medium">Historique des parties partagées</h2>
 
-      <UiDataTable :columns="columns" :rows="matchesData?.matches ?? []" clickable @row-click="goToMatch">
+      <UiDataTable
+        :columns="columns"
+        :rows="matchesData?.matches ?? []"
+        clickable
+        mobile-primary-key="mapName"
+        mobile-secondary-key="playedAt"
+        mobile-badge-key="result"
+        @row-click="goToMatch"
+      >
         <template #cell-playedAt="{ row }">{{ formatDate(row.playedAt as string) }}</template>
         <template #cell-gameMode="{ row }">{{ formatGameMode(row.gameMode as never) }}</template>
         <template #cell-result="{ row }">

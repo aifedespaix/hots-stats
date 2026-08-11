@@ -21,8 +21,8 @@ useSeoMeta({
 </script>
 
 <template>
-  <main class="min-h-screen flex items-center justify-center p-8">
-    <UCard class="max-w-sm w-full">
+  <main class="flex min-h-screen items-center justify-center p-4 sm:p-8">
+    <UCard class="w-full max-w-sm">
       <div class="mb-1 flex items-center gap-2.5">
         <img src="/favicon.svg" alt="" width="32" height="32" class="h-8 w-8">
         <h1 class="font-heading text-2xl">HotS Analytics</h1>

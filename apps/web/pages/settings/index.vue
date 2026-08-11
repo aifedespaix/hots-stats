@@ -141,42 +141,46 @@ async function revokeToken(id: string) {
 </script>
 
 <template>
-  <main class="p-8 max-w-2xl mx-auto space-y-8">
-    <h1 class="font-heading text-2xl">Paramètres</h1>
+  <div class="mx-auto max-w-2xl space-y-6 sm:space-y-8">
+    <h1 class="font-heading text-2xl font-semibold">Paramètres</h1>
 
-    <section class="border border-border rounded-lg p-6 space-y-4">
+    <section class="space-y-4 rounded-lg border border-border p-4 sm:p-6">
       <h2 class="font-heading text-lg">Pseudo</h2>
-      <p class="text-muted text-sm">
+      <p class="text-sm text-muted">
         Le nom affiché sur le site. Ce n'est pas ton nom Google - choisis ce que tu veux.
       </p>
-      <div class="flex gap-2">
+      <div class="flex flex-col gap-2 sm:flex-row">
         <UInput v-model="pseudo" placeholder="Mon pseudo" class="flex-1" />
-        <UButton :loading="savingPseudo" @click="savePseudo">Enregistrer</UButton>
+        <UButton :loading="savingPseudo" block class="sm:w-auto" @click="savePseudo">Enregistrer</UButton>
       </div>
-      <p v-if="pseudoError" class="text-danger text-sm">{{ pseudoError }}</p>
+      <p v-if="pseudoError" class="text-sm text-danger">{{ pseudoError }}</p>
     </section>
 
-    <section class="border border-border rounded-lg p-6 space-y-4">
+    <section class="space-y-4 rounded-lg border border-border p-4 sm:p-6">
       <h2 class="font-heading text-lg">BattleTag</h2>
-      <div class="flex gap-2">
-        <UInput v-model="battletag" placeholder="Pseudo#12345" class="font-mono flex-1" />
-        <UButton :loading="savingBattletag" @click="saveBattletag">Enregistrer</UButton>
+      <div class="flex flex-col gap-2 sm:flex-row">
+        <UInput v-model="battletag" placeholder="Pseudo#12345" class="flex-1 font-mono" />
+        <UButton :loading="savingBattletag" block class="sm:w-auto" @click="saveBattletag">
+          Enregistrer
+        </UButton>
       </div>
-      <p v-if="battletagError" class="text-danger text-sm">{{ battletagError }}</p>
+      <p v-if="battletagError" class="text-sm text-danger">{{ battletagError }}</p>
     </section>
 
-    <section class="border border-border rounded-lg p-6 space-y-4">
+    <section class="space-y-4 rounded-lg border border-border p-4 sm:p-6">
       <h2 class="font-heading text-lg">Profil public</h2>
-      <p class="text-muted text-sm">
+      <p class="text-sm text-muted">
         Défini, ton profil devient consultable sans connexion sur
-        <code class="font-mono text-xs">/u/{{ publicHandle || "..." }}</code>
+        <code class="break-all font-mono text-xs">/u/{{ publicHandle || "..." }}</code>
         - pratique pour le partager sur Discord. Généré depuis ton pseudo, modifiable si besoin.
       </p>
-      <div class="flex gap-2">
-        <UInput v-model="publicHandle" placeholder="mon-pseudo" class="font-mono flex-1" />
-        <UButton :loading="savingPublicHandle" @click="savePublicHandle">Enregistrer</UButton>
+      <div class="flex flex-col gap-2 sm:flex-row">
+        <UInput v-model="publicHandle" placeholder="mon-pseudo" class="flex-1 font-mono" />
+        <UButton :loading="savingPublicHandle" block class="sm:w-auto" @click="savePublicHandle">
+          Enregistrer
+        </UButton>
       </div>
-      <p v-if="publicHandleError" class="text-danger text-sm">{{ publicHandleError }}</p>
+      <p v-if="publicHandleError" class="text-sm text-danger">{{ publicHandleError }}</p>
       <NuxtLink
         v-if="authData?.user?.publicHandle"
         :to="`/u/${authData.user.publicHandle}`"
@@ -187,26 +191,26 @@ async function revokeToken(id: string) {
       </NuxtLink>
     </section>
 
-    <section class="border border-border rounded-lg p-6 space-y-4">
+    <section class="space-y-4 rounded-lg border border-border p-4 sm:p-6">
       <h2 class="font-heading text-lg">Personal Access Tokens</h2>
-      <p class="text-muted text-sm">
+      <p class="text-sm text-muted">
         Utilisé par le daemon Windows pour envoyer tes statistiques de partie.
       </p>
 
-      <div v-if="createdToken" class="bg-surface border border-brand rounded-md p-4">
-        <p class="text-sm mb-2">Copie ce token maintenant, il ne sera plus jamais affiché :</p>
-        <code class="font-mono text-sm break-all">{{ createdToken }}</code>
+      <div v-if="createdToken" class="rounded-md border border-brand bg-surface p-4">
+        <p class="mb-2 text-sm">Copie ce token maintenant, il ne sera plus jamais affiché :</p>
+        <code class="break-all font-mono text-sm">{{ createdToken }}</code>
       </div>
 
       <ul class="divide-y divide-border">
         <li
           v-for="token in tokensData?.tokens ?? []"
           :key="token.id"
-          class="flex items-center justify-between py-3"
+          class="flex items-center justify-between gap-3 py-3"
         >
-          <div>
-            <p class="font-medium">{{ token.name }}</p>
-            <p class="text-muted text-xs font-mono">
+          <div class="min-w-0">
+            <p class="truncate font-medium">{{ token.name }}</p>
+            <p class="text-xs text-muted font-mono">
               {{ token.revokedAt ? "Révoqué" : "Actif" }} · créé le
               {{ new Date(token.createdAt).toLocaleDateString() }}
             </p>
@@ -216,6 +220,7 @@ async function revokeToken(id: string) {
             color="red"
             variant="ghost"
             size="sm"
+            class="shrink-0"
             @click="revokeToken(token.id)"
           >
             Révoquer
@@ -223,10 +228,10 @@ async function revokeToken(id: string) {
         </li>
       </ul>
 
-      <div class="flex gap-2">
+      <div class="flex flex-col gap-2 sm:flex-row">
         <UInput v-model="newTokenName" placeholder="Nom du token (ex: PC principal)" class="flex-1" />
-        <UButton @click="createToken">Générer</UButton>
+        <UButton block class="sm:w-auto" @click="createToken">Générer</UButton>
       </div>
     </section>
-  </main>
+  </div>
 </template>

@@ -29,8 +29,17 @@ export interface PlayerListResponse {
   players: PlayerEncounterStats[];
 }
 
+export interface PlayerHeroBreakdown {
+  heroId: string;
+  heroName: string;
+  gamesPlayed: number;
+  wins: number;
+  losses: number;
+}
+
 export interface PlayerDetailResponse {
   player: PlayerEncounterStats;
+  heroBreakdown: PlayerHeroBreakdown[];
 }
 
 export interface PublicProfileResponse {

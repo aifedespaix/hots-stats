@@ -37,11 +37,11 @@ useSeoMeta({
         v-if="profile.avatarUrl"
         :src="profile.avatarUrl"
         :alt="profile.displayName"
-        class="h-16 w-16 rounded-full border border-border"
+        class="h-16 w-16 shrink-0 rounded-full border border-border"
       >
-      <div>
-        <h1 class="font-heading text-2xl font-semibold">{{ profile.displayName }}</h1>
-        <p v-if="profile.battletag" class="font-mono text-sm text-muted">{{ profile.battletag }}</p>
+      <div class="min-w-0">
+        <h1 class="break-words font-heading text-2xl font-semibold">{{ profile.displayName }}</h1>
+        <p v-if="profile.battletag" class="break-all font-mono text-sm text-muted">{{ profile.battletag }}</p>
       </div>
     </div>
 

@@ -1,7 +1,15 @@
-import { db, matches, matchPlayers } from "@hots-stats/db";
+import { db, heroes, matches, matchPlayers } from "@hots-stats/db";
 import type { GameMode, PlayerEncounterStats } from "@hots-stats/shared-types";
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+
+export interface PlayerHeroBreakdown {
+  heroId: string;
+  heroName: string;
+  gamesPlayed: number;
+  wins: number;
+  losses: number;
+}
 
 export type PlayerSortBy =
   | "battletag"
@@ -114,4 +122,28 @@ export async function getPlayerEncounter(
     winsAsAlly: row.winsAsAlly,
     winsAsOpponent: row.winsAsOpponent,
   };
+}
+
+/** Breakdown, per hero, of the connected user's games shared with `battletag`. */
+export async function getPlayerHeroBreakdown(
+  userId: string,
+  battletag: string,
+): Promise<PlayerHeroBreakdown[]> {
+  const other = alias(matchPlayers, "other");
+
+  const rows = await db
+    .select({
+      heroId: matchPlayers.heroId,
+      heroName: heroes.name,
+      gamesPlayed: sql<number>`count(*)::int`,
+      wins: sql<number>`count(*) filter (where ${matchPlayers.winner})::int`,
+    })
+    .from(matchPlayers)
+    .innerJoin(heroes, eq(heroes.id, matchPlayers.heroId))
+    .innerJoin(other, and(eq(other.matchId, matchPlayers.matchId), ne(other.id, matchPlayers.id)))
+    .where(and(eq(matchPlayers.userId, userId), eq(other.battletag, battletag)))
+    .groupBy(matchPlayers.heroId, heroes.name)
+    .orderBy(desc(sql`count(*)`));
+
+  return rows.map((row) => ({ ...row, losses: row.gamesPlayed - row.wins }));
 }

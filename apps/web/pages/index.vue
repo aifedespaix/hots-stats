@@ -73,6 +73,9 @@ function goToMatch(row: Record<string, unknown>) {
         :columns="columns"
         :rows="recentMatches?.matches ?? []"
         clickable
+        mobile-primary-key="mapName"
+        mobile-secondary-key="playedAt"
+        mobile-badge-key="result"
         @row-click="goToMatch"
       >
         <template #cell-playedAt="{ row }">{{ formatDate(row.playedAt as string) }}</template>
