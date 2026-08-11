@@ -77,6 +77,13 @@ web app's `apps/web/public/favicon.svg`. See `assets/generate_icons.py` for
 how to regenerate them after the favicon changes (needs `cairosvg` +
 `pillow`, not otherwise required to build the daemon).
 
+## Protocol manifest
+
+`src/_protocol_versions.py` lists every replay protocol build bundled by the
+installed `heroprotocol` package. See `assets/generate_protocol_manifest.py`
+for why `parser.py` needs this instead of calling `heroprotocol.versions`
+directly, and regenerate it after bumping the `heroprotocol` dependency.
+
 ## Tests
 
 ```
