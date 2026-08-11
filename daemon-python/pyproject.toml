@@ -8,6 +8,8 @@ dependencies = [
     "watchdog>=4.0",
     "requests>=2.31",
     "mpyq>=0.2.5",
+    "pystray>=0.19.5",
+    "pillow>=10.0",
 ]
 
 [project.optional-dependencies]

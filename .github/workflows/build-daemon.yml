@@ -65,11 +65,16 @@ jobs:
           --standalone
           --mingw64
           --assume-yes-for-downloads
+          --enable-plugin=tk-inter
+          --windows-console-mode=attach
           --include-package=heroprotocol
           --include-package=watchdog
+          --include-package=pystray
+          --include-package=PIL
+          --include-package=src
           --output-dir=dist
           --output-filename=hots-analytics-daemon-v${{ steps.version.outputs.version }}.exe
-          src/main.py
+          run.py
         # Nuitka over PyInstaller: it compiles to native C rather than
         # embedding a zipped interpreter, which triggers far fewer AV false
         # positives on Windows.
@@ -90,11 +95,29 @@ jobs:
         # updates. --assume-yes-for-downloads lets Nuitka fetch it
         # non-interactively in CI.
         #
-        # --include-package on heroprotocol/watchdog: both pick their actual
-        # implementation dynamically at runtime (heroprotocol loads a
-        # protocol module per replay build number; watchdog picks an OS
-        # backend), which Nuitka's static import analysis can miss — this
-        # forces the full package tree into the build regardless.
+        # --enable-plugin=tk-inter: bundles Tcl/Tk so the settings window
+        # (src/gui.py) runs standalone. --windows-console-mode=attach: this
+        # app is both a double-clicked tray app (no console, so `attach`
+        # stays silent) and a CLI tool (`--resync`, `--help` from a terminal
+        # or this CI smoke test, where `attach` reuses the parent's console
+        # so stdout is visible) — `disable` would break the latter.
+        #
+        # run.py (not src/main.py): compiling src/main.py directly makes
+        # Nuitka treat it as the top-level `__main__` module with no parent
+        # package, which breaks its `from . import ...` relative imports
+        # (see run.py's docstring for the full explanation). run.py is a
+        # trivial top-level launcher that imports `src.main` as a real
+        # package instead, which fixes that without touching src/'s internal
+        # imports.
+        #
+        # --include-package on heroprotocol/watchdog/pystray/PIL/src: these
+        # pick their actual implementation dynamically at runtime
+        # (heroprotocol loads a protocol module per replay build number;
+        # watchdog and pystray each pick an OS-specific backend; PIL is
+        # pystray's icon-image dependency), which Nuitka's static import
+        # analysis can miss — this forces the full package tree into the
+        # build regardless. --include-package=src is belt-and-suspenders
+        # alongside run.py's static `from src.main import main`.
 
       - name: Smoke test the executable
         shell: bash

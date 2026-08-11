@@ -3,6 +3,19 @@ import type { HeroListResponse, HeroStats } from "~/types/analytics";
 
 definePageMeta({ middleware: "auth" });
 
+useSeoMeta({
+  title: "Héros",
+  description:
+    "Statistiques détaillées par héros : winrate, KDA moyen et participation aux kills sur toutes tes parties Heroes of the Storm.",
+  ogTitle: "Héros - HotS Analytics",
+  ogDescription:
+    "Statistiques détaillées par héros : winrate, KDA moyen et participation aux kills sur toutes tes parties Heroes of the Storm.",
+  ogImage: "/og/heroes-index.png",
+  twitterCard: "summary_large_image",
+  twitterImage: "/og/heroes-index.png",
+  robots: "noindex, follow",
+});
+
 const { data } = await useApiFetch<HeroListResponse>("/heroes");
 
 const sortKey = ref<keyof HeroStats>("gamesPlayed");

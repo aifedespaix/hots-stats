@@ -9,8 +9,44 @@ interface PatSummary {
   revokedAt: string | null;
 }
 
+useSeoMeta({
+  title: "Paramètres",
+  description:
+    "Gère ton BattleTag, ton profil public et tes tokens d'accès personnels pour HotS Analytics.",
+  ogTitle: "Paramètres - HotS Analytics",
+  ogDescription:
+    "Gère ton BattleTag, ton profil public et tes tokens d'accès personnels pour HotS Analytics.",
+  ogImage: "/og/settings-index.png",
+  twitterCard: "summary_large_image",
+  twitterImage: "/og/settings-index.png",
+  robots: "noindex, follow",
+});
+
 const config = useRuntimeConfig();
 const { data: authData, refresh: refreshAuth } = await useAuthUser();
+
+const pseudo = ref(authData.value?.user?.displayName ?? "");
+const savingPseudo = ref(false);
+const pseudoError = ref("");
+
+async function savePseudo() {
+  savingPseudo.value = true;
+  pseudoError.value = "";
+  try {
+    await $fetch("/auth/me", {
+      method: "PATCH",
+      baseURL: config.public.apiBase,
+      credentials: "include",
+      body: { displayName: pseudo.value },
+    });
+    await refreshAuth();
+  } catch (err) {
+    pseudoError.value =
+      (err as { data?: { error?: string } })?.data?.error ?? "Erreur lors de la mise à jour";
+  } finally {
+    savingPseudo.value = false;
+  }
+}
 
 const battletag = ref(authData.value?.user?.battletag ?? "");
 const savingBattletag = ref(false);
@@ -20,7 +56,7 @@ async function saveBattletag() {
   savingBattletag.value = true;
   battletagError.value = "";
   try {
-    await $fetch("/me", {
+    await $fetch("/auth/me", {
       method: "PATCH",
       baseURL: config.public.apiBase,
       credentials: "include",
@@ -35,15 +71,27 @@ async function saveBattletag() {
   }
 }
 
-const publicHandle = ref(authData.value?.user?.publicHandle ?? "");
+const publicHandle = ref(
+  authData.value?.user?.publicHandle || (pseudo.value ? slugify(pseudo.value) : ""),
+);
 const savingPublicHandle = ref(false);
 const publicHandleError = ref("");
+// Once the user types their own handle, stop overwriting it from the pseudo.
+const publicHandleTouched = ref(Boolean(authData.value?.user?.publicHandle));
+
+watch(publicHandle, (value) => {
+  if (value !== slugify(pseudo.value)) publicHandleTouched.value = true;
+});
+
+watch(pseudo, (value) => {
+  if (!publicHandleTouched.value) publicHandle.value = value ? slugify(value) : "";
+});
 
 async function savePublicHandle() {
   savingPublicHandle.value = true;
   publicHandleError.value = "";
   try {
-    await $fetch("/me", {
+    await $fetch("/auth/me", {
       method: "PATCH",
       baseURL: config.public.apiBase,
       credentials: "include",
@@ -97,6 +145,18 @@ async function revokeToken(id: string) {
     <h1 class="font-heading text-2xl">Paramètres</h1>
 
     <section class="border border-border rounded-lg p-6 space-y-4">
+      <h2 class="font-heading text-lg">Pseudo</h2>
+      <p class="text-muted text-sm">
+        Le nom affiché sur le site. Ce n'est pas ton nom Google - choisis ce que tu veux.
+      </p>
+      <div class="flex gap-2">
+        <UInput v-model="pseudo" placeholder="Mon pseudo" class="flex-1" />
+        <UButton :loading="savingPseudo" @click="savePseudo">Enregistrer</UButton>
+      </div>
+      <p v-if="pseudoError" class="text-danger text-sm">{{ pseudoError }}</p>
+    </section>
+
+    <section class="border border-border rounded-lg p-6 space-y-4">
       <h2 class="font-heading text-lg">BattleTag</h2>
       <div class="flex gap-2">
         <UInput v-model="battletag" placeholder="Pseudo#12345" class="font-mono flex-1" />
@@ -110,7 +170,7 @@ async function revokeToken(id: string) {
       <p class="text-muted text-sm">
         Défini, ton profil devient consultable sans connexion sur
         <code class="font-mono text-xs">/u/{{ publicHandle || "..." }}</code>
-        — pratique pour le partager sur Discord.
+        - pratique pour le partager sur Discord. Généré depuis ton pseudo, modifiable si besoin.
       </p>
       <div class="flex gap-2">
         <UInput v-model="publicHandle" placeholder="mon-pseudo" class="font-mono flex-1" />

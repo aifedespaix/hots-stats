@@ -3,6 +3,19 @@ import type { MatchListResponse, StatsSummary } from "~/types/matches";
 
 definePageMeta({ middleware: "auth" });
 
+useSeoMeta({
+  title: "Dashboard",
+  description:
+    "Vue d'ensemble de tes statistiques Heroes of the Storm : winrate, parties récentes et accès rapide à ton historique.",
+  ogTitle: "Dashboard - HotS Analytics",
+  ogDescription:
+    "Vue d'ensemble de tes statistiques Heroes of the Storm : winrate, parties récentes et accès rapide à ton historique.",
+  ogImage: "/og/index.png",
+  twitterCard: "summary_large_image",
+  twitterImage: "/og/index.png",
+  robots: "noindex, follow",
+});
+
 const { data: authData } = await useAuthUser();
 
 const { data: summary } = await useApiFetch<StatsSummary>("/stats/summary");
@@ -37,14 +50,14 @@ function goToMatch(row: Record<string, unknown>) {
     <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
       <UiStatTile
         label="Winrate"
-        :value="summary ? formatPercent(summary.winrate) : '—'"
+        :value="summary ? formatPercent(summary.winrate) : '-'"
         :tone="summary && summary.winrate >= 0.5 ? 'success' : 'danger'"
       />
-      <UiStatTile label="Parties jouées" :value="summary ? String(summary.gamesPlayed) : '—'" />
-      <UiStatTile label="Victoires" :value="summary ? String(summary.wins) : '—'" />
+      <UiStatTile label="Parties jouées" :value="summary ? String(summary.gamesPlayed) : '-'" />
+      <UiStatTile label="Victoires" :value="summary ? String(summary.wins) : '-'" />
       <UiStatTile
         label="Durée moyenne"
-        :value="summary ? formatDuration(summary.avgDurationSeconds) : '—'"
+        :value="summary ? formatDuration(summary.avgDurationSeconds) : '-'"
       />
     </div>
 

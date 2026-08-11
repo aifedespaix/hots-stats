@@ -4,6 +4,19 @@ import type { MatchListResponse } from "~/types/matches";
 
 definePageMeta({ middleware: "auth" });
 
+useSeoMeta({
+  title: "Historique",
+  description:
+    "Historique complet de tes parties Heroes of the Storm avec filtres par mode, héros, carte et joueur croisé.",
+  ogTitle: "Historique - HotS Analytics",
+  ogDescription:
+    "Historique complet de tes parties Heroes of the Storm avec filtres par mode, héros, carte et joueur croisé.",
+  ogImage: "/og/matches-index.png",
+  twitterCard: "summary_large_image",
+  twitterImage: "/og/matches-index.png",
+  robots: "noindex, follow",
+});
+
 interface FiltersResponse {
   heroes: { id: string; name: string }[];
   maps: { id: string; name: string }[];

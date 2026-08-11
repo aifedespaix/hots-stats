@@ -8,6 +8,24 @@ const route = useRoute();
 const { data, error } = await useApiFetch<MatchDetailResponse>(`/matches/${route.params.id}`);
 
 const talentTiers = [1, 4, 7, 10, 13, 16, 20] as const;
+
+const matchTitle = computed(() => data.value?.match.mapName ?? "Détails de la partie");
+const matchSeoDescription = computed(() =>
+  data.value
+    ? `Détails de la partie sur ${data.value.match.mapName} : composition des équipes, KDA et talents joués.`
+    : "Détails d'une partie Heroes of the Storm : composition des équipes, KDA et talents joués.",
+);
+
+useSeoMeta({
+  title: () => matchTitle.value,
+  description: () => matchSeoDescription.value,
+  ogTitle: () => `${matchTitle.value} - HotS Analytics`,
+  ogDescription: () => matchSeoDescription.value,
+  ogImage: "/og/matches-[id].png",
+  twitterCard: "summary_large_image",
+  twitterImage: "/og/matches-[id].png",
+  robots: "noindex, follow",
+});
 </script>
 
 <template>
@@ -33,7 +51,7 @@ const talentTiers = [1, 4, 7, 10, 13, 16, 20] as const;
           class="font-heading text-lg font-medium"
           :class="team.players[0]?.winner ? 'text-success' : 'text-danger'"
         >
-          Équipe {{ team.team + 1 }} — {{ team.players[0]?.winner ? "Victoire" : "Défaite" }}
+          Équipe {{ team.team + 1 }} - {{ team.players[0]?.winner ? "Victoire" : "Défaite" }}
         </h2>
 
         <div
@@ -66,7 +84,7 @@ const talentTiers = [1, 4, 7, 10, 13, 16, 20] as const;
               class="rounded border border-border px-2 py-1 text-xs"
             >
               <span class="text-muted">{{ tier }}:</span>
-              {{ player.talents.find((t) => t.tier === tier)?.talentName ?? "—" }}
+              {{ player.talents.find((t) => t.tier === tier)?.talentName ?? "-" }}
             </div>
           </div>
         </div>
