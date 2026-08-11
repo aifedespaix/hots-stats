@@ -7,17 +7,22 @@
     "dev": "nuxt dev",
     "build": "nuxt build",
     "start": "bun .output/server/index.mjs",
-    "typecheck": "nuxt typecheck"
+    "typecheck": "nuxt typecheck",
+    "generate:og": "bun run scripts/generate-og.ts"
   },
   "dependencies": {
     "@hots-stats/shared-types": "workspace:*",
     "@nuxt/fonts": "^0.14.0",
     "@nuxt/ui": "^2.20.0",
     "nuxt": "^3.15.0",
+    "sharp": "^0.35.3",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "satori": "^0.29.0",
+    "satori-html": "^0.3.2",
     "typescript": "^5.7.3",
     "vue-tsc": "^2.2.0"
   }
