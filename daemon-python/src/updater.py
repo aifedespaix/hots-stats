@@ -10,6 +10,19 @@ current .exe, relaunches it, and deletes itself -- then this process exits
 immediately, releasing the file lock the script is waiting on. This is the
 same handoff technique most self-updating single-.exe Windows apps use.
 
+Exiting is only safe once the handoff has actually taken -- `Popen`
+succeeding just means Windows *accepted* the request to spawn the script,
+not that it's still running a moment later. `apply_update_and_exit` briefly
+confirms the script is still alive before committing to `os._exit`; if it
+isn't (or `powershell.exe` couldn't even be launched), the update is
+aborted and this process keeps running the current version instead of
+exiting into what would otherwise be nothing. This matters in practice, not
+just in theory: the script this hands off to is, unavoidably, an unsigned,
+hidden, execution-policy-bypassing process that copies one unsigned .exe
+over another and relaunches it -- exactly the shape of thing real-time
+antivirus is built to kill on sight, regardless of how legitimate the app
+actually is.
+
 This build is not code-signed (no certificate has been purchased for it),
 so Windows SmartScreen shows its "Windows protected your PC" warning the
 first time a browser-downloaded copy is run -- that's a one-time,
@@ -40,12 +53,14 @@ it.
 
 from __future__ import annotations
 
+import datetime as dt
 import logging
 import os
 import subprocess
 import sys
 import tempfile
 import threading
+import time
 from dataclasses import dataclass, replace
 from enum import Enum
 from pathlib import Path
@@ -67,6 +82,25 @@ _STARTUP_DELAY_SECONDS = 30  # let the daemon finish its first sync pass before 
 _CHECK_INTERVAL_SECONDS = 6 * 60 * 60  # 6h
 
 _DOWNLOADS_DIR_NAME = "hots-analytics-updates"
+
+# Only exist on Windows. `apply_update_and_exit` only does anything
+# meaningful against a real Windows-installed .exe, but resolving these
+# eagerly with `getattr` (instead of a bare `subprocess.DETACHED_PROCESS`
+# at the call site) keeps the module importable -- and the rest of that
+# function's logic unit-testable with `subprocess.Popen` itself mocked --
+# on the non-Windows platforms this test suite and `python -m src.main` in
+# dev actually run on.
+_DETACHED_PROCESS = getattr(subprocess, "DETACHED_PROCESS", 0)
+_CREATE_NEW_PROCESS_GROUP = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+
+# How long `apply_update_and_exit` waits, after handing off to the relaunch
+# script, to confirm that script is still alive before actually exiting --
+# see that function's docstring for why this matters (real-time antivirus /
+# SmartScreen killing an unsigned, freshly-spawned "copy an exe over another
+# exe and relaunch it" script is a real failure mode, not a hypothetical
+# one). Long enough to not false-positive on a merely slow process start,
+# short enough that a normal successful update barely notices the delay.
+_RELAUNCH_LIVENESS_CHECK_SECONDS = 1.5
 
 # Nuitka injects `__compiled__` into every compiled module's globals; unlike
 # PyInstaller, it does not set `sys.frozen`, so this is the reliable way to
@@ -130,6 +164,27 @@ def read_last_update_log_lines(max_lines: int = 10) -> list[str]:
     except OSError:
         return []
     return [line for line in lines if line.strip()][-max_lines:]
+
+
+def _append_update_log_line(version: str, message: str) -> None:
+    """Best-effort append to `update.log`, timestamped the same way the
+    relaunch PowerShell script's own `Log` function is (see
+    `_RELAUNCH_SCRIPT`), so lines written from Python and from the script
+    interleave into one coherent timeline regardless of which side wrote
+    which. Called from `apply_update_and_exit` itself -- on both the normal
+    handoff path and every abort path -- so an attempt that never gets as
+    far as the PowerShell script successfully logging anything (it failed to
+    launch at all, or was killed within its first moment of life) still
+    leaves a trace. Without this, that failure mode looked exactly like "the
+    app quietly vanished", with nothing on disk anywhere to explain why."""
+    try:
+        log_path = update_log_file_path()
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        timestamp = dt.datetime.now().astimezone().isoformat(timespec="seconds")
+        with log_path.open("a", encoding="utf-8") as f:
+            f.write(f"{timestamp} [v{version}] {message}\n")
+    except OSError:
+        logger.debug("Could not write to the update log", exc_info=True)
 
 
 def cleanup_stale_downloads() -> None:
@@ -314,8 +369,19 @@ function Relaunch($exePath, $why) {{
     for ($attempt = 1; $attempt -le 5; $attempt++) {{
         try {{
             Unblock-File -LiteralPath $exePath -ErrorAction SilentlyContinue
-            Start-Process -FilePath $exePath
-            Log "$why -- relaunched successfully (attempt $attempt)."
+            $proc = Start-Process -FilePath $exePath -PassThru
+            # Diagnostic only -- doesn't change the retry/fallback decision
+            # below, which already treats a non-throwing Start-Process call
+            # as success. This just tells the difference, in the log, between
+            # "relaunched and still running" and "relaunched but something
+            # (antivirus, SmartScreen) killed it a moment later" -- both look
+            # identical to Start-Process itself, since it doesn't wait.
+            Start-Sleep -Milliseconds 1500
+            if ($proc -and $proc.HasExited) {{
+                Log "$why -- relaunched (attempt $attempt) but the process exited almost immediately (code $($proc.ExitCode)); it may have been blocked by antivirus or SmartScreen."
+            }} else {{
+                Log "$why -- relaunched successfully (attempt $attempt) and is still running."
+            }}
             return $true
         }} catch {{
             Log "$why -- relaunch attempt $attempt failed: $($_.Exception.Message)"
@@ -372,12 +438,37 @@ def _render_relaunch_script(*, pid: int, new_exe: Path, current_exe: Path, scrip
     )
 
 
-def apply_update_and_exit(new_exe: Path, version: str = "?") -> None:
+def apply_update_and_exit(new_exe: Path, version: str = "?") -> bool:
     """Hands off to a detached PowerShell script that waits for this process
     (by pid) to exit, replaces the *actually installed* .exe (see
     `installed_exe_path`) with `new_exe`, relaunches it, and cleans up after
-    itself -- then exits this process immediately so the script's wait
-    resolves. Never returns."""
+    itself -- then exits this process immediately (`os._exit`) so the
+    script's wait resolves. Does not return in that case.
+
+    Returns `False` instead of exiting if the handoff can't even get that
+    far: `powershell.exe` fails to launch at all (missing/blocked
+    interpreter), or -- the case this exists to guard against -- the script
+    process dies within its first moment of life, before it could possibly
+    have finished `Copy-Item` and relaunched anything. That second case is
+    not hypothetical: this script is, by construction, an unsigned,
+    freshly-spawned, hidden, execution-policy-bypassing process that copies
+    one unsigned .exe over another and relaunches it -- exactly the shape of
+    thing real-time antivirus and other endpoint protection is built to kill
+    on sight, regardless of how legitimate the app actually is (see the
+    module docstring's note on why this build isn't code-signed).
+
+    Without this check, that failure mode was indistinguishable from success
+    from this process's point of view: `Popen` returning just means Windows
+    *accepted* the request to start a process, not that it kept running, and
+    the very next line unconditionally exited -- so the app would vanish and
+    never come back, with nothing on disk to explain why (the killed script
+    likely never got to execute its own first `Log` call either). Aborting
+    here instead means a self-update that can't complete degrades to "still
+    running the current version, will retry next cycle", the same fallback
+    principle `_RELAUNCH_SCRIPT` already applies on the *other* side of this
+    handoff (see `_render_relaunch_script`'s callers/tests) if `Copy-Item`
+    itself fails there.
+    """
     current_exe = installed_exe_path()
     log_path = update_log_file_path()
     try:
@@ -399,22 +490,45 @@ def apply_update_and_exit(new_exe: Path, version: str = "?") -> None:
             )
         )
 
-    subprocess.Popen(
-        [
-            "powershell.exe",
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-WindowStyle",
-            "Hidden",
-            "-File",
-            str(script_path),
-        ],
-        creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
-        close_fds=True,
-    )
+    try:
+        process = subprocess.Popen(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-WindowStyle",
+                "Hidden",
+                "-File",
+                str(script_path),
+            ],
+            creationflags=_DETACHED_PROCESS | _CREATE_NEW_PROCESS_GROUP,
+            close_fds=True,
+        )
+    except OSError as err:
+        logger.error("Could not launch the relaunch script: %s", err)
+        _append_update_log_line(version, f"Could not launch powershell.exe for the relaunch script: {err}.")
+        return False
+
+    deadline = time.monotonic() + _RELAUNCH_LIVENESS_CHECK_SECONDS
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            logger.error(
+                "Relaunch script (pid %d) exited almost immediately (code %s); aborting the update.",
+                process.pid,
+                process.returncode,
+            )
+            _append_update_log_line(
+                version,
+                f"Relaunch script exited immediately (code {process.returncode}) -- likely blocked by "
+                "antivirus or a security policy. Update aborted, staying on the current version.",
+            )
+            return False
+        time.sleep(0.1)
+
     logger.info("Handed off to the relaunch script, exiting to update to v%s.", version)
+    _append_update_log_line(version, f"Handed off to relaunch script (pid {process.pid}), exiting now.")
     os._exit(0)
 
 
@@ -435,13 +549,32 @@ def perform_update(update: AvailableUpdate, status: UpdateStatusTracker) -> bool
             downloads_dir(),
             on_progress=lambda frac: status.set(progress=frac),
         )
-    except requests.RequestException as err:
+    except (requests.RequestException, OSError) as err:
+        # OSError alongside the obvious network errors: `download_update`
+        # also touches disk (`dest_dir.mkdir`, writing the file), and a
+        # disk-full/permission/AV-lock failure there must degrade the same
+        # way a network failure does -- logged and retried next cycle --
+        # rather than propagate out of this function uncaught, which would
+        # silently kill whichever thread called it (the persistent
+        # "hots-update-checker" loop in `watch_for_updates`, or a one-shot
+        # "Vérifier les mises à jour" click) and stop it from ever checking
+        # again for the rest of this run.
         logger.warning("Update download failed, will retry next cycle: %s", err)
         status.set(phase=UpdatePhase.ERROR, message=str(err))
         return True
 
     status.set(phase=UpdatePhase.INSTALLING, progress=None)
-    apply_update_and_exit(new_exe, version=update.version)  # never returns
+    # Only returns (always `False`) if the handoff to the relaunch script
+    # couldn't be confirmed -- see `apply_update_and_exit`'s docstring. On
+    # success it exits the process instead, so this line is never reached.
+    if not apply_update_and_exit(new_exe, version=update.version):
+        status.set(
+            phase=UpdatePhase.ERROR,
+            message=(
+                "Le redémarrage automatique a échoué (probablement bloqué par un antivirus) -- "
+                "l'application précédente continue de fonctionner ; nouvel essai au prochain cycle."
+            ),
+        )
     return True
 
 

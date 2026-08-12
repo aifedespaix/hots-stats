@@ -10,6 +10,7 @@ from src.updater import (
     UpdatePhase,
     UpdateStatusTracker,
     _render_relaunch_script,
+    apply_update_and_exit,
     check_for_update,
     cleanup_stale_downloads,
     download_update,
@@ -188,6 +189,75 @@ def test_installed_exe_path_falls_back_to_sys_executable(monkeypatch):
     assert installed_exe_path() == Path("/tmp/fake-python").resolve()
 
 
+# -- apply_update_and_exit -----------------------------------------------
+
+
+def _fake_process(*, alive: bool, returncode: int | None = None) -> MagicMock:
+    proc = MagicMock()
+    proc.pid = 4242
+    proc.poll.return_value = None if alive else (returncode if returncode is not None else 1)
+    proc.returncode = returncode if returncode is not None else (None if alive else 1)
+    return proc
+
+
+def test_apply_update_and_exit_exits_when_relaunch_script_stays_alive(monkeypatch, tmp_path):
+    monkeypatch.setattr("src.updater.installed_exe_path", lambda: tmp_path / "current.exe")
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
+    monkeypatch.setattr("src.updater._RELAUNCH_LIVENESS_CHECK_SECONDS", 0.05)
+    monkeypatch.setattr("src.updater.subprocess.Popen", lambda *a, **k: _fake_process(alive=True))
+    exit_mock = MagicMock()
+    monkeypatch.setattr("src.updater.os._exit", exit_mock)
+
+    apply_update_and_exit(tmp_path / "new.exe", version="2.0.0")
+
+    exit_mock.assert_called_once_with(0)
+    log_text = (tmp_path / "AppData" / "hots-analytics" / "update.log").read_text()
+    assert "[v2.0.0]" in log_text
+    assert "Handed off" in log_text
+
+
+def test_apply_update_and_exit_aborts_when_relaunch_script_dies_immediately(monkeypatch, tmp_path):
+    """The bug this guards against: `Popen` succeeding only means Windows
+    accepted the request to start a process, not that it kept running --
+    real-time antivirus killing an unsigned, freshly-spawned self-replace
+    script within its first moment of life is a real failure mode. Before
+    this check existed, the very next line unconditionally exited, so the
+    app would vanish with nothing on disk to explain why."""
+    monkeypatch.setattr("src.updater.installed_exe_path", lambda: tmp_path / "current.exe")
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
+    monkeypatch.setattr("src.updater._RELAUNCH_LIVENESS_CHECK_SECONDS", 0.05)
+    monkeypatch.setattr("src.updater.subprocess.Popen", lambda *a, **k: _fake_process(alive=False, returncode=1))
+    exit_mock = MagicMock()
+    monkeypatch.setattr("src.updater.os._exit", exit_mock)
+
+    result = apply_update_and_exit(tmp_path / "new.exe", version="2.0.0")
+
+    assert result is False
+    exit_mock.assert_not_called()
+    log_text = (tmp_path / "AppData" / "hots-analytics" / "update.log").read_text()
+    assert "[v2.0.0]" in log_text
+    assert "antivirus" in log_text
+
+
+def test_apply_update_and_exit_aborts_when_powershell_fails_to_launch(monkeypatch, tmp_path):
+    monkeypatch.setattr("src.updater.installed_exe_path", lambda: tmp_path / "current.exe")
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
+
+    def _boom(*_a, **_k):
+        raise OSError("powershell.exe not found")
+
+    monkeypatch.setattr("src.updater.subprocess.Popen", _boom)
+    exit_mock = MagicMock()
+    monkeypatch.setattr("src.updater.os._exit", exit_mock)
+
+    result = apply_update_and_exit(tmp_path / "new.exe", version="2.0.0")
+
+    assert result is False
+    exit_mock.assert_not_called()
+    log_text = (tmp_path / "AppData" / "hots-analytics" / "update.log").read_text()
+    assert "Could not launch" in log_text
+
+
 # -- UpdateStatusTracker --------------------------------------------------
 
 
@@ -221,11 +291,35 @@ def test_perform_update_downloads_and_applies(monkeypatch):
     applied: list[Path] = []
 
     monkeypatch.setattr("src.updater.download_update", lambda *_a, **_k: Path("/tmp/fake.exe"))
-    monkeypatch.setattr("src.updater.apply_update_and_exit", lambda p, version=None: applied.append(p))
+    # In reality `apply_update_and_exit` never returns on success (the
+    # process replaces itself) -- the mock returns True purely so
+    # `perform_update`'s "did the handoff report failure?" check sees a
+    # truthy value and leaves the status at INSTALLING, same as the real
+    # never-returns case would.
+    monkeypatch.setattr("src.updater.apply_update_and_exit", lambda p, version=None: applied.append(p) or True)
 
     assert perform_update(update, status) is True
     assert applied == [Path("/tmp/fake.exe")]
     assert status.snapshot().phase is UpdatePhase.INSTALLING
+
+
+def test_perform_update_reports_error_when_relaunch_handoff_fails(monkeypatch):
+    """`apply_update_and_exit` returning False means it aborted instead of
+    exiting (see its docstring: e.g. antivirus killed the relaunch script
+    within its first moment of life) -- the status must flip to ERROR
+    instead of staying stuck on INSTALLING forever, which is what the
+    settings window's Update tab would otherwise show indefinitely with no
+    indication anything went wrong."""
+    update = AvailableUpdate(version="2.0.0", download_url="https://example.com/a.exe", asset_name="a.exe")
+    status = UpdateStatusTracker()
+
+    monkeypatch.setattr("src.updater.download_update", lambda *_a, **_k: Path("/tmp/fake.exe"))
+    monkeypatch.setattr("src.updater.apply_update_and_exit", lambda p, version=None: False)
+
+    assert perform_update(update, status) is True
+    snapshot = status.snapshot()
+    assert snapshot.phase is UpdatePhase.ERROR
+    assert snapshot.message
 
 
 def test_perform_update_records_error_on_download_failure(monkeypatch):
@@ -244,6 +338,28 @@ def test_perform_update_records_error_on_download_failure(monkeypatch):
     snapshot = status.snapshot()
     assert snapshot.phase is UpdatePhase.ERROR
     assert "offline" in snapshot.message
+
+
+def test_perform_update_records_error_on_download_os_error(monkeypatch):
+    """`download_update` also touches disk (mkdir, writing the file) -- a
+    disk-full/permission/AV-lock failure there raises OSError, not a
+    requests exception, but must be just as non-fatal to the calling thread
+    (see `perform_update`'s comment)."""
+    update = AvailableUpdate(version="2.0.0", download_url="https://example.com/a.exe", asset_name="a.exe")
+    status = UpdateStatusTracker()
+
+    def _boom(*_a, **_k):
+        raise PermissionError("Access is denied")
+
+    monkeypatch.setattr("src.updater.download_update", _boom)
+    applied = MagicMock()
+    monkeypatch.setattr("src.updater.apply_update_and_exit", applied)
+
+    assert perform_update(update, status) is True
+    applied.assert_not_called()
+    snapshot = status.snapshot()
+    assert snapshot.phase is UpdatePhase.ERROR
+    assert "Access is denied" in snapshot.message
 
 
 def test_perform_update_skips_when_already_in_progress(monkeypatch):
@@ -269,7 +385,7 @@ def test_perform_update_progress_callback_updates_status(monkeypatch):
         return Path("/tmp/fake.exe")
 
     monkeypatch.setattr("src.updater.download_update", _fake_download)
-    monkeypatch.setattr("src.updater.apply_update_and_exit", lambda _p, version=None: None)
+    monkeypatch.setattr("src.updater.apply_update_and_exit", lambda _p, version=None: True)
 
     perform_update(update, status)
     assert seen_progress == [0.5]
@@ -296,7 +412,7 @@ def test_trigger_manual_update_applies_when_available(monkeypatch):
 
     monkeypatch.setattr("src.updater.check_for_update", lambda: update)
     monkeypatch.setattr("src.updater.download_update", lambda *_a, **_k: Path("/tmp/fake.exe"))
-    monkeypatch.setattr("src.updater.apply_update_and_exit", lambda p, version=None: applied.append(p))
+    monkeypatch.setattr("src.updater.apply_update_and_exit", lambda p, version=None: applied.append(p) or True)
 
     trigger_manual_update(status)
     _wait_until(lambda: applied)
@@ -328,7 +444,7 @@ def test_watch_for_updates_notifies_and_auto_applies(monkeypatch):
     monkeypatch.setattr("src.updater.IS_FROZEN", True)
     monkeypatch.setattr("src.updater.check_for_update", lambda: update)
     monkeypatch.setattr("src.updater.download_update", lambda *_a, **_k: Path("/tmp/fake.exe"))
-    monkeypatch.setattr("src.updater.apply_update_and_exit", lambda p, version=None: applied.append(p))
+    monkeypatch.setattr("src.updater.apply_update_and_exit", lambda p, version=None: applied.append(p) or True)
 
     stop_event = threading.Event()
     found: list[AvailableUpdate] = []
@@ -347,7 +463,7 @@ def test_watch_for_updates_notification_failure_does_not_block_update(monkeypatc
     monkeypatch.setattr("src.updater.IS_FROZEN", True)
     monkeypatch.setattr("src.updater.check_for_update", lambda: update)
     monkeypatch.setattr("src.updater.download_update", lambda *_a, **_k: Path("/tmp/fake.exe"))
-    monkeypatch.setattr("src.updater.apply_update_and_exit", lambda p, version=None: applied.append(p))
+    monkeypatch.setattr("src.updater.apply_update_and_exit", lambda p, version=None: applied.append(p) or True)
 
     def _boom(_update: AvailableUpdate) -> None:
         raise RuntimeError("notification backend unavailable")
@@ -559,3 +675,23 @@ def test_render_relaunch_script_path_arguments_are_single_quoted(tmp_path):
     assert f'"{current_exe}"' not in script
     assert f"'{new_exe}'" in script
     assert f'"{new_exe}"' not in script
+
+
+def test_render_relaunch_script_logs_whether_relaunch_survived(tmp_path):
+    """`Start-Process` doesn't wait, so on its own it can't tell "relaunched
+    and running" apart from "relaunched but killed a moment later by
+    antivirus/SmartScreen" -- capturing the process (`-PassThru`) and
+    checking back after a short wait is what makes that distinction show up
+    in update.log instead of every relaunch just logging "successfully"
+    regardless of what actually happened next."""
+    script = _render_relaunch_script(
+        pid=1234,
+        new_exe=tmp_path / "new.exe",
+        current_exe=tmp_path / "current.exe",
+        script_path=tmp_path / "script.ps1",
+        log_path=tmp_path / "update.log",
+        version="2.0.0",
+    )
+
+    assert "-PassThru" in script
+    assert "HasExited" in script

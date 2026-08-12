@@ -86,6 +86,18 @@ def ingest_file(
     -- shown in the Debug window (gui.py) -- and retried on the next call,
     since fixing the underlying issue (a code update, a reachable API) is
     exactly what should make it sync next time.
+
+    Never raises: every failure this function knows how to name (a bad
+    replay file, a rejected/unreachable API call) gets a specific handler
+    below, and anything it doesn't recognize -- a malformed API response, a
+    local sqlite hiccup -- still falls through to a final catch-all rather
+    than escaping. One bad replay must never take the whole sync loop down
+    with it (`app.py`'s `_run_sync_loop` calls this in a plain `for` loop
+    with no try/except of its own): before this guarantee existed, an
+    unanticipated exception here would silently kill the background
+    "hots-replay-watcher" thread mid-run, leaving the settings window frozen
+    on "en cours de synchronisation : <this file>" forever with the
+    remaining replays never attempted and no error shown anywhere.
     """
     replay_hash: str | None = None
     if sync_state is not None:
@@ -98,8 +110,10 @@ def ingest_file(
                 logger.debug("Skipping %s: already synced", path)
                 return IngestOutcome("skipped", "already synced")
 
+    payload: dict | None = None
     try:
         payload = replay_parser.parse_replay(path)
+        result = client.post_replay(payload)
     except replay_parser.ReplayParseError as err:
         logger.warning("Skipping %s: %s", path, err)
         if sync_state is not None and replay_hash is not None:
@@ -108,9 +122,6 @@ def ingest_file(
             client, sync_state, error_type="parse", replay_hash=replay_hash, base_build=None, message=str(err)
         )
         return IngestOutcome("error", str(err))
-
-    try:
-        result = client.post_replay(payload)
     except api_client.AuthError as err:
         # Every subsequent request will fail the same way, but the watcher
         # callback runs on a background thread, so we can only log loudly
@@ -154,15 +165,48 @@ def ingest_file(
             message=str(err),
         )
         return IngestOutcome("error", str(err))
+    except Exception as err:  # noqa: BLE001 -- deliberate catch-all, see docstring
+        # Not something any handler above recognizes -- e.g. the server (or
+        # a proxy/WAF in front of it) returning a 2xx response with a
+        # non-JSON or unexpected-shape body, which raises deep inside
+        # `requests`/`client.post_replay` rather than as one of the named
+        # api_client exceptions. `payload` is bound here in every realistic
+        # case (parse_replay only ever raises ReplayParseError, handled
+        # above), but fall back to the pre-parse hash rather than risk a
+        # second, masking exception if it somehow isn't.
+        logger.exception("Unexpected error ingesting %s", path)
+        message = f"{type(err).__name__}: {err}"
+        error_hash = (payload or {}).get("replayHash") or replay_hash
+        if sync_state is not None and error_hash is not None:
+            sync_state.mark_error(error_hash, str(path), message, traceback.format_exc())
+        _report_error(
+            client,
+            sync_state,
+            error_type="server",
+            replay_hash=error_hash,
+            base_build=(payload or {}).get("m_baseBuild"),
+            message=message,
+        )
+        return IngestOutcome("error", message)
 
     if sync_state is not None:
-        sync_state.mark_synced(
-            payload["replayHash"],
-            payload["parserVersion"],
-            file_path=str(path),
-            api_version=api_version,
-            match_id=result.match_id,
-        )
+        try:
+            sync_state.mark_synced(
+                payload["replayHash"],
+                payload["parserVersion"],
+                file_path=str(path),
+                api_version=api_version,
+                match_id=result.match_id,
+            )
+        except Exception:
+            # The upload itself already succeeded server-side (`result` is
+            # back) -- losing the local "already synced" record only means
+            # this one replay gets reparsed and re-POSTed next run, which the
+            # server upserts as a no-op. A successful upload must never be
+            # reported as an ingestion failure over a local bookkeeping
+            # write, so this is deliberately not routed through mark_error /
+            # _report_error like the branches above.
+            logger.warning("Uploaded %s but failed to record it locally", path, exc_info=True)
 
     if result.upserted:
         logger.info("Ingested %s -> match %s", path, result.match_id)

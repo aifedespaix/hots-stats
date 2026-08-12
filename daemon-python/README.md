@@ -164,6 +164,20 @@ refreshes, per tracked replay, whether its source file is still present on
 disk (`SyncState.refresh_file_existence`), so a moved/deleted replay shows
 up as such in the Debug report instead of just going stale silently.
 
+The initial sync pass (`app._run_sync_loop`) uploads every replay on disk
+strictly one at a time, on a single background thread, so one replay's
+failure must never take the rest of the folder down with it — `ingestion.
+ingest_file` is guaranteed to never raise: anything it doesn't specifically
+recognize (a malformed API response, a local sqlite hiccup) still falls
+through to a catch-all that records it as an ordinary ingestion error and
+lets the loop move on to the next file. Before this guarantee was
+enforced end-to-end, an exception type none of the specific handlers
+anticipated would silently kill the watcher thread mid-run — the settings
+window kept showing "en cours de synchronisation : <this one file>" forever,
+with everything after it in the folder never even attempted and no error
+displayed anywhere, since the code path that would have shown one
+(`StatusTracker.finish_syncing`) was never reached.
+
 The same `GET /ingest/version` response also carries `dataResetAt`: set
 once an account uses **Réinitialiser mes données** in the web app's
 Settings page (Zone dangereuse), which wipes every match that account
@@ -233,7 +247,29 @@ Every step of that handoff is logged, with a timestamp, to
 `%APPDATA%\hots-analytics\update.log` (`updater.update_log_file_path`) —
 since the script runs after this process has already exited, that log is
 the only record of what happened if a copy or relaunch step fails. It's one
-click away from the settings window's Update tab (**Voir le journal**).
+click away from the settings window's Update tab (**Voir le journal**). The
+Python side writes to the same log too (`updater._append_update_log_line`),
+before and immediately after handing off to the script — not just the
+script itself — so an attempt that never got far enough for the script to
+log anything on its own (killed before its first `Log` call, or
+`powershell.exe` failing to launch at all) still leaves a trace instead of
+the log staying completely empty.
+
+**This process never exits on faith that the handoff will work.**
+`Popen` returning successfully only means Windows *accepted* the request to
+start the relaunch script — not that it kept running. Before this process
+commits to `os._exit(0)`, `apply_update_and_exit` briefly confirms the
+script process is still alive; if it isn't (or `powershell.exe` couldn't be
+launched at all), the update is aborted instead — logged, the Update tab
+shows a clear error, and **the current process keeps running normally**,
+retrying on the next scheduled cycle. This closes the failure mode that
+used to look like "it downloads, then the app just closes and never comes
+back, with nothing anywhere on disk to explain why": a script this shape —
+unsigned, hidden, execution-policy-bypassing, copying one unsigned `.exe`
+over another and relaunching it — is exactly what real-time antivirus and
+other endpoint protection are built to kill on sight, and until this check
+existed, this process had already unconditionally exited by the time that
+happened, so there was nothing left running to notice or recover.
 
 **Unsigned binary / SmartScreen:** this build isn't code-signed (no
 certificate has been purchased for it), so the *first* time a
