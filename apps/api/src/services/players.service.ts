@@ -34,11 +34,11 @@ const sortColumn: Record<PlayerSortBy, ReturnType<typeof sql>> = {
  * Self-joins the connected user's rows against every other player row in the
  * same match to build cross-encounter stats (ally when same team, opponent otherwise).
  */
-function encounterBase(userId: string, mode?: GameMode) {
+function encounterBase(userId: string, mode?: GameMode[]) {
   const other = alias(matchPlayers, "other");
 
   const conditions = [eq(matchPlayers.userId, userId), ne(other.battletag, matchPlayers.battletag)];
-  if (mode) conditions.push(eq(matches.gameMode, mode));
+  if (mode && mode.length > 0) conditions.push(inArray(matches.gameMode, mode));
 
   return db.$with("encounters").as(
     db
@@ -113,7 +113,7 @@ export async function listPlayerEncounters(
   userId: string,
   sortBy: PlayerSortBy,
   sortDir: SortDir,
-  mode?: GameMode,
+  mode?: GameMode[],
 ): Promise<PlayerEncounterStats[]> {
   const encounters = encounterBase(userId, mode);
   const order = sortDir === "asc" ? sql`${sortColumn[sortBy]} asc` : sql`${sortColumn[sortBy]} desc`;

@@ -10,7 +10,14 @@ from __future__ import annotations
 
 # Bump whenever parser.py's output shape changes in a way that should
 # override previously-ingested matches (see replay-upsert.service.ts).
-PARSER_VERSION = "1.0"
+# 1.1: ARAM ammId (50101) was missing and fell back to "Custom"; hero
+# resolution mis-scoped `replay.attributes.events` by the tracker
+# PlayerID instead of `m_playerList` position, occasionally attributing
+# one player's hero (and only the hero -- talents/stats stayed correct)
+# to a different player in the same match. Bumping this flags every
+# previously-ingested match as stale so the daemon's API-driven resync
+# (see sync_state.py's `invalidate_stale`) reparses and re-uploads it.
+PARSER_VERSION = "1.1"
 
 # Shown in the settings window. Bump alongside `[project].version` in pyproject.toml.
 APP_VERSION = "1.0.2"
@@ -19,9 +26,13 @@ APP_VERSION = "1.0.2"
 TALENT_TIER_LEVELS = (1, 4, 7, 10, 13, 16, 20)
 
 # `m_ammId` from replay.initData -> our `gameMode` enum (packages/shared-types).
-# Confirmed against hots-parser's constants.js. AI/Practice lobbies are
-# intentionally excluded: they have no `gameMode` counterpart and are
-# rejected by the parser (see parser.ReplayParseError).
+# Confirmed against Heroes.ReplayParser's ReplayInitData.cs (the parser
+# behind HeroesProfile.com's ingestion pipeline -- hots-parser's own table
+# predates ARAM's launch as a matchmade queue and doesn't have an entry for
+# it, which is exactly why it used to fall through to "Custom" here). AI
+# lobbies (50021, "Cooperative" -- vs. AI bots) are intentionally excluded:
+# `parser.py` rejects any replay containing a Computer player before
+# `gameMode` is even resolved, so vs-AI games are never ingested at all.
 GAME_MODE_BY_AMM_ID: dict[int, str] = {
     50001: "QuickMatch",
     50051: "UnrankedDraft",
@@ -29,10 +40,11 @@ GAME_MODE_BY_AMM_ID: dict[int, str] = {
     50071: "TeamLeague",
     50091: "StormLeague",
     50031: "Brawl",
+    50101: "ARAM",
 }
-# ARAM has no confirmed dedicated ammId as of this writing; matches that
-# don't resolve to a known id above fall back to "Custom" rather than being
-# mis-tagged. Revisit with a real ARAM replay if this matters.
+# True custom (unranked, non-matchmade) lobbies report no ammId at all
+# (`m_ammId` absent/null), which is the only case that should still land
+# here.
 DEFAULT_GAME_MODE = "Custom"
 
 # Internal map identifier (as reported by the EndOfGameTalentChoices tracker

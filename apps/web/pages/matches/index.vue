@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import type { GameMode } from "@hots-stats/shared-types";
 import type { MatchListResponse } from "~/types/matches";
 
 definePageMeta({ middleware: "auth" });
@@ -24,7 +23,7 @@ interface FiltersResponse {
 
 const { data: filterOptions } = await useApiFetch<FiltersResponse>("/matches/filters");
 
-const mode = ref<GameMode | "">("");
+const mode = ref("");
 const heroId = ref("");
 const mapId = ref("");
 const dateFrom = ref("");
@@ -69,7 +68,7 @@ watch([sortKey, sortDir], () => {
   page.value = 1;
 });
 
-const modeOptions = [{ value: "" as const, label: "Tous les modes" }, ...gameModeOptions()];
+const modeOptions = [{ value: "" as const, label: "Tous les modes" }, ...gameModeFilterOptions()];
 
 const columns = [
   { key: "playedAt", label: "Date", sortable: true },

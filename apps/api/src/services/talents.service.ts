@@ -1,6 +1,6 @@
 import { db, heroes, matchPlayers, matches, talentPicks } from "@hots-stats/db";
 import type { GameMode, HeroStatsScope, TalentTierStats } from "@hots-stats/shared-types";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 export interface HeroStatsRow {
   heroId: string;
@@ -22,7 +22,7 @@ export interface HeroStatsRow {
 async function heroStatsQuery(
   userId: string,
   heroId?: string,
-  mode?: GameMode,
+  mode?: GameMode[],
   scope: HeroStatsScope = "personal",
 ) {
   const teamKills = db.$with("team_kills").as(
@@ -38,7 +38,7 @@ async function heroStatsQuery(
 
   const conditions = scope === "personal" ? [eq(matchPlayers.userId, userId)] : [];
   if (heroId) conditions.push(eq(matchPlayers.heroId, heroId));
-  if (mode) conditions.push(eq(matches.gameMode, mode));
+  if (mode && mode.length > 0) conditions.push(inArray(matches.gameMode, mode));
 
   return db
     .with(teamKills)
@@ -68,7 +68,7 @@ async function heroStatsQuery(
 
 export async function getHeroSummaries(
   userId: string,
-  mode?: GameMode,
+  mode?: GameMode[],
   scope: HeroStatsScope = "personal",
 ): Promise<HeroStatsRow[]> {
   const rows = await heroStatsQuery(userId, undefined, mode, scope);

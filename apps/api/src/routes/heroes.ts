@@ -1,13 +1,14 @@
 import type { User } from "@hots-stats/db";
-import { gameModeSchema, heroStatsScopeSchema } from "@hots-stats/shared-types";
+import { heroStatsScopeSchema } from "@hots-stats/shared-types";
 import { Hono } from "hono";
 import { z } from "zod";
+import { gameModeListSchema } from "../lib/query";
 import { authSession, requireUser } from "../middleware/auth-session";
 import { getHeroSummaries, getHeroSummary, getTalentTierStats } from "../services/talents.service";
 
 type Env = { Variables: { user: User } };
 
-const listQuerySchema = z.object({ mode: gameModeSchema.optional(), scope: heroStatsScopeSchema.optional() });
+const listQuerySchema = z.object({ mode: gameModeListSchema.optional(), scope: heroStatsScopeSchema.optional() });
 
 export const heroesRoute = new Hono<Env>()
   .use("*", authSession, requireUser)
