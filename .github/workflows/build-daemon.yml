@@ -115,6 +115,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: daemon-python/pyproject.toml
 
       - name: Install daemon + build dependencies
         run: pip install -e ".[build]"
@@ -130,6 +132,24 @@ jobs:
           else
             echo "version=0.0.0-dev.${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
           fi
+
+      # Nuitka bundles its own ccache, but its cache dir lives on the
+      # runner's disk and every windows-latest VM starts empty -- without
+      # persisting it, all ~880 generated C files (stdlib, heroprotocol,
+      # opencv, onnxruntime, Tcl/Tk...) are a cache miss on every run,
+      # which alone is ~75% of this job's total time (measured: 23 of its
+      # ~32 minutes). This also stops the MinGW64 toolchain and depends.exe
+      # from being re-downloaded every run. github.sha in the primary key
+      # forces a fresh save each run (cache entries are immutable) while
+      # restore-keys still seeds from the closest previous cache.
+      - name: Cache Nuitka compilation cache
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\Nuitka\Nuitka\Cache
+          key: nuitka-${{ runner.os }}-${{ hashFiles('daemon-python/pyproject.toml') }}-${{ github.sha }}
+          restore-keys: |
+            nuitka-${{ runner.os }}-${{ hashFiles('daemon-python/pyproject.toml') }}-
+            nuitka-${{ runner.os }}-
 
       # The binary version (this tag / dev build) and PARSER_VERSION (in
       # src/constants.py) are intentionally independent: the daemon can ship
