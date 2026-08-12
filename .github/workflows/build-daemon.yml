@@ -173,6 +173,7 @@ jobs:
           --include-package=PIL
           --include-package=src
           --include-package-data=rapidocr_onnxruntime
+          --include-data-files=src/models/en_PP-OCRv5_rec_mobile.onnx=src/models/en_PP-OCRv5_rec_mobile.onnx
           --output-dir=dist
           --output-filename=${{ env.ASSET_NAME }}
           run.py
@@ -239,6 +240,18 @@ jobs:
         # caught by ocr.py's `except Exception` and logged, so it degrades
         # to "unreadable" names instead of crashing, which is also why this
         # was easy to miss until someone actually read the daemon's logs.
+        #
+        # --include-data-files=src/models/en_PP-OCRv5_rec_mobile.onnx=...:
+        # this one *is* a Python-imported package's data (src/ocr.py's own
+        # Latin-script OCR model, see that file's module docstring), but
+        # --include-package=src above only follows src/'s .py files, not
+        # arbitrary non-code data sitting next to them -- same gap
+        # --include-package-data=rapidocr_onnxruntime fixes for RapidOCR's
+        # own bundled models, just for a file that isn't inside an
+        # installed pip package. The dest path (right of `=`) mirrors
+        # ocr.py's own `Path(__file__).resolve().parent / "models" / ...`
+        # lookup, so it has to stay in sync with that path if either one
+        # ever moves.
 
       - name: Smoke test the executable
         shell: bash

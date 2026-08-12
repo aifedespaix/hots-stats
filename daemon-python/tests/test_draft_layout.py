@@ -70,7 +70,7 @@ def test_extract_team_crops_exposes_intermediate_strip_and_rotated_images():
 def test_left_team_slot_1_matches_the_current_tuning():
     # Pins the built-in default so a future crop retune is a deliberate,
     # visible diff here too.
-    assert LEFT_TEAM.player_crops[0] == RelBox(0.12, 0.27, 0.3, 0.3)
+    assert LEFT_TEAM.player_crops[0] == RelBox(0.143, 0.278, 0.311, 0.294)
 
 
 def test_team_split_crop_is_unaffected_by_the_player_crop_shift():
