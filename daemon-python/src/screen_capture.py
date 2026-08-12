@@ -91,3 +91,25 @@ def capture_window(hwnd: int) -> Image.Image:
 def capture_game_window() -> Image.Image:
     """Convenience wrapper: finds the game window and screenshots it in one call."""
     return capture_window(find_game_window())
+
+
+def find_foreground_window() -> int:
+    """Returns the handle of whatever window currently has focus, with no
+    title filtering at all -- unlike `find_game_window`. Backs the settings
+    window's "Tester la capture" button (see draft_capture.py's
+    `run_test_capture`), which is deliberately *not* restricted to a live
+    HotS window: the whole point is letting a player sanity-check the
+    hotkey -> screenshot -> crop -> OCR pipeline (and see the crop boxes
+    used) without needing to be mid-draft in an actual game.
+    """
+    import win32gui
+
+    hwnd = win32gui.GetForegroundWindow()
+    if not hwnd:
+        raise GameWindowNotFoundError("No active window found.")
+    return hwnd
+
+
+def capture_foreground_window() -> Image.Image:
+    """Convenience wrapper: screenshots whatever window currently has focus."""
+    return capture_window(find_foreground_window())

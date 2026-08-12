@@ -3,7 +3,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.screen_capture import GameWindowNotFoundError, capture_window, find_game_window
+from src.screen_capture import (
+    GameWindowNotFoundError,
+    capture_window,
+    find_foreground_window,
+    find_game_window,
+)
 
 
 @pytest.fixture
@@ -76,6 +81,21 @@ def test_find_game_window_skips_minimized_windows(fake_win32gui):
 
     with pytest.raises(GameWindowNotFoundError):
         find_game_window()
+
+
+def test_find_foreground_window_returns_whatever_has_focus_no_title_check(fake_win32gui):
+    """Unlike `find_game_window`, no title filtering at all -- this backs
+    the "Tester la capture" button, which must work against any window."""
+    fake_win32gui.GetForegroundWindow.return_value = 777
+
+    assert find_foreground_window() == 777
+
+
+def test_find_foreground_window_raises_when_nothing_has_focus(fake_win32gui):
+    fake_win32gui.GetForegroundWindow.return_value = 0
+
+    with pytest.raises(GameWindowNotFoundError):
+        find_foreground_window()
 
 
 def test_capture_window_rejects_empty_client_area(fake_win32gui):
