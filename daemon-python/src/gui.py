@@ -61,6 +61,7 @@ _LIVE_STATS_POLL_MS = 500
 _SYNCING_LABEL_MAX_CHARS = 60
 _ERROR_LABEL_MAX_CHARS = 220
 _UPDATE_STATUS_MAX_CHARS = 90
+_DRAFT_CAPTURE_STATUS_MAX_CHARS = 90
 _LABEL_WRAPLENGTH = 460
 
 # A small, dark, "gamer tool" palette. Kept in one place so the whole window
@@ -673,24 +674,36 @@ class _SettingsWindow:
         crop + OCR + upload happening invisibly in the fraction of a second
         it takes -- there was previously no feedback at all beyond whatever
         eventually shows up on the dashboard's Live Draft page, which
-        looked identical whether the hotkey had done nothing or was still
-        working."""
+        looked identical whether the hotkey had done nothing, failed, or
+        was still working. A failure (no game window found, a
+        screenshot/crop error) now stays visible in red instead of just
+        being logged -- this is what used to look like "the hotkey is fine
+        but nothing happens": something did happen, it just wasn't shown
+        anywhere a player would see it.
+        """
         assert self._draft_capture_status is not None
         status = self._draft_capture_status.snapshot()
 
+        busy = status.phase in (CapturePhase.CAPTURING, CapturePhase.SUBMITTING)
+        if not busy and self._draft_capture_animating:
+            self._draft_capture_animating = False
+            self._draft_capture_progress_bar.stop()
+            self._draft_capture_progress_bar.grid_remove()
+        elif busy and not self._draft_capture_animating:
+            self._draft_capture_animating = True
+            self._draft_capture_progress_bar.grid(row=6, column=0, columnspan=3, sticky="ew")
+            self._draft_capture_progress_bar.start(12)
+
         if status.phase is CapturePhase.IDLE:
-            if self._draft_capture_animating:
-                self._draft_capture_animating = False
-                self._draft_capture_progress_bar.stop()
-                self._draft_capture_progress_bar.grid_remove()
-            self._draft_capture_status_label.configure(text="")
+            self._set_status(self._draft_capture_status_label, "", _NEUTRAL)
+        elif status.phase is CapturePhase.ERROR:
+            message = status.message or "Échec de la capture."
+            self._set_status(
+                self._draft_capture_status_label, _truncate(f"✗ {message}", _DRAFT_CAPTURE_STATUS_MAX_CHARS), _ERROR
+            )
         else:
-            if not self._draft_capture_animating:
-                self._draft_capture_animating = True
-                self._draft_capture_progress_bar.grid(row=6, column=0, columnspan=3, sticky="ew")
-                self._draft_capture_progress_bar.start(12)
             text = "Capture en cours…" if status.phase is CapturePhase.CAPTURING else "Envoi de la capture…"
-            self._draft_capture_status_label.configure(text=text)
+            self._set_status(self._draft_capture_status_label, text, _NEUTRAL)
 
         self._draft_capture_status_job = self._root.after(_LIVE_STATS_POLL_MS, self._refresh_draft_capture_status)
 
@@ -1110,11 +1123,11 @@ class _SettingsWindow:
         if hasattr(self, "_update_status_label"):
             placeholders.append((self._update_status_label, "x" * _UPDATE_STATUS_MAX_CHARS))
         if self._draft_capture_status is not None:
-            # Not unbounded external text like the others above (only ever
-            # one of two short fixed phrases -- see
-            # `_refresh_draft_capture_status`), so the longer of the two is
-            # its own worst case, no "x"*N filler needed.
-            placeholders.append((self._draft_capture_status_label, "Envoi de la capture…"))
+            # Can show an ERROR message up to _DRAFT_CAPTURE_STATUS_MAX_CHARS
+            # long (see `_refresh_draft_capture_status`), not just the two
+            # short fixed in-progress phrases -- same "x"*N filler pattern
+            # as the other unbounded-text labels above.
+            placeholders.append((self._draft_capture_status_label, "x" * _DRAFT_CAPTURE_STATUS_MAX_CHARS))
 
         originals = [(label, label.cget("text")) for label, _ in placeholders]
         for label, placeholder in placeholders:

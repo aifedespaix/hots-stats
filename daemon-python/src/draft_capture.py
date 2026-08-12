@@ -27,11 +27,13 @@ class CapturePhase(str, Enum):
     IDLE = "idle"
     CAPTURING = "capturing"  # screenshotting, cropping, OCR
     SUBMITTING = "submitting"  # POSTing the result to the API
+    ERROR = "error"
 
 
 @dataclass(frozen=True)
 class CaptureStatus:
     phase: CapturePhase = CapturePhase.IDLE
+    message: str | None = None  # set only when phase is ERROR
 
 
 class DraftCaptureCoordinator:
@@ -83,6 +85,18 @@ class DraftCaptureCoordinator:
             if generation == self._generation:
                 self._status = CaptureStatus(phase=CapturePhase.IDLE)
 
+    def fail(self, generation: int, message: str) -> None:
+        """Like `finish`, but leaves the failure visible (ERROR, with
+        `message`) instead of going straight back to IDLE -- a capture that
+        silently does nothing (no game window found, a screenshot/crop
+        error) is exactly the "the hotkey is fine but nothing happens"
+        symptom this exists to make diagnosable. Stays showing until the
+        *next* `begin()` (the next hotkey press) rather than timing out on
+        its own, same as `updater.UpdateStatus`'s ERROR phase."""
+        with self._lock:
+            if generation == self._generation:
+                self._status = CaptureStatus(phase=CapturePhase.ERROR, message=message)
+
     def snapshot(self) -> CaptureStatus:
         with self._lock:
             return self._status
@@ -106,15 +120,23 @@ def capture_and_submit(client: api_client.ApiClient, coordinator: DraftCaptureCo
 
     `coordinator`, when given, is what makes pressing the hotkey again
     while a capture is still running supersede it instead of letting both
-    finish -- see `DraftCaptureCoordinator`'s docstring. Wrapped in
-    `finally` so its status always gets released back to IDLE on every exit
-    path (an error, a skip, a normal finish, or being superseded);
-    forgetting one would leave the Draft Live tab's progress indicator
-    showing "capture in progress" forever, the exact class of bug this
-    codebase has repeatedly had to fix elsewhere (see sync_state's
-    finish_syncing / updater's UpdateStatusTracker).
+    finish -- see `DraftCaptureCoordinator`'s docstring. Also wrapped in
+    `finally` so its status always gets released on every exit path (an
+    error, a skip, a normal finish, or being superseded); forgetting one
+    would leave the Draft Live tab's progress indicator showing "capture in
+    progress" forever, the exact class of bug this codebase has repeatedly
+    had to fix elsewhere (see sync_state's finish_syncing / updater's
+    UpdateStatusTracker). A real failure -- no game window found, a
+    screenshot/crop error -- reports itself via `coordinator.fail()` and
+    stays visible (ERROR) rather than being reset to IDLE by that `finally`
+    (see the `failed` flag below): this is what used to be the "hotkey
+    fires fine but nothing happens, no image, no request, no error
+    anywhere" symptom -- it wasn't that nothing happened, just that
+    whatever did happen (usually the game window not being found) was only
+    ever logged, never shown anywhere a player would see it.
     """
     generation = coordinator.begin() if coordinator is not None else 0
+    failed = False
     try:
         draft_debug.install_file_log_handler()
         ensure_crop_config_file()
@@ -123,9 +145,15 @@ def capture_and_submit(client: api_client.ApiClient, coordinator: DraftCaptureCo
             screenshot = screen_capture.capture_game_window()
         except screen_capture.GameWindowNotFoundError as err:
             logger.warning("Live-draft capture skipped: %s", err)
+            if coordinator is not None:
+                coordinator.fail(generation, "Fenêtre du jeu introuvable — lancez Heroes of the Storm et réessayez.")
+                failed = True
             return
         except Exception:
             logger.exception("Live-draft capture failed while screenshotting the game window")
+            if coordinator is not None:
+                coordinator.fail(generation, "Échec de la capture d'écran (voir live-draft.log).")
+                failed = True
             return
 
         if coordinator is not None and not coordinator.is_current(generation):
@@ -139,6 +167,9 @@ def capture_and_submit(client: api_client.ApiClient, coordinator: DraftCaptureCo
             team_right, right_results = _build_team_payload(right.player_crops)
         except Exception:
             logger.exception("Live-draft capture failed while reading player names")
+            if coordinator is not None:
+                coordinator.fail(generation, "Erreur pendant la lecture des noms (voir live-draft.log).")
+                failed = True
             return
 
         if coordinator is not None:
@@ -156,5 +187,5 @@ def capture_and_submit(client: api_client.ApiClient, coordinator: DraftCaptureCo
         if client.post_draft_snapshot(payload):
             logger.info("Live-draft snapshot submitted")
     finally:
-        if coordinator is not None:
+        if coordinator is not None and not failed:
             coordinator.finish(generation)

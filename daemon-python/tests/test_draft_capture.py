@@ -152,16 +152,72 @@ def test_capture_and_submit_reports_phases_via_coordinator():
     assert coordinator.snapshot().phase is draft_capture.CapturePhase.IDLE
 
 
-def test_capture_and_submit_releases_coordinator_even_on_error():
+def test_capture_and_submit_reports_error_instead_of_getting_stuck():
     """The bug this guards against: forgetting to release the coordinator
     on an error path would leave the Draft Live tab's progress indicator
     stuck showing "capture in progress" forever, same class of bug as the
-    sync-thread and update-status ones fixed elsewhere in this daemon."""
+    sync-thread and update-status ones fixed elsewhere in this daemon. It
+    must resolve to ERROR (visible, with a message), not silently back to
+    IDLE -- a capture that fails and shows nothing at all is exactly the
+    "hotkey is fine but nothing happens" symptom this exists to fix."""
     client = _client()
     coordinator = draft_capture.DraftCaptureCoordinator()
 
     with patch("src.draft_capture.screen_capture.capture_game_window", side_effect=RuntimeError("boom")):
         draft_capture.capture_and_submit(client, coordinator=coordinator)
+
+    status = coordinator.snapshot()
+    assert status.phase is draft_capture.CapturePhase.ERROR
+    assert status.message
+
+
+def test_capture_and_submit_reports_window_not_found_as_a_clear_error():
+    client = _client()
+    coordinator = draft_capture.DraftCaptureCoordinator()
+
+    with patch(
+        "src.draft_capture.screen_capture.capture_game_window",
+        side_effect=screen_capture.GameWindowNotFoundError("nope"),
+    ):
+        draft_capture.capture_and_submit(client, coordinator=coordinator)
+
+    status = coordinator.snapshot()
+    assert status.phase is draft_capture.CapturePhase.ERROR
+    assert "introuvable" in status.message
+
+
+def test_capture_and_submit_reports_crop_ocr_errors():
+    client = _client()
+    coordinator = draft_capture.DraftCaptureCoordinator()
+
+    with patch("src.draft_capture.screen_capture.capture_game_window", return_value="screenshot"):
+        with patch("src.draft_capture.extract_team_crops", side_effect=RuntimeError("boom")):
+            with patch("src.draft_capture.draft_debug.save_capture"):
+                draft_capture.capture_and_submit(client, coordinator=coordinator)
+
+    status = coordinator.snapshot()
+    assert status.phase is draft_capture.CapturePhase.ERROR
+    assert status.message
+
+
+def test_capture_and_submit_next_attempt_clears_a_previous_error():
+    """A fresh `begin()` (the next hotkey press) resets the status before
+    doing anything else, so a stale error from a previous failed attempt
+    doesn't linger forever once the underlying problem (e.g. the game
+    window) is fixed and a new capture actually succeeds."""
+    client = _client()
+    coordinator = draft_capture.DraftCaptureCoordinator()
+    with patch("src.draft_capture.screen_capture.capture_game_window", side_effect=RuntimeError("boom")):
+        draft_capture.capture_and_submit(client, coordinator=coordinator)
+    assert coordinator.snapshot().phase is draft_capture.CapturePhase.ERROR
+
+    left = _team_result(["l1", None, "l3", "l4", "l5"])
+    right = _team_result(["r1", "r2", "r3", "r4", "r5"])
+    with patch("src.draft_capture.screen_capture.capture_game_window", return_value="screenshot"):
+        with patch("src.draft_capture.extract_team_crops", return_value=(left, right)):
+            with patch("src.draft_capture.ocr.read_player_name", return_value=OcrResult("X", 0.9)):
+                with patch("src.draft_capture.draft_debug.save_capture"):
+                    draft_capture.capture_and_submit(client, coordinator=coordinator)
 
     assert coordinator.snapshot().phase is draft_capture.CapturePhase.IDLE
 

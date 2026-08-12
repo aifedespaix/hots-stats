@@ -114,16 +114,19 @@ While the settings window is open, its Draft Live tab shows a short
 hotkey press is being processed (`draft_capture.DraftCaptureCoordinator`,
 polled by `gui.py`'s `_refresh_draft_capture_status`) — there was
 previously no feedback at all beyond whatever eventually shows up on the
-dashboard. Pressing the hotkey again before a capture has finished doesn't
-queue a second one behind it: the same coordinator hands the newer press a
-fresh generation number, and the older run checks at its two natural
-checkpoints (right after screenshotting, and right before committing its
-result) whether it's still the current one -- if not, it gives up instead
-of finishing and possibly submitting stale data after (or racing with) the
-fresher capture. Python can't forcibly kill a running thread, so this is
-cooperative rather than a hard cancel, but since every checkpoint bails
-*before* writing anything, the practical effect is the one that matters: a
-superseded capture never wins over a newer one.
+dashboard. A capture that fails (no game window found, a screenshot/crop
+error) shows the reason in red instead of just being logged — see
+*Troubleshooting* below for what that fixes. Pressing the hotkey again
+before a capture has finished doesn't queue a second one behind it: the
+same coordinator hands the newer press a fresh generation number, and the
+older run checks at its two natural checkpoints (right after
+screenshotting, and right before committing its result) whether it's still
+the current one -- if not, it gives up instead of finishing and possibly
+submitting stale data after (or racing with) the fresher capture. Python
+can't forcibly kill a running thread, so this is cooperative rather than a
+hard cancel, but since every checkpoint bails *before* writing anything,
+the practical effect is the one that matters: a superseded capture never
+wins over a newer one.
 
 **OCR accuracy:** each player-name crop is already known to contain
 exactly one line of text and nothing else (that's the entire point of
@@ -141,6 +144,40 @@ knows how to read a single line of text), and upscales each crop 3x
 work with than a native ~30px-tall crop provides. Both are standard
 techniques for exactly this "already-isolated single line of text" shape of
 problem.
+
+### Troubleshooting: the hotkey doesn't seem to do anything
+
+The hook is registered once from `app._DaemonRunner.start()` at daemon
+startup (and again whenever the settings window saves a config change) --
+it is *not* tied to the settings window being open, and closing that
+window never unregisters it. If the hotkey genuinely isn't doing
+anything at all -- not even a brief "Capture en cours…" flash in the Draft
+Live tab, not a line in `live-draft.log` -- the keystroke isn't reaching
+the hook in the first place, and the most common cause of that on Windows
+is a **privilege mismatch**: `keyboard`'s global hook is a low-level
+`SetWindowsHookEx(WH_KEYBOARD_LL, ...)` hook, and Windows' UIPI
+(User Interface Privilege Isolation) blocks a *non-elevated* hook from
+ever receiving keystrokes while a window running *elevated* ("Run as
+administrator") has focus -- silently, with no error on either side. If
+Heroes of the Storm, its Battle.net launcher, or an overlay is set to
+always run as administrator (check its shortcut/exe's Compatibility tab)
+while the daemon itself is not, this is almost certainly why: either stop
+running the game elevated, or run the daemon elevated too (in which case
+it also needs to be launched that way for the "Lancer au démarrage de
+Windows" autostart entry, or the same mismatch reappears on every login).
+
+If instead a capture clearly *does* start (the progress indicator
+appears, or `live-draft.log` gets a new line) but never finishes/nothing
+shows up on the dashboard, that's a different failure — most commonly the
+game window not being found (see `screen_capture.find_game_window`, and
+the exclusive-fullscreen limitation above). That case is no longer
+silent: the Draft Live tab shows the specific reason in red instead of
+only logging it, so what used to look identical to "the hotkey did
+nothing" is now distinguishable from it. `find_game_window` also now
+prefers whichever matching window currently has focus when more than one
+window's title happens to match "Heroes of the Storm" (a browser tab, an
+unrelated app) -- previously it took an arbitrary one, which could
+silently screenshot the wrong thing.
 
 ### Crop tuning
 
