@@ -86,6 +86,25 @@ class ApiClient:
         assert last_error is not None
         raise ApiClientError(f"Failed to reach the ingestion API after {_MAX_ATTEMPTS} attempts") from last_error
 
+    def post_draft_snapshot(self, payload: dict, timeout: float = 10.0) -> bool:
+        """POSTs a live-draft snapshot. Unlike `post_replay`, this is
+        time-sensitive -- the draft is happening right now -- so it's a
+        single best-effort attempt rather than a retrying one: by the time a
+        multi-attempt backoff would succeed, the draft the player wanted to
+        see stats for is probably long over. Returns whether it succeeded;
+        never raises, since a failed capture must never crash the daemon's
+        hotkey callback (see draft_capture.py)."""
+        try:
+            response = self._session.post(f"{self._base_url}/draft/snapshot", json=payload, timeout=timeout)
+        except requests.RequestException as err:
+            logger.warning("Failed to submit draft snapshot: %s", err)
+            return False
+
+        if response.status_code >= 400:
+            logger.warning("Draft snapshot rejected (%d): %s", response.status_code, _safe_json(response))
+            return False
+        return True
+
 
 def _safe_json(response: requests.Response) -> object:
     try:

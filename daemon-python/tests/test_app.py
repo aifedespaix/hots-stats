@@ -1,7 +1,8 @@
 import threading
-from unittest.mock import patch
+import time
+from unittest.mock import MagicMock, patch
 
-from src.app import _run_sync_loop, _sync_api_version
+from src.app import _DaemonRunner, _run_sync_loop, _sync_api_version
 from src.config import Config
 from src.status import StatusTracker
 from src.sync_state import SyncState
@@ -106,3 +107,34 @@ def test_sync_api_version_keeps_replays_at_or_above_min_version(tmp_path):
         _sync_api_version(_config(tmp_path), sync_state)
 
     assert sync_state.is_up_to_date("current", "1.1") is True
+
+
+def _wait_until(predicate, timeout: float = 2.0) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return
+        time.sleep(0.01)
+    raise AssertionError("condition never became true")
+
+
+def test_trigger_draft_capture_is_noop_before_any_client_is_set():
+    runner = _DaemonRunner()
+
+    with patch("src.app.draft_capture.capture_and_submit") as capture:
+        runner._trigger_draft_capture()
+        time.sleep(0.05)
+
+    capture.assert_not_called()
+
+
+def test_trigger_draft_capture_spawns_thread_with_current_client():
+    runner = _DaemonRunner()
+    fake_client = MagicMock()
+    runner._client = fake_client
+
+    with patch("src.app.draft_capture.capture_and_submit") as capture:
+        runner._trigger_draft_capture()
+        _wait_until(lambda: capture.called)
+
+    capture.assert_called_once_with(fake_client)

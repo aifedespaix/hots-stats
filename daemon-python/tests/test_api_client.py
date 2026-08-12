@@ -111,6 +111,35 @@ def test_post_replay_retries_5xx_then_raises(tmp_path):
     assert post.call_count == 4
 
 
+def test_post_draft_snapshot_success(tmp_path):
+    client = ApiClient(_config(tmp_path))
+    ok_response = _response(202, {"status": "ok"})
+
+    with patch.object(client._session, "post", return_value=ok_response) as post:
+        assert client.post_draft_snapshot({"capturedAt": "now"}) is True
+
+    post.assert_called_once()
+    assert post.call_args.args[0] == "https://api.example.com/draft/snapshot"
+    assert post.call_args.kwargs["json"] == {"capturedAt": "now"}
+
+
+def test_post_draft_snapshot_false_on_rejection(tmp_path):
+    client = ApiClient(_config(tmp_path))
+    bad_response = _response(400, {"error": "invalid"})
+
+    with patch.object(client._session, "post", return_value=bad_response):
+        assert client.post_draft_snapshot({"capturedAt": "now"}) is False
+
+
+def test_post_draft_snapshot_false_on_network_error_not_retried(tmp_path):
+    client = ApiClient(_config(tmp_path))
+
+    with patch.object(client._session, "post", side_effect=requests.ConnectionError("offline")) as post:
+        assert client.post_draft_snapshot({"capturedAt": "now"}) is False
+
+    post.assert_called_once()
+
+
 def test_ping_health_true_on_200():
     with patch("src.api_client.requests.get", return_value=_response(200, {"status": "ok"})) as get:
         assert ping_health("https://api.example.com/") is True

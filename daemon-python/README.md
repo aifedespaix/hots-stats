@@ -64,6 +64,24 @@ needed. Since the daemon only opens the settings window when it has no
 config yet (see `app.run_app`), a configured daemon launched this way starts
 straight into the tray and syncs in the background, no window shown.
 
+## Live draft capture
+
+While in a Heroes of the Storm draft, pressing the configured global hotkey
+(default **Ctrl+Maj+D**, rebindable in the settings window) screenshots the
+game window, crops the 10 player-name regions off the draft screen
+(`src/draft_layout.py`), reads each one with OCR (`src/ocr.py`, RapidOCR),
+and POSTs the result to `/draft/snapshot` (`src/draft_capture.py`) so it
+shows up live on the dashboard's **Live Draft** page. The hotkey is a global
+low-level keyboard hook (`src/hotkey.py`, the `keyboard` package), so it
+fires even while the game has focus, windowed or "Fullscreen (Windowed)"
+(HotS's own default display mode); true exclusive fullscreen bypasses the
+screenshot the same way it bypasses everything else GDI/DWM-based. A name
+OCR can't read confidently is sent as `"unreadable"` rather than guessed at,
+so one bad crop degrades that one slot instead of the whole capture. The
+feature can be turned off entirely from the settings window, which is also
+where the hotkey field lives -- rebinding takes effect on save, no restart
+needed.
+
 ## Sync state
 
 Which replays are already synced (and which failed) is tracked in
@@ -117,6 +135,11 @@ src/
   watcher.py    Watches the replays folder (watchdog), stoppable via threading.Event
   ingestion.py  Parses + uploads one replay; shared by --resync and the tray daemon
   parser.py     .StormReplay -> API payload
+  hotkey.py         Global keyboard shortcut (the `keyboard` package) that triggers a draft capture
+  screen_capture.py Finds the HotS window and screenshots its client area (win32gui + mss)
+  draft_layout.py   Crops the 10 player-name regions off a draft-screen screenshot
+  ocr.py            Reads a player-name crop via RapidOCR
+  draft_capture.py  Wires the above together and POSTs the result to /draft/snapshot
   api_client.py HTTP client (retrying, for real ingestion) + light ping/summary/version helpers (for the settings UI)
   sync_state.py SQLite-backed "already synced" cache + per-replay error log, keyed by content hash
   status.py     Thread-safe found/synced/currently-syncing/last-error snapshot, for the settings window

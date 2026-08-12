@@ -17,7 +17,7 @@ import threading
 from pathlib import Path
 from typing import Callable
 
-from . import api_client
+from . import api_client, draft_capture, hotkey
 from .config import Config, ConfigError, config_exists, load_config
 from .ingestion import ingest_file
 from .status import StatusTracker
@@ -110,12 +110,34 @@ class _DaemonRunner:
         self._stop_event: threading.Event | None = None
         self.status = StatusTracker()
         self.sync_state: SyncState | None = None
+        # `_client` is swapped by every `start()` call; the hotkey manager
+        # itself is built once and kept for the app's whole lifetime so
+        # settings-window rebinds (`start()` again with a new hotkey) just
+        # re-register on the same instance instead of leaking a new one.
+        self._client: api_client.ApiClient | None = None
+        self.hotkey_manager = hotkey.HotkeyManager(on_trigger=self._trigger_draft_capture)
+
+    def _trigger_draft_capture(self) -> None:
+        # Runs on `keyboard`'s own internal dispatch thread -- handing off
+        # to a fresh thread immediately keeps a slow capture (screenshot +
+        # OCR) from delaying that thread's next keystroke.
+        client = self._client
+        if client is None:
+            return
+        threading.Thread(
+            target=draft_capture.capture_and_submit, args=(client,), name="hots-draft-capture", daemon=True
+        ).start()
 
     def start(self, config: Config) -> None:
         self.stop()  # ensure any previous thread is fully stopped before starting a new one
         self.status = StatusTracker()  # fresh counters for this run
 
         client = api_client.ApiClient(config)
+        self._client = client
+        if config.draft_feature_enabled:
+            self.hotkey_manager.start(config.draft_hotkey)
+        else:
+            self.hotkey_manager.stop()
         sync_state = SyncState()
         self.sync_state = sync_state
         stop_event = threading.Event()
@@ -144,6 +166,7 @@ class _DaemonRunner:
         thread.start()
 
     def stop(self, timeout: float = 10.0) -> None:
+        self.hotkey_manager.stop()
         if self._thread is None or self._stop_event is None:
             return
         self._stop_event.set()

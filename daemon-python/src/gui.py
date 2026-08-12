@@ -25,8 +25,8 @@ import webbrowser
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from . import api_client, autostart
-from .config import config_file_path, default_replays_dir, read_config_file, save_config
+from . import api_client, autostart, hotkey
+from .config import DEFAULT_DRAFT_HOTKEY, config_file_path, default_replays_dir, read_config_file, save_config
 from .constants import APP_VERSION
 from .status import StatusTracker
 from .sync_state import SyncState
@@ -239,6 +239,8 @@ class _SettingsWindow:
             )
             autostart_check.grid(row=grid_row + 1, column=0, columnspan=3, sticky="w", pady=(10, 0))
 
+        self._build_draft_section(outer)
+
         self._error_label = ttk.Label(
             outer, text="", style="Muted.TLabel", foreground=_ERROR, wraplength=_LABEL_WRAPLENGTH, justify="left"
         )
@@ -292,6 +294,93 @@ class _SettingsWindow:
         status.grid(row=entry_row, column=1, columnspan=2, sticky="w", padx=(10, 0))
 
         return entry, status, entry_row + 1
+
+    def _build_draft_section(self, parent) -> None:
+        """"Live draft" capture feature: on/off toggle plus its global
+        hotkey, validated live the same way the URL/token fields are (see
+        `_check_draft_hotkey`) but synchronously -- `keyboard.parse_hotkey`
+        is a local, in-process lookup (no network round trip), so unlike
+        `_check_connection` this doesn't need a worker thread or debounce.
+        """
+        section = tk.Frame(parent, bg=_PANEL)
+        section.pack(fill="x", pady=(16, 0))
+        inner = ttk.Frame(section, style="Panel.TFrame", padding=18)
+        inner.pack(fill="x")
+        inner.grid_columnconfigure(0, weight=1, minsize=340)
+
+        self._draft_enabled_var = tk.BooleanVar(value=True)
+        enabled_check = tk.Checkbutton(
+            inner,
+            text="Activer la capture de draft en direct (raccourci clavier global)",
+            variable=self._draft_enabled_var,
+            command=self._on_draft_enabled_toggled,
+            bg=_PANEL,
+            fg=_TEXT,
+            selectcolor=_FIELD_BG,
+            activebackground=_PANEL,
+            activeforeground=_TEXT,
+            highlightthickness=0,
+            borderwidth=0,
+            font=("Segoe UI", 9),
+            anchor="w",
+            wraplength=420,
+            justify="left",
+        )
+        enabled_check.grid(row=0, column=0, columnspan=3, sticky="w")
+
+        ttk.Label(inner, text="Raccourci", style="Panel.TLabel").grid(
+            row=1, column=0, columnspan=3, sticky="w", pady=(12, 0)
+        )
+        self._draft_hotkey_var = tk.StringVar()
+        wrapper = tk.Frame(inner, bg=_FIELD_BG, highlightthickness=1, highlightbackground=_FIELD_BG)
+        wrapper.grid(row=2, column=0, sticky="ew", pady=(4, 0))
+        self._draft_hotkey_entry = tk.Entry(
+            wrapper,
+            textvariable=self._draft_hotkey_var,
+            bg=_FIELD_BG,
+            fg=_TEXT,
+            insertbackground=_TEXT,
+            relief="flat",
+            font=("Segoe UI", 10),
+        )
+        self._draft_hotkey_entry.pack(fill="x", padx=10, pady=8)
+        self._draft_hotkey_entry.bind(
+            "<FocusIn>", lambda _e: wrapper.configure(bg=_FIELD_BG_FOCUS, highlightbackground=_ACCENT)
+        )
+        self._draft_hotkey_entry.bind(
+            "<FocusOut>", lambda _e: wrapper.configure(bg=_FIELD_BG, highlightbackground=_FIELD_BG)
+        )
+        self._draft_hotkey_entry.bind("<KeyRelease>", lambda _e: self._check_draft_hotkey())
+
+        self._draft_hotkey_status = ttk.Label(inner, text="", style="PanelMuted.TLabel")
+        self._draft_hotkey_status.grid(row=2, column=1, columnspan=2, sticky="w", padx=(10, 0))
+
+        ttk.Label(
+            inner,
+            text="Fonctionne même avec Heroes of the Storm en fenêtré ou plein écran.",
+            style="PanelMuted.TLabel",
+            wraplength=420,
+            justify="left",
+        ).grid(row=3, column=0, columnspan=3, sticky="w", pady=(6, 0))
+
+    def _on_draft_enabled_toggled(self) -> None:
+        state = "normal" if self._draft_enabled_var.get() else "disabled"
+        self._draft_hotkey_entry.configure(state=state)
+        if self._draft_enabled_var.get():
+            self._check_draft_hotkey()
+        else:
+            self._set_status(self._draft_hotkey_status, "", _NEUTRAL)
+
+    def _check_draft_hotkey(self) -> bool:
+        value = self._draft_hotkey_var.get().strip()
+        try:
+            hotkey.validate(value)
+        except hotkey.InvalidHotkeyError as err:
+            self._set_status(self._draft_hotkey_status, _truncate(f"✗ {err}", 40), _ERROR)
+            return False
+        else:
+            self._set_status(self._draft_hotkey_status, "✓ Raccourci valide", _OK)
+            return True
 
     def _build_stats(self, parent) -> None:
         stats = tk.Frame(parent, bg=_PANEL)
@@ -385,6 +474,10 @@ class _SettingsWindow:
             replays_dir = str(guessed) if guessed else ""
         self._replays_var.set(replays_dir)
         self._check_replays_dir()
+
+        self._draft_enabled_var.set(bool(existing.get("draftFeatureEnabled", True)))
+        self._draft_hotkey_var.set(existing.get("draftHotkey") or DEFAULT_DRAFT_HOTKEY)
+        self._on_draft_enabled_toggled()
 
     # -- validation: replays dir ------------------------------------------
 
@@ -621,7 +714,25 @@ class _SettingsWindow:
             self._show_error("Le dossier des replays est invalide ou introuvable.")
             return
 
-        save_config(api_base_url, access_token, replays_dir)
+        draft_feature_enabled = self._draft_enabled_var.get()
+        draft_hotkey = self._draft_hotkey_var.get().strip()
+        if draft_feature_enabled:
+            if not self._check_draft_hotkey():
+                self._show_error("Le raccourci de capture de draft est invalide.")
+                return
+            draft_hotkey = hotkey.validate(draft_hotkey)
+        elif not draft_hotkey:
+            # Disabled with a blank field (e.g. never touched on first
+            # run): keep a sane default around in case it's re-enabled later.
+            draft_hotkey = DEFAULT_DRAFT_HOTKEY
+
+        save_config(
+            api_base_url,
+            access_token,
+            replays_dir,
+            draft_feature_enabled=draft_feature_enabled,
+            draft_hotkey=draft_hotkey,
+        )
         logger.info("Configuration saved to %s", config_file_path())
         self._result["saved"] = True
         self._stop_live_stats()

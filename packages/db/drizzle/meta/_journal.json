@@ -29,6 +29,13 @@
       "when": 1786521934059,
       "tag": "0003_giant_lifeguard",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786525855304,
+      "tag": "0004_curious_fixer",
+      "breakpoints": true
     }
   ]
 }
