@@ -31,7 +31,9 @@ import webbrowser
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from . import api_client, autostart, hotkey, updater
+from PIL import Image, ImageTk
+
+from . import api_client, autostart, draft_capture, hotkey, updater
 from .config import (
     DEFAULT_DRAFT_HOTKEY,
     config_file_path,
@@ -42,6 +44,9 @@ from .config import (
     save_config,
 )
 from .constants import APP_VERSION
+from .draft_capture import CapturePhase, DraftCaptureCoordinator
+from .draft_layout import TeamCropResult
+from .ocr import OcrResult
 from .status import StatusTracker
 from .sync_state import SyncState
 from .updater import UpdatePhase, UpdateStatus, UpdateStatusTracker
@@ -60,7 +65,22 @@ _LIVE_STATS_POLL_MS = 500
 _SYNCING_LABEL_MAX_CHARS = 60
 _ERROR_LABEL_MAX_CHARS = 220
 _UPDATE_STATUS_MAX_CHARS = 90
+_DRAFT_CAPTURE_STATUS_MAX_CHARS = 90
+_TEST_CAPTURE_STATUS_MAX_CHARS = 90
 _LABEL_WRAPLENGTH = 460
+
+# How long the "Tester la capture" button waits, after being clicked, before
+# actually taking the screenshot -- gives the player a moment to alt-tab to
+# whatever window they actually want to test (the click itself leaves the
+# settings window focused, which would otherwise be the only thing ever
+# captured). See `_SettingsWindow._start_test_capture`.
+_TEST_CAPTURE_DELAY_SECONDS = 3
+
+# Display width (px) each of the 10 crop thumbnails is scaled to in the test
+# capture's result window -- the raw crops are tiny (hand-tuned name-strip
+# boxes, see draft_layout.py), so shown at native size they'd be nearly
+# unreadable.
+_TEST_CAPTURE_THUMB_WIDTH = 220
 
 # A small, dark, "gamer tool" palette. Kept in one place so the whole window
 # reads as one deliberate look rather than default-tk gray.
@@ -149,6 +169,7 @@ def run_settings_window(
     status_tracker: StatusTracker | None = None,
     sync_state: SyncState | None = None,
     update_status: UpdateStatusTracker | None = None,
+    draft_capture_status: DraftCaptureCoordinator | None = None,
 ) -> bool:
     """Opens the settings window and blocks (on the calling thread) until
     it's closed. Returns True if the user saved a valid configuration.
@@ -159,7 +180,8 @@ def run_settings_window(
     fetched from the API. `sync_state`, same condition, backs the Debug
     button's error report. `update_status`, same condition, backs the
     Update tab's live progress and lets its "Vérifier les mises à jour"
-    button report back to something.
+    button report back to something. `draft_capture_status`, same
+    condition, backs the Draft Live tab's "capture in progress" indicator.
     """
     result = {"saved": False}
     root = tk.Tk()
@@ -170,6 +192,7 @@ def run_settings_window(
         status_tracker=status_tracker,
         sync_state=sync_state,
         update_status=update_status,
+        draft_capture_status=draft_capture_status,
     )
     root.mainloop()
     return result["saved"]
@@ -312,6 +335,7 @@ class _SettingsWindow:
         status_tracker: StatusTracker | None = None,
         sync_state: SyncState | None = None,
         update_status: UpdateStatusTracker | None = None,
+        draft_capture_status: DraftCaptureCoordinator | None = None,
     ) -> None:
         self._root = root
         self._is_first_run = is_first_run
@@ -319,10 +343,22 @@ class _SettingsWindow:
         self._status_tracker = status_tracker
         self._sync_state = sync_state
         self._update_status = update_status
+        self._draft_capture_status = draft_capture_status
         self._debounce_job: str | None = None
         self._live_stats_job: str | None = None
         self._update_status_job: str | None = None
+        self._draft_capture_status_job: str | None = None
+        self._test_capture_countdown_job: str | None = None
+        self._test_capture_running = False
         self._hotkey_capturing = False
+        # Flipped once the window starts closing (see `_on_close`/`_save`),
+        # before `root.destroy()`. Background worker threads (the
+        # connection/token checks, the hotkey-combo listener) can still be
+        # mid-flight at that point; `_after_if_open` uses this to drop their
+        # results instead of handing a destroyed Tk root/widget back to
+        # `root.after`, which would otherwise raise from a thread nothing is
+        # watching.
+        self._closed = False
 
         root.title("HotS Analytics — Configuration")
         root.configure(bg=_BG)
@@ -348,6 +384,8 @@ class _SettingsWindow:
             # see `_build_ui` -- so this must stay in sync with that guard.
             if updater.IS_FROZEN and self._update_status is not None:
                 self._refresh_update_status()
+            if self._draft_capture_status is not None:
+                self._refresh_draft_capture_status()
 
         root.after(50, lambda: self._api_entry.focus_set())
 
@@ -405,6 +443,25 @@ class _SettingsWindow:
 
     def _open_data_folder(self) -> None:
         open_config_folder()
+
+    def _after_if_open(self, func, *args) -> None:
+        """`self._root.after(0, func, *args)`, but a no-op once the window
+        has closed. Every call site is a background worker thread (a
+        connection/token check, the hotkey-combo listener) handing a result
+        back to the Tk thread -- those threads aren't cancelled when the
+        window closes (there's no clean way to interrupt a blocking
+        `requests.get`/`keyboard.read_hotkey` call), so without this guard a
+        result that arrives after `_on_close`/`_save` already destroyed the
+        root would either touch already-destroyed widgets or hand `after` a
+        dead interpreter, raising from a thread nothing is watching instead
+        of just being silently discarded like it should be.
+        """
+        if self._closed:
+            return
+        try:
+            self._root.after(0, func, *args)
+        except (RuntimeError, tk.TclError):
+            pass
 
     # -- Config tab -------------------------------------------------------
 
@@ -577,6 +634,33 @@ class _SettingsWindow:
             justify="left",
         ).grid(row=4, column=0, columnspan=3, sticky="w", pady=(10, 0))
 
+        if self._draft_capture_status is not None:
+            self._draft_capture_animating = False
+            self._draft_capture_status_label = ttk.Label(inner, text="", style="PanelMuted.TLabel")
+            self._draft_capture_status_label.grid(row=5, column=0, columnspan=3, sticky="w", pady=(14, 4))
+            self._draft_capture_progress_bar = ttk.Progressbar(
+                inner, orient="horizontal", length=200, mode="indeterminate"
+            )
+            # Not gridded here -- only shown while a capture is actually in
+            # progress (see _refresh_draft_capture_status), so idle time
+            # (almost always) doesn't show an empty bar doing nothing.
+
+        # "Tester la capture" -- runs the same screenshot -> crop -> OCR
+        # pipeline against whatever window has focus, without ever POSTing
+        # anything, so a player can check hotkey/crop/OCR calibration
+        # without needing to be mid-draft in an actual game (see
+        # draft_capture.run_test_capture). Independent of the "Activer la
+        # capture de draft en direct" checkbox above and of any saved
+        # config -- available even on first run, before anything's saved.
+        test_row = ttk.Frame(inner, style="Panel.TFrame")
+        test_row.grid(row=7, column=0, columnspan=3, sticky="w", pady=(18, 0))
+        self._test_capture_btn = ttk.Button(
+            test_row, text="Tester la capture", style="Ghost.TButton", command=self._start_test_capture
+        )
+        self._test_capture_btn.pack(side="left")
+        self._test_capture_status_label = ttk.Label(inner, text="", style="PanelMuted.TLabel")
+        self._test_capture_status_label.grid(row=8, column=0, columnspan=3, sticky="w", pady=(6, 0))
+
     def _on_draft_enabled_toggled(self) -> None:
         state = "normal" if self._draft_enabled_var.get() else "disabled"
         self._draft_hotkey_record_btn.configure(state=state)
@@ -623,7 +707,7 @@ class _SettingsWindow:
         except Exception as err:  # pragma: no cover -- exercised via error branch in tests
             combo = None
             error = str(err)
-        self._root.after(0, self._finish_hotkey_capture, combo, error)
+        self._after_if_open(self._finish_hotkey_capture, combo, error)
 
     def _finish_hotkey_capture(self, combo: str | None, error: str | None) -> None:
         self._hotkey_capturing = False
@@ -646,6 +730,151 @@ class _SettingsWindow:
 
         self._draft_hotkey_var.set(normalized)
         self._check_draft_hotkey()
+
+    def _refresh_draft_capture_status(self) -> None:
+        """Polled while the window is open (see `__init__`/`_on_close`) so a
+        hotkey-triggered capture is visible instead of the screenshot +
+        crop + OCR + upload happening invisibly in the fraction of a second
+        it takes -- there was previously no feedback at all beyond whatever
+        eventually shows up on the dashboard's Live Draft page, which
+        looked identical whether the hotkey had done nothing, failed, or
+        was still working. A failure (no game window found, a
+        screenshot/crop error) now stays visible in red instead of just
+        being logged -- this is what used to look like "the hotkey is fine
+        but nothing happens": something did happen, it just wasn't shown
+        anywhere a player would see it.
+        """
+        assert self._draft_capture_status is not None
+        status = self._draft_capture_status.snapshot()
+
+        busy = status.phase in (CapturePhase.CAPTURING, CapturePhase.SUBMITTING)
+        if not busy and self._draft_capture_animating:
+            self._draft_capture_animating = False
+            self._draft_capture_progress_bar.stop()
+            self._draft_capture_progress_bar.grid_remove()
+        elif busy and not self._draft_capture_animating:
+            self._draft_capture_animating = True
+            self._draft_capture_progress_bar.grid(row=6, column=0, columnspan=3, sticky="ew")
+            self._draft_capture_progress_bar.start(12)
+
+        if status.phase is CapturePhase.IDLE:
+            self._set_status(self._draft_capture_status_label, "", _NEUTRAL)
+        elif status.phase is CapturePhase.ERROR:
+            message = status.message or "Échec de la capture."
+            self._set_status(
+                self._draft_capture_status_label, _truncate(f"✗ {message}", _DRAFT_CAPTURE_STATUS_MAX_CHARS), _ERROR
+            )
+        else:
+            text = "Capture en cours…" if status.phase is CapturePhase.CAPTURING else "Envoi de la capture…"
+            self._set_status(self._draft_capture_status_label, text, _NEUTRAL)
+
+        self._draft_capture_status_job = self._root.after(_LIVE_STATS_POLL_MS, self._refresh_draft_capture_status)
+
+    # -- Draft Live tab: "Tester la capture" ---------------------------------
+
+    def _start_test_capture(self) -> None:
+        if self._test_capture_running:
+            return
+        self._test_capture_running = True
+        self._test_capture_btn.configure(state="disabled")
+        self._test_capture_countdown(_TEST_CAPTURE_DELAY_SECONDS)
+
+    def _test_capture_countdown(self, remaining: int) -> None:
+        # Clicking the button leaves *this* window focused -- capturing
+        # immediately would only ever screenshot the settings window itself.
+        # This short countdown gives the player a moment to alt-tab to
+        # whatever window they actually want to test (the game, or anything
+        # else -- see `draft_capture.run_test_capture`).
+        if remaining > 0:
+            self._set_status(
+                self._test_capture_status_label,
+                f"Basculez vers la fenêtre à tester… capture dans {remaining}s",
+                _NEUTRAL,
+            )
+            self._test_capture_countdown_job = self._root.after(
+                1000, lambda: self._test_capture_countdown(remaining - 1)
+            )
+            return
+        self._test_capture_countdown_job = None
+        self._set_status(self._test_capture_status_label, "Capture en cours…", _NEUTRAL)
+        threading.Thread(target=self._test_capture_worker, daemon=True, name="hots-test-capture").start()
+
+    def _test_capture_worker(self) -> None:
+        try:
+            result = draft_capture.run_test_capture()
+        except Exception as err:
+            self._after_if_open(self._finish_test_capture, None, str(err))
+            return
+        self._after_if_open(self._finish_test_capture, result, None)
+
+    def _finish_test_capture(
+        self, result: draft_capture.TestCaptureResult | None, error: str | None
+    ) -> None:
+        self._test_capture_running = False
+        self._test_capture_btn.configure(state="normal")
+
+        if error is not None:
+            self._set_status(
+                self._test_capture_status_label, _truncate(f"✗ {error}", _TEST_CAPTURE_STATUS_MAX_CHARS), _ERROR
+            )
+            return
+        assert result is not None
+        self._set_status(self._test_capture_status_label, "✓ Capture terminée, voir la fenêtre de résultat.", _OK)
+        self._open_test_capture_window(result)
+
+    def _crop_to_photo(self, crop: Image.Image | None) -> ImageTk.PhotoImage | None:
+        if crop is None or crop.width == 0 or crop.height == 0:
+            return None
+        scale = _TEST_CAPTURE_THUMB_WIDTH / crop.width
+        resized = crop.resize((_TEST_CAPTURE_THUMB_WIDTH, max(1, round(crop.height * scale))), Image.LANCZOS)
+        return ImageTk.PhotoImage(resized)
+
+    def _open_test_capture_window(self, result: draft_capture.TestCaptureResult) -> None:
+        win = tk.Toplevel(self._root)
+        win.title("HotS Analytics — Test de capture")
+        win.configure(bg=_BG)
+        win.transient(self._root)
+
+        body = ttk.Frame(win, padding=18)
+        body.pack(fill="both", expand=True)
+
+        # PhotoImage instances are garbage-collected by Tk the moment nothing
+        # in Python still references them -- kept alive for the window's
+        # whole lifetime by stashing them on it directly.
+        photos: list[ImageTk.PhotoImage] = []
+        win._test_capture_photos = photos  # type: ignore[attr-defined]
+
+        def _build_team_column(title: str, team: TeamCropResult, ocr_results: list[OcrResult], column: int) -> None:
+            padx = (0, 0) if column == 0 else (28, 0)
+            ttk.Label(body, text=title, style="Title.TLabel").grid(row=0, column=column, sticky="w", padx=padx)
+            for i, (crop, read) in enumerate(zip(team.player_crops, ocr_results), start=1):
+                cell = ttk.Frame(body, style="TFrame")
+                cell.grid(row=i, column=column, sticky="w", pady=(12, 0), padx=padx)
+
+                photo = self._crop_to_photo(crop)
+                if photo is not None:
+                    photos.append(photo)
+                    tk.Label(cell, image=photo, bg=_BG).pack(anchor="w")
+                else:
+                    tk.Label(cell, text="(pas de crop)", bg=_BG, fg=_TEXT_MUTED, font=("Segoe UI", 9)).pack(
+                        anchor="w"
+                    )
+
+                ok = bool(read.text)
+                text = read.text if ok else "— illisible —"
+                ttk.Label(
+                    cell,
+                    text=f"Slot {i} : {text}  ({round(read.confidence * 100)} %)",
+                    foreground=_OK if ok else _ERROR,
+                    style="TLabel",
+                ).pack(anchor="w")
+
+        _build_team_column("Équipe gauche", result.left, result.left_results, 0)
+        _build_team_column("Équipe droite", result.right, result.right_results, 1)
+
+        ttk.Button(body, text="Fermer", style="Ghost.TButton", command=win.destroy).grid(
+            row=6, column=0, columnspan=2, sticky="e", pady=(18, 0)
+        )
 
     # -- Synchronisation tab ------------------------------------------------
 
@@ -725,7 +954,14 @@ class _SettingsWindow:
         self._synced_count_label.configure(
             text=f"{status.synced} ok" + (f", {status.failed} échouées" if status.failed else "")
         )
-        syncing_text = _truncate(status.currently_syncing, _SYNCING_LABEL_MAX_CHARS) if status.currently_syncing else "—"
+        # A small pool of worker threads ingests the initial backlog (see
+        # app.py's `_INITIAL_SYNC_WORKERS`), so more than one filename can be
+        # "in progress" at once -- joined here rather than only ever showing
+        # one of them and hiding the rest.
+        if status.currently_syncing:
+            syncing_text = _truncate(", ".join(sorted(status.currently_syncing)), _SYNCING_LABEL_MAX_CHARS)
+        else:
+            syncing_text = "—"
         self._currently_syncing_label.configure(text=syncing_text)
 
         done = status.synced + status.failed
@@ -891,22 +1127,22 @@ class _SettingsWindow:
 
     def _check_connection_worker(self, base_url: str, token: str) -> None:
         reachable = api_client.ping_health(base_url)
-        self._root.after(0, self._apply_api_status, reachable)
+        self._after_if_open(self._apply_api_status, reachable)
 
         if not reachable:
             # Can't tell if the token itself is valid without a reachable
             # API — leave it neutral rather than mislabeling it "invalid".
-            self._root.after(0, self._apply_token_status, "unknown")
+            self._after_if_open(self._apply_token_status, "unknown")
             return
         if not token:
-            self._root.after(0, self._apply_token_status, "unknown")
+            self._after_if_open(self._apply_token_status, "unknown")
             return
 
         summary = api_client.fetch_summary(base_url, token)
-        self._root.after(0, self._apply_token_status, summary if summary is not None else "invalid")
+        self._after_if_open(self._apply_token_status, summary if summary is not None else "invalid")
 
         version_info = api_client.fetch_version(base_url, token)
-        self._root.after(0, self._apply_api_version, version_info)
+        self._after_if_open(self._apply_api_version, version_info)
 
     def _apply_api_version(self, info: dict | None) -> None:
         if hasattr(self, "_api_version_label"):
@@ -940,10 +1176,10 @@ class _SettingsWindow:
     def _load_stats_worker(self, base_url: str, token: str) -> None:
         summary = api_client.fetch_summary(base_url, token)
         games = summary.get("gamesPlayed", "—") if summary else "—"
-        self._root.after(0, lambda: self._games_count_label.configure(text=str(games)))
+        self._after_if_open(lambda: self._games_count_label.configure(text=str(games)))
 
         version_info = api_client.fetch_version(base_url, token)
-        self._root.after(0, self._apply_api_version, version_info)
+        self._after_if_open(self._apply_api_version, version_info)
 
     # -- debug report ---------------------------------------------------------
 
@@ -1062,20 +1298,43 @@ class _SettingsWindow:
             )
         if hasattr(self, "_update_status_label"):
             placeholders.append((self._update_status_label, "x" * _UPDATE_STATUS_MAX_CHARS))
+        if self._draft_capture_status is not None:
+            # Can show an ERROR message up to _DRAFT_CAPTURE_STATUS_MAX_CHARS
+            # long (see `_refresh_draft_capture_status`), not just the two
+            # short fixed in-progress phrases -- same "x"*N filler pattern
+            # as the other unbounded-text labels above.
+            placeholders.append((self._draft_capture_status_label, "x" * _DRAFT_CAPTURE_STATUS_MAX_CHARS))
+        placeholders.append((self._test_capture_status_label, "x" * _TEST_CAPTURE_STATUS_MAX_CHARS))
 
         originals = [(label, label.cget("text")) for label, _ in placeholders]
         for label, placeholder in placeholders:
             label.configure(text=placeholder)
+
+        # The progress bar itself is normally hidden (grid_remove'd) until a
+        # capture starts -- briefly showing it here too means its height is
+        # already accounted for in the locked window size, so the window
+        # doesn't need to grow the first time a real capture actually shows it.
+        if self._draft_capture_status is not None:
+            self._draft_capture_progress_bar.grid(row=6, column=0, columnspan=3, sticky="ew")
 
         self._root.update_idletasks()
         width, height = self._root.winfo_reqwidth(), self._root.winfo_reqheight()
 
         for label, original in originals:
             label.configure(text=original)
+        if self._draft_capture_status is not None:
+            self._draft_capture_progress_bar.grid_remove()
 
         return width, height
 
     def _save(self) -> None:
+        if self._hotkey_capturing:
+            self._show_error(
+                "Terminez la capture du raccourci (appuyez sur une combinaison de touches, "
+                "ou Échap pour annuler) avant d'enregistrer."
+            )
+            return
+
         api_base_url = self._api_var.get().strip()
         access_token = self._token_var.get().strip()
         replays_dir = self._replays_var.get().strip()
@@ -1121,14 +1380,43 @@ class _SettingsWindow:
         self._error_label.configure(text=_truncate(message, _ERROR_LABEL_MAX_CHARS))
 
     def _stop_background_jobs(self) -> None:
+        # Marks the window as closing so `_after_if_open` drops any
+        # still-in-flight worker-thread result instead of handing it to the
+        # root we're about to destroy. Set here (the one place both `_save`
+        # and `_on_close` call right before `root.destroy()`) rather than in
+        # each of them separately.
+        self._closed = True
         if self._live_stats_job is not None:
             self._root.after_cancel(self._live_stats_job)
             self._live_stats_job = None
         if self._update_status_job is not None:
             self._root.after_cancel(self._update_status_job)
             self._update_status_job = None
+        if self._draft_capture_status_job is not None:
+            self._root.after_cancel(self._draft_capture_status_job)
+            self._draft_capture_status_job = None
+        if self._test_capture_countdown_job is not None:
+            self._root.after_cancel(self._test_capture_countdown_job)
+            self._test_capture_countdown_job = None
 
     def _on_close(self) -> None:
+        if self._hotkey_capturing:
+            # `keyboard.read_hotkey()` (see `_capture_hotkey_worker`) is a
+            # blocking call with no cancellation API: it keeps its low-level
+            # hook installed, suppressing input, until the next key combo is
+            # pressed -- whenever that is. Closing the window out from under
+            # it wouldn't stop it; it would just mean the *next* keys the
+            # player presses anywhere (e.g. an ability in the game itself)
+            # get silently swallowed by that orphaned hook instead of a
+            # rebind. Forcing the capture to finish (a combo, or Échap to
+            # cancel) first is what actually releases the hook.
+            messagebox.showinfo(
+                "HotS Analytics",
+                "Terminez la capture du raccourci (appuyez sur une combinaison de touches, "
+                "ou Échap pour annuler) avant de fermer cette fenêtre.",
+                parent=self._root,
+            )
+            return
         if self._is_first_run:
             if not messagebox.askyesno(
                 "Quitter", "Aucune configuration n'a été enregistrée. Quitter quand même ?", parent=self._root

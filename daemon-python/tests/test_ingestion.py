@@ -76,6 +76,63 @@ def test_ingest_file_skips_already_synced_replay_without_parsing(tmp_path):
     assert outcome.status == "skipped"
 
 
+def test_ingest_file_reuses_cached_hash_instead_of_rereading_the_file(tmp_path):
+    """Regression test for 2.4 in tasks/daemon-audit-2026-08-12.md: a replay
+    already hashed once (same path, size and mtime) must not have its bytes
+    read again on a later `ingest_file` call, e.g. a subsequent daemon
+    startup with the same file already on disk."""
+    client = api_client.ApiClient(_config(tmp_path))
+    replay = tmp_path / "game.StormReplay"
+    replay.write_bytes(b"some replay bytes")
+    sync_state = SyncState(tmp_path / "synced.json")
+
+    from src.hasher import hash_replay_file
+
+    replay_hash = hash_replay_file(replay)
+    stat = replay.stat()
+    sync_state.mark_synced(replay_hash, constants.PARSER_VERSION)
+    sync_state.cache_hash(str(replay), stat.st_size, stat.st_mtime, replay_hash)
+
+    with patch("src.ingestion.hash_replay_file") as hash_fn:
+        outcome = ingest_file(client, replay, sync_state)
+
+    hash_fn.assert_not_called()
+    assert outcome.status == "skipped"
+
+
+def test_ingest_file_caches_hash_after_computing_it(tmp_path):
+    client = api_client.ApiClient(_config(tmp_path))
+    replay = tmp_path / "game.StormReplay"
+    replay.write_bytes(b"some replay bytes")
+    sync_state = SyncState(tmp_path / "synced.json")
+
+    from src.hasher import hash_replay_file
+
+    replay_hash = hash_replay_file(replay)
+    stat = replay.stat()
+
+    with patch("src.ingestion.replay_parser.parse_replay", return_value={"replayHash": replay_hash}):
+        with patch.object(client, "post_replay", side_effect=api_client.AuthError("nope")):
+            ingest_file(client, replay, sync_state)
+
+    assert sync_state.cached_hash(str(replay), stat.st_size, stat.st_mtime) == replay_hash
+
+
+def test_ingest_file_recomputes_hash_when_the_file_changed_since_caching(tmp_path):
+    client = api_client.ApiClient(_config(tmp_path))
+    replay = tmp_path / "game.StormReplay"
+    replay.write_bytes(b"some replay bytes")
+    sync_state = SyncState(tmp_path / "synced.json")
+
+    sync_state.cache_hash(str(replay), file_size=999999, mtime=1.0, replay_hash="stale-hash")
+
+    with patch("src.ingestion.replay_parser.parse_replay", return_value={"replayHash": "abc"}):
+        with patch.object(client, "post_replay", return_value=api_client.IngestResult(upserted=True, match_id="m1")):
+            outcome = ingest_file(client, replay, sync_state)
+
+    assert outcome == IngestOutcome("uploaded")
+
+
 def test_ingest_file_marks_synced_on_success(tmp_path):
     client = api_client.ApiClient(_config(tmp_path))
     replay = tmp_path / "game.StormReplay"
@@ -184,6 +241,33 @@ def test_ingest_file_reports_auth_error_with_base_build(tmp_path):
     assert report["baseBuild"] == 93943
 
 
+def test_ingest_file_quarantined_returns_error_outcome_without_reporting_error(tmp_path):
+    """Regression test for the KeyError('upserted') crash: the server
+    quarantines replays whose game build isn't verified yet (202 with
+    `{quarantined: true, baseBuild}`, no `upserted`/`matchId` keys) instead
+    of ingesting them. That must come back as a clear, retryable error --
+    not an unhandled KeyError -- and must not double-report the failure via
+    `_report_error`, since the server already recorded it server-side as
+    part of quarantining it (see `raw_replays_quarantine`)."""
+    client = api_client.ApiClient(_config(tmp_path))
+    replay = tmp_path / "game.StormReplay"
+    replay.write_bytes(b"some replay bytes")
+    sync_state = SyncState(tmp_path / "synced.json")
+
+    payload = {"replayHash": "abc", "parserVersion": constants.PARSER_VERSION, "m_baseBuild": 93943}
+    with patch("src.ingestion.replay_parser.parse_replay", return_value=payload):
+        with patch.object(client, "post_replay", side_effect=api_client.QuarantinedError("quarantined", 93943)):
+            with patch.object(client, "post_ingest_error") as post_ingest_error:
+                outcome = ingest_file(client, replay, sync_state)
+
+    assert outcome.status == "error"
+    post_ingest_error.assert_not_called()
+    records = sync_state.get_error_records()
+    assert len(records) == 1
+    assert records[0].replay_hash == "abc"
+    assert sync_state.is_up_to_date("abc", constants.PARSER_VERSION) is False
+
+
 def test_ingest_file_marks_synced_with_api_version_and_match_id(tmp_path):
     client = api_client.ApiClient(_config(tmp_path))
     replay = tmp_path / "game.StormReplay"
@@ -203,6 +287,74 @@ def test_ingest_file_marks_synced_with_api_version_and_match_id(tmp_path):
 
     assert sync_state.get_error_records() == []
     assert sync_state.is_up_to_date(replay_hash, constants.PARSER_VERSION) is True
+
+
+def test_ingest_file_unexpected_post_replay_error_returns_error_outcome(tmp_path):
+    """The bug this guards against: `client.post_replay` can raise something
+    that isn't one of the specific api_client exceptions (e.g. a malformed
+    2xx response body raising deep inside `requests`) -- that must still
+    come back as an error outcome instead of propagating out of
+    `ingest_file` and silently killing whatever loop is calling it (see
+    `app.py`'s `_run_sync_loop`, which has no try/except of its own around
+    each file)."""
+    client = api_client.ApiClient(_config(tmp_path))
+    replay = tmp_path / "game.StormReplay"
+    replay.write_bytes(b"some replay bytes")
+
+    with patch("src.ingestion.replay_parser.parse_replay", return_value={"replayHash": "abc"}):
+        with patch.object(client, "post_replay", side_effect=ValueError("unexpected response shape")):
+            outcome = ingest_file(client, replay)
+
+    assert outcome.status == "error"
+    assert "unexpected response shape" in outcome.detail
+
+
+def test_ingest_file_unexpected_error_is_recorded_and_reported(tmp_path):
+    client = api_client.ApiClient(_config(tmp_path))
+    replay = tmp_path / "game.StormReplay"
+    replay.write_bytes(b"some replay bytes")
+    sync_state = SyncState(tmp_path / "synced.json")
+
+    with patch(
+        "src.ingestion.replay_parser.parse_replay",
+        return_value={"replayHash": "abc", "m_baseBuild": 12345},
+    ):
+        with patch.object(client, "post_replay", side_effect=KeyError("matchId")):
+            with patch.object(client, "post_ingest_error") as post_ingest_error:
+                outcome = ingest_file(client, replay, sync_state)
+
+    assert outcome.status == "error"
+    records = sync_state.get_error_records()
+    assert len(records) == 1
+    assert records[0].replay_hash == "abc"
+    post_ingest_error.assert_called_once()
+    report = post_ingest_error.call_args.args[0]
+    assert report["errorType"] == "server"
+    assert report["replayHash"] == "abc"
+    assert report["baseBuild"] == 12345
+
+
+def test_ingest_file_mark_synced_failure_does_not_turn_success_into_error(tmp_path):
+    """The upload already succeeded server-side by the time `mark_synced` is
+    called -- a local bookkeeping failure (e.g. a locked sqlite file) must
+    not be reported as an ingestion failure; worst case this replay is
+    simply reparsed and re-POSTed next run, which the server upserts as a
+    no-op."""
+    client = api_client.ApiClient(_config(tmp_path))
+    replay = tmp_path / "game.StormReplay"
+    replay.write_bytes(b"some replay bytes")
+    sync_state = SyncState(tmp_path / "synced.json")
+
+    with patch(
+        "src.ingestion.replay_parser.parse_replay",
+        return_value={"replayHash": "abc", "parserVersion": constants.PARSER_VERSION},
+    ):
+        with patch.object(client, "post_replay", return_value=api_client.IngestResult(upserted=True, match_id="m1")):
+            with patch.object(sync_state, "mark_synced", side_effect=RuntimeError("database is locked")):
+                outcome = ingest_file(client, replay, sync_state)
+
+    assert outcome == IngestOutcome("uploaded")
+    assert sync_state.get_error_records() == []
 
 
 def test_resync_logs_summary(tmp_path, caplog):

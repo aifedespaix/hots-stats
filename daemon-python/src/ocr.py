@@ -28,6 +28,23 @@ logger = logging.getLogger(__name__)
 # false-confident misread could silently attribute another player's stats.
 _MIN_CONFIDENCE = 0.5
 
+# Each crop is already known to contain exactly one line of text and
+# nothing else (see draft_layout.py -- these are hand-tuned player-name
+# boxes, not an arbitrary photo/document). RapidOCR's default pipeline
+# runs a *detection* stage first to find where text sits in the image
+# before ever reading it; on a crop this size and aspect ratio that stage
+# frequently fails to find a box at all (trained for full photos/documents,
+# not a razor-tight ~30px-tall strip), which silently discards the crop
+# before the model that actually reads characters ever runs -- a plausible
+# explanation for the engine doing far worse on our crops than a generic
+# "throw the whole image at it" OCR tool. Skipping detection entirely and
+# going straight to recognition avoids that failure mode: see
+# `read_player_name`'s `use_det=False`, and `_UPSCALE_FACTOR` below for the
+# other half of this (giving that recognition step more effective detail
+# to work with, since our crops are natively far smaller than what it
+# expects).
+_UPSCALE_FACTOR = 3
+
 _engine = None
 
 
@@ -38,6 +55,28 @@ def _get_engine():
 
         _engine = RapidOCR()
     return _engine
+
+
+def warm_up() -> None:
+    """Eagerly loads and caches the RapidOCR engine (see `_get_engine`)
+    instead of waiting for the first real `read_player_name` call to pay
+    that cost. Meant to be called once, on a background thread, right after
+    daemon startup when the live-draft feature is enabled (see app.py) --
+    without this, that model-load time (over a second) is paid inline
+    during the player's *first actual draft* of the session, stacked on top
+    of the screenshot/crop/OCR work `capture_and_submit` already has to do
+    before it can show any result. Idempotent and safe to call more than
+    once: `_get_engine` only ever builds the engine the first time.
+
+    Best-effort: a failure here (e.g. a packaging issue with the bundled
+    ONNX models) is logged and swallowed rather than raised -- it just means
+    the engine falls back to loading lazily on the first real capture,
+    exactly as it did before this existed.
+    """
+    try:
+        _get_engine()
+    except Exception:
+        logger.exception("Failed to warm up the OCR engine (will load lazily on first use instead)")
 
 
 @dataclass(frozen=True)
@@ -63,8 +102,17 @@ def read_player_name(crop: Image.Image | None) -> OcrResult:
     try:
         import numpy as np
 
+        prepared = crop.convert("RGB")
+        prepared = prepared.resize(
+            (prepared.width * _UPSCALE_FACTOR, prepared.height * _UPSCALE_FACTOR), Image.LANCZOS
+        )
         engine = _get_engine()
-        result, _elapse = engine(np.array(crop.convert("RGB")))
+        # use_det=False: see _UPSCALE_FACTOR's comment above. This also
+        # changes each result entry's shape from RapidOCR's usual
+        # `[box, text, score]` to `[text, score]` -- there's no detected
+        # box to report when detection never ran (see RapidOCR's
+        # `get_final_res`, the `dt_boxes is None` branches).
+        result, _elapse = engine(np.array(prepared), use_det=False)
     except Exception:
         logger.exception("OCR failed on a player-name crop")
         return OcrResult(None, 0.0)
@@ -73,8 +121,8 @@ def read_player_name(crop: Image.Image | None) -> OcrResult:
         return OcrResult(None, 0.0)
 
     # One crop is one line of text; take the highest-confidence read in
-    # case the engine splits it into more than one detected box.
-    _box, best_text, best_score = max(result, key=lambda entry: entry[2])
+    # case the engine still returns more than one candidate.
+    best_text, best_score = max(result, key=lambda entry: entry[1])
     best_score = float(best_score)
     cleaned = _clean_text(best_text)
     if not cleaned or best_score < _MIN_CONFIDENCE:
