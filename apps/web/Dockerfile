@@ -7,6 +7,7 @@ FROM base AS deps
 COPY package.json bunfig.toml ./
 COPY apps/web/package.json apps/web/package.json
 COPY packages/shared-types/package.json packages/shared-types/package.json
+COPY packages/config/tsconfig-base/base.json packages/config/tsconfig-base/base.json
 RUN bun install --frozen-lockfile
 
 FROM deps AS build
