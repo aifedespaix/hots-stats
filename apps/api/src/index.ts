@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import { startQuarantineVerificationJob } from "./jobs/quarantine-verification.job";
 import { env } from "./lib/env";
 import { authRoute } from "./routes/auth";
 import { draftRoute } from "./routes/draft";
@@ -38,6 +39,8 @@ app.route("/friends", friendsRoute);
 app.route("/draft", draftRoute);
 app.route("/public", publicRoute);
 app.route("/_internal", internalRoute);
+
+startQuarantineVerificationJob();
 
 export default {
   port: env.PORT,
