@@ -1,9 +1,11 @@
 import type { User } from "@hots-stats/db";
+import { daemonErrorReportInputSchema } from "@hots-stats/shared-types";
 import { Hono } from "hono";
 import { DefaultAdapter, ReplayValidationError, resolveAdapter } from "../adapters";
 import type { ReplayAdapter } from "../adapters";
 import { API_VERSION, MIN_PARSER_VERSION } from "../constants";
 import { authToken } from "../middleware/auth-token";
+import { recordDaemonError } from "../services/daemon-errors.service";
 import { quarantineRawReplay } from "../services/quarantine.service";
 import { upsertReplay } from "../services/replay-upsert.service";
 import { getStatsSummary } from "../services/stats.service";
@@ -91,4 +93,19 @@ export const ingestRoute = new Hono<Env>()
 
     const result = await upsertReplay(parsed, user.id);
     return c.json(result, result.upserted ? 201 : 200);
+  })
+  .post("/errors", async (c) => {
+    // Best-effort report of a *local* ingestion failure the daemon already
+    // recorded in its own sync_state.db (see ingestion.py's `_report_error`)
+    // -- unlike the rest of this route, a bad body here doesn't mean a bad
+    // replay, so it's surfaced with the same 400 shape rather than silently
+    // dropped, but the daemon itself never lets a failure here interrupt
+    // the sync loop (see api_client.py's `post_ingest_error`).
+    const parsed = daemonErrorReportInputSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: parsed.error.flatten() }, 400);
+    }
+    const user = c.get("user");
+    await recordDaemonError(user.id, parsed.data);
+    return c.json({ status: "ok" }, 202);
   });

@@ -140,6 +140,35 @@ def test_post_draft_snapshot_false_on_network_error_not_retried(tmp_path):
     post.assert_called_once()
 
 
+def test_post_ingest_error_success(tmp_path):
+    client = ApiClient(_config(tmp_path))
+    ok_response = _response(202, {"status": "ok"})
+
+    with patch.object(client._session, "post", return_value=ok_response) as post:
+        assert client.post_ingest_error({"errorType": "parse", "errorMessage": "boom"}) is True
+
+    post.assert_called_once()
+    assert post.call_args.args[0] == "https://api.example.com/ingest/errors"
+    assert post.call_args.kwargs["json"] == {"errorType": "parse", "errorMessage": "boom"}
+
+
+def test_post_ingest_error_false_on_rejection(tmp_path):
+    client = ApiClient(_config(tmp_path))
+    bad_response = _response(400, {"error": "invalid"})
+
+    with patch.object(client._session, "post", return_value=bad_response):
+        assert client.post_ingest_error({"errorType": "parse", "errorMessage": "boom"}) is False
+
+
+def test_post_ingest_error_false_on_network_error_not_retried(tmp_path):
+    client = ApiClient(_config(tmp_path))
+
+    with patch.object(client._session, "post", side_effect=requests.ConnectionError("offline")) as post:
+        assert client.post_ingest_error({"errorType": "parse", "errorMessage": "boom"}) is False
+
+    post.assert_called_once()
+
+
 def test_ping_health_true_on_200():
     with patch("src.api_client.requests.get", return_value=_response(200, {"status": "ok"})) as get:
         assert ping_health("https://api.example.com/") is True

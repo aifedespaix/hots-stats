@@ -11,6 +11,7 @@ import logging
 import traceback
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from . import api_client, constants
 from . import parser as replay_parser
@@ -28,6 +29,42 @@ class IngestOutcome:
 
     status: str  # "uploaded" | "skipped" | "error"
     detail: str | None = None
+
+
+def _report_error(
+    client: api_client.ApiClient,
+    sync_state: SyncState | None,
+    *,
+    error_type: Literal["parse", "auth", "validation", "server"],
+    replay_hash: str | None,
+    base_build: int | None,
+    message: str,
+) -> None:
+    """Best-effort forwards one local ingestion failure to the API (`POST
+    /ingest/errors`, see `daemonErrorReportInputSchema`) so it's triageable
+    centrally instead of only visible in this one player's local Debug
+    window. Gated on `sync_state` being present, same as the `mark_error`
+    call right before each of this function's 4 call sites below: both only
+    run in the real background daemon / `--resync` CLI (see app.py /
+    main.py), never in a bare `ingest_file(client, path)` call.
+
+    Must be called while still inside the `except` block that caught the
+    failure -- `traceback.format_exc()` reads the currently handled
+    exception, which is only available within that block's dynamic extent.
+    """
+    if sync_state is None:
+        return
+    client.post_ingest_error(
+        {
+            "replayHash": replay_hash,
+            "baseBuild": base_build,
+            "errorType": error_type,
+            "errorMessage": message[:2000],
+            "errorLog": traceback.format_exc()[:8000],
+            "parserVersion": constants.PARSER_VERSION,
+            "daemonVersion": constants.APP_VERSION,
+        }
+    )
 
 
 def ingest_file(
@@ -67,6 +104,9 @@ def ingest_file(
         logger.warning("Skipping %s: %s", path, err)
         if sync_state is not None and replay_hash is not None:
             sync_state.mark_error(replay_hash, str(path), str(err), traceback.format_exc())
+        _report_error(
+            client, sync_state, error_type="parse", replay_hash=replay_hash, base_build=None, message=str(err)
+        )
         return IngestOutcome("error", str(err))
 
     try:
@@ -78,18 +118,41 @@ def ingest_file(
         logger.error("%s", err)
         if sync_state is not None:
             sync_state.mark_error(payload["replayHash"], str(path), str(err), traceback.format_exc())
+        _report_error(
+            client,
+            sync_state,
+            error_type="auth",
+            replay_hash=payload["replayHash"],
+            base_build=payload.get("m_baseBuild"),
+            message=str(err),
+        )
         return IngestOutcome("error", str(err))
     except api_client.ValidationError as err:
         logger.error("Server rejected %s: %s (detail: %s)", path, err, err.detail)
+        message = f"{err} ({err.detail})"
         if sync_state is not None:
-            sync_state.mark_error(
-                payload["replayHash"], str(path), f"{err} ({err.detail})", traceback.format_exc()
-            )
-        return IngestOutcome("error", f"{err} ({err.detail})")
+            sync_state.mark_error(payload["replayHash"], str(path), message, traceback.format_exc())
+        _report_error(
+            client,
+            sync_state,
+            error_type="validation",
+            replay_hash=payload["replayHash"],
+            base_build=payload.get("m_baseBuild"),
+            message=message,
+        )
+        return IngestOutcome("error", message)
     except api_client.ApiClientError as err:
         logger.error("Failed to ingest %s: %s", path, err)
         if sync_state is not None:
             sync_state.mark_error(payload["replayHash"], str(path), str(err), traceback.format_exc())
+        _report_error(
+            client,
+            sync_state,
+            error_type="server",
+            replay_hash=payload["replayHash"],
+            base_build=payload.get("m_baseBuild"),
+            message=str(err),
+        )
         return IngestOutcome("error", str(err))
 
     if sync_state is not None:

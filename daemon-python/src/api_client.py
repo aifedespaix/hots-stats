@@ -105,6 +105,26 @@ class ApiClient:
             return False
         return True
 
+    def post_ingest_error(self, report: dict, timeout: float = 10.0) -> bool:
+        """POSTs one local ingestion failure to `/ingest/errors`, so it's
+        triageable centrally instead of only visible in this one player's own
+        Debug window -- see ingestion.py's `_report_error`, the only caller.
+        Single best-effort attempt, same as `post_draft_snapshot`: never
+        raises and isn't retried, since a failed *error report* must not
+        itself become a second failure for the sync loop to handle, and the
+        underlying failure is already recorded locally (sync_state.py's
+        `mark_error`) regardless of whether this call succeeds."""
+        try:
+            response = self._session.post(f"{self._base_url}/ingest/errors", json=report, timeout=timeout)
+        except requests.RequestException as err:
+            logger.debug("Failed to report ingestion error to the API: %s", err)
+            return False
+
+        if response.status_code >= 400:
+            logger.debug("Ingestion error report rejected (%d): %s", response.status_code, _safe_json(response))
+            return False
+        return True
+
 
 def _safe_json(response: requests.Response) -> object:
     try:
