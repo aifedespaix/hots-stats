@@ -479,6 +479,14 @@ def _powershell_diagnostics() -> str:
         result = subprocess.run(
             ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", probe],
             capture_output=True,
+            # This process has no console (frozen, windowed build), so its
+            # own stdin is not a valid inheritable handle. `capture_output`
+            # covers stdout/stderr but leaves stdin on the default "inherit
+            # from parent" -- which is exactly what made this same probe
+            # fail with `OSError: [WinError 6] The handle is invalid` before
+            # this line existed (see `apply_update_and_exit`'s Popen call,
+            # which already redirects all three for the same reason).
+            stdin=subprocess.DEVNULL,
             encoding="utf-8",
             errors="replace",
             timeout=10,
