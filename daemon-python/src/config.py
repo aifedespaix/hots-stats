@@ -34,6 +34,7 @@ class Config:
     replays_dir: Path
     draft_feature_enabled: bool = True
     draft_hotkey: str = DEFAULT_DRAFT_HOTKEY
+    auto_update_enabled: bool = True
 
 
 def config_file_path() -> Path:
@@ -68,6 +69,7 @@ def save_config(
     replays_dir: str,
     draft_feature_enabled: bool = True,
     draft_hotkey: str = DEFAULT_DRAFT_HOTKEY,
+    auto_update_enabled: bool = True,
 ) -> None:
     """Writes the user-provided fields to the JSON config file, creating its
     parent directory (`%APPDATA%\\hots-analytics\\`) if needed."""
@@ -79,6 +81,7 @@ def save_config(
         "replaysDir": replays_dir,
         "draftFeatureEnabled": draft_feature_enabled,
         "draftHotkey": draft_hotkey,
+        "autoUpdateEnabled": auto_update_enabled,
     }
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
@@ -144,6 +147,7 @@ def load_config() -> Config:
 
     draft_feature_enabled = file_values.get("draftFeatureEnabled")
     draft_hotkey = os.environ.get("HOTS_DRAFT_HOTKEY") or file_values.get("draftHotkey") or DEFAULT_DRAFT_HOTKEY
+    auto_update_enabled = file_values.get("autoUpdateEnabled")
 
     return Config(
         api_base_url=api_base_url.rstrip("/"),
@@ -151,4 +155,18 @@ def load_config() -> Config:
         replays_dir=replays_dir,
         draft_feature_enabled=True if draft_feature_enabled is None else bool(draft_feature_enabled),
         draft_hotkey=draft_hotkey,
+        auto_update_enabled=True if auto_update_enabled is None else bool(auto_update_enabled),
     )
+
+
+def is_auto_update_enabled() -> bool:
+    """Reads just the `autoUpdateEnabled` preference, independent of the
+    rest of `load_config()` -- used by the update-checker background thread
+    (`updater.watch_for_updates`), which must keep working even if the
+    config file is otherwise unreadable (defaulting to "on", matching the
+    field's own default) rather than raising `ConfigError` over a field
+    that's unrelated to the API/token/replays-dir it validates."""
+    try:
+        return bool(read_config_file().get("autoUpdateEnabled", True))
+    except ConfigError:
+        return True

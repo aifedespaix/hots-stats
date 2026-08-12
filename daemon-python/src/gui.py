@@ -25,11 +25,12 @@ import webbrowser
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from . import api_client, autostart, hotkey
+from . import api_client, autostart, hotkey, updater
 from .config import DEFAULT_DRAFT_HOTKEY, config_file_path, default_replays_dir, read_config_file, save_config
 from .constants import APP_VERSION
 from .status import StatusTracker
 from .sync_state import SyncState
+from .updater import UpdatePhase, UpdateStatus, UpdateStatusTracker
 from .urls import DEFAULT_API_BASE_URL, guess_settings_url
 
 logger = logging.getLogger(__name__)
@@ -44,6 +45,7 @@ _LIVE_STATS_POLL_MS = 500
 # show.
 _SYNCING_LABEL_MAX_CHARS = 60
 _ERROR_LABEL_MAX_CHARS = 220
+_UPDATE_STATUS_MAX_CHARS = 90
 _LABEL_WRAPLENGTH = 460
 
 # A small, dark, "gamer tool" palette. Kept in one place so the whole window
@@ -60,6 +62,24 @@ _ERROR = "#ef5b5b"
 _NEUTRAL = "#8b90ad"
 
 
+def _format_update_status(status: UpdateStatus) -> str:
+    """Renders the updater's current phase as one French status line for
+    the settings window -- including download progress, since a bare
+    "downloading" gives no sense of whether it's about to finish or stuck."""
+    if status.phase is UpdatePhase.CHECKING:
+        return "Recherche de mise à jour…"
+    if status.phase is UpdatePhase.AVAILABLE:
+        return f"Mise à jour v{status.version} disponible"
+    if status.phase is UpdatePhase.DOWNLOADING:
+        pct = f" ({round(status.progress * 100)} %)" if status.progress is not None else ""
+        return f"Téléchargement de la v{status.version}…{pct}"
+    if status.phase is UpdatePhase.INSTALLING:
+        return f"Installation de la v{status.version}, redémarrage…"
+    if status.phase is UpdatePhase.ERROR:
+        return f"✗ Échec de la mise à jour : {status.message}" if status.message else "✗ Échec de la mise à jour"
+    return status.message or f"À jour (v{APP_VERSION})"
+
+
 def _truncate(text: str, max_chars: int) -> str:
     """Caps `text` at `max_chars`, replacing anything cut off with an
     ellipsis, so a label fed unbounded text (a long file name, a verbose
@@ -73,6 +93,7 @@ def run_settings_window(
     is_first_run: bool,
     status_tracker: StatusTracker | None = None,
     sync_state: SyncState | None = None,
+    update_status: UpdateStatusTracker | None = None,
 ) -> bool:
     """Opens the settings window and blocks (on the calling thread) until
     it's closed. Returns True if the user saved a valid configuration.
@@ -81,11 +102,19 @@ def run_settings_window(
     tray), lets the window show live found/synced/currently-syncing counts
     instead of just the one-off "games recorded" summary fetched from the API.
     `sync_state`, same condition, backs the Debug button's error report.
+    `update_status`, same condition, backs the live "download/install"
+    progress line and lets the manual "Mettre à jour maintenant" button
+    report back to something.
     """
     result = {"saved": False}
     root = tk.Tk()
     _SettingsWindow(
-        root, is_first_run=is_first_run, result=result, status_tracker=status_tracker, sync_state=sync_state
+        root,
+        is_first_run=is_first_run,
+        result=result,
+        status_tracker=status_tracker,
+        sync_state=sync_state,
+        update_status=update_status,
     )
     root.mainloop()
     return result["saved"]
@@ -100,14 +129,17 @@ class _SettingsWindow:
         result: dict,
         status_tracker: StatusTracker | None = None,
         sync_state: SyncState | None = None,
+        update_status: UpdateStatusTracker | None = None,
     ) -> None:
         self._root = root
         self._is_first_run = is_first_run
         self._result = result
         self._status_tracker = status_tracker
         self._sync_state = sync_state
+        self._update_status = update_status
         self._debounce_job: str | None = None
         self._live_stats_job: str | None = None
+        self._update_status_job: str | None = None
 
         root.title("HotS Analytics — Configuration")
         root.configure(bg=_BG)
@@ -127,6 +159,8 @@ class _SettingsWindow:
             self._load_stats()
             if self._status_tracker is not None:
                 self._refresh_live_stats()
+            if self._update_status is not None:
+                self._refresh_update_status()
 
         root.after(50, lambda: self._api_entry.focus_set())
 
@@ -240,6 +274,7 @@ class _SettingsWindow:
             autostart_check.grid(row=grid_row + 1, column=0, columnspan=3, sticky="w", pady=(10, 0))
 
         self._build_draft_section(outer)
+        self._build_update_section(outer)
 
         self._error_label = ttk.Label(
             outer, text="", style="Muted.TLabel", foreground=_ERROR, wraplength=_LABEL_WRAPLENGTH, justify="left"
@@ -382,6 +417,87 @@ class _SettingsWindow:
             self._set_status(self._draft_hotkey_status, "✓ Raccourci valide", _OK)
             return True
 
+    def _build_update_section(self, parent) -> None:
+        """Auto-update on/off (a config preference, saved like every other
+        field) plus, when reopened while the daemon is running
+        (`self._update_status` set), a live status line and a manual
+        "Mettre à jour maintenant" button -- shown only while auto-update is
+        off, since it's otherwise handled for the user already. Hidden
+        entirely outside the compiled .exe: there's no installed binary for
+        `updater.watch_for_updates` to ever replace in dev.
+        """
+        if not updater.IS_FROZEN:
+            return
+
+        section = tk.Frame(parent, bg=_PANEL)
+        section.pack(fill="x", pady=(16, 0))
+        inner = ttk.Frame(section, style="Panel.TFrame", padding=18)
+        inner.pack(fill="x")
+        inner.grid_columnconfigure(0, weight=1, minsize=340)
+
+        self._auto_update_var = tk.BooleanVar(value=True)
+        auto_update_check = tk.Checkbutton(
+            inner,
+            text="Mise à jour automatique du daemon",
+            variable=self._auto_update_var,
+            command=self._on_auto_update_toggled,
+            bg=_PANEL,
+            fg=_TEXT,
+            selectcolor=_FIELD_BG,
+            activebackground=_PANEL,
+            activeforeground=_TEXT,
+            highlightthickness=0,
+            borderwidth=0,
+            font=("Segoe UI", 9),
+            anchor="w",
+            wraplength=420,
+            justify="left",
+        )
+        auto_update_check.grid(row=0, column=0, columnspan=2, sticky="w")
+
+        if self._update_status is not None:
+            self._update_status_label = ttk.Label(
+                inner, text="", style="PanelMuted.TLabel", wraplength=420, justify="left"
+            )
+            self._update_status_label.grid(row=1, column=0, columnspan=2, sticky="w", pady=(8, 0))
+
+            self._update_button = ttk.Button(
+                inner,
+                text="Mettre à jour maintenant",
+                style="Ghost.TButton",
+                command=self._on_manual_update_clicked,
+            )
+            self._update_button.grid(row=2, column=0, sticky="w", pady=(8, 0))
+
+        self._on_auto_update_toggled()
+
+    def _on_auto_update_toggled(self) -> None:
+        # The manual button only makes sense when auto-update is off --
+        # when it's on, the background checker already installs updates by
+        # itself the moment one is found.
+        if not hasattr(self, "_update_button"):
+            return
+        if self._auto_update_var.get():
+            self._update_button.grid_remove()
+        else:
+            self._update_button.grid()
+
+    def _on_manual_update_clicked(self) -> None:
+        assert self._update_status is not None
+        self._update_button.configure(state="disabled")
+        updater.trigger_manual_update(self._update_status)
+
+    def _refresh_update_status(self) -> None:
+        assert self._update_status is not None
+        status = self._update_status.snapshot()
+        self._update_status_label.configure(text=_truncate(_format_update_status(status), _UPDATE_STATUS_MAX_CHARS))
+
+        busy = status.phase in (UpdatePhase.CHECKING, UpdatePhase.DOWNLOADING, UpdatePhase.INSTALLING)
+        if hasattr(self, "_update_button"):
+            self._update_button.configure(state="disabled" if busy else "normal")
+
+        self._update_status_job = self._root.after(_LIVE_STATS_POLL_MS, self._refresh_update_status)
+
     def _build_stats(self, parent) -> None:
         stats = tk.Frame(parent, bg=_PANEL)
         stats.pack(fill="x", pady=(16, 0))
@@ -478,6 +594,10 @@ class _SettingsWindow:
         self._draft_enabled_var.set(bool(existing.get("draftFeatureEnabled", True)))
         self._draft_hotkey_var.set(existing.get("draftHotkey") or DEFAULT_DRAFT_HOTKEY)
         self._on_draft_enabled_toggled()
+
+        if hasattr(self, "_auto_update_var"):
+            self._auto_update_var.set(bool(existing.get("autoUpdateEnabled", True)))
+            self._on_auto_update_toggled()
 
     # -- validation: replays dir ------------------------------------------
 
@@ -686,6 +806,8 @@ class _SettingsWindow:
             placeholders.append(
                 (self._sync_error_label, "✗ Dernière erreur de synchronisation : " + "x" * _ERROR_LABEL_MAX_CHARS)
             )
+        if hasattr(self, "_update_status_label"):
+            placeholders.append((self._update_status_label, "x" * _UPDATE_STATUS_MAX_CHARS))
 
         originals = [(label, label.cget("text")) for label, _ in placeholders]
         for label, placeholder in placeholders:
@@ -726,25 +848,31 @@ class _SettingsWindow:
             # run): keep a sane default around in case it's re-enabled later.
             draft_hotkey = DEFAULT_DRAFT_HOTKEY
 
+        auto_update_enabled = self._auto_update_var.get() if hasattr(self, "_auto_update_var") else True
+
         save_config(
             api_base_url,
             access_token,
             replays_dir,
             draft_feature_enabled=draft_feature_enabled,
             draft_hotkey=draft_hotkey,
+            auto_update_enabled=auto_update_enabled,
         )
         logger.info("Configuration saved to %s", config_file_path())
         self._result["saved"] = True
-        self._stop_live_stats()
+        self._stop_background_jobs()
         self._root.destroy()
 
     def _show_error(self, message: str) -> None:
         self._error_label.configure(text=_truncate(message, _ERROR_LABEL_MAX_CHARS))
 
-    def _stop_live_stats(self) -> None:
+    def _stop_background_jobs(self) -> None:
         if self._live_stats_job is not None:
             self._root.after_cancel(self._live_stats_job)
             self._live_stats_job = None
+        if self._update_status_job is not None:
+            self._root.after_cancel(self._update_status_job)
+            self._update_status_job = None
 
     def _on_close(self) -> None:
         if self._is_first_run:
@@ -752,5 +880,5 @@ class _SettingsWindow:
                 "Quitter", "Aucune configuration n'a été enregistrée. Quitter quand même ?", parent=self._root
             ):
                 return
-        self._stop_live_stats()
+        self._stop_background_jobs()
         self._root.destroy()

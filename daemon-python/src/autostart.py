@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 import sys
 
-from .updater import IS_FROZEN
+from .updater import IS_FROZEN, installed_exe_path
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +57,12 @@ def set_enabled(enabled: bool) -> None:
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
             if enabled:
-                winreg.SetValueEx(key, _VALUE_NAME, 0, winreg.REG_SZ, f'"{sys.executable}"')
+                # `installed_exe_path()`, not `sys.executable`: under Nuitka's
+                # --onefile packaging the latter resolves to the ephemeral
+                # per-run extraction folder, which is gone by the next boot --
+                # pointing autostart at it would silently stop working the
+                # moment the process that created it exits.
+                winreg.SetValueEx(key, _VALUE_NAME, 0, winreg.REG_SZ, f'"{installed_exe_path()}"')
             else:
                 try:
                     winreg.DeleteValue(key, _VALUE_NAME)

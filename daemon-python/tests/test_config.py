@@ -3,7 +3,15 @@ from pathlib import Path
 
 import pytest
 
-from src.config import ConfigError, config_exists, config_file_path, default_replays_dir, load_config, save_config
+from src.config import (
+    ConfigError,
+    config_exists,
+    config_file_path,
+    default_replays_dir,
+    is_auto_update_enabled,
+    load_config,
+    save_config,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -115,6 +123,7 @@ def test_config_exists_false_before_save_true_after(monkeypatch, tmp_path):
         "replaysDir": str(tmp_path),
         "draftFeatureEnabled": True,
         "draftHotkey": "ctrl+shift+d",
+        "autoUpdateEnabled": True,
     }
 
 
@@ -164,3 +173,42 @@ def test_load_config_draft_hotkey_env_override(monkeypatch, tmp_path):
     config = load_config()
 
     assert config.draft_hotkey == "ctrl+alt+g"
+
+
+def test_load_config_defaults_auto_update_enabled_when_absent(monkeypatch, tmp_path):
+    monkeypatch.setenv("HOTS_API_BASE_URL", "https://api.example.com")
+    monkeypatch.setenv("HOTS_ACCESS_TOKEN", "hots_pat_abc")
+    monkeypatch.setenv("HOTS_REPLAYS_DIR", str(tmp_path))
+
+    assert load_config().auto_update_enabled is True
+
+
+def test_save_and_load_config_round_trips_auto_update_enabled(monkeypatch, tmp_path):
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
+
+    save_config("https://api.example.com", "hots_pat_abc", str(tmp_path), auto_update_enabled=False)
+
+    assert load_config().auto_update_enabled is False
+
+
+def test_is_auto_update_enabled_true_when_no_config_file(monkeypatch, tmp_path):
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
+
+    assert is_auto_update_enabled() is True
+
+
+def test_is_auto_update_enabled_reads_saved_value(monkeypatch, tmp_path):
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
+    save_config("https://api.example.com", "hots_pat_abc", str(tmp_path), auto_update_enabled=False)
+
+    assert is_auto_update_enabled() is False
+
+
+def test_is_auto_update_enabled_true_on_unreadable_config(monkeypatch, tmp_path):
+    appdata = tmp_path / "AppData"
+    config_dir = appdata / "hots-analytics"
+    config_dir.mkdir(parents=True)
+    (config_dir / "config.json").write_text("not json")
+    monkeypatch.setenv("APPDATA", str(appdata))
+
+    assert is_auto_update_enabled() is True

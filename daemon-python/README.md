@@ -109,10 +109,37 @@ up as such in the Debug report instead of just going stale silently.
 
 The packaged `.exe` checks GitHub Releases for a newer daemon build shortly
 after startup and every few hours after that (`src/updater.py`). If one is
-found, a tray notification announces it, then it's downloaded and the app
-relaunches itself as the new version — no user action needed beyond
-acknowledging the notification. This only runs in the compiled build;
-`python -m src.main` in dev never self-updates.
+found, a tray notification announces it and the settings window's **Mise à
+jour automatique du daemon** checkbox decides what happens next:
+
+- **Checked (default):** it's downloaded and the app relaunches itself as
+  the new version automatically — no user action needed beyond
+  acknowledging the notification.
+- **Unchecked:** the update is left pending; a **Mettre à jour maintenant**
+  button appears in the settings window (reopened from the tray) to install
+  it on demand.
+
+Either way, the settings window shows live progress (checking / downloading
+with a percentage / installing) while the daemon is running — see
+`UpdateStatusTracker` in `src/updater.py` and `_refresh_update_status` in
+`gui.py`. This all only runs in the compiled build; `python -m src.main` in
+dev never self-updates.
+
+The self-replace step (and the "Lancer au démarrage de Windows" registry
+entry) resolve the actual installed `.exe` via `updater.installed_exe_path()`
+rather than `sys.executable`: under Nuitka's `--onefile` packaging,
+`sys.executable` points into the ephemeral per-run extraction folder, which
+is deleted the moment the process exits — pointing either of those at it
+would silently target a file that's already gone.
+
+## Single instance
+
+`src/single_instance.py` holds a named Windows mutex for the process's
+lifetime. If the `.exe` is launched a second time (e.g. a double-click while
+the tray icon is already running, or autostart racing a manual launch), the
+new process detects the lock, shows a short "already running" dialog, and
+exits immediately without touching the running instance's config, sync
+state, or tray icon.
 
 ## Releases
 
@@ -145,6 +172,7 @@ src/
   status.py     Thread-safe found/synced/currently-syncing/last-error snapshot, for the settings window
   updater.py    Checks GitHub Releases for a newer build and self-updates when running as the compiled .exe
   autostart.py  Registers/unregisters the .exe in the Windows Run key ("launch at startup")
+  single_instance.py  Named-mutex guard so a second launch of the .exe exits instead of running alongside the first
 ```
 
 ## Icon
