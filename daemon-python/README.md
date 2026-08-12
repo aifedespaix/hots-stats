@@ -218,12 +218,21 @@ path), and `%TEMP%\hots-analytics-updates\` is swept clean of anything left
 over from an interrupted/superseded download the next time the daemon
 starts (`cleanup_stale_downloads`, called from `watch_for_updates`).
 
+Both the copy and the relaunch are retried a few times (a just-exited
+process, or real-time antivirus scanning an unfamiliar unsigned `.exe`, can
+each hold a brief lock) — and if replacing the installed `.exe` still fails
+after every retry, the script falls back to relaunching the *previous*
+version instead of leaving the app closed. A failed update always degrades
+back to "still running the old version," never to "gone until someone
+notices and manually reruns an old installer" — and since a failed copy
+means the installed `.exe` was never actually replaced, that's also what
+stops a persistent failure from repeating the exact same "found this
+update, downloaded it, then vanished" cycle on every subsequent launch.
+
 Every step of that handoff is logged, with a timestamp, to
-`%APPDATA%\hots-analytics\update.log` (`updater.update_log_file_path`;
-Copy-Item is retried a few times first, since the just-exited process or
-real-time antivirus scanning the new file can hold a brief lock) — since the
-script runs after this process has already exited, that log is the only
-record of what happened if a copy or relaunch step fails silently. It's one
+`%APPDATA%\hots-analytics\update.log` (`updater.update_log_file_path`) —
+since the script runs after this process has already exited, that log is
+the only record of what happened if a copy or relaunch step fails. It's one
 click away from the settings window's Update tab (**Voir le journal**).
 
 **Unsigned binary / SmartScreen:** this build isn't code-signed (no
@@ -232,17 +241,23 @@ browser-downloaded copy is run, Windows SmartScreen shows its "Windows
 protected your PC" prompt — click "Informations complémentaires" then
 "Exécuter quand même". That's a one-time, per-download-hash check from
 Explorer's own Attachment Execution Service and can't be suppressed from
-inside the app without an actual signing certificate. It does **not** refire
-on the self-update path above, though: the new build is fetched with
-`requests` (never attaches a Mark-of-the-Web the way a browser download
-does) and relaunched via `Start-Process` (bypassing Explorer's shell-execute
-path entirely) — so once a machine has approved one build, its self-updates
-relaunch silently. (Real-time antivirus heuristics are a separate mechanism
-from SmartScreen and could in principle still flag an unfamiliar unsigned
-binary; the retrying Copy-Item + `update.log` above exist partly to make
-that failure mode visible instead of silent if it ever happens. The durable
-fix is buying a code-signing certificate, which is a purchase/verification
-decision outside what this repo's code can do on its own.)
+inside the app without an actual signing certificate. The new build itself
+is fetched with `requests`, so it never picks up a Mark-of-the-Web the way
+a browser download does — but `Start-Process` with a bare `-FilePath` still
+goes through the same ShellExecute path Explorer uses, so if the *installed*
+`.exe` already carries a Mark-of-the-Web (likely, since that's usually
+wherever the user's browser first put it), the same SmartScreen prompt
+could otherwise reappear on every self-relaunch and block it silently with
+nobody there to click "Run anyway." The relaunch script strips it
+(`Unblock-File`) right after copying the new build into place, so self-updates
+relaunch silently regardless of where the installed `.exe` lives. (Real-time
+antivirus heuristics are a separate mechanism from SmartScreen and could in
+principle still flag an unfamiliar unsigned binary; the retrying Copy-Item/
+Start-Process + `update.log` above exist partly to make that failure mode
+visible — and recoverable — instead of silent if it ever happens. The
+durable fix is buying a code-signing certificate, which is a
+purchase/verification decision outside what this repo's code can do on its
+own.)
 
 The self-replace step (and the "Lancer au démarrage de Windows" registry
 entry) resolve the actual installed `.exe` via `updater.installed_exe_path()`

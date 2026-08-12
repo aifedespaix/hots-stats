@@ -13,17 +13,29 @@ same handoff technique most self-updating single-.exe Windows apps use.
 This build is not code-signed (no certificate has been purchased for it),
 so Windows SmartScreen shows its "Windows protected your PC" warning the
 first time a browser-downloaded copy is run -- that's a one-time,
-per-download-hash prompt from Explorer's own Attachment Execution Service,
-not something this process can suppress. It does *not* refire on this
-self-update path: the update .exe is fetched with `requests` (no
-Mark-of-the-Web is ever attached) and relaunched via `Start-Process`
-(bypassing Explorer's shell-execute path entirely), so once a build has
-been "Run anyway"-approved once, its self-updates run silently.
+per-download-hash prompt from Explorer's own Attachment Execution Service.
+The update .exe itself is fetched with `requests`, so it never picks up a
+Mark-of-the-Web -- but `Start-Process` with a bare `-FilePath` still goes
+through the same ShellExecute path Explorer uses, so if the *installed*
+.exe already carries a Mark-of-the-Web (very likely: it's usually sitting
+wherever the user's browser first downloaded it), that same SmartScreen
+prompt could reappear on every self-relaunch and block it silently since
+nobody is there to click "Run anyway". The relaunch script strips it
+(`Unblock-File`) right after copying the new build into place, so this
+doesn't depend on the installed .exe's location or download history.
 
 Every relaunch attempt is logged to `update.log` next to `config.json` (see
 `update_log_file_path`) -- the PowerShell handoff runs after this process
 has already exited, so that log is the only record of what happened if a
-copy/relaunch step fails and the app doesn't come back.
+copy/relaunch step fails and the app doesn't come back. Both the copy and
+the relaunch are retried a few times (a just-exited process, or real-time
+antivirus scanning an unfamiliar unsigned .exe, can each hold a brief file
+lock), and if copying the new build over the installed .exe still fails
+after every retry, the script falls back to relaunching the previous
+version (left untouched on disk) instead of leaving the app closed --
+otherwise a single failed update permanently "bricks" the daemon until the
+user notices and manually reruns an old installer from wherever they kept
+it.
 """
 
 from __future__ import annotations
@@ -275,13 +287,42 @@ def download_update(
 # this script is the *only* thing running once this process has exited --
 # without it, a failure here (a locked file, a blocked relaunch) previously
 # looked to the user like "the app closed and never came back", with nothing
-# on disk to explain why. Copy-Item is retried a few times because the
-# just-exited process (or real-time antivirus scanning the freshly-written
-# `new_exe`) can hold a brief file lock right after `Wait-Process` returns.
+# on disk to explain why. Copy-Item and Start-Process are each retried a few
+# times because the just-exited process (or real-time antivirus scanning an
+# unfamiliar unsigned .exe) can hold a brief file lock or block execution
+# right after `Wait-Process` returns or the copy completes. Path arguments
+# are single-quoted (not double-quoted) so a `$` in a username or folder
+# name -- valid in a Windows path, but PowerShell variable-expansion syntax
+# inside a double-quoted string -- can't silently corrupt them.
+#
+# Critically, if replacing the installed .exe fails even after every retry,
+# this still relaunches the *previous* version (untouched on disk) rather
+# than leaving the app closed: a failed update should degrade back to "still
+# running the old version", never to "gone until a human notices and
+# manually reruns an old installer". Without this fallback, a persistent
+# failure (e.g. antivirus holding a lock past the retry window) looked
+# exactly like the app permanently forgetting how to start -- and since the
+# installed .exe was never actually replaced, every future launch would
+# redetect the same "new" release and repeat the identical failure.
 _RELAUNCH_SCRIPT = """\
 $ErrorActionPreference = 'Continue'
 function Log($msg) {{
-    try {{ Add-Content -LiteralPath "{log_path}" -Value "$(Get-Date -Format o) [v{version}] $msg" -Encoding utf8 }} catch {{}}
+    try {{ Add-Content -LiteralPath '{log_path}' -Value "$(Get-Date -Format o) [v{version}] $msg" -Encoding utf8 }} catch {{}}
+}}
+
+function Relaunch($exePath, $why) {{
+    for ($attempt = 1; $attempt -le 5; $attempt++) {{
+        try {{
+            Unblock-File -LiteralPath $exePath -ErrorAction SilentlyContinue
+            Start-Process -FilePath $exePath
+            Log "$why -- relaunched successfully (attempt $attempt)."
+            return $true
+        }} catch {{
+            Log "$why -- relaunch attempt $attempt failed: $($_.Exception.Message)"
+            Start-Sleep -Milliseconds 1000
+        }}
+    }}
+    return $false
 }}
 
 Log "Waiting for process {pid} to exit..."
@@ -291,7 +332,7 @@ Start-Sleep -Milliseconds 500
 $copied = $false
 for ($attempt = 1; $attempt -le 10; $attempt++) {{
     try {{
-        Copy-Item -LiteralPath "{new_exe}" -Destination "{current_exe}" -Force
+        Copy-Item -LiteralPath '{new_exe}' -Destination '{current_exe}' -Force
         $copied = $true
         Log "Copied new build into place (attempt $attempt)."
         break
@@ -301,19 +342,19 @@ for ($attempt = 1; $attempt -le 10; $attempt++) {{
     }}
 }}
 
-if (-not $copied) {{
-    Log "Update failed: could not replace the running executable after 10 attempts. Previous version left in place."
+if ($copied) {{
+    Remove-Item -LiteralPath '{new_exe}' -Force -ErrorAction SilentlyContinue
+    if (-not (Relaunch '{current_exe}' "Update installed")) {{
+        Log "Update installed but every relaunch attempt failed -- the app will not restart on its own."
+    }}
 }} else {{
-    Remove-Item -LiteralPath "{new_exe}" -Force -ErrorAction SilentlyContinue
-    try {{
-        Start-Process -FilePath "{current_exe}"
-        Log "Relaunched successfully."
-    }} catch {{
-        Log "Relaunch failed: $($_.Exception.Message)"
+    Log "Update failed: could not replace the running executable after 10 attempts. Previous version left in place."
+    if (-not (Relaunch '{current_exe}' "Copy failed, falling back to the previous version")) {{
+        Log "Fallback relaunch of the previous version also failed -- the app will not restart on its own."
     }}
 }}
 
-Remove-Item -LiteralPath "{script_path}" -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath '{script_path}' -Force -ErrorAction SilentlyContinue
 """
 
 
