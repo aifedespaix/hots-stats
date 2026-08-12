@@ -7,6 +7,7 @@ from src.parser import (
     ReplayParseError,
     _attribute_scope_by_player_list_index,
     _build_protocol,
+    _hero_from_talent_prefix,
     _protocol_module,
     _read_archive_file,
     _slugify,
@@ -386,14 +387,18 @@ def test_build_payload_resolves_aram_game_mode():
 
 
 def test_build_payload_resolves_hero_by_player_list_position_not_tracker_id():
-    """Regression test: a player's hero must be resolved by their
-    `m_playerList` position, not by whichever tracker id `PlayerInit`
-    happened to assign them -- the two numberings aren't guaranteed to
-    match (see `_attribute_scope_by_player_list_index`). Here `PlayerInit`
-    fires in the *reverse* of `m_playerList` order (Foo, listed first, gets
-    tracker id 2; Bar, listed second, gets tracker id 1), while the
-    attribute-events scopes still follow plain `m_playerList` order
-    (scope 1 = Foo = Li-Ming, scope 2 = Bar = Malfurion). The previous
+    """Regression test for the `replay.attributes.events` *fallback* path
+    (talents here -- "TalentA"/"TalentC" -- don't match any real hero name
+    prefix, so `_hero_from_talent_prefix` returns `None` and hero resolution
+    falls through to this attribute-based logic, same as before
+    PARSER_VERSION 1.2 made talents the primary source): a player's hero
+    must be resolved by their `m_playerList` position, not by whichever
+    tracker id `PlayerInit` happened to assign them -- the two numberings
+    aren't guaranteed to match (see `_attribute_scope_by_player_list_index`).
+    Here `PlayerInit` fires in the *reverse* of `m_playerList` order (Foo,
+    listed first, gets tracker id 2; Bar, listed second, gets tracker id 1),
+    while the attribute-events scopes still follow plain `m_playerList`
+    order (scope 1 = Foo = Li-Ming, scope 2 = Bar = Malfurion). The previous
     tracker-id-keyed lookup would swap their heroes.
     """
     events = [
@@ -427,6 +432,76 @@ def test_build_payload_resolves_hero_by_player_list_position_not_tracker_id():
     assert players_by_tag["Foo#1111"]["talents"] == [{"tier": 1, "talentId": "TalentA", "talentName": "TalentA"}]
     assert players_by_tag["Bar#2222"]["winner"] is False
     assert players_by_tag["Bar#2222"]["talents"] == [{"tier": 1, "talentId": "TalentC", "talentName": "TalentC"}]
+
+
+def test_build_payload_resolves_hero_from_talent_prefix_even_when_attribute_disagrees():
+    """Regression test for a real production bug (PARSER_VERSION 1.2, see
+    `daemon-python/scripts/diagnose_hero_mapping.py`): on current replays,
+    `replay.attributes.events`' `HeroAttributeId` has been observed to name
+    a hero nobody in the match actually played, for every player at once --
+    not a simple index swap (the wrong hero has zero overlap with anyone's
+    real hero), so no amount of re-indexing into that attribute fixes it.
+    Talents (`EndOfGameTalentChoices`, a separate tracker-events mechanism)
+    stayed correct throughout. Foo's attribute-events hero says "Wiza"
+    (Li-Ming) but their talent is "DiabloSoulShield" -- the talent must win.
+    """
+    events = [
+        _player_init_event(1, "1-Hero-1-1001"),
+        _player_init_event(2, "1-Hero-1-1002"),
+        _gates_open_event(610),
+        _score_event(REQUIRED_STATS),
+        _end_of_game_event(1, b"Win", b"CursedHollow", {1: "DiabloSoulShield"}),
+        _end_of_game_event(2, b"Loss", b"CursedHollow", {1: "ThrallMaelstromWeapon"}),
+    ]
+
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=events,
+        attributes_events=_attributes_events({1: b"Wiza", 2: b"Malf"}),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+    )
+
+    players_by_tag = {p["battletag"]: p for p in payload["players"]}
+    assert players_by_tag["Foo#1111"]["heroId"] == "diablo"
+    assert players_by_tag["Bar#2222"]["heroId"] == "thrall"
+
+
+def test_build_payload_falls_back_to_hero_attribute_without_a_matching_talent_prefix():
+    """No `EndOfGameTalentChoices` event at all for this player (e.g. a
+    replay build/edge case where talents didn't decode) -- hero resolution
+    must still fall back to `replay.attributes.events` rather than failing
+    outright."""
+    events = [e for e in _base_tracker_events() if e.get("m_eventName") != b"EndOfGameTalentChoices"]
+    events.append(_end_of_game_event(1, b"Win", b"CursedHollow", {}))
+    events.append(_end_of_game_event(2, b"Loss", b"CursedHollow", {}))
+
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=events,
+        attributes_events=_base_attributes_events(),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+    )
+
+    players_by_tag = {p["battletag"]: p for p in payload["players"]}
+    assert players_by_tag["Foo#1111"]["heroId"] == "li-ming"
+    assert players_by_tag["Bar#2222"]["heroId"] == "malfurion"
+
+
+def test_hero_from_talent_prefix_matches_known_heroes():
+    assert _hero_from_talent_prefix("DiabloSoulShield") == "Diablo"
+    assert _hero_from_talent_prefix("KaelthasManaAddict") == "Kael'thas"
+    assert _hero_from_talent_prefix("LiMingCriticalMass") == "Li-Ming"
+    assert _hero_from_talent_prefix("LiLiSecondWind") == "Li Li"
+
+
+def test_hero_from_talent_prefix_returns_none_for_unrecognized_talent():
+    assert _hero_from_talent_prefix("SomeBrandNewHeroAbility") is None
 
 
 def test_attribute_scope_by_player_list_index_skips_open_slots():

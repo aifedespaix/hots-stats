@@ -183,11 +183,73 @@ def _hero_attribute_code(attributes_events: dict, scope: int) -> str | None:
     mort" on a French client, "Lúcio" with its accent on some locales) rather
     than the stable short code `HERO_DISPLAY_NAMES` is keyed by, so using it
     directly makes every non-English replay fail hero resolution.
+
+    As of `PARSER_VERSION` 1.2, only used as a *fallback* -- see
+    `_hero_from_talent_prefix`, the primary source now, and that constant's
+    changelog for why `HeroAttributeId` itself stopped being trustworthy.
     """
     entries = attributes_events.get("scopes", {}).get(scope, {}).get(_HERO_ATTRIBUTE_ID)
     if not entries:
         return None
     return _s(entries[0]["value"])
+
+
+def _normalize_hero_name(name: str) -> str:
+    """Strips everything but letters/digits, e.g. "Kael'thas" -> "Kaelthas",
+    "E.T.C." -> "ETC" -- talent ids are the hero's name immediately followed
+    by the ability name, both PascalCase with no separator (see
+    `_hero_from_talent_prefix`)."""
+    return re.sub(r"[^A-Za-z0-9]", "", name)
+
+
+# Longest-normalized-name first, so e.g. a hero whose name is a prefix of
+# another's never wins by accident -- checked empirically against the
+# current roster (no `HERO_DISPLAY_NAMES` value's normalized form is a
+# prefix of another's), not something this sort order can silently break if
+# a future hero *does* introduce one, since the longer/more specific name is
+# always tried first either way.
+_HERO_NAME_CANDIDATES: tuple[tuple[str, str], ...] = tuple(
+    sorted(
+        ((_normalize_hero_name(display), display) for display in constants.HERO_DISPLAY_NAMES.values()),
+        key=lambda pair: len(pair[0]),
+        reverse=True,
+    )
+)
+
+
+def _hero_from_talent_prefix(talent_id: str) -> str | None:
+    """Matches a talent id's leading hero-name (e.g. "DiabloSoulShield" ->
+    "Diablo") against every known hero's normalized display name. `None` if
+    no candidate matches (an unrecognized/very new hero not yet in
+    `HERO_DISPLAY_NAMES`, or a talent id that doesn't fit the convention)."""
+    for normalized, display in _HERO_NAME_CANDIDATES:
+        if talent_id.startswith(normalized):
+            return display
+    return None
+
+
+def _first_talent_id_by_toon(tracker_events: list[dict], tracker_id_to_toon: dict[int, str]) -> dict[str, str]:
+    """One talent id per toon handle (any tier -- the hero-name prefix is the
+    same at every tier), for `_hero_from_talent_prefix`. Reads
+    `EndOfGameTalentChoices` (tracker events, scoped by tracker player id via
+    `tracker_id_to_toon`), the same event `build_payload` reads talents from
+    below -- a separate, independent pass here only because hero resolution
+    now needs one talent id *before* `players` is built."""
+    first_talent: dict[str, str] = {}
+    for event in tracker_events:
+        if event.get("_event") != "NNet.Replay.Tracker.SStatGameEvent":
+            continue
+        if _s(event["m_eventName"]) != "EndOfGameTalentChoices":
+            continue
+        tracker_id = event["m_intData"][0]["m_value"]
+        toon_handle = tracker_id_to_toon.get(tracker_id)
+        if toon_handle is None or toon_handle in first_talent:
+            continue
+        for entry in event["m_stringData"]:
+            if _s(entry["m_key"]).startswith("Tier"):
+                first_talent[toon_handle] = _s(entry["m_value"])
+                break
+    return first_talent
 
 
 def _attribute_scope_by_player_list_index(attributes_events: dict, player_count: int) -> dict[int, int]:
@@ -345,9 +407,10 @@ def build_payload(
     """
     player_list = details["m_playerList"]
 
-    # Still needed below for talents/stats (`EndOfGameTalentChoices` /
-    # `SScoreResultEvent`, both scoped by tracker player id) -- but *not*
-    # for hero resolution anymore, see `_attribute_scope_by_player_list_index`.
+    # Also used below for talents/stats (`EndOfGameTalentChoices` /
+    # `SScoreResultEvent`) and, as of `PARSER_VERSION` 1.2, for hero
+    # resolution itself via `_first_talent_id_by_toon` -- see that function
+    # and `_hero_from_talent_prefix`.
     tracker_id_to_toon: dict[int, str] = {}
     for event in tracker_events:
         if event.get("_event") != "NNet.Replay.Tracker.SStatGameEvent":
@@ -360,18 +423,38 @@ def build_payload(
         toon_handle = _s(event["m_stringData"][1]["m_value"])
         tracker_id_to_toon[tracker_id] = toon_handle
 
+    first_talent_by_toon = _first_talent_id_by_toon(tracker_events, tracker_id_to_toon)
     scope_by_player_list_index = _attribute_scope_by_player_list_index(attributes_events, len(player_list))
 
     players: dict[str, dict[str, Any]] = {}
     for index, player in enumerate(player_list, start=1):
         toon_handle = _toon_handle(player["m_toon"])
-        scope = scope_by_player_list_index.get(index)
-        hero_code = _hero_attribute_code(attributes_events, scope) if scope is not None else None
-        if hero_code is None:
-            raise ReplayParseError(f"Could not determine hero for player {_s(player['m_name'])!r}.")
-        hero_name = constants.HERO_DISPLAY_NAMES.get(hero_code)
+
+        # Primary source: the hero-name prefix of this player's own talent
+        # picks (`EndOfGameTalentChoices`, tracker-events based -- the same
+        # mechanism that already resolves talents/stats/win result further
+        # below, and unaffected by the bug described next). Falls back to
+        # `replay.attributes.events`' `HeroAttributeId` (the sole source
+        # before PARSER_VERSION 1.2) only when no talent is available to
+        # match against -- e.g. a very new hero not yet in
+        # `HERO_DISPLAY_NAMES`. `HeroAttributeId` stopped being reliable on
+        # its own at some point: real replays have been observed where every
+        # player's `HeroAttributeId` names a hero nobody in the match
+        # actually played (talents/stats/win result staying correct
+        # regardless, since those never read this attribute) -- see
+        # `daemon-python/scripts/diagnose_hero_mapping.py`.
+        hero_name = None
+        first_talent = first_talent_by_toon.get(toon_handle)
+        if first_talent is not None:
+            hero_name = _hero_from_talent_prefix(first_talent)
+
         if hero_name is None:
-            raise ReplayParseError(f"Unknown hero attribute code: {hero_code!r}")
+            scope = scope_by_player_list_index.get(index)
+            hero_code = _hero_attribute_code(attributes_events, scope) if scope is not None else None
+            hero_name = constants.HERO_DISPLAY_NAMES.get(hero_code) if hero_code else None
+
+        if hero_name is None:
+            raise ReplayParseError(f"Could not determine hero for player {_s(player['m_name'])!r}.")
 
         battletag = battletags.get(toon_handle)
         if battletag is None:
