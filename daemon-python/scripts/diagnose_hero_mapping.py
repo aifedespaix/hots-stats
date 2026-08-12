@@ -25,9 +25,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import mpyq  # noqa: E402
+import mpyq
 
-from src import constants, parser  # noqa: E402
+from src import constants, parser
 
 
 def _talent_hero_guess(tracker_events: list[dict], tracker_id_to_toon: dict[int, str]) -> dict[str, str]:
