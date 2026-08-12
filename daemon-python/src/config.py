@@ -11,9 +11,14 @@ Resolution order (highest priority first):
 from __future__ import annotations
 
 import json
+import logging
 import os
+import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 class ConfigError(Exception):
@@ -46,6 +51,39 @@ def config_file_path() -> Path:
 
 def config_exists() -> bool:
     return config_file_path().is_file()
+
+
+def open_path(path: Path) -> None:
+    """Opens `path` (a file or a folder) with whatever the OS considers its
+    default handler -- Explorer for a folder, the default text editor for a
+    log file, etc. Best-effort: used from the settings window's "Ouvrir le
+    dossier de données" and "Voir le journal" buttons, neither of which
+    should be able to crash the window over a missing file or an
+    unavailable opener command."""
+    try:
+        if sys.platform == "win32":
+            os.startfile(str(path))  # type: ignore[attr-defined]
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", str(path)])
+        else:
+            subprocess.Popen(["xdg-open", str(path)])
+    except OSError:
+        logger.warning("Could not open %s", path, exc_info=True)
+
+
+def open_config_folder() -> None:
+    """Opens `%APPDATA%\\hots-analytics\\` (config.json, sync_state.db,
+    update.log, live-draft/) in the OS file explorer -- what the settings
+    window's "Ouvrir le dossier de données" button calls. Creates the folder
+    first if it doesn't exist yet (e.g. clicked before ever saving a
+    config)."""
+    path = config_file_path().parent
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        logger.warning("Could not create the data folder at %s", path, exc_info=True)
+        return
+    open_path(path)
 
 
 def read_config_file() -> dict:

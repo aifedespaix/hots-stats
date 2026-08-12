@@ -88,8 +88,7 @@ def test_save_capture_skips_missing_slot_images():
     assert info["teamLeft"]["slots"][0]["cropSize"] is None
 
 
-def test_save_capture_prunes_captures_beyond_the_kept_limit(monkeypatch):
-    monkeypatch.setattr(draft_debug, "_MAX_KEPT_CAPTURES", 3)
+def test_save_capture_keeps_only_the_latest_capture(monkeypatch):
     screenshot = Image.new("RGB", (100, 100), color=(0, 0, 0))
     left = _team_result()
     right = _team_result()
@@ -99,7 +98,31 @@ def test_save_capture_prunes_captures_beyond_the_kept_limit(monkeypatch):
         draft_debug.save_capture(screenshot, f"2026-08-12T10:00:{i:02d}Z", left, right, results, results)
 
     captures_dir = draft_debug.debug_dir() / "captures"
-    assert len(list(captures_dir.iterdir())) == 3
+    assert [p.name for p in captures_dir.iterdir()] == ["latest"]
+
+    info = json.loads((captures_dir / "latest" / "crop-info.json").read_text(encoding="utf-8"))
+    assert info["capturedAt"] == "2026-08-12T10:00:04Z"  # the most recent one
+
+
+def test_save_capture_clears_stale_files_from_the_previous_capture():
+    screenshot = Image.new("RGB", (100, 100), color=(0, 0, 0))
+    results = _ocr_results(["A"] * 5)
+    empty_results = _ocr_results([None] * 5)
+
+    draft_debug.save_capture(screenshot, "2026-08-12T10:00:00Z", _team_result(), _team_result(), results, results)
+    capture_dir = draft_debug.debug_dir() / "captures" / "latest"
+    assert (capture_dir / "left-slot-1.png").is_file()
+
+    draft_debug.save_capture(
+        screenshot,
+        "2026-08-12T10:00:01Z",
+        _team_result(has_crops=False),
+        _team_result(has_crops=False),
+        empty_results,
+        empty_results,
+    )
+
+    assert not (capture_dir / "left-slot-1.png").exists()
 
 
 def test_install_file_log_handler_writes_warnings_to_log_file():

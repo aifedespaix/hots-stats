@@ -1,6 +1,25 @@
+import json
+
+import pytest
 from PIL import Image
 
-from src.draft_layout import extract_player_crops, extract_team_crops
+from src.draft_layout import (
+    LEFT_TEAM,
+    RIGHT_TEAM,
+    RelBox,
+    TeamLayout,
+    crop_config_file_path,
+    default_crop_config,
+    ensure_crop_config_file,
+    extract_player_crops,
+    extract_team_crops,
+    load_team_layouts,
+)
+
+
+@pytest.fixture(autouse=True)
+def _isolated_appdata(monkeypatch, tmp_path):
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
 
 
 def _synthetic_screenshot(width: int = 1920, height: int = 1080) -> Image.Image:
@@ -43,3 +62,105 @@ def test_extract_team_crops_exposes_intermediate_strip_and_rotated_images():
         assert [crop.size if crop else None for crop in result.player_crops] == [
             crop.size if crop else None for crop in expected
         ]
+
+
+# -- player-name crop Y-shift -------------------------------------------
+
+
+def test_left_team_slot_1_matches_the_shifted_reference_example():
+    # "cropBoxRelative": [0.12, 0.24, 0.3, 0.26] -> [0.12, 0.26, 0.3, 0.28]:
+    # y1,y2 move to y2,y2+(y2-y1), only for player-name crops.
+    assert LEFT_TEAM.player_crops[0] == RelBox(0.12, 0.26, 0.3, 0.28)
+
+
+def test_team_split_crop_is_unaffected_by_the_player_crop_shift():
+    assert LEFT_TEAM.initial_crop == RelBox(0, 0, 0.15, 1)
+    assert RIGHT_TEAM.initial_crop == RelBox(0.85, 0, 1, 1)
+
+
+# -- crop config file (appdata) ------------------------------------------
+
+
+def test_load_team_layouts_returns_builtin_defaults_when_no_file():
+    assert load_team_layouts() == (LEFT_TEAM, RIGHT_TEAM)
+
+
+def test_ensure_crop_config_file_seeds_defaults():
+    path = crop_config_file_path()
+    assert not path.is_file()
+
+    ensure_crop_config_file()
+
+    assert path.is_file()
+    assert json.loads(path.read_text(encoding="utf-8")) == default_crop_config()
+
+
+def test_ensure_crop_config_file_does_not_overwrite_an_existing_file():
+    path = crop_config_file_path()
+    ensure_crop_config_file()
+    path.write_text(json.dumps({"custom": True}), encoding="utf-8")
+
+    ensure_crop_config_file()
+
+    assert json.loads(path.read_text(encoding="utf-8")) == {"custom": True}
+
+
+def test_load_team_layouts_reads_custom_config():
+    custom_left = TeamLayout(
+        initial_crop=RelBox(0, 0, 0.2, 1),
+        rotation_degrees=25,
+        player_crops=(RelBox(0.1, 0.1, 0.2, 0.2),) * 5,
+    )
+    path = crop_config_file_path()
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        json.dumps(
+            {
+                "left": {
+                    "initialCrop": [0, 0, 0.2, 1],
+                    "rotationDegrees": 25,
+                    "playerCrops": [[0.1, 0.1, 0.2, 0.2]] * 5,
+                },
+                "right": default_crop_config()["right"],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    left, right = load_team_layouts()
+
+    assert left == custom_left
+    assert right == RIGHT_TEAM
+
+
+def test_load_team_layouts_falls_back_on_malformed_config():
+    path = crop_config_file_path()
+    path.parent.mkdir(parents=True)
+    path.write_text("not json", encoding="utf-8")
+
+    assert load_team_layouts() == (LEFT_TEAM, RIGHT_TEAM)
+
+
+def test_load_team_layouts_falls_back_per_team_on_invalid_shape():
+    path = crop_config_file_path()
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        json.dumps({"left": {"initialCrop": [0, 0, 0.2, 1], "rotationDegrees": 25, "playerCrops": []}, "right": default_crop_config()["right"]}),
+        encoding="utf-8",
+    )
+
+    left, right = load_team_layouts()
+
+    assert left == LEFT_TEAM  # invalid (only 5 playerCrops allowed) -> default
+    assert right == RIGHT_TEAM
+
+
+def test_extract_team_crops_uses_custom_config_when_present():
+    ensure_crop_config_file()
+    data = json.loads(crop_config_file_path().read_text(encoding="utf-8"))
+    data["left"]["playerCrops"][0] = [0.0, 0.0, 0.1, 0.1]
+    crop_config_file_path().write_text(json.dumps(data), encoding="utf-8")
+
+    left, _right = extract_team_crops(_synthetic_screenshot())
+
+    assert left.layout.player_crops[0] == RelBox(0.0, 0.0, 0.1, 0.1)

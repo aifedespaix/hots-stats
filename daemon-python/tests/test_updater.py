@@ -9,15 +9,27 @@ from src.updater import (
     AvailableUpdate,
     UpdatePhase,
     UpdateStatusTracker,
+    _render_relaunch_script,
     check_for_update,
+    cleanup_stale_downloads,
     download_update,
+    downloads_dir,
     find_update,
     installed_exe_path,
     parse_version,
     perform_update,
+    read_last_update_log_lines,
     trigger_manual_update,
+    update_log_file_path,
     watch_for_updates,
 )
+
+
+@pytest.fixture(autouse=True)
+def _no_real_temp_cleanup(monkeypatch):
+    # `watch_for_updates` calls `cleanup_stale_downloads()` on every run;
+    # stub it out so tests never touch the real machine's temp directory.
+    monkeypatch.setattr("src.updater.cleanup_stale_downloads", lambda: None)
 
 
 def _release(tag_name: str, assets: list[dict]) -> dict:
@@ -209,7 +221,7 @@ def test_perform_update_downloads_and_applies(monkeypatch):
     applied: list[Path] = []
 
     monkeypatch.setattr("src.updater.download_update", lambda *_a, **_k: Path("/tmp/fake.exe"))
-    monkeypatch.setattr("src.updater.apply_update_and_exit", applied.append)
+    monkeypatch.setattr("src.updater.apply_update_and_exit", lambda p, version=None: applied.append(p))
 
     assert perform_update(update, status) is True
     assert applied == [Path("/tmp/fake.exe")]
@@ -257,7 +269,7 @@ def test_perform_update_progress_callback_updates_status(monkeypatch):
         return Path("/tmp/fake.exe")
 
     monkeypatch.setattr("src.updater.download_update", _fake_download)
-    monkeypatch.setattr("src.updater.apply_update_and_exit", lambda _p: None)
+    monkeypatch.setattr("src.updater.apply_update_and_exit", lambda _p, version=None: None)
 
     perform_update(update, status)
     assert seen_progress == [0.5]
@@ -284,7 +296,7 @@ def test_trigger_manual_update_applies_when_available(monkeypatch):
 
     monkeypatch.setattr("src.updater.check_for_update", lambda: update)
     monkeypatch.setattr("src.updater.download_update", lambda *_a, **_k: Path("/tmp/fake.exe"))
-    monkeypatch.setattr("src.updater.apply_update_and_exit", applied.append)
+    monkeypatch.setattr("src.updater.apply_update_and_exit", lambda p, version=None: applied.append(p))
 
     trigger_manual_update(status)
     _wait_until(lambda: applied)
@@ -316,7 +328,7 @@ def test_watch_for_updates_notifies_and_auto_applies(monkeypatch):
     monkeypatch.setattr("src.updater.IS_FROZEN", True)
     monkeypatch.setattr("src.updater.check_for_update", lambda: update)
     monkeypatch.setattr("src.updater.download_update", lambda *_a, **_k: Path("/tmp/fake.exe"))
-    monkeypatch.setattr("src.updater.apply_update_and_exit", applied.append)
+    monkeypatch.setattr("src.updater.apply_update_and_exit", lambda p, version=None: applied.append(p))
 
     stop_event = threading.Event()
     found: list[AvailableUpdate] = []
@@ -335,7 +347,7 @@ def test_watch_for_updates_notification_failure_does_not_block_update(monkeypatc
     monkeypatch.setattr("src.updater.IS_FROZEN", True)
     monkeypatch.setattr("src.updater.check_for_update", lambda: update)
     monkeypatch.setattr("src.updater.download_update", lambda *_a, **_k: Path("/tmp/fake.exe"))
-    monkeypatch.setattr("src.updater.apply_update_and_exit", applied.append)
+    monkeypatch.setattr("src.updater.apply_update_and_exit", lambda p, version=None: applied.append(p))
 
     def _boom(_update: AvailableUpdate) -> None:
         raise RuntimeError("notification backend unavailable")
@@ -391,3 +403,93 @@ def test_watch_for_updates_noop_when_not_frozen():
         watch_for_updates(stop_event, status)
     wait.assert_not_called()
     assert status.snapshot().phase is UpdatePhase.IDLE
+
+
+def test_watch_for_updates_cleans_up_stale_downloads_once_per_run(monkeypatch):
+    status = UpdateStatusTracker()
+    monkeypatch.setattr("src.updater.IS_FROZEN", True)
+    monkeypatch.setattr("src.updater.check_for_update", lambda: None)
+    cleanup = MagicMock()
+    monkeypatch.setattr("src.updater.cleanup_stale_downloads", cleanup)
+
+    stop_event = threading.Event()
+    with patch.object(stop_event, "wait", side_effect=[True]):
+        watch_for_updates(stop_event, status)
+
+    cleanup.assert_called_once()
+
+
+# -- downloads_dir / update_log_file_path ------------------------------------
+
+
+def test_downloads_dir_is_under_the_system_temp_dir():
+    assert downloads_dir().name == "hots-analytics-updates"
+    assert downloads_dir().parent.exists()  # the system temp dir itself
+
+
+def test_update_log_file_path_is_next_to_config_file(monkeypatch, tmp_path):
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
+
+    assert update_log_file_path() == tmp_path / "AppData" / "hots-analytics" / "update.log"
+
+
+# -- cleanup_stale_downloads --------------------------------------------------
+
+
+def test_cleanup_stale_downloads_removes_leftover_files(monkeypatch, tmp_path):
+    stale_dir = tmp_path / "hots-analytics-updates"
+    stale_dir.mkdir()
+    (stale_dir / "old-build.exe").write_bytes(b"stale")
+    monkeypatch.setattr("src.updater.downloads_dir", lambda: stale_dir)
+
+    cleanup_stale_downloads()
+
+    assert list(stale_dir.iterdir()) == []
+
+
+def test_cleanup_stale_downloads_noop_when_dir_absent(tmp_path, monkeypatch):
+    monkeypatch.setattr("src.updater.downloads_dir", lambda: tmp_path / "does-not-exist")
+
+    cleanup_stale_downloads()  # must not raise
+
+
+# -- read_last_update_log_lines -----------------------------------------------
+
+
+def test_read_last_update_log_lines_returns_empty_when_missing(monkeypatch, tmp_path):
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
+
+    assert read_last_update_log_lines() == []
+
+
+def test_read_last_update_log_lines_returns_tail(monkeypatch, tmp_path):
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
+    log_path = update_log_file_path()
+    log_path.parent.mkdir(parents=True)
+    log_path.write_text("\n".join(f"line {i}" for i in range(20)) + "\n", encoding="utf-8")
+
+    lines = read_last_update_log_lines(max_lines=3)
+
+    assert lines == ["line 17", "line 18", "line 19"]
+
+
+# -- _render_relaunch_script --------------------------------------------------
+
+
+def test_render_relaunch_script_includes_paths_version_and_retry_logic(tmp_path):
+    script = _render_relaunch_script(
+        pid=1234,
+        new_exe=tmp_path / "new.exe",
+        current_exe=tmp_path / "current.exe",
+        script_path=tmp_path / "script.ps1",
+        log_path=tmp_path / "update.log",
+        version="2.0.0",
+    )
+
+    assert "Wait-Process -Id 1234" in script
+    assert str(tmp_path / "new.exe") in script
+    assert str(tmp_path / "current.exe") in script
+    assert str(tmp_path / "update.log") in script
+    assert "[v2.0.0]" in script
+    assert "for ($attempt = 1; $attempt -le 10; $attempt++)" in script
+    assert "Start-Process -FilePath" in script

@@ -1,8 +1,10 @@
 import json
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
+from src import config
 from src.config import (
     ConfigError,
     config_exists,
@@ -10,6 +12,7 @@ from src.config import (
     default_replays_dir,
     is_auto_update_enabled,
     load_config,
+    open_config_folder,
     save_config,
 )
 
@@ -212,3 +215,46 @@ def test_is_auto_update_enabled_true_on_unreadable_config(monkeypatch, tmp_path)
     monkeypatch.setenv("APPDATA", str(appdata))
 
     assert is_auto_update_enabled() is True
+
+
+# -- open_config_folder -------------------------------------------------------
+
+
+def test_open_config_folder_creates_the_directory_if_missing(monkeypatch, tmp_path):
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
+    monkeypatch.setattr(config.sys, "platform", "linux")
+    monkeypatch.setattr(config.subprocess, "Popen", MagicMock())
+
+    open_config_folder()
+
+    assert config_file_path().parent.is_dir()
+
+
+def test_open_config_folder_uses_startfile_on_windows(monkeypatch, tmp_path):
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
+    monkeypatch.setattr(config.sys, "platform", "win32")
+    startfile = MagicMock()
+    monkeypatch.setattr(config.os, "startfile", startfile, raising=False)
+
+    open_config_folder()
+
+    startfile.assert_called_once_with(str(config_file_path().parent))
+
+
+def test_open_config_folder_uses_open_on_macos(monkeypatch, tmp_path):
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
+    monkeypatch.setattr(config.sys, "platform", "darwin")
+    popen = MagicMock()
+    monkeypatch.setattr(config.subprocess, "Popen", popen)
+
+    open_config_folder()
+
+    popen.assert_called_once_with(["open", str(config_file_path().parent)])
+
+
+def test_open_config_folder_swallows_errors(monkeypatch, tmp_path):
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
+    monkeypatch.setattr(config.sys, "platform", "linux")
+    monkeypatch.setattr(config.subprocess, "Popen", MagicMock(side_effect=OSError("no xdg-open")))
+
+    open_config_folder()  # must not raise

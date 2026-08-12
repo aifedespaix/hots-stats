@@ -11,6 +11,12 @@ shift every box off target. Looking at the console/log alone can't show
 that; seeing the actual crops next to their coordinates can. Best-effort
 throughout -- a disk error here must never take down a live-draft capture,
 only leave it undocumented.
+
+Only the *most recent* capture is kept on disk (a fixed `captures/latest/`
+folder, cleared and rewritten on every hotkey press) rather than one folder
+per press: this is a live debugging aid, not a history, and a folder that
+grows by ~10 images every draft would otherwise slowly bloat the user's
+`%APPDATA%` for no benefit.
 """
 
 from __future__ import annotations
@@ -18,7 +24,7 @@ from __future__ import annotations
 import json
 import logging
 import logging.handlers
-from datetime import datetime, timezone
+import shutil
 from pathlib import Path
 
 from PIL import Image
@@ -28,11 +34,6 @@ from .draft_layout import TeamCropResult
 from .ocr import OcrResult
 
 logger = logging.getLogger(__name__)
-
-# One folder per hotkey press; keep only the most recent ones so a debugging
-# session doesn't slowly fill the user's disk with crops nobody's looking at
-# anymore.
-_MAX_KEPT_CAPTURES = 20
 
 _MAX_LOG_BYTES = 2 * 1024 * 1024
 _LOG_BACKUP_COUNT = 3
@@ -77,17 +78,6 @@ def install_file_log_handler() -> None:
         logger.exception("Could not set up live-draft.log")
 
 
-def _timestamp_slug(captured_at: str) -> str:
-    """A filesystem- (and Windows-) safe folder name derived from
-    `captured_at`, e.g. `20260812-153045-123`. `captured_at` itself contains
-    colons (`HH:MM:SS`), which Windows rejects in path segments."""
-    try:
-        parsed = datetime.fromisoformat(captured_at.replace("Z", "+00:00"))
-    except ValueError:
-        parsed = datetime.now(timezone.utc)
-    return parsed.strftime("%Y%m%d-%H%M%S-%f")[:-3]
-
-
 def _save_image(image: Image.Image, path: Path) -> None:
     if image.width == 0 or image.height == 0:
         return
@@ -128,17 +118,6 @@ def _save_team_images(result: TeamCropResult, directory: Path, prefix: str) -> N
             _save_image(crop, directory / f"{prefix}-slot-{index}.png")
 
 
-def _prune_old_captures(captures_dir: Path) -> None:
-    existing = sorted((p for p in captures_dir.iterdir() if p.is_dir()), key=lambda p: p.name)
-    for stale in existing[:-_MAX_KEPT_CAPTURES]:
-        try:
-            for child in stale.iterdir():
-                child.unlink()
-            stale.rmdir()
-        except OSError:
-            logger.warning("Could not remove old live-draft debug capture at %s", stale)
-
-
 def save_capture(
     screenshot: Image.Image,
     captured_at: str,
@@ -148,14 +127,19 @@ def save_capture(
     right_results: list[OcrResult],
 ) -> None:
     """Saves the full screenshot, every team/rotation/player-name crop, and a
-    `crop-info.json` describing each crop's box and OCR read, to a
-    per-capture folder under `debug_dir()/captures/`. Called on every
-    live-draft capture attempt (see draft_capture.py) regardless of whether
-    OCR or the API submit succeeds, since a failed capture is exactly what
-    needs debugging. Never raises."""
+    `crop-info.json` describing each crop's box and OCR read, to
+    `debug_dir()/captures/latest/` -- replacing whatever was there from the
+    previous capture. Called on every live-draft capture attempt (see
+    draft_capture.py) regardless of whether OCR or the API submit succeeds,
+    since a failed capture is exactly what needs debugging. Never raises.
+    """
     try:
-        captures_dir = debug_dir() / "captures"
-        capture_dir = captures_dir / _timestamp_slug(captured_at)
+        capture_dir = debug_dir() / "captures" / "latest"
+        if capture_dir.exists():
+            # Cleared (not just overwritten) first: a slot that had a crop
+            # last time but comes out empty this time would otherwise leave
+            # behind a stale image implying a crop that no longer exists.
+            shutil.rmtree(capture_dir)
         capture_dir.mkdir(parents=True, exist_ok=True)
 
         _save_image(screenshot, capture_dir / "screenshot.png")
@@ -169,7 +153,5 @@ def save_capture(
             "teamRight": _team_debug_info(right, right_results),
         }
         (capture_dir / "crop-info.json").write_text(json.dumps(info, indent=2), encoding="utf-8")
-
-        _prune_old_captures(captures_dir)
     except OSError:
         logger.exception("Could not save live-draft debug capture")
