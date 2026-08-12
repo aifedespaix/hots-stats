@@ -7,6 +7,12 @@ nothing extra bundled into the Nuitka build (see build-daemon.yml's
 the extra packaging risk customtkinter's bundled theme/asset files add to a
 `--onefile` build.
 
+Laid out as a `ttk.Notebook` with one tab per concern (Config / Draft Live /
+Synchronisation / Update) instead of one long scroll of stacked sections —
+each tab's widgets are still built up front (not lazily on first select),
+so the window's locked size (see `_center`) already accounts for every
+tab's worst-case content and never resizes when switching between them.
+
 Threading note: this module is only ever driven from a dedicated thread that
 does nothing but run one `tk.Tk()` mainloop at a time (see tray.py) — never
 from the same thread as pystray's own loop, and never two windows at once.
@@ -26,7 +32,15 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from . import api_client, autostart, hotkey, updater
-from .config import DEFAULT_DRAFT_HOTKEY, config_file_path, default_replays_dir, read_config_file, save_config
+from .config import (
+    DEFAULT_DRAFT_HOTKEY,
+    config_file_path,
+    default_replays_dir,
+    open_config_folder,
+    open_path,
+    read_config_file,
+    save_config,
+)
 from .constants import APP_VERSION
 from .status import StatusTracker
 from .sync_state import SyncState
@@ -63,9 +77,9 @@ _NEUTRAL = "#8b90ad"
 
 
 def _format_update_status(status: UpdateStatus) -> str:
-    """Renders the updater's current phase as one French status line for
-    the settings window -- including download progress, since a bare
-    "downloading" gives no sense of whether it's about to finish or stuck."""
+    """Renders the updater's current phase as one French status line --
+    including download progress, since a bare "downloading" gives no sense
+    of whether it's about to finish or stuck."""
     if status.phase is UpdatePhase.CHECKING:
         return "Recherche de mise à jour…"
     if status.phase is UpdatePhase.AVAILABLE:
@@ -89,6 +103,47 @@ def _truncate(text: str, max_chars: int) -> str:
     return text[: max_chars - 1].rstrip() + "…"
 
 
+class _ProgressBarDriver:
+    """Switches a `ttk.Progressbar` between determinate (a known 0-100%)
+    and indeterminate ("something's happening, no ETA") modes to match an
+    `UpdateStatus`, and idles it back to empty once the update is neither
+    running nor pending. Used by both the settings window's Update tab and
+    the standalone update-progress popup (see `run_update_progress_window`)
+    so the two share one rendering of "what does this phase look like".
+    """
+
+    def __init__(self, bar: ttk.Progressbar) -> None:
+        self._bar = bar
+        self._animating = False
+
+    def apply(self, status: UpdateStatus) -> None:
+        if status.phase is UpdatePhase.DOWNLOADING and status.progress is not None:
+            self._stop()
+            self._bar.configure(mode="determinate", maximum=100)
+            self._bar["value"] = round(status.progress * 100)
+        elif status.phase in (UpdatePhase.CHECKING, UpdatePhase.INSTALLING) or (
+            status.phase is UpdatePhase.DOWNLOADING and status.progress is None
+        ):
+            self._start()
+        else:
+            self._stop()
+            self._bar.configure(mode="determinate")
+            self._bar["value"] = 0
+
+    def _start(self) -> None:
+        if self._animating:
+            return
+        self._animating = True
+        self._bar.configure(mode="indeterminate")
+        self._bar.start(12)
+
+    def _stop(self) -> None:
+        if not self._animating:
+            return
+        self._animating = False
+        self._bar.stop()
+
+
 def run_settings_window(
     is_first_run: bool,
     status_tracker: StatusTracker | None = None,
@@ -99,12 +154,12 @@ def run_settings_window(
     it's closed. Returns True if the user saved a valid configuration.
 
     `status_tracker`, when the daemon is already running (reopened from the
-    tray), lets the window show live found/synced/currently-syncing counts
-    instead of just the one-off "games recorded" summary fetched from the API.
-    `sync_state`, same condition, backs the Debug button's error report.
-    `update_status`, same condition, backs the live "download/install"
-    progress line and lets the manual "Mettre à jour maintenant" button
-    report back to something.
+    tray), lets the Synchronisation tab show live found/synced/currently-
+    syncing counts instead of just the one-off "games recorded" summary
+    fetched from the API. `sync_state`, same condition, backs the Debug
+    button's error report. `update_status`, same condition, backs the
+    Update tab's live progress and lets its "Vérifier les mises à jour"
+    button report back to something.
     """
     result = {"saved": False}
     root = tk.Tk()
@@ -118,6 +173,133 @@ def run_settings_window(
     )
     root.mainloop()
     return result["saved"]
+
+
+def run_update_progress_window(update_status: UpdateStatusTracker, version: str) -> None:
+    """A small, always-on-top standalone window shown while an update
+    downloads/installs *without* the settings window open -- otherwise the
+    only visible sign of an automatic update was the tray balloon
+    (best-effort, silently dropped on failure) and then the app vanishing
+    for a few seconds, which is exactly the "it just closes and tells you
+    nothing" complaint this exists to fix.
+
+    Blocks (on the calling thread, meant to be a dedicated one -- see
+    app.py's `_on_update_found`) until the update finishes. On success the
+    whole process exits from underneath this window (see
+    `updater.apply_update_and_exit`), so there is nothing to close; on
+    failure it shows the error and waits for the user to dismiss it.
+    """
+    root = tk.Tk()
+    _UpdateProgressWindow(root, update_status, version)
+    root.mainloop()
+
+
+class _UpdateProgressWindow:
+    def __init__(self, root: tk.Tk, update_status: UpdateStatusTracker, version: str) -> None:
+        self._root = root
+        self._update_status = update_status
+        self._poll_job: str | None = None
+
+        root.title("HotS Analytics — Mise à jour")
+        root.configure(bg=_BG)
+        root.resizable(False, False)
+        root.attributes("-topmost", True)
+        root.protocol("WM_DELETE_WINDOW", lambda: None)  # closes itself once done/failed
+
+        outer = ttk.Frame(root, padding=20, style="TFrame")
+        outer.pack(fill="both", expand=True)
+        _apply_dark_style()
+
+        ttk.Label(outer, text=f"Mise à jour v{version}", style="Title.TLabel").pack(anchor="w")
+        self._status_label = ttk.Label(
+            outer, text="", style="Muted.TLabel", wraplength=340, justify="left"
+        )
+        self._status_label.pack(anchor="w", pady=(6, 10))
+
+        self._bar = ttk.Progressbar(outer, orient="horizontal", length=340, mode="indeterminate")
+        self._bar.pack(fill="x")
+        self._bar_driver = _ProgressBarDriver(self._bar)
+
+        self._close_button = ttk.Button(outer, text="Fermer", style="Ghost.TButton", command=root.destroy)
+        # Only shown on error -- on any other phase the process is either
+        # still working or about to exit on its own (see `_poll`).
+        self._close_button_visible = False
+
+        root.update_idletasks()
+        x = (root.winfo_screenwidth() - root.winfo_reqwidth()) - 24
+        y = (root.winfo_screenheight() - root.winfo_reqheight()) - 80
+        root.geometry(f"+{max(x, 0)}+{max(y, 0)}")
+
+        self._poll()
+
+    def _poll(self) -> None:
+        status = self._update_status.snapshot()
+        self._status_label.configure(text=_format_update_status(status))
+        self._bar_driver.apply(status)
+
+        if status.phase is UpdatePhase.ERROR:
+            if not self._close_button_visible:
+                self._close_button_visible = True
+                self._close_button.pack(anchor="e", pady=(12, 0))
+            return  # stop polling -- wait for the user to dismiss it
+
+        self._poll_job = self._root.after(300, self._poll)
+
+
+_style_built = False
+
+
+def _apply_dark_style() -> None:
+    """Builds the shared dark ttk theme once per process (both the main
+    settings window and the standalone update-progress popup use it, and
+    ttk styles are process-global -- rebuilding is harmless but wasteful)."""
+    global _style_built
+    style = ttk.Style()
+    style.theme_use("clam")  # the only built-in theme that reliably honors custom colors everywhere
+    if _style_built:
+        return
+    _style_built = True
+    style.configure("TFrame", background=_BG)
+    style.configure("Panel.TFrame", background=_PANEL)
+    style.configure("TLabel", background=_BG, foreground=_TEXT, font=("Segoe UI", 10))
+    style.configure("Panel.TLabel", background=_PANEL, foreground=_TEXT, font=("Segoe UI", 10))
+    style.configure("Muted.TLabel", background=_BG, foreground=_TEXT_MUTED, font=("Segoe UI", 9))
+    style.configure("PanelMuted.TLabel", background=_PANEL, foreground=_TEXT_MUTED, font=("Segoe UI", 9))
+    style.configure("Title.TLabel", background=_BG, foreground=_TEXT, font=("Segoe UI", 15, "bold"))
+    style.configure("Link.TLabel", background=_PANEL, foreground=_ACCENT, font=("Segoe UI", 9, "underline"))
+    style.configure(
+        "Accent.TButton",
+        background=_ACCENT,
+        foreground="#0f1220",
+        font=("Segoe UI", 10, "bold"),
+        padding=(14, 8),
+        borderwidth=0,
+    )
+    style.map("Accent.TButton", background=[("active", "#8aa3ff"), ("disabled", "#3a4066")])
+    style.configure(
+        "Ghost.TButton",
+        background=_BG,
+        foreground=_TEXT_MUTED,
+        font=("Segoe UI", 10),
+        padding=(14, 8),
+        borderwidth=0,
+    )
+    style.map("Ghost.TButton", background=[("active", _PANEL)])
+    style.configure("TNotebook", background=_BG, borderwidth=0)
+    style.configure(
+        "TNotebook.Tab",
+        background=_BG,
+        foreground=_TEXT_MUTED,
+        padding=(16, 8),
+        font=("Segoe UI", 10),
+        borderwidth=0,
+    )
+    style.map(
+        "TNotebook.Tab",
+        background=[("selected", _PANEL)],
+        foreground=[("selected", _TEXT)],
+    )
+    style.configure("TProgressbar", background=_ACCENT, troughcolor=_FIELD_BG, borderwidth=0, thickness=8)
 
 
 class _SettingsWindow:
@@ -140,13 +322,15 @@ class _SettingsWindow:
         self._debounce_job: str | None = None
         self._live_stats_job: str | None = None
         self._update_status_job: str | None = None
+        self._hotkey_capturing = False
 
         root.title("HotS Analytics — Configuration")
         root.configure(bg=_BG)
         root.resizable(False, False)
         root.protocol("WM_DELETE_WINDOW", self._on_close)
+        root.bind("<Escape>", lambda _e: self._on_close())
 
-        self._style = self._build_style()
+        _apply_dark_style()
         self._api_var = tk.StringVar()
         self._token_var = tk.StringVar()
         self._replays_var = tk.StringVar()
@@ -159,60 +343,73 @@ class _SettingsWindow:
             self._load_stats()
             if self._status_tracker is not None:
                 self._refresh_live_stats()
-            if self._update_status is not None:
+            # The Update tab (and `_update_status_label`/`_update_progress_bar`
+            # it would refresh) only actually gets built when `IS_FROZEN` --
+            # see `_build_ui` -- so this must stay in sync with that guard.
+            if updater.IS_FROZEN and self._update_status is not None:
                 self._refresh_update_status()
 
         root.after(50, lambda: self._api_entry.focus_set())
 
     # -- layout ---------------------------------------------------------
 
-    def _build_style(self) -> ttk.Style:
-        style = ttk.Style()
-        # "clam" is the only built-in ttk theme that reliably honors custom
-        # colors on every platform; the default ("vista" on Windows) mostly
-        # ignores background/foreground overrides.
-        style.theme_use("clam")
-        style.configure("TFrame", background=_BG)
-        style.configure("Panel.TFrame", background=_PANEL)
-        style.configure("TLabel", background=_BG, foreground=_TEXT, font=("Segoe UI", 10))
-        style.configure("Panel.TLabel", background=_PANEL, foreground=_TEXT, font=("Segoe UI", 10))
-        style.configure("Muted.TLabel", background=_BG, foreground=_TEXT_MUTED, font=("Segoe UI", 9))
-        style.configure("PanelMuted.TLabel", background=_PANEL, foreground=_TEXT_MUTED, font=("Segoe UI", 9))
-        style.configure("Title.TLabel", background=_BG, foreground=_TEXT, font=("Segoe UI", 15, "bold"))
-        style.configure("Link.TLabel", background=_PANEL, foreground=_ACCENT, font=("Segoe UI", 9, "underline"))
-        style.configure(
-            "Accent.TButton",
-            background=_ACCENT,
-            foreground="#0f1220",
-            font=("Segoe UI", 10, "bold"),
-            padding=(14, 8),
-            borderwidth=0,
-        )
-        style.map("Accent.TButton", background=[("active", "#8aa3ff"), ("disabled", "#3a4066")])
-        style.configure(
-            "Ghost.TButton",
-            background=_BG,
-            foreground=_TEXT_MUTED,
-            font=("Segoe UI", 10),
-            padding=(14, 8),
-            borderwidth=0,
-        )
-        style.map("Ghost.TButton", background=[("active", _PANEL)])
-        return style
+    def _build_tab(self, notebook: ttk.Notebook, title: str) -> ttk.Frame:
+        tab = ttk.Frame(notebook, style="TFrame", padding=18)
+        notebook.add(tab, text=title)
+        return tab
 
     def _build_ui(self) -> None:
         outer = ttk.Frame(self._root, padding=24)
         outer.pack(fill="both", expand=True)
 
-        ttk.Label(outer, text="HotS Analytics", style="Title.TLabel").pack(anchor="w")
+        header = ttk.Frame(outer, style="TFrame")
+        header.pack(fill="x")
+        ttk.Label(header, text="HotS Analytics", style="Title.TLabel").pack(side="left", anchor="w")
+        ttk.Button(
+            header, text="📁 Dossier de données", style="Ghost.TButton", command=self._open_data_folder
+        ).pack(side="right")
+
         subtitle = (
             "Première configuration du daemon de synchronisation"
             if self._is_first_run
-            else "Paramètres du daemon de synchronisation"
+            else f"Paramètres du daemon de synchronisation · v{APP_VERSION}"
         )
-        ttk.Label(outer, text=subtitle, style="Muted.TLabel").pack(anchor="w", pady=(2, 16))
+        ttk.Label(outer, text=subtitle, style="Muted.TLabel").pack(anchor="w", pady=(2, 14))
 
-        card = tk.Frame(outer, bg=_PANEL)
+        notebook = ttk.Notebook(outer)
+        notebook.pack(fill="both", expand=True)
+
+        self._build_config_tab(self._build_tab(notebook, "Config"))
+        self._build_draft_tab(self._build_tab(notebook, "Draft Live"))
+        self._build_sync_tab(self._build_tab(notebook, "Synchronisation"))
+        if updater.IS_FROZEN:
+            self._build_update_tab(self._build_tab(notebook, "Update"))
+
+        self._error_label = ttk.Label(
+            outer, text="", style="Muted.TLabel", foreground=_ERROR, wraplength=_LABEL_WRAPLENGTH, justify="left"
+        )
+        self._error_label.pack(anchor="w", pady=(10, 0))
+
+        buttons = ttk.Frame(outer, style="TFrame")
+        buttons.pack(fill="x", pady=(14, 0))
+        if not self._is_first_run and self._sync_state is not None:
+            ttk.Button(buttons, text="Debug", style="Ghost.TButton", command=self._open_debug_window).pack(
+                side="left"
+            )
+        cancel_text = "Quitter" if self._is_first_run else "Annuler"
+        ttk.Button(buttons, text=cancel_text, style="Ghost.TButton", command=self._on_close).pack(side="right")
+        ttk.Button(buttons, text="Enregistrer", style="Accent.TButton", command=self._save).pack(
+            side="right", padx=(0, 10)
+        )
+        self._root.bind("<Return>", lambda _e: self._save())
+
+    def _open_data_folder(self) -> None:
+        open_config_folder()
+
+    # -- Config tab -------------------------------------------------------
+
+    def _build_config_tab(self, parent: ttk.Frame) -> None:
+        card = tk.Frame(parent, bg=_PANEL)
         card.pack(fill="x")
         card_inner = ttk.Frame(card, style="Panel.TFrame", padding=18)
         card_inner.pack(fill="x")
@@ -254,46 +451,35 @@ class _SettingsWindow:
 
         if autostart.is_supported():
             self._autostart_var = tk.BooleanVar(value=autostart.is_enabled())
-            autostart_check = tk.Checkbutton(
+            autostart_check = self._checkbutton(
                 card_inner,
                 text="Lancer au démarrage de Windows (en arrière-plan, sans ouvrir cette fenêtre)",
                 variable=self._autostart_var,
                 command=self._on_autostart_toggled,
-                bg=_PANEL,
-                fg=_TEXT,
-                selectcolor=_FIELD_BG,
-                activebackground=_PANEL,
-                activeforeground=_TEXT,
-                highlightthickness=0,
-                borderwidth=0,
-                font=("Segoe UI", 9),
-                anchor="w",
-                wraplength=420,
-                justify="left",
             )
             autostart_check.grid(row=grid_row + 1, column=0, columnspan=3, sticky="w", pady=(10, 0))
 
-        self._build_draft_section(outer)
-        self._build_update_section(outer)
-
-        self._error_label = ttk.Label(
-            outer, text="", style="Muted.TLabel", foreground=_ERROR, wraplength=_LABEL_WRAPLENGTH, justify="left"
-        )
-        self._error_label.pack(anchor="w", pady=(10, 0))
-
-        if not self._is_first_run:
-            self._build_stats(outer)
-
-        buttons = ttk.Frame(outer, style="TFrame")
-        buttons.pack(fill="x", pady=(20, 0))
-        if not self._is_first_run and self._sync_state is not None:
-            ttk.Button(buttons, text="Debug", style="Ghost.TButton", command=self._open_debug_window).pack(
-                side="left"
-            )
-        cancel_text = "Quitter" if self._is_first_run else "Annuler"
-        ttk.Button(buttons, text=cancel_text, style="Ghost.TButton", command=self._on_close).pack(side="right")
-        ttk.Button(buttons, text="Enregistrer", style="Accent.TButton", command=self._save).pack(
-            side="right", padx=(0, 10)
+    def _checkbutton(self, parent, *, text: str, variable: tk.BooleanVar, command) -> tk.Checkbutton:
+        """A `Checkbutton` styled to match the dark ttk theme (plain `tk`,
+        not `ttk`, since ttk's checkbutton doesn't expose enough color
+        knobs to blend in) -- factored out since every tab uses at least
+        one of these with the same look."""
+        return tk.Checkbutton(
+            parent,
+            text=text,
+            variable=variable,
+            command=command,
+            bg=_PANEL,
+            fg=_TEXT,
+            selectcolor=_FIELD_BG,
+            activebackground=_PANEL,
+            activeforeground=_TEXT,
+            highlightthickness=0,
+            borderwidth=0,
+            font=("Segoe UI", 9),
+            anchor="w",
+            wraplength=420,
+            justify="left",
         )
 
     def _build_field(self, parent, *, label, var, start_row, on_change, show=None):
@@ -330,77 +516,70 @@ class _SettingsWindow:
 
         return entry, status, entry_row + 1
 
-    def _build_draft_section(self, parent) -> None:
-        """"Live draft" capture feature: on/off toggle plus its global
-        hotkey, validated live the same way the URL/token fields are (see
-        `_check_draft_hotkey`) but synchronously -- `keyboard.parse_hotkey`
-        is a local, in-process lookup (no network round trip), so unlike
-        `_check_connection` this doesn't need a worker thread or debounce.
-        """
-        section = tk.Frame(parent, bg=_PANEL)
-        section.pack(fill="x", pady=(16, 0))
-        inner = ttk.Frame(section, style="Panel.TFrame", padding=18)
+    # -- Draft Live tab -----------------------------------------------------
+
+    def _build_draft_tab(self, parent: ttk.Frame) -> None:
+        card = tk.Frame(parent, bg=_PANEL)
+        card.pack(fill="x")
+        inner = ttk.Frame(card, style="Panel.TFrame", padding=18)
         inner.pack(fill="x")
         inner.grid_columnconfigure(0, weight=1, minsize=340)
 
         self._draft_enabled_var = tk.BooleanVar(value=True)
-        enabled_check = tk.Checkbutton(
+        enabled_check = self._checkbutton(
             inner,
-            text="Activer la capture de draft en direct (raccourci clavier global)",
+            text="Activer la capture de draft en direct",
             variable=self._draft_enabled_var,
             command=self._on_draft_enabled_toggled,
-            bg=_PANEL,
-            fg=_TEXT,
-            selectcolor=_FIELD_BG,
-            activebackground=_PANEL,
-            activeforeground=_TEXT,
-            highlightthickness=0,
-            borderwidth=0,
-            font=("Segoe UI", 9),
-            anchor="w",
-            wraplength=420,
-            justify="left",
         )
         enabled_check.grid(row=0, column=0, columnspan=3, sticky="w")
 
-        ttk.Label(inner, text="Raccourci", style="Panel.TLabel").grid(
-            row=1, column=0, columnspan=3, sticky="w", pady=(12, 0)
+        ttk.Label(inner, text="Raccourci clavier", style="Panel.TLabel").grid(
+            row=1, column=0, columnspan=3, sticky="w", pady=(14, 0)
         )
         self._draft_hotkey_var = tk.StringVar()
-        wrapper = tk.Frame(inner, bg=_FIELD_BG, highlightthickness=1, highlightbackground=_FIELD_BG)
-        wrapper.grid(row=2, column=0, sticky="ew", pady=(4, 0))
-        self._draft_hotkey_entry = tk.Entry(
-            wrapper,
+
+        hotkey_row = ttk.Frame(inner, style="Panel.TFrame")
+        hotkey_row.grid(row=2, column=0, columnspan=3, sticky="w", pady=(4, 0))
+
+        display_wrapper = tk.Frame(hotkey_row, bg=_FIELD_BG, highlightthickness=1, highlightbackground=_FIELD_BG)
+        display_wrapper.pack(side="left")
+        self._draft_hotkey_display = tk.Label(
+            display_wrapper,
             textvariable=self._draft_hotkey_var,
             bg=_FIELD_BG,
             fg=_TEXT,
-            insertbackground=_TEXT,
-            relief="flat",
-            font=("Segoe UI", 10),
+            font=("Segoe UI", 10, "bold"),
+            padx=14,
+            pady=8,
+            width=22,
+            anchor="w",
         )
-        self._draft_hotkey_entry.pack(fill="x", padx=10, pady=8)
-        self._draft_hotkey_entry.bind(
-            "<FocusIn>", lambda _e: wrapper.configure(bg=_FIELD_BG_FOCUS, highlightbackground=_ACCENT)
+        self._draft_hotkey_display.pack()
+
+        self._draft_hotkey_record_btn = ttk.Button(
+            hotkey_row, text="Modifier…", style="Ghost.TButton", command=self._start_hotkey_capture
         )
-        self._draft_hotkey_entry.bind(
-            "<FocusOut>", lambda _e: wrapper.configure(bg=_FIELD_BG, highlightbackground=_FIELD_BG)
-        )
-        self._draft_hotkey_entry.bind("<KeyRelease>", lambda _e: self._check_draft_hotkey())
+        self._draft_hotkey_record_btn.pack(side="left", padx=(10, 0))
 
         self._draft_hotkey_status = ttk.Label(inner, text="", style="PanelMuted.TLabel")
-        self._draft_hotkey_status.grid(row=2, column=1, columnspan=2, sticky="w", padx=(10, 0))
+        self._draft_hotkey_status.grid(row=3, column=0, columnspan=3, sticky="w", pady=(6, 0))
 
         ttk.Label(
             inner,
-            text="Fonctionne même avec Heroes of the Storm en fenêtré ou plein écran.",
+            text=(
+                "Cliquez sur « Modifier… » puis appuyez sur la combinaison de touches voulue "
+                "(Échap pour annuler). Fonctionne même avec Heroes of the Storm en fenêtré ou "
+                "plein écran (fenêtré)."
+            ),
             style="PanelMuted.TLabel",
             wraplength=420,
             justify="left",
-        ).grid(row=3, column=0, columnspan=3, sticky="w", pady=(6, 0))
+        ).grid(row=4, column=0, columnspan=3, sticky="w", pady=(10, 0))
 
     def _on_draft_enabled_toggled(self) -> None:
         state = "normal" if self._draft_enabled_var.get() else "disabled"
-        self._draft_hotkey_entry.configure(state=state)
+        self._draft_hotkey_record_btn.configure(state=state)
         if self._draft_enabled_var.get():
             self._check_draft_hotkey()
         else:
@@ -411,97 +590,79 @@ class _SettingsWindow:
         try:
             hotkey.validate(value)
         except hotkey.InvalidHotkeyError as err:
-            self._set_status(self._draft_hotkey_status, _truncate(f"✗ {err}", 40), _ERROR)
+            self._set_status(self._draft_hotkey_status, _truncate(f"✗ {err}", 60), _ERROR)
             return False
         else:
             self._set_status(self._draft_hotkey_status, "✓ Raccourci valide", _OK)
             return True
 
-    def _build_update_section(self, parent) -> None:
-        """Auto-update on/off (a config preference, saved like every other
-        field) plus, when reopened while the daemon is running
-        (`self._update_status` set), a live status line and a manual
-        "Mettre à jour maintenant" button -- shown only while auto-update is
-        off, since it's otherwise handled for the user already. Hidden
-        entirely outside the compiled .exe: there's no installed binary for
-        `updater.watch_for_updates` to ever replace in dev.
+    def _start_hotkey_capture(self) -> None:
+        """Records a rebind by listening for the next real key combo instead
+        of asking the user to type a syntax like "ctrl+shift+d" by hand --
+        `keyboard.read_hotkey` (the same package already used to register
+        the hotkey globally, see hotkey.py) blocks until a combo is pressed
+        and released and returns it pre-formatted in exactly the string
+        shape `hotkey.validate`/`keyboard.add_hotkey` expect. Runs on a
+        worker thread since it blocks; the result is handed back to the Tk
+        thread via `root.after`, same pattern as the connection checks.
         """
-        if not updater.IS_FROZEN:
+        if self._hotkey_capturing:
+            return
+        self._hotkey_capturing = True
+        self._draft_hotkey_record_btn.configure(state="disabled")
+        self._draft_hotkey_display.configure(fg=_ACCENT)
+        self._set_status(self._draft_hotkey_status, "Appuyez sur une combinaison de touches… (Échap pour annuler)", _NEUTRAL)
+        threading.Thread(target=self._capture_hotkey_worker, daemon=True, name="hots-hotkey-capture").start()
+
+    def _capture_hotkey_worker(self) -> None:
+        try:
+            import keyboard
+
+            combo = keyboard.read_hotkey(suppress=True)
+            error: str | None = None
+        except Exception as err:  # pragma: no cover -- exercised via error branch in tests
+            combo = None
+            error = str(err)
+        self._root.after(0, self._finish_hotkey_capture, combo, error)
+
+    def _finish_hotkey_capture(self, combo: str | None, error: str | None) -> None:
+        self._hotkey_capturing = False
+        self._draft_hotkey_record_btn.configure(state="normal")
+        self._draft_hotkey_display.configure(fg=_TEXT)
+
+        if error is not None:
+            self._set_status(self._draft_hotkey_status, _truncate(f"✗ Capture impossible : {error}", 60), _ERROR)
+            return
+        if combo is None:
             return
 
-        section = tk.Frame(parent, bg=_PANEL)
-        section.pack(fill="x", pady=(16, 0))
-        inner = ttk.Frame(section, style="Panel.TFrame", padding=18)
-        inner.pack(fill="x")
-        inner.grid_columnconfigure(0, weight=1, minsize=340)
-
-        self._auto_update_var = tk.BooleanVar(value=True)
-        auto_update_check = tk.Checkbutton(
-            inner,
-            text="Mise à jour automatique du daemon",
-            variable=self._auto_update_var,
-            command=self._on_auto_update_toggled,
-            bg=_PANEL,
-            fg=_TEXT,
-            selectcolor=_FIELD_BG,
-            activebackground=_PANEL,
-            activeforeground=_TEXT,
-            highlightthickness=0,
-            borderwidth=0,
-            font=("Segoe UI", 9),
-            anchor="w",
-            wraplength=420,
-            justify="left",
-        )
-        auto_update_check.grid(row=0, column=0, columnspan=2, sticky="w")
-
-        if self._update_status is not None:
-            self._update_status_label = ttk.Label(
-                inner, text="", style="PanelMuted.TLabel", wraplength=420, justify="left"
-            )
-            self._update_status_label.grid(row=1, column=0, columnspan=2, sticky="w", pady=(8, 0))
-
-            self._update_button = ttk.Button(
-                inner,
-                text="Mettre à jour maintenant",
-                style="Ghost.TButton",
-                command=self._on_manual_update_clicked,
-            )
-            self._update_button.grid(row=2, column=0, sticky="w", pady=(8, 0))
-
-        self._on_auto_update_toggled()
-
-    def _on_auto_update_toggled(self) -> None:
-        # The manual button only makes sense when auto-update is off --
-        # when it's on, the background checker already installs updates by
-        # itself the moment one is found.
-        if not hasattr(self, "_update_button"):
+        normalized = combo.strip().lower()
+        if normalized in ("esc", "escape"):
+            # A bare Escape has no modifier and would fail validation anyway
+            # -- treat it as "cancel" rather than showing an error for what
+            # is clearly meant as a cancel gesture.
+            self._check_draft_hotkey()
             return
-        if self._auto_update_var.get():
-            self._update_button.grid_remove()
-        else:
-            self._update_button.grid()
 
-    def _on_manual_update_clicked(self) -> None:
-        assert self._update_status is not None
-        self._update_button.configure(state="disabled")
-        updater.trigger_manual_update(self._update_status)
+        self._draft_hotkey_var.set(normalized)
+        self._check_draft_hotkey()
 
-    def _refresh_update_status(self) -> None:
-        assert self._update_status is not None
-        status = self._update_status.snapshot()
-        self._update_status_label.configure(text=_truncate(_format_update_status(status), _UPDATE_STATUS_MAX_CHARS))
+    # -- Synchronisation tab ------------------------------------------------
 
-        busy = status.phase in (UpdatePhase.CHECKING, UpdatePhase.DOWNLOADING, UpdatePhase.INSTALLING)
-        if hasattr(self, "_update_button"):
-            self._update_button.configure(state="disabled" if busy else "normal")
+    def _build_sync_tab(self, parent: ttk.Frame) -> None:
+        if self._is_first_run:
+            ttk.Label(
+                parent,
+                text="Les statistiques de synchronisation seront disponibles ici une fois le daemon lancé.",
+                style="Muted.TLabel",
+                wraplength=420,
+                justify="left",
+            ).pack(anchor="w")
+            return
 
-        self._update_status_job = self._root.after(_LIVE_STATS_POLL_MS, self._refresh_update_status)
-
-    def _build_stats(self, parent) -> None:
-        stats = tk.Frame(parent, bg=_PANEL)
-        stats.pack(fill="x", pady=(16, 0))
-        inner = ttk.Frame(stats, style="Panel.TFrame", padding=16)
+        card = tk.Frame(parent, bg=_PANEL)
+        card.pack(fill="x")
+        inner = ttk.Frame(card, style="Panel.TFrame", padding=18)
         inner.pack(fill="x")
 
         ttk.Label(inner, text="Version daemon", style="PanelMuted.TLabel").grid(row=0, column=0, sticky="w")
@@ -526,19 +687,25 @@ class _SettingsWindow:
             self._found_count_label = ttk.Label(inner, text="…", style="Panel.TLabel")
             self._found_count_label.grid(row=1, column=3, sticky="w", padx=(40, 0))
 
+            ttk.Label(inner, text="Progression de la synchronisation", style="PanelMuted.TLabel").grid(
+                row=2, column=0, columnspan=4, sticky="w", pady=(16, 4)
+            )
+            self._sync_progress_bar = ttk.Progressbar(inner, orient="horizontal", mode="determinate", maximum=100)
+            self._sync_progress_bar.grid(row=3, column=0, columnspan=4, sticky="ew")
+
             ttk.Label(inner, text="Synchronisées (cette session)", style="PanelMuted.TLabel").grid(
-                row=2, column=0, sticky="w", pady=(14, 0)
+                row=4, column=0, sticky="w", pady=(14, 0)
             )
             self._synced_count_label = ttk.Label(inner, text="…", style="Panel.TLabel")
-            self._synced_count_label.grid(row=3, column=0, sticky="w")
+            self._synced_count_label.grid(row=5, column=0, sticky="w")
 
             ttk.Label(inner, text="En cours de synchronisation", style="PanelMuted.TLabel").grid(
-                row=2, column=1, columnspan=3, sticky="w", pady=(14, 0), padx=(40, 0)
+                row=4, column=1, columnspan=3, sticky="w", pady=(14, 0), padx=(40, 0)
             )
             self._currently_syncing_label = ttk.Label(
                 inner, text="—", style="Panel.TLabel", wraplength=_LABEL_WRAPLENGTH, justify="left"
             )
-            self._currently_syncing_label.grid(row=3, column=1, columnspan=3, sticky="w", padx=(40, 0))
+            self._currently_syncing_label.grid(row=5, column=1, columnspan=3, sticky="w", padx=(40, 0))
 
             self._sync_error_label = ttk.Label(
                 inner,
@@ -548,7 +715,7 @@ class _SettingsWindow:
                 wraplength=_LABEL_WRAPLENGTH,
                 justify="left",
             )
-            self._sync_error_label.grid(row=4, column=0, columnspan=4, sticky="w", pady=(14, 0))
+            self._sync_error_label.grid(row=6, column=0, columnspan=4, sticky="w", pady=(14, 0))
 
     def _refresh_live_stats(self) -> None:
         assert self._status_tracker is not None
@@ -561,6 +728,9 @@ class _SettingsWindow:
         syncing_text = _truncate(status.currently_syncing, _SYNCING_LABEL_MAX_CHARS) if status.currently_syncing else "—"
         self._currently_syncing_label.configure(text=syncing_text)
 
+        done = status.synced + status.failed
+        self._sync_progress_bar["value"] = round((done / status.found) * 100) if status.found else 0
+
         if status.last_error:
             error_text = _truncate(status.last_error, _ERROR_LABEL_MAX_CHARS)
             self._sync_error_label.configure(text=f"✗ Dernière erreur de synchronisation : {error_text}")
@@ -568,6 +738,84 @@ class _SettingsWindow:
             self._sync_error_label.configure(text="")
 
         self._live_stats_job = self._root.after(_LIVE_STATS_POLL_MS, self._refresh_live_stats)
+
+    # -- Update tab -----------------------------------------------------------
+
+    def _build_update_tab(self, parent: ttk.Frame) -> None:
+        card = tk.Frame(parent, bg=_PANEL)
+        card.pack(fill="x")
+        inner = ttk.Frame(card, style="Panel.TFrame", padding=18)
+        inner.pack(fill="x")
+        inner.grid_columnconfigure(0, weight=1, minsize=340)
+
+        self._auto_update_var = tk.BooleanVar(value=True)
+        auto_update_check = self._checkbutton(
+            inner,
+            text="Mise à jour automatique (téléchargée et installée dès qu'elle est trouvée)",
+            variable=self._auto_update_var,
+            command=lambda: None,
+        )
+        auto_update_check.grid(row=0, column=0, columnspan=2, sticky="w")
+
+        button_row = ttk.Frame(inner, style="Panel.TFrame")
+        button_row.grid(row=1, column=0, columnspan=2, sticky="w", pady=(12, 0))
+
+        if self._update_status is not None:
+            self._check_update_button = ttk.Button(
+                button_row,
+                text="Vérifier les mises à jour",
+                style="Accent.TButton",
+                command=self._on_check_update_clicked,
+            )
+            self._check_update_button.pack(side="left")
+
+        self._view_log_button = ttk.Button(
+            button_row, text="Voir le journal", style="Ghost.TButton", command=self._open_update_log
+        )
+        self._view_log_button.pack(side="left", padx=(10, 0) if self._update_status is not None else (0, 0))
+
+        if self._update_status is not None:
+            self._update_status_label = ttk.Label(
+                inner, text="", style="PanelMuted.TLabel", wraplength=420, justify="left"
+            )
+            self._update_status_label.grid(row=2, column=0, columnspan=2, sticky="w", pady=(12, 4))
+
+            self._update_progress_bar = ttk.Progressbar(inner, orient="horizontal", mode="determinate", maximum=100)
+            self._update_progress_bar.grid(row=3, column=0, columnspan=2, sticky="ew")
+            self._update_progress_driver = _ProgressBarDriver(self._update_progress_bar)
+
+        ttk.Label(
+            inner,
+            text=(
+                "L'application n'est pas signée numériquement : au tout premier lancement d'un "
+                "exécutable téléchargé, Windows SmartScreen peut afficher « Windows a protégé "
+                "votre PC » — cliquez sur « Informations complémentaires » puis « Exécuter quand "
+                "même ». Les mises à jour suivantes, elles, se relancent automatiquement sans "
+                "repasser par cet écran."
+            ),
+            style="PanelMuted.TLabel",
+            wraplength=420,
+            justify="left",
+        ).grid(row=4, column=0, columnspan=2, sticky="w", pady=(16, 0))
+
+    def _on_check_update_clicked(self) -> None:
+        assert self._update_status is not None
+        self._check_update_button.configure(state="disabled")
+        updater.trigger_manual_update(self._update_status)
+
+    def _open_update_log(self) -> None:
+        open_path(updater.update_log_file_path())
+
+    def _refresh_update_status(self) -> None:
+        assert self._update_status is not None
+        status = self._update_status.snapshot()
+        self._update_status_label.configure(text=_truncate(_format_update_status(status), _UPDATE_STATUS_MAX_CHARS))
+        self._update_progress_driver.apply(status)
+
+        busy = status.phase in (UpdatePhase.CHECKING, UpdatePhase.DOWNLOADING, UpdatePhase.INSTALLING)
+        self._check_update_button.configure(state="disabled" if busy else "normal")
+
+        self._update_status_job = self._root.after(_LIVE_STATS_POLL_MS, self._refresh_update_status)
 
     # -- prefill ----------------------------------------------------------
 
@@ -597,7 +845,6 @@ class _SettingsWindow:
 
         if hasattr(self, "_auto_update_var"):
             self._auto_update_var.set(bool(existing.get("autoUpdateEnabled", True)))
-            self._on_auto_update_toggled()
 
     # -- validation: replays dir ------------------------------------------
 
@@ -738,9 +985,14 @@ class _SettingsWindow:
         button_row = ttk.Frame(body, style="TFrame")
         button_row.pack(fill="x", pady=(12, 0))
 
+        copy_status = ttk.Label(button_row, text="", style="Muted.TLabel")
+        copy_status.pack(side="left")
+
         def _copy() -> None:
             win.clipboard_clear()
             win.clipboard_append(report)
+            copy_status.configure(text="✓ Copié dans le presse-papiers")
+            win.after(2000, lambda: copy_status.configure(text=""))
 
         ttk.Button(button_row, text="Fermer", style="Ghost.TButton", command=win.destroy).pack(side="right")
         ttk.Button(button_row, text="Copier", style="Accent.TButton", command=_copy).pack(
@@ -788,7 +1040,9 @@ class _SettingsWindow:
         stop that auto-layout growth. The size is computed from worst-case
         label content (see `_measure_worst_case_size`), not whatever
         happens to be showing right now, so it stays valid for anything
-        those labels go on to display.
+        those labels go on to display. `ttk.Notebook` sizes itself to fit
+        its largest pane regardless of which tab is selected, so this
+        already accounts for every tab's content, not just the active one.
         """
         width, height = self._measure_worst_case_size()
         x = (self._root.winfo_screenwidth() - width) // 2

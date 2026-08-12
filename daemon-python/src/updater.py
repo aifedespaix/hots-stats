@@ -9,6 +9,21 @@ that waits for this process to exit, copies the downloaded build over the
 current .exe, relaunches it, and deletes itself -- then this process exits
 immediately, releasing the file lock the script is waiting on. This is the
 same handoff technique most self-updating single-.exe Windows apps use.
+
+This build is not code-signed (no certificate has been purchased for it),
+so Windows SmartScreen shows its "Windows protected your PC" warning the
+first time a browser-downloaded copy is run -- that's a one-time,
+per-download-hash prompt from Explorer's own Attachment Execution Service,
+not something this process can suppress. It does *not* refire on this
+self-update path: the update .exe is fetched with `requests` (no
+Mark-of-the-Web is ever attached) and relaunched via `Start-Process`
+(bypassing Explorer's shell-execute path entirely), so once a build has
+been "Run anyway"-approved once, its self-updates run silently.
+
+Every relaunch attempt is logged to `update.log` next to `config.json` (see
+`update_log_file_path`) -- the PowerShell handoff runs after this process
+has already exited, so that log is the only record of what happened if a
+copy/relaunch step fails and the app doesn't come back.
 """
 
 from __future__ import annotations
@@ -39,6 +54,8 @@ _DOWNLOAD_TIMEOUT_SECONDS = 60
 _STARTUP_DELAY_SECONDS = 30  # let the daemon finish its first sync pass before checking
 _CHECK_INTERVAL_SECONDS = 6 * 60 * 60  # 6h
 
+_DOWNLOADS_DIR_NAME = "hots-analytics-updates"
+
 # Nuitka injects `__compiled__` into every compiled module's globals; unlike
 # PyInstaller, it does not set `sys.frozen`, so this is the reliable way to
 # tell "running as the built .exe" apart from "running from source". Only
@@ -65,6 +82,66 @@ def installed_exe_path() -> Path:
     if onefile_binary:
         return Path(onefile_binary).resolve()
     return Path(sys.executable).resolve()
+
+
+def downloads_dir() -> Path:
+    """Where a downloaded update build is staged before being handed off to
+    the relaunch script -- `%TEMP%\\hots-analytics-updates\\`. Temp, not
+    appdata: this only ever holds a build that's either about to replace the
+    installed .exe (and gets deleted by the relaunch script once it does) or
+    was abandoned mid-download, neither of which is worth surviving a
+    reboot."""
+    return Path(tempfile.gettempdir()) / _DOWNLOADS_DIR_NAME
+
+
+def update_log_file_path() -> Path:
+    """`%APPDATA%\\hots-analytics\\update.log` -- next to `config.json`. The
+    relaunch script (see `_render_relaunch_script`) appends one line per step
+    to this file; since it runs after this process has already exited, it's
+    the only record of what happened if a copy/relaunch step fails silently
+    on the user's machine."""
+    from .config import config_file_path
+
+    return config_file_path().parent / "update.log"
+
+
+def read_last_update_log_lines(max_lines: int = 10) -> list[str]:
+    """The last `max_lines` of `update.log`, most recent last -- for showing
+    "what happened during the last update attempt" in the settings window.
+    Returns `[]` if the file doesn't exist yet (no update has ever run) or
+    can't be read."""
+    path = update_log_file_path()
+    if not path.is_file():
+        return []
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return []
+    return [line for line in lines if line.strip()][-max_lines:]
+
+
+def cleanup_stale_downloads() -> None:
+    """Clears `downloads_dir()` of anything left over from a previous run --
+    an update build that failed to download completely, or one that was
+    superseded by a newer release before ever being applied. Nothing in
+    there is resumable or otherwise worth keeping across a restart; a normal
+    successful update already removes its own file (see
+    `_render_relaunch_script`), so this is just cleanup for the abnormal
+    cases. Best-effort and called once at startup, never on the hot path of
+    an actual download."""
+    directory = downloads_dir()
+    if not directory.is_dir():
+        return
+    for child in directory.iterdir():
+        try:
+            if child.is_dir():
+                import shutil
+
+                shutil.rmtree(child)
+            else:
+                child.unlink()
+        except OSError:
+            logger.debug("Could not remove stale update download at %s", child, exc_info=True)
 
 
 @dataclass(frozen=True)
@@ -193,32 +270,91 @@ def download_update(
     return dest
 
 
+# Every step logs a timestamped line to `{log_path}` (best-effort: wrapped in
+# try/catch so a locked/unwritable log never stops the actual update) since
+# this script is the *only* thing running once this process has exited --
+# without it, a failure here (a locked file, a blocked relaunch) previously
+# looked to the user like "the app closed and never came back", with nothing
+# on disk to explain why. Copy-Item is retried a few times because the
+# just-exited process (or real-time antivirus scanning the freshly-written
+# `new_exe`) can hold a brief file lock right after `Wait-Process` returns.
 _RELAUNCH_SCRIPT = """\
+$ErrorActionPreference = 'Continue'
+function Log($msg) {{
+    try {{ Add-Content -LiteralPath "{log_path}" -Value "$(Get-Date -Format o) [v{version}] $msg" -Encoding utf8 }} catch {{}}
+}}
+
+Log "Waiting for process {pid} to exit..."
 Wait-Process -Id {pid} -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 500
-Copy-Item -LiteralPath "{new_exe}" -Destination "{current_exe}" -Force
-Remove-Item -LiteralPath "{new_exe}" -Force -ErrorAction SilentlyContinue
-Start-Process -FilePath "{current_exe}"
+
+$copied = $false
+for ($attempt = 1; $attempt -le 10; $attempt++) {{
+    try {{
+        Copy-Item -LiteralPath "{new_exe}" -Destination "{current_exe}" -Force
+        $copied = $true
+        Log "Copied new build into place (attempt $attempt)."
+        break
+    }} catch {{
+        Log "Copy attempt $attempt failed: $($_.Exception.Message)"
+        Start-Sleep -Milliseconds 1000
+    }}
+}}
+
+if (-not $copied) {{
+    Log "Update failed: could not replace the running executable after 10 attempts. Previous version left in place."
+}} else {{
+    Remove-Item -LiteralPath "{new_exe}" -Force -ErrorAction SilentlyContinue
+    try {{
+        Start-Process -FilePath "{current_exe}"
+        Log "Relaunched successfully."
+    }} catch {{
+        Log "Relaunch failed: $($_.Exception.Message)"
+    }}
+}}
+
 Remove-Item -LiteralPath "{script_path}" -Force -ErrorAction SilentlyContinue
 """
 
 
-def apply_update_and_exit(new_exe: Path) -> None:
+def _render_relaunch_script(*, pid: int, new_exe: Path, current_exe: Path, script_path: Path, log_path: Path, version: str) -> str:
+    """Pure string-formatting split out from `apply_update_and_exit` so the
+    script's content is unit-testable without actually spawning PowerShell
+    or exiting the process."""
+    return _RELAUNCH_SCRIPT.format(
+        pid=pid,
+        new_exe=new_exe,
+        current_exe=current_exe,
+        script_path=script_path,
+        log_path=log_path,
+        version=version,
+    )
+
+
+def apply_update_and_exit(new_exe: Path, version: str = "?") -> None:
     """Hands off to a detached PowerShell script that waits for this process
     (by pid) to exit, replaces the *actually installed* .exe (see
     `installed_exe_path`) with `new_exe`, relaunches it, and cleans up after
     itself -- then exits this process immediately so the script's wait
     resolves. Never returns."""
     current_exe = installed_exe_path()
+    log_path = update_log_file_path()
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+
     fd, script_path_str = tempfile.mkstemp(suffix=".ps1", prefix="hots-analytics-update-")
     script_path = Path(script_path_str)
     with os.fdopen(fd, "w", encoding="utf-8") as f:
         f.write(
-            _RELAUNCH_SCRIPT.format(
+            _render_relaunch_script(
                 pid=os.getpid(),
                 new_exe=new_exe,
                 current_exe=current_exe,
                 script_path=script_path,
+                log_path=log_path,
+                version=version,
             )
         )
 
@@ -237,7 +373,7 @@ def apply_update_and_exit(new_exe: Path) -> None:
         creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
         close_fds=True,
     )
-    logger.info("Handed off to the relaunch script, exiting to update to v%s.", new_exe.name)
+    logger.info("Handed off to the relaunch script, exiting to update to v%s.", version)
     os._exit(0)
 
 
@@ -255,7 +391,7 @@ def perform_update(update: AvailableUpdate, status: UpdateStatusTracker) -> bool
     try:
         new_exe = download_update(
             update,
-            Path(tempfile.gettempdir()) / "hots-analytics-updates",
+            downloads_dir(),
             on_progress=lambda frac: status.set(progress=frac),
         )
     except requests.RequestException as err:
@@ -264,7 +400,7 @@ def perform_update(update: AvailableUpdate, status: UpdateStatusTracker) -> bool
         return True
 
     status.set(phase=UpdatePhase.INSTALLING, progress=None)
-    apply_update_and_exit(new_exe)  # never returns
+    apply_update_and_exit(new_exe, version=update.version)  # never returns
     return True
 
 
@@ -314,6 +450,7 @@ def watch_for_updates(
     """
     if not IS_FROZEN:
         return
+    cleanup_stale_downloads()
     if stop_event.wait(_STARTUP_DELAY_SECONDS):
         return
 

@@ -14,7 +14,7 @@ import logging
 from datetime import datetime, timezone
 
 from . import api_client, draft_debug, ocr, screen_capture
-from .draft_layout import extract_team_crops
+from .draft_layout import ensure_crop_config_file, extract_team_crops
 from .ocr import OcrResult
 
 logger = logging.getLogger(__name__)
@@ -36,6 +36,7 @@ def capture_and_submit(client: api_client.ApiClient) -> None:
     surface an exception to -- any failure is logged and swallowed so a bad
     capture can't take the keyboard hook, or the daemon, down with it."""
     draft_debug.install_file_log_handler()
+    ensure_crop_config_file()
 
     try:
         screenshot = screen_capture.capture_game_window()

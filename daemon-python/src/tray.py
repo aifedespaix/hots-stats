@@ -36,10 +36,22 @@ def _build_icon_image() -> Image.Image:
 
 
 class TrayController:
-    def __init__(self, on_open_settings: Callable[[], None], on_quit: Callable[[], None]) -> None:
+    def __init__(
+        self,
+        on_open_settings: Callable[[], None],
+        on_quit: Callable[[], None],
+        *,
+        window_lock: threading.Lock | None = None,
+    ) -> None:
         self._on_open_settings = on_open_settings
         self._on_quit = on_quit
-        self._settings_open = threading.Lock()
+        # Shared with app.py's standalone update-progress popup (see
+        # `run_update_progress_window`) when a `window_lock` is passed in,
+        # so the two never both try to own the process's one-at-a-time Tk
+        # mainloop (see this module's docstring) -- opening the settings
+        # window while an update toast is up, or vice versa, silently skips
+        # rather than racing two `tk.Tk()` instances.
+        self._settings_open = window_lock or threading.Lock()
         self._icon = pystray.Icon(
             name="hots-analytics",
             icon=_build_icon_image(),

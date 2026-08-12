@@ -47,40 +47,74 @@ already sitting in the replays folder before it starts watching for new
 ones — a folder full of replays from before the daemon was ever configured
 gets synced too, not just future games.
 
-From the tray icon: **Ouvrir les paramètres** reopens the settings window
-(pre-filled, live connection/token status, current games-recorded count,
-daemon + API versions, plus live found/synced/currently-syncing counters and
-the last sync error, if any, while the daemon is running); saving restarts
-the background watcher with the new config. A **Debug** button opens a
-read-only report of every replay currently in an error state (file path,
-whether the source file still exists, the error, and its full traceback),
-with a **Copier** button to grab it in one click for a bug report. **Quitter**
+From the tray icon: **Ouvrir les paramètres** reopens the settings window;
+saving restarts the background watcher with the new config. **Quitter**
 stops the watcher thread cleanly before exiting.
 
-On Windows, a **"Lancer au démarrage de Windows"** checkbox registers (or
-unregisters) the built `.exe` under the current user's Run key
-(`HKCU\...\CurrentVersion\Run`, `src/autostart.py`) — no admin rights
-needed. Since the daemon only opens the settings window when it has no
-config yet (see `app.run_app`), a configured daemon launched this way starts
-straight into the tray and syncs in the background, no window shown.
+The settings window is a `ttk.Notebook` with one tab per concern, so it
+stays readable as the feature set grows instead of one long scroll:
+
+- **Config** — API URL, access token (with a link to generate/manage it),
+  replays folder (autodetected, or browse manually), and the **"Lancer au
+  démarrage de Windows"** checkbox, which registers (or unregisters) the
+  built `.exe` under the current user's Run key
+  (`HKCU\...\CurrentVersion\Run`, `src/autostart.py`) — no admin rights
+  needed. Since the daemon only opens the settings window when it has no
+  config yet (see `app.run_app`), a configured daemon launched this way
+  starts straight into the tray and syncs in the background, no window
+  shown.
+- **Draft Live** — the live-draft capture toggle and its global hotkey; see
+  [Live draft capture](#live-draft-capture) below.
+- **Synchronisation** — daemon/API versions, games-recorded count, and
+  (while the daemon is running) live found/synced/currently-syncing
+  counters, a progress bar, the last sync error if any, and a **Debug**
+  button: a read-only report of every replay currently in an error state
+  (file path, whether the source file still exists, the error, and its full
+  traceback), with a **Copier** button to grab it in one click for a bug
+  report.
+- **Update** — see [Auto-update](#auto-update) below.
+
+A **📁 Dossier de données** button in the window's header (visible from
+every tab) opens `%APPDATA%\hots-analytics\` directly in Explorer —
+`config.json`, `sync_state.db`, `update.log`, the crop config, and the
+live-draft debug folder all live there.
+
+The live-draft hotkey field doesn't take typed text: click **Modifier…**
+and press the combo you want (Échap to cancel). It's captured with
+`keyboard.read_hotkey()` (`src/hotkey.py` already depends on the `keyboard`
+package for the global hook itself) and comes back pre-formatted in exactly
+the shape the hook needs — no risk of a typo like `"ctrl+shft+d"` silently
+failing to register.
 
 ## Live draft capture
 
 While in a Heroes of the Storm draft, pressing the configured global hotkey
-(default **Ctrl+Maj+D**, rebindable in the settings window) screenshots the
-game window, crops the 10 player-name regions off the draft screen
-(`src/draft_layout.py`), reads each one with OCR (`src/ocr.py`, RapidOCR),
-and POSTs the result to `/draft/snapshot` (`src/draft_capture.py`) so it
-shows up live on the dashboard's **Live Draft** page. The hotkey is a global
-low-level keyboard hook (`src/hotkey.py`, the `keyboard` package), so it
-fires even while the game has focus, windowed or "Fullscreen (Windowed)"
+(default **Ctrl+Maj+D**, rebindable in the settings window's Draft Live tab)
+screenshots the game window, crops the 10 player-name regions off the draft
+screen (`src/draft_layout.py`), reads each one with OCR (`src/ocr.py`,
+RapidOCR), and POSTs the result to `/draft/snapshot` (`src/draft_capture.py`)
+so it shows up live on the dashboard's **Live Draft** page. The hotkey is a
+global low-level keyboard hook (`src/hotkey.py`, the `keyboard` package), so
+it fires even while the game has focus, windowed or "Fullscreen (Windowed)"
 (HotS's own default display mode); true exclusive fullscreen bypasses the
 screenshot the same way it bypasses everything else GDI/DWM-based. A name
 OCR can't read confidently is sent as `"unreadable"` rather than guessed at,
 so one bad crop degrades that one slot instead of the whole capture. The
-feature can be turned off entirely from the settings window, which is also
-where the hotkey field lives -- rebinding takes effect on save, no restart
-needed.
+feature can be turned off entirely from the settings window — rebinding
+takes effect on save, no restart needed.
+
+### Crop tuning
+
+The 10 player-name crop boxes (plus the left/right team-split crop and
+rotation angle) are defined in `src/draft_layout.py` as relative (0.0-1.0)
+fractions of the screenshot — resolution-independent for any capture at the
+same aspect ratio. Those constants are also the *defaults*: the values
+actually used at capture time are read from
+`%APPDATA%\hots-analytics\draft-crop-config.json`
+(`load_team_layouts`/`ensure_crop_config_file`), seeded from the defaults the
+first time the daemon runs. Editing that file and pressing the hotkey again
+picks up the change immediately, no rebuild needed — useful for
+recalibrating against a different UI scale without waiting on a release.
 
 ### Debugging a capture
 
@@ -88,13 +122,15 @@ Every hotkey press writes its debug artifacts under
 `%APPDATA%\hots-analytics\live-draft\` (`src/draft_debug.py`), regardless of
 whether OCR or the API submit succeeds:
 
-- `captures\<timestamp>\` — one folder per capture, holding the full
-  screenshot, each team's pre- and post-rotation strip crop
-  (`left-strip.png` / `left-rotated.png`, and the same for `right-`), each of
-  the 10 player-name crops (`left-slot-1.png` … `right-slot-5.png`, skipped
-  when a slot came out empty), and `crop-info.json` — the relative and pixel
-  box for every crop plus what OCR read from it and at what confidence. Only
-  the most recent 20 captures are kept.
+- `captures\latest\` — the full screenshot, each team's pre- and
+  post-rotation strip crop (`left-strip.png` / `left-rotated.png`, and the
+  same for `right-`), each of the 10 player-name crops (`left-slot-1.png` …
+  `right-slot-5.png`, skipped when a slot came out empty), and
+  `crop-info.json` — the relative and pixel box for every crop plus what OCR
+  read from it and at what confidence. Only the *most recent* capture is
+  kept (the folder is cleared and rewritten on every hotkey press) — this is
+  a live debugging aid, not a history, so it doesn't slowly grow
+  `%APPDATA%` the way keeping every past capture would.
 - `live-draft.log` — every `WARNING`+ record from `draft_capture.py`,
   `draft_layout.py`, `ocr.py` and `screen_capture.py`, so a failed capture is
   on disk even if nobody was watching the console when it happened.
@@ -137,21 +173,70 @@ the UI.
 
 The packaged `.exe` checks GitHub Releases for a newer daemon build shortly
 after startup and every few hours after that (`src/updater.py`). If one is
-found, a tray notification announces it and the settings window's **Mise à
-jour automatique du daemon** checkbox decides what happens next:
+found, the settings window's **Mise à jour automatique** checkbox (Update
+tab) decides what happens next:
 
 - **Checked (default):** it's downloaded and the app relaunches itself as
-  the new version automatically — no user action needed beyond
-  acknowledging the notification.
-- **Unchecked:** the update is left pending; a **Mettre à jour maintenant**
-  button appears in the settings window (reopened from the tray) to install
-  it on demand.
+  the new version automatically.
+- **Unchecked:** the update is left pending until installed on demand (see
+  below).
 
-Either way, the settings window shows live progress (checking / downloading
-with a percentage / installing) while the daemon is running — see
-`UpdateStatusTracker` in `src/updater.py` and `_refresh_update_status` in
-`gui.py`. This all only runs in the compiled build; `python -m src.main` in
-dev never self-updates.
+Either way this is never invisible: a tray balloon announces the find, and
+— unless the settings window is already open, in which case its Update tab
+already shows the same thing — a small always-on-top popup
+(`run_update_progress_window` in `gui.py`) pops up on its own with live
+download/install progress and stays up if something goes wrong, instead of
+the only visible sign of an update being the app quietly vanishing for a
+few seconds. The settings window's Update tab shows the same live phase
+(checking / downloading with a percentage / installing) whenever it's open,
+via `UpdateStatusTracker` (`src/updater.py`); its **Vérifier les mises à
+jour** button runs a check on demand instead of waiting for the next
+scheduled cycle — useful right after a release goes out. All of this only
+runs in the compiled build; `python -m src.main` in dev never self-updates.
+
+**Where it downloads to, and how the replace/relaunch works:** the new
+build is streamed to `%TEMP%\hots-analytics-updates\` (`updater.downloads_dir`).
+Once complete, this process writes a small PowerShell script to a temp
+`.ps1` file and hands off to it (detached, hidden window), then exits
+immediately (a running `.exe` can't overwrite or rename itself, and under
+Nuitka's `--onefile` packaging the running process may well be executing
+from an ephemeral self-extracted copy rather than the installed path
+anyway). That script: waits for this process's PID to fully exit, copies
+the downloaded build over the *installed* `.exe`
+(`updater.installed_exe_path()` — see below), deletes the downloaded copy
+and itself, and starts the installed `.exe` again — no separate "second
+exe" or bundled library needed, PowerShell already does this handoff
+reliably and ships with Windows. There is no old version left lying around
+afterward: the installed `.exe` is replaced *in place* (one file, one
+path), and `%TEMP%\hots-analytics-updates\` is swept clean of anything left
+over from an interrupted/superseded download the next time the daemon
+starts (`cleanup_stale_downloads`, called from `watch_for_updates`).
+
+Every step of that handoff is logged, with a timestamp, to
+`%APPDATA%\hots-analytics\update.log` (`updater.update_log_file_path`;
+Copy-Item is retried a few times first, since the just-exited process or
+real-time antivirus scanning the new file can hold a brief lock) — since the
+script runs after this process has already exited, that log is the only
+record of what happened if a copy or relaunch step fails silently. It's one
+click away from the settings window's Update tab (**Voir le journal**).
+
+**Unsigned binary / SmartScreen:** this build isn't code-signed (no
+certificate has been purchased for it), so the *first* time a
+browser-downloaded copy is run, Windows SmartScreen shows its "Windows
+protected your PC" prompt — click "Informations complémentaires" then
+"Exécuter quand même". That's a one-time, per-download-hash check from
+Explorer's own Attachment Execution Service and can't be suppressed from
+inside the app without an actual signing certificate. It does **not** refire
+on the self-update path above, though: the new build is fetched with
+`requests` (never attaches a Mark-of-the-Web the way a browser download
+does) and relaunched via `Start-Process` (bypassing Explorer's shell-execute
+path entirely) — so once a machine has approved one build, its self-updates
+relaunch silently. (Real-time antivirus heuristics are a separate mechanism
+from SmartScreen and could in principle still flag an unfamiliar unsigned
+binary; the retrying Copy-Item + `update.log` above exist partly to make
+that failure mode visible instead of silent if it ever happens. The durable
+fix is buying a code-signing certificate, which is a purchase/verification
+decision outside what this repo's code can do on its own.)
 
 The self-replace step (and the "Lancer au démarrage de Windows" registry
 entry) resolve the actual installed `.exe` via `updater.installed_exe_path()`
@@ -184,22 +269,22 @@ merge the change.
 src/
   main.py       CLI entrypoint: --resync (headless), or the tray app by default
   app.py        Wires first-run setup + tray icon + background daemon thread together
-  gui.py        tkinter settings window (first run / reopened from the tray)
+  gui.py        tkinter settings window (tabbed: Config/Draft Live/Synchronisation/Update) + the standalone update-progress popup
   tray.py       pystray tray icon and menu
-  config.py     Reads/writes %APPDATA%\hots-analytics\config.json
+  config.py     Reads/writes %APPDATA%\hots-analytics\config.json; open_config_folder/open_path for the "Dossier de données" button
   watcher.py    Watches the replays folder (watchdog), stoppable via threading.Event
   ingestion.py  Parses + uploads one replay; shared by --resync and the tray daemon
   parser.py     .StormReplay -> API payload
   hotkey.py         Global keyboard shortcut (the `keyboard` package) that triggers a draft capture
   screen_capture.py Finds the HotS window and screenshots its client area (win32gui + mss)
-  draft_layout.py   Crops the 10 player-name regions off a draft-screen screenshot
+  draft_layout.py   Crops the 10 player-name regions off a draft-screen screenshot; loads/seeds the appdata crop config
   ocr.py            Reads a player-name crop via RapidOCR
   draft_capture.py  Wires the above together and POSTs the result to /draft/snapshot
-  draft_debug.py    Saves every capture's crops + a crop-info.json under %APPDATA%\hots-analytics\live-draft\, and mirrors WARNING+ logs from the draft modules to live-draft.log
+  draft_debug.py    Saves the latest capture's crops + a crop-info.json under %APPDATA%\hots-analytics\live-draft\captures\latest\, and mirrors WARNING+ logs from the draft modules to live-draft.log
   api_client.py HTTP client (retrying, for real ingestion) + light ping/summary/version helpers (for the settings UI)
   sync_state.py SQLite-backed "already synced" cache + per-replay error log, keyed by content hash
   status.py     Thread-safe found/synced/currently-syncing/last-error snapshot, for the settings window
-  updater.py    Checks GitHub Releases for a newer build and self-updates when running as the compiled .exe
+  updater.py    Checks GitHub Releases for a newer build and self-updates when running as the compiled .exe; logs the relaunch handoff to update.log
   autostart.py  Registers/unregisters the .exe in the Windows Run key ("launch at startup")
   single_instance.py  Named-mutex guard so a second launch of the .exe exits instead of running alongside the first
 ```

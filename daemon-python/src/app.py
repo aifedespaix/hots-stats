@@ -17,7 +17,7 @@ import threading
 from pathlib import Path
 from typing import Callable
 
-from . import api_client, draft_capture, hotkey, single_instance
+from . import api_client, draft_capture, draft_layout, hotkey, single_instance
 from .config import Config, ConfigError, config_exists, is_auto_update_enabled, load_config
 from .ingestion import ingest_file
 from .status import StatusTracker
@@ -239,6 +239,12 @@ def run_app() -> int:
         logger.error("%s", err)
         return 1
 
+    # Seeded here (not just lazily on the first live-draft capture, see
+    # draft_capture.py) so the crop tuning actually in use is visible and
+    # hand-editable under %APPDATA%/hots-analytics/ from the moment the
+    # daemon starts, even before the feature's hotkey is ever pressed.
+    draft_layout.ensure_crop_config_file()
+
     daemon = _DaemonRunner()
     daemon.start(config)
     update_status = UpdateStatusTracker()
@@ -265,21 +271,52 @@ def run_app() -> int:
         update_stop_event.set()
         daemon.stop()
 
+    # Shared with TrayController's own "one settings window at a time" lock
+    # so the standalone update-progress popup (see `_on_update_found` below)
+    # and the settings window never both try to own the process's one Tk
+    # mainloop at once.
+    window_lock = threading.Lock()
+
     # Constructed before the update-checker thread starts (but only `.run()`
     # at the very end) so `_on_update_found` below has a tray icon to post
     # its notification to as soon as an update is found, not just once the
     # tray's own message loop gets around to starting.
-    tray = TrayController(on_open_settings=_on_open_settings, on_quit=_on_quit)
+    tray = TrayController(on_open_settings=_on_open_settings, on_quit=_on_quit, window_lock=window_lock)
+
+    def _show_update_progress_popup(version: str) -> None:
+        # Non-blocking: if the settings window (or a previous popup) already
+        # holds the lock, skip rather than queue up behind it -- matches
+        # tray.py's own "already open, ignore" handling of the same lock.
+        if not window_lock.acquire(blocking=False):
+            logger.debug("A Tk window is already open, skipping the update-progress popup.")
+            return
+        try:
+            from .gui import run_update_progress_window
+
+            run_update_progress_window(update_status, version)
+        finally:
+            window_lock.release()
 
     def _on_update_found(update: AvailableUpdate) -> None:
         if is_auto_update_enabled():
-            # The download + relaunch happen automatically right after this
-            # -- this is purely so "why did my tray icon flicker/relaunch"
-            # has an answer on screen instead of happening invisibly.
+            # The download + relaunch happen automatically right after this.
+            # The tray balloon is best-effort (silently dropped on
+            # platforms/configs where it doesn't work), so it's backed by a
+            # small always-on-top popup with live download/install progress
+            # -- unless the settings window is already open, in which case
+            # its own Update tab already shows the same thing and a second
+            # window would just be noise. This is what used to make an
+            # automatic update look like "the app closes and says nothing".
             tray.notify(f"Mise à jour v{update.version} trouvée, installation en cours…", "HotS Analytics")
+            threading.Thread(
+                target=_show_update_progress_popup,
+                args=(update.version,),
+                name="hots-update-progress-popup",
+                daemon=True,
+            ).start()
         else:
             # Auto-update is off: nothing happens until the user clicks
-            # "Mettre à jour maintenant" in the settings window themselves.
+            # "Vérifier les mises à jour" in the settings window themselves.
             tray.notify(
                 f"Mise à jour v{update.version} disponible. Ouvrez les paramètres pour l'installer.",
                 "HotS Analytics",
