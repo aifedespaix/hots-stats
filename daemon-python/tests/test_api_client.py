@@ -87,6 +87,21 @@ def test_post_replay_quarantined_raises_and_not_retried(tmp_path):
     post.assert_called_once()
 
 
+def test_post_replay_unexpected_response_shape_raises_api_client_error(tmp_path):
+    """A 2xx body that's neither the quarantine shape nor the normal
+    upsert shape (e.g. a future response variant this client doesn't know
+    about yet) must not raise a bare KeyError -- see the `upserted`/
+    `matchId` crash this whole exception hierarchy exists to prevent."""
+    client = ApiClient(_config(tmp_path))
+    weird_response = _response(200, {"status": "ok"})
+
+    with patch.object(client._session, "post", return_value=weird_response) as post:
+        with pytest.raises(ApiClientError):
+            client.post_replay({"replayHash": "abc"})
+
+    post.assert_called_once()
+
+
 def test_post_replay_retries_network_errors_then_raises(tmp_path):
     client = ApiClient(_config(tmp_path))
 

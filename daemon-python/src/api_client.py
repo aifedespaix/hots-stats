@@ -102,6 +102,16 @@ class ApiClient:
                             "review and will sync automatically once the build is verified.",
                             base_build,
                         )
+                    if "upserted" not in body or "matchId" not in body:
+                        # Same shape of bug the `quarantined` branch above
+                        # guards against, generalized: a body that isn't the
+                        # quarantine shape and also isn't the normal
+                        # upsert shape (a future response variant this
+                        # client doesn't know about yet) must not raise a
+                        # bare KeyError -- that's an unrecognized-server-
+                        # response condition, so it gets `ingestion.py`'s
+                        # existing generic-`ApiClientError` handling instead.
+                        raise ApiClientError(f"Unexpected response shape from the ingestion API: {body}")
                     return IngestResult(
                         upserted=body["upserted"],
                         match_id=body["matchId"],
