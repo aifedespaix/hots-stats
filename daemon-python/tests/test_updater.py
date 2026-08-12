@@ -58,36 +58,46 @@ def test_parse_version_none_for_empty():
 
 
 def test_find_update_returns_none_when_up_to_date():
-    release = _release("v1.0.0", [_asset("hots-analytics-daemon-v1.0.0.exe")])
+    release = _release("v1.0.0", [_asset("hots-analytics-daemon.exe")])
     assert find_update(release, "1.0.0") is None
 
 
 def test_find_update_returns_none_when_current_is_newer():
-    release = _release("v1.0.0", [_asset("hots-analytics-daemon-v1.0.0.exe")])
+    release = _release("v1.0.0", [_asset("hots-analytics-daemon.exe")])
     assert find_update(release, "1.2.0") is None
 
 
 def test_find_update_returns_update_when_newer():
+    """The asset itself is never versioned (see updater._ASSET_NAME) --
+    the release's tag_name is the only source of truth for the version."""
     release = _release(
         "v1.2.0",
-        [_asset("hots-analytics-daemon-v1.2.0.exe", "https://example.com/asset.exe")],
+        [_asset("hots-analytics-daemon.exe", "https://example.com/asset.exe")],
     )
     update = find_update(release, "1.0.0")
     assert update == AvailableUpdate(
         version="1.2.0",
         download_url="https://example.com/asset.exe",
-        asset_name="hots-analytics-daemon-v1.2.0.exe",
+        asset_name="hots-analytics-daemon.exe",
     )
 
 
-def test_find_update_ignores_non_exe_assets():
+def test_find_update_ignores_unrelated_assets():
     release = _release(
         "v1.2.0",
-        [_asset("checksums.txt"), _asset("hots-analytics-daemon-v1.2.0.exe")],
+        [_asset("checksums.txt"), _asset("hots-analytics-daemon.exe")],
     )
     update = find_update(release, "1.0.0")
     assert update is not None
-    assert update.asset_name == "hots-analytics-daemon-v1.2.0.exe"
+    assert update.asset_name == "hots-analytics-daemon.exe"
+
+
+def test_find_update_ignores_similarly_named_asset():
+    """Exact match, not a prefix/suffix check -- a differently-purposed
+    asset that merely starts with the same name (e.g. a future companion
+    tool) must not be mistaken for the daemon build."""
+    release = _release("v1.2.0", [_asset("hots-analytics-daemon-updater-helper.exe")])
+    assert find_update(release, "1.0.0") is None
 
 
 def test_find_update_none_when_no_matching_asset():
@@ -96,7 +106,7 @@ def test_find_update_none_when_no_matching_asset():
 
 
 def test_find_update_none_for_dev_release_tag():
-    release = _release("0.0.0-dev.abc1234", [_asset("hots-analytics-daemon-v0.0.0-dev.abc1234.exe")])
+    release = _release("0.0.0-dev.abc1234", [_asset("hots-analytics-daemon.exe")])
     assert find_update(release, "1.0.0") is None
 
 
@@ -109,7 +119,7 @@ def _response(status_code: int, json_body: dict) -> MagicMock:
 
 
 def test_check_for_update_returns_update():
-    release = _release("v2.0.0", [_asset("hots-analytics-daemon-v2.0.0.exe")])
+    release = _release("v2.0.0", [_asset("hots-analytics-daemon.exe")])
     with patch("src.updater.requests.get", return_value=_response(200, release)):
         update = check_for_update("1.0.0")
     assert update is not None

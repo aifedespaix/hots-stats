@@ -74,7 +74,12 @@ logger = logging.getLogger(__name__)
 
 _GITHUB_REPO = "aifedespaix/hots-stats"
 _LATEST_RELEASE_URL = f"https://api.github.com/repos/{_GITHUB_REPO}/releases/latest"
-_ASSET_PREFIX = "hots-analytics-daemon-v"
+# Deliberately not versioned -- see build-daemon.yml's ASSET_NAME comment.
+# The release's tag_name (below, via `find_update`) is the only source of
+# truth for the version; the asset itself is always this exact name, so
+# every download lands at the same path and this process never needs to
+# parse a version out of a filename.
+_ASSET_NAME = "hots-analytics-daemon.exe"
 _REQUEST_TIMEOUT_SECONDS = 15
 _DOWNLOAD_TIMEOUT_SECONDS = 60
 
@@ -289,15 +294,14 @@ def find_update(release: dict, current_version: str) -> AvailableUpdate | None:
         return None
 
     for asset in release.get("assets", []):
-        name = asset.get("name", "")
-        if name.startswith(_ASSET_PREFIX) and name.endswith(".exe"):
+        if asset.get("name") == _ASSET_NAME:
             return AvailableUpdate(
                 version=release["tag_name"].lstrip("v"),
                 download_url=asset["browser_download_url"],
-                asset_name=name,
+                asset_name=asset["name"],
             )
 
-    logger.warning("Release %s has no daemon .exe asset, skipping.", release.get("tag_name"))
+    logger.warning("Release %s has no '%s' asset, skipping.", release.get("tag_name"), _ASSET_NAME)
     return None
 
 

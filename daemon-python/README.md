@@ -320,6 +320,18 @@ in `pyproject.toml` + `constants.py`'s `APP_VERSION`, commits it, tags it
 `.github/workflows/build-daemon.yml`. There's nothing manual to do; just
 merge the change.
 
+The release **asset** itself is always named `hots-analytics-daemon.exe` --
+never version-suffixed. The version lives only on the release: its git tag
+(`vX.Y.Z`) and title (`Daemon vX.Y.Z`). This is deliberate, not an
+oversight: `updater.py`'s self-update handoff already treats the *installed*
+`.exe`'s path/filename as opaque (`installed_exe_path()` — it copies the new
+build's bytes over whatever that path already is, never renames it), so a
+stable asset name doesn't cost that mechanism anything, and it means a
+manual download from the Releases page always lands at the same filename
+instead of a new one piling up next to every previous version ever fetched.
+`updater._ASSET_NAME` and `find_update` match this exact name; only the
+release's `tag_name` is ever parsed as a version.
+
 ## Architecture
 
 ```
