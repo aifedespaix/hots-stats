@@ -37,6 +37,15 @@ permissions:
 
 env:
   PYTHON_VERSION: "3.11"
+  # Deliberately not versioned (no "-vX.Y.Z" suffix): the release's git tag
+  # and its title ("Daemon vX.Y.Z" below) are the only source of truth for
+  # which version a release is. A stable asset name means the daemon's
+  # self-update handoff (`updater.py`'s `apply_update_and_exit`) is always
+  # replacing "the installed .exe" with "the new .exe" -- it never has to
+  # parse or care about either one's filename -- and it means every
+  # download, at any point in time, lands at the exact same path, instead
+  # of accumulating one same-content file per version ever downloaded.
+  ASSET_NAME: hots-analytics-daemon.exe
 
 jobs:
   bump_version:
@@ -145,7 +154,7 @@ jobs:
           --include-package=src
           --include-package-data=rapidocr_onnxruntime
           --output-dir=dist
-          --output-filename=hots-analytics-daemon-v${{ steps.version.outputs.version }}.exe
+          --output-filename=${{ env.ASSET_NAME }}
           run.py
         # Nuitka over PyInstaller: it compiles to native C rather than
         # embedding a zipped interpreter, which triggers far fewer AV false
@@ -213,13 +222,17 @@ jobs:
 
       - name: Smoke test the executable
         shell: bash
-        run: ./dist/hots-analytics-daemon-v${{ steps.version.outputs.version }}.exe --help
+        run: ./dist/${{ env.ASSET_NAME }} --help
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
+          # Unlike the release asset (env.ASSET_NAME, deliberately stable),
+          # this is just the label for this one workflow run's downloadable
+          # build in the Actions UI -- keeping the version here costs
+          # nothing and makes browsing past runs easier.
           name: hots-analytics-daemon-v${{ steps.version.outputs.version }}
-          path: daemon-python/dist/hots-analytics-daemon-v${{ steps.version.outputs.version }}.exe
+          path: daemon-python/dist/${{ env.ASSET_NAME }}
           if-no-files-found: error
 
       - name: Publish GitHub Release
@@ -227,6 +240,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.bump_version.outputs.tag || github.ref_name }}
-          files: daemon-python/dist/hots-analytics-daemon-v${{ steps.version.outputs.version }}.exe
+          files: daemon-python/dist/${{ env.ASSET_NAME }}
           name: Daemon v${{ steps.version.outputs.version }}
           generate_release_notes: true

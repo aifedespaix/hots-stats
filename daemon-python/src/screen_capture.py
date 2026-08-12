@@ -35,7 +35,17 @@ class GameWindowNotFoundError(Exception):
 def find_game_window() -> int:
     """Returns the window handle (HWND) of the running game window.
     Minimized windows are skipped (`IsIconic`) since there's nothing to
-    screenshot; raises `GameWindowNotFoundError` if none match."""
+    screenshot; raises `GameWindowNotFoundError` if none match.
+
+    More than one visible window can match the title hint -- a browser tab
+    or another app that happens to mention "Heroes of the Storm" in its own
+    title, say -- in which case `EnumWindows`' Z-order-derived iteration
+    order is an arbitrary tiebreaker, not a meaningful one. The player just
+    pressed the capture hotkey, so if the foreground window (whatever
+    currently has focus) is among the matches, that's a far safer bet than
+    "whichever one Windows happened to enumerate first" -- it's what they
+    were actually looking at.
+    """
     import win32gui
 
     matches: list[int] = []
@@ -51,6 +61,10 @@ def find_game_window() -> int:
     win32gui.EnumWindows(_on_window, None)
     if not matches:
         raise GameWindowNotFoundError("Heroes of the Storm window not found (is the game running?)")
+
+    foreground = win32gui.GetForegroundWindow()
+    if foreground in matches:
+        return foreground
     return matches[0]
 
 

@@ -109,6 +109,76 @@ so one bad crop degrades that one slot instead of the whole capture. The
 feature can be turned off entirely from the settings window — rebinding
 takes effect on save, no restart needed.
 
+While the settings window is open, its Draft Live tab shows a short
+"Capture en cours… / Envoi de la capture…" progress indicator while a
+hotkey press is being processed (`draft_capture.DraftCaptureCoordinator`,
+polled by `gui.py`'s `_refresh_draft_capture_status`) — there was
+previously no feedback at all beyond whatever eventually shows up on the
+dashboard. A capture that fails (no game window found, a screenshot/crop
+error) shows the reason in red instead of just being logged — see
+*Troubleshooting* below for what that fixes. Pressing the hotkey again
+before a capture has finished doesn't queue a second one behind it: the
+same coordinator hands the newer press a fresh generation number, and the
+older run checks at its two natural checkpoints (right after
+screenshotting, and right before committing its result) whether it's still
+the current one -- if not, it gives up instead of finishing and possibly
+submitting stale data after (or racing with) the fresher capture. Python
+can't forcibly kill a running thread, so this is cooperative rather than a
+hard cancel, but since every checkpoint bails *before* writing anything,
+the practical effect is the one that matters: a superseded capture never
+wins over a newer one.
+
+**OCR accuracy:** each player-name crop is already known to contain
+exactly one line of text and nothing else (that's the entire point of
+`draft_layout.py`'s hand-tuned boxes) — but RapidOCR's default pipeline
+runs a *detection* stage first, meant for finding text within an arbitrary
+photo or document, before ever reading it. On a crop this small and this
+tightly bound, detection frequently fails to find a box at all, which
+silently discards the crop before the model that actually reads characters
+ever runs — a generic "throw the whole image at an OCR tool" comparison
+looks nothing like this, since a full screenshot gives that stage plenty to
+detect. `ocr.py`'s `read_player_name` now calls RapidOCR with
+`use_det=False` to skip straight to recognition (the step that already
+knows how to read a single line of text), and upscales each crop 3x
+(Lanczos) beforehand so that recognition step has more effective detail to
+work with than a native ~30px-tall crop provides. Both are standard
+techniques for exactly this "already-isolated single line of text" shape of
+problem.
+
+### Troubleshooting: the hotkey doesn't seem to do anything
+
+The hook is registered once from `app._DaemonRunner.start()` at daemon
+startup (and again whenever the settings window saves a config change) --
+it is *not* tied to the settings window being open, and closing that
+window never unregisters it. If the hotkey genuinely isn't doing
+anything at all -- not even a brief "Capture en cours…" flash in the Draft
+Live tab, not a line in `live-draft.log` -- the keystroke isn't reaching
+the hook in the first place, and the most common cause of that on Windows
+is a **privilege mismatch**: `keyboard`'s global hook is a low-level
+`SetWindowsHookEx(WH_KEYBOARD_LL, ...)` hook, and Windows' UIPI
+(User Interface Privilege Isolation) blocks a *non-elevated* hook from
+ever receiving keystrokes while a window running *elevated* ("Run as
+administrator") has focus -- silently, with no error on either side. If
+Heroes of the Storm, its Battle.net launcher, or an overlay is set to
+always run as administrator (check its shortcut/exe's Compatibility tab)
+while the daemon itself is not, this is almost certainly why: either stop
+running the game elevated, or run the daemon elevated too (in which case
+it also needs to be launched that way for the "Lancer au démarrage de
+Windows" autostart entry, or the same mismatch reappears on every login).
+
+If instead a capture clearly *does* start (the progress indicator
+appears, or `live-draft.log` gets a new line) but never finishes/nothing
+shows up on the dashboard, that's a different failure — most commonly the
+game window not being found (see `screen_capture.find_game_window`, and
+the exclusive-fullscreen limitation above). That case is no longer
+silent: the Draft Live tab shows the specific reason in red instead of
+only logging it, so what used to look identical to "the hotkey did
+nothing" is now distinguishable from it. `find_game_window` also now
+prefers whichever matching window currently has focus when more than one
+window's title happens to match "Heroes of the Storm" (a browser tab, an
+unrelated app) -- previously it took an arbitrary one, which could
+silently screenshot the wrong thing.
+
 ### Crop tuning
 
 The 10 player-name crop boxes (plus the left/right team-split crop and
@@ -163,6 +233,20 @@ sync state is kept as-is rather than guessed at. The startup scan also
 refreshes, per tracked replay, whether its source file is still present on
 disk (`SyncState.refresh_file_existence`), so a moved/deleted replay shows
 up as such in the Debug report instead of just going stale silently.
+
+The initial sync pass (`app._run_sync_loop`) uploads every replay on disk
+strictly one at a time, on a single background thread, so one replay's
+failure must never take the rest of the folder down with it — `ingestion.
+ingest_file` is guaranteed to never raise: anything it doesn't specifically
+recognize (a malformed API response, a local sqlite hiccup) still falls
+through to a catch-all that records it as an ordinary ingestion error and
+lets the loop move on to the next file. Before this guarantee was
+enforced end-to-end, an exception type none of the specific handlers
+anticipated would silently kill the watcher thread mid-run — the settings
+window kept showing "en cours de synchronisation : <this one file>" forever,
+with everything after it in the folder never even attempted and no error
+displayed anywhere, since the code path that would have shown one
+(`StatusTracker.finish_syncing`) was never reached.
 
 The same `GET /ingest/version` response also carries `dataResetAt`: set
 once an account uses **Réinitialiser mes données** in the web app's
@@ -233,7 +317,29 @@ Every step of that handoff is logged, with a timestamp, to
 `%APPDATA%\hots-analytics\update.log` (`updater.update_log_file_path`) —
 since the script runs after this process has already exited, that log is
 the only record of what happened if a copy or relaunch step fails. It's one
-click away from the settings window's Update tab (**Voir le journal**).
+click away from the settings window's Update tab (**Voir le journal**). The
+Python side writes to the same log too (`updater._append_update_log_line`),
+before and immediately after handing off to the script — not just the
+script itself — so an attempt that never got far enough for the script to
+log anything on its own (killed before its first `Log` call, or
+`powershell.exe` failing to launch at all) still leaves a trace instead of
+the log staying completely empty.
+
+**This process never exits on faith that the handoff will work.**
+`Popen` returning successfully only means Windows *accepted* the request to
+start the relaunch script — not that it kept running. Before this process
+commits to `os._exit(0)`, `apply_update_and_exit` briefly confirms the
+script process is still alive; if it isn't (or `powershell.exe` couldn't be
+launched at all), the update is aborted instead — logged, the Update tab
+shows a clear error, and **the current process keeps running normally**,
+retrying on the next scheduled cycle. This closes the failure mode that
+used to look like "it downloads, then the app just closes and never comes
+back, with nothing anywhere on disk to explain why": a script this shape —
+unsigned, hidden, execution-policy-bypassing, copying one unsigned `.exe`
+over another and relaunching it — is exactly what real-time antivirus and
+other endpoint protection are built to kill on sight, and until this check
+existed, this process had already unconditionally exited by the time that
+happened, so there was nothing left running to notice or recover.
 
 **Unsigned binary / SmartScreen:** this build isn't code-signed (no
 certificate has been purchased for it), so the *first* time a
@@ -283,6 +389,18 @@ in `pyproject.toml` + `constants.py`'s `APP_VERSION`, commits it, tags it
 `vX.Y.Z`, builds the `.exe`, and publishes it as a GitHub Release — see
 `.github/workflows/build-daemon.yml`. There's nothing manual to do; just
 merge the change.
+
+The release **asset** itself is always named `hots-analytics-daemon.exe` --
+never version-suffixed. The version lives only on the release: its git tag
+(`vX.Y.Z`) and title (`Daemon vX.Y.Z`). This is deliberate, not an
+oversight: `updater.py`'s self-update handoff already treats the *installed*
+`.exe`'s path/filename as opaque (`installed_exe_path()` — it copies the new
+build's bytes over whatever that path already is, never renames it), so a
+stable asset name doesn't cost that mechanism anything, and it means a
+manual download from the Releases page always lands at the same filename
+instead of a new one piling up next to every previous version ever fetched.
+`updater._ASSET_NAME` and `find_update` match this exact name; only the
+release's `tag_name` is ever parsed as a version.
 
 ## Architecture
 
