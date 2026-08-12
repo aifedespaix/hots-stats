@@ -8,6 +8,7 @@ from src.parser import (
     _attribute_scope_by_player_list_index,
     _build_protocol,
     _protocol_module,
+    _read_archive_file,
     _slugify,
     _toon_handle,
     _windows_filetime_to_iso8601,
@@ -43,6 +44,33 @@ def test_build_protocol_falls_back_to_newest_known_build_for_newer_replays():
     newest_build = max(KNOWN_PROTOCOL_BUILDS)
     module = _build_protocol({"m_version": {"m_baseBuild": newest_build + 1000}})
     assert module.__name__ == f"heroprotocol.versions.protocol{newest_build:05d}"
+
+
+class _FakeArchive:
+    """Stands in for `mpyq.MPQArchive`: only `read_file` is exercised here."""
+
+    def __init__(self, files: dict[str, bytes]):
+        self._files = files
+
+    def read_file(self, filename: str) -> bytes | None:
+        return self._files.get(filename)
+
+
+def test_read_archive_file_returns_the_streams_bytes():
+    archive = _FakeArchive({"replay.details": b"\x01\x02"})
+    assert _read_archive_file(archive, "replay.details") == b"\x01\x02"
+
+
+def test_read_archive_file_raises_replay_parse_error_for_a_missing_stream():
+    # Regression test: `mpyq.MPQArchive.read_file` returns `None` (rather
+    # than raising) for a stream that's absent from the archive's hash
+    # table or resolves to a zero-length block entry. Feeding that `None`
+    # straight into a `heroprotocol` decoder used to blow up several stack
+    # frames deep with an opaque `TypeError: cannot convert 'NoneType'
+    # object to bytes` instead of a message naming the actual problem.
+    archive = _FakeArchive({"replay.details": b"\x01\x02"})
+    with pytest.raises(ReplayParseError, match="replay.attributes.events"):
+        _read_archive_file(archive, "replay.attributes.events")
 
 
 def test_slugify():

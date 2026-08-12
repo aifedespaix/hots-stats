@@ -259,6 +259,28 @@ def _apply_score_event(tracker_events: list[dict], tracker_id_to_toon: dict[int,
         break
 
 
+def _read_archive_file(archive: mpyq.MPQArchive, filename: str) -> bytes:
+    """Reads a required stream from the replay's MPQ archive.
+
+    `mpyq.MPQArchive.read_file` returns `None` -- rather than raising --
+    when `filename` isn't in the archive's hash table, or resolves to a
+    zero-length block entry (see its source: a missing hash entry, an
+    `archived_size` of 0, and a block entry without `MPQ_FILE_EXISTS` set
+    are all `None` returns, no exception). Feeding that straight into
+    `heroprotocol`'s decoders blows up several stack frames deep with an
+    opaque `TypeError: cannot convert 'NoneType' object to bytes` (see
+    `heroprotocol.decoders.BitPackedBuffer.__init__`), which names neither
+    the missing stream nor the actual problem. Fail fast here instead, with
+    a `ReplayParseError` that says which stream the archive is missing --
+    this is a genuinely incomplete/corrupt replay file, not something a
+    decoder fix can address.
+    """
+    contents = archive.read_file(filename)
+    if contents is None:
+        raise ReplayParseError(f"Replay archive is missing '{filename}' (corrupt or incomplete replay file).")
+    return contents
+
+
 def parse_replay(path: Path) -> dict[str, Any]:
     """Parses a `.StormReplay` file into a dict matching `replayPayloadSchema`.
 
@@ -277,10 +299,14 @@ def parse_replay(path: Path) -> dict[str, Any]:
         header = _protocol_module(max(KNOWN_PROTOCOL_BUILDS)).decode_replay_header(header_contents)
         protocol = _build_protocol(header)
 
-        details = protocol.decode_replay_details(archive.read_file("replay.details"))
-        initdata = protocol.decode_replay_initdata(archive.read_file("replay.initData"))
-        tracker_events = list(protocol.decode_replay_tracker_events(archive.read_file("replay.tracker.events")))
-        attributes_events = protocol.decode_replay_attributes_events(archive.read_file("replay.attributes.events"))
+        details = protocol.decode_replay_details(_read_archive_file(archive, "replay.details"))
+        initdata = protocol.decode_replay_initdata(_read_archive_file(archive, "replay.initData"))
+        tracker_events = list(
+            protocol.decode_replay_tracker_events(_read_archive_file(archive, "replay.tracker.events"))
+        )
+        attributes_events = protocol.decode_replay_attributes_events(
+            _read_archive_file(archive, "replay.attributes.events")
+        )
         battletags = _extract_battletags(archive, details["m_playerList"])
 
         return build_payload(
