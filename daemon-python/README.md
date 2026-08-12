@@ -45,7 +45,13 @@ up-to-date matches are skipped rather than duplicated.
 On start (or after saving new settings), the daemon uploads every replay
 already sitting in the replays folder before it starts watching for new
 ones — a folder full of replays from before the daemon was ever configured
-gets synced too, not just future games.
+gets synced too, not just future games. New replays are normally picked up
+the instant they're written, via a filesystem event (`watchdog`); as a
+fallback, the replays folder is also re-scanned every 60 seconds for
+anything that event-based detection missed (e.g. a dropped Windows
+`ReadDirectoryChangesW` notification, or an antivirus/cloud-sync tool
+briefly locking the folder) — so a game played while the daemon is running
+gets synced within a minute even if its creation event never arrived.
 
 From the tray icon: **Ouvrir les paramètres** reopens the settings window;
 saving restarts the background watcher with the new config. **Quitter**
@@ -272,7 +278,7 @@ src/
   gui.py        tkinter settings window (tabbed: Config/Draft Live/Synchronisation/Update) + the standalone update-progress popup
   tray.py       pystray tray icon and menu
   config.py     Reads/writes %APPDATA%\hots-analytics\config.json; open_config_folder/open_path for the "Dossier de données" button
-  watcher.py    Watches the replays folder (watchdog), stoppable via threading.Event
+  watcher.py    Watches the replays folder (watchdog) for new files, backed by a 60s fallback re-scan; stoppable via threading.Event
   ingestion.py  Parses + uploads one replay; shared by --resync and the tray daemon
   parser.py     .StormReplay -> API payload
   hotkey.py         Global keyboard shortcut (the `keyboard` package) that triggers a draft capture

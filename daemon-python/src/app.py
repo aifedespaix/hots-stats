@@ -66,7 +66,12 @@ def _run_sync_loop(
         status.bump_found()
         ingest(path)
 
-    watch_replays(replays_dir, on_replay_ready=_on_new_replay, stop_event=stop_event)
+    watch_replays(
+        replays_dir,
+        on_replay_ready=_on_new_replay,
+        stop_event=stop_event,
+        known_paths={str(path) for path in existing},
+    )
 
 
 def _sync_api_version(config: Config, sync_state: SyncState) -> str | None:
