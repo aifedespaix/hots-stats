@@ -1,3 +1,4 @@
+import subprocess
 import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -9,6 +10,7 @@ from src.updater import (
     AvailableUpdate,
     UpdatePhase,
     UpdateStatusTracker,
+    _powershell_diagnostics,
     _render_relaunch_script,
     apply_update_and_exit,
     check_for_update,
@@ -202,11 +204,14 @@ def test_installed_exe_path_falls_back_to_sys_executable(monkeypatch):
 # -- apply_update_and_exit -----------------------------------------------
 
 
-def _fake_process(*, alive: bool, returncode: int | None = None) -> MagicMock:
+def _fake_process(
+    *, alive: bool, returncode: int | None = None, stdout: str = "", stderr: str = ""
+) -> MagicMock:
     proc = MagicMock()
     proc.pid = 4242
     proc.poll.return_value = None if alive else (returncode if returncode is not None else 1)
     proc.returncode = returncode if returncode is not None else (None if alive else 1)
+    proc.communicate.return_value = (stdout, stderr)
     return proc
 
 
@@ -247,6 +252,33 @@ def test_apply_update_and_exit_aborts_when_relaunch_script_dies_immediately(monk
     log_text = (tmp_path / "AppData" / "hots-analytics" / "update.log").read_text()
     assert "[v2.0.0]" in log_text
     assert "antivirus" in log_text
+
+
+def test_apply_update_and_exit_logs_captured_powershell_output_on_quick_exit(monkeypatch, tmp_path):
+    """Previously the quick-exit log line was pure guesswork ("likely blocked
+    by antivirus") because nothing PowerShell itself printed was ever
+    captured. Whatever it wrote to stderr (an execution-policy or
+    not-digitally-signed error, for instance) must now show up in
+    update.log so a real failure has evidence behind it instead of a guess."""
+    monkeypatch.setattr("src.updater.installed_exe_path", lambda: tmp_path / "current.exe")
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
+    monkeypatch.setattr("src.updater._RELAUNCH_LIVENESS_CHECK_SECONDS", 0.05)
+    monkeypatch.setattr(
+        "src.updater.subprocess.Popen",
+        lambda *a, **k: _fake_process(
+            alive=False,
+            returncode=1,
+            stderr="File ... cannot be loaded because running scripts is disabled on this system.",
+        ),
+    )
+    exit_mock = MagicMock()
+    monkeypatch.setattr("src.updater.os._exit", exit_mock)
+
+    result = apply_update_and_exit(tmp_path / "new.exe", version="2.0.0")
+
+    assert result is False
+    log_text = (tmp_path / "AppData" / "hots-analytics" / "update.log").read_text()
+    assert "cannot be loaded because running scripts is disabled" in log_text
 
 
 def test_apply_update_and_exit_aborts_when_powershell_fails_to_launch(monkeypatch, tmp_path):
@@ -438,6 +470,25 @@ def test_trigger_manual_update_reports_up_to_date(monkeypatch):
     _wait_until(lambda: status.snapshot().phase is UpdatePhase.IDLE and status.snapshot().message)
 
     assert status.snapshot().message == "Aucune mise à jour disponible."
+
+
+def test_trigger_manual_update_logs_diagnostics_even_when_up_to_date(monkeypatch, tmp_path):
+    """`apply_update_and_exit`'s diagnostics line only ever gets written
+    during a real pending-update attempt, which needs a newer release to
+    exist -- so a user already on the latest version would otherwise have no
+    way to produce a fresh diagnostic short of waiting for the next release.
+    The manual "Vérifier les mises à jour" button must double as an
+    on-demand self-test regardless of whether an update is actually found."""
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
+    monkeypatch.setattr("src.updater.check_for_update", lambda: None)
+    monkeypatch.setattr("src.updater._powershell_diagnostics", lambda: "powershell=fake stub output")
+    status = UpdateStatusTracker()
+
+    trigger_manual_update(status)
+    _wait_until(lambda: status.snapshot().phase is UpdatePhase.IDLE and status.snapshot().message)
+
+    log_text = (tmp_path / "AppData" / "hots-analytics" / "update.log").read_text()
+    assert "Diagnostics: powershell=fake stub output" in log_text
 
 
 # -- watch_for_updates --------------------------------------------------------
@@ -685,6 +736,79 @@ def test_render_relaunch_script_path_arguments_are_single_quoted(tmp_path):
     assert f'"{current_exe}"' not in script
     assert f"'{new_exe}'" in script
     assert f'"{new_exe}"' not in script
+
+
+def test_powershell_diagnostics_reports_missing_when_not_on_path(monkeypatch):
+    monkeypatch.setattr("src.updater.shutil.which", lambda _name: None)
+
+    assert _powershell_diagnostics() == "powershell.exe not found on PATH"
+
+
+def test_powershell_diagnostics_reports_probe_output(monkeypatch):
+    monkeypatch.setattr("src.updater.shutil.which", lambda _name: r"C:\Windows\System32\powershell.exe")
+    fake_result = MagicMock(
+        returncode=0,
+        stdout="PSVersion=5.1.19041.1 PSEdition=Desktop ExecutionPolicy=[MachinePolicy=Undefined, "
+        "UserPolicy=Undefined, Process=Undefined, CurrentUser=Undefined, LocalMachine=RemoteSigned] "
+        "SmartAppControl(0=off,1=on,2=audit,n/a=no-such-key)=n/a\n",
+        stderr="",
+    )
+    monkeypatch.setattr("src.updater.subprocess.run", lambda *a, **k: fake_result)
+
+    output = _powershell_diagnostics()
+
+    assert output.startswith(r"powershell=C:\Windows\System32\powershell.exe (exit 0)")
+    assert "ExecutionPolicy=[" in output
+    assert "SmartAppControl" in output
+
+
+def test_powershell_diagnostics_falls_back_to_stderr_when_stdout_empty(monkeypatch):
+    monkeypatch.setattr("src.updater.shutil.which", lambda _name: "powershell.exe")
+    fake_result = MagicMock(returncode=1, stdout="", stderr="Access is denied.")
+    monkeypatch.setattr("src.updater.subprocess.run", lambda *a, **k: fake_result)
+
+    assert "Access is denied." in _powershell_diagnostics()
+
+
+def test_powershell_diagnostics_handles_probe_failure_without_raising(monkeypatch):
+    monkeypatch.setattr("src.updater.shutil.which", lambda _name: "powershell.exe")
+
+    def _boom(*_a, **_k):
+        raise OSError("blocked")
+
+    monkeypatch.setattr("src.updater.subprocess.run", _boom)
+
+    output = _powershell_diagnostics()
+
+    assert "probe failed" in output
+    assert "blocked" in output
+
+
+def test_powershell_diagnostics_handles_timeout(monkeypatch):
+    monkeypatch.setattr("src.updater.shutil.which", lambda _name: "powershell.exe")
+
+    def _boom(*_a, **_k):
+        raise subprocess.TimeoutExpired(cmd="powershell.exe", timeout=10)
+
+    monkeypatch.setattr("src.updater.subprocess.run", _boom)
+
+    assert "probe failed" in _powershell_diagnostics()
+
+
+def test_apply_update_and_exit_logs_diagnostics_line(monkeypatch, tmp_path):
+    """The diagnostics line must be written on every attempt, success or
+    failure, so a report from the user always carries this context."""
+    monkeypatch.setattr("src.updater.installed_exe_path", lambda: tmp_path / "current.exe")
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
+    monkeypatch.setattr("src.updater._RELAUNCH_LIVENESS_CHECK_SECONDS", 0.05)
+    monkeypatch.setattr("src.updater.subprocess.Popen", lambda *a, **k: _fake_process(alive=True))
+    monkeypatch.setattr("src.updater._powershell_diagnostics", lambda: "powershell=fake stub output")
+    monkeypatch.setattr("src.updater.os._exit", MagicMock())
+
+    apply_update_and_exit(tmp_path / "new.exe", version="2.0.0")
+
+    log_text = (tmp_path / "AppData" / "hots-analytics" / "update.log").read_text()
+    assert "Diagnostics: powershell=fake stub output" in log_text
 
 
 def test_render_relaunch_script_logs_whether_relaunch_survived(tmp_path):
