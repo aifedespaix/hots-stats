@@ -8,3 +8,4 @@ export * from "./talent-picks";
 export * from "./friendships";
 export * from "./quarantine";
 export * from "./draft-pseudo-preferences";
+export * from "./daemon-ingest-errors";

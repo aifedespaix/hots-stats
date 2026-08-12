@@ -106,7 +106,8 @@ def test_ingest_file_does_not_mark_synced_on_error(tmp_path):
 
     replay_hash = hash_replay_file(bad_file)
 
-    ingest_file(client, bad_file, sync_state)
+    with patch.object(client, "post_ingest_error"):
+        ingest_file(client, bad_file, sync_state)
 
     assert sync_state.is_up_to_date(replay_hash, constants.PARSER_VERSION) is False
 
@@ -117,13 +118,70 @@ def test_ingest_file_records_error_with_traceback_for_debug_report(tmp_path):
     bad_file.write_bytes(b"not an mpq archive")
     sync_state = SyncState(tmp_path / "synced.json")
 
-    ingest_file(client, bad_file, sync_state)
+    with patch.object(client, "post_ingest_error"):
+        ingest_file(client, bad_file, sync_state)
 
     records = sync_state.get_error_records()
     assert len(records) == 1
     assert records[0].file_path == str(bad_file)
     assert records[0].error_message
     assert records[0].error_log  # full traceback for the Debug window
+
+
+def test_ingest_file_reports_error_to_api_when_sync_state_present(tmp_path):
+    """Mirrors sync_state's own local `mark_error` -- see `_report_error`
+    in ingestion.py -- so a parse failure is triageable from `GET
+    /_internal/errors` instead of only visible in this one player's own
+    Debug window."""
+    client = api_client.ApiClient(_config(tmp_path))
+    bad_file = tmp_path / "not-a-replay.StormReplay"
+    bad_file.write_bytes(b"not an mpq archive")
+    sync_state = SyncState(tmp_path / "synced.json")
+
+    with patch.object(client, "post_ingest_error") as post_ingest_error:
+        ingest_file(client, bad_file, sync_state)
+
+    post_ingest_error.assert_called_once()
+    report = post_ingest_error.call_args.args[0]
+    assert report["errorType"] == "parse"
+    assert report["baseBuild"] is None
+    assert report["errorMessage"]
+    assert report["errorLog"]
+    assert report["parserVersion"] == constants.PARSER_VERSION
+    assert report["daemonVersion"] == constants.APP_VERSION
+
+
+def test_ingest_file_does_not_report_error_to_api_without_sync_state(tmp_path):
+    """A bare `ingest_file(client, path)` call (no `sync_state`) is not the
+    real background daemon / `--resync` flow -- see `_report_error`'s
+    docstring -- so it must not trigger a network call either."""
+    client = api_client.ApiClient(_config(tmp_path))
+    bad_file = tmp_path / "not-a-replay.StormReplay"
+    bad_file.write_bytes(b"not an mpq archive")
+
+    with patch.object(client, "post_ingest_error") as post_ingest_error:
+        ingest_file(client, bad_file)
+
+    post_ingest_error.assert_not_called()
+
+
+def test_ingest_file_reports_auth_error_with_base_build(tmp_path):
+    client = api_client.ApiClient(_config(tmp_path))
+    replay = tmp_path / "game.StormReplay"
+    replay.write_bytes(b"some replay bytes")
+    sync_state = SyncState(tmp_path / "synced.json")
+
+    payload = {"replayHash": "abc", "parserVersion": constants.PARSER_VERSION, "m_baseBuild": 93943}
+    with patch("src.ingestion.replay_parser.parse_replay", return_value=payload):
+        with patch.object(client, "post_replay", side_effect=api_client.AuthError("nope")):
+            with patch.object(client, "post_ingest_error") as post_ingest_error:
+                ingest_file(client, replay, sync_state)
+
+    post_ingest_error.assert_called_once()
+    report = post_ingest_error.call_args.args[0]
+    assert report["errorType"] == "auth"
+    assert report["replayHash"] == "abc"
+    assert report["baseBuild"] == 93943
 
 
 def test_ingest_file_marks_synced_with_api_version_and_match_id(tmp_path):

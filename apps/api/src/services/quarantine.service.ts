@@ -1,5 +1,5 @@
 import { db, knownBuilds, rawReplaysQuarantine } from "@hots-stats/db";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 
 /** Inserts a raw ingestion payload for a build we don't have an adapter for yet -- see `raw_replays_quarantine`. */
 export async function quarantineRawReplay(params: {
@@ -12,6 +12,26 @@ export async function quarantineRawReplay(params: {
     rawPayload: params.rawPayload,
     uploadedByUserId: params.uploadedByUserId,
   });
+}
+
+/**
+ * One row per `baseBuild` currently holding quarantined replays, for
+ * `GET /_internal/quarantine` -- the discovery step before
+ * `GET /_internal/quarantine/:buildId` (which needs a build id to already be
+ * known) or `bun run check-build <id>` can be used at all.
+ */
+export async function getQuarantineOverview() {
+  return db
+    .select({
+      baseBuild: rawReplaysQuarantine.baseBuild,
+      pendingCount: sql<number>`count(*) filter (where ${rawReplaysQuarantine.status} = 'pending')::int`,
+      failedCount: sql<number>`count(*) filter (where ${rawReplaysQuarantine.status} = 'failed')::int`,
+      firstReceivedAt: sql<string>`min(${rawReplaysQuarantine.receivedAt})`,
+      lastReceivedAt: sql<string>`max(${rawReplaysQuarantine.receivedAt})`,
+    })
+    .from(rawReplaysQuarantine)
+    .groupBy(rawReplaysQuarantine.baseBuild)
+    .orderBy(desc(sql`max(${rawReplaysQuarantine.receivedAt})`));
 }
 
 /** Newest `limit` raw payloads quarantined for a build, for `GET /_internal/quarantine/:buildId` structure comparisons. */

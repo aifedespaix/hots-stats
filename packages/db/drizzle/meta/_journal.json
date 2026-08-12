@@ -43,6 +43,13 @@
       "when": 1786529362063,
       "tag": "0005_nifty_the_spike",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786541229456,
+      "tag": "0006_late_frank_castle",
+      "breakpoints": true
     }
   ]
 }
