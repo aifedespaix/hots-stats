@@ -493,3 +493,69 @@ def test_render_relaunch_script_includes_paths_version_and_retry_logic(tmp_path)
     assert "[v2.0.0]" in script
     assert "for ($attempt = 1; $attempt -le 10; $attempt++)" in script
     assert "Start-Process -FilePath" in script
+
+
+def test_render_relaunch_script_falls_back_to_previous_version_on_copy_failure(tmp_path):
+    """The bug this guards against: if Copy-Item never succeeds (e.g. a
+    lingering antivirus lock on the freshly-downloaded build), the app must
+    not just stay closed -- it should relaunch the untouched previous
+    version instead, so a failed update degrades to "still on the old
+    version" rather than "gone until the user notices and manually reruns
+    an old installer"."""
+    script = _render_relaunch_script(
+        pid=1234,
+        new_exe=tmp_path / "new.exe",
+        current_exe=tmp_path / "current.exe",
+        script_path=tmp_path / "script.ps1",
+        log_path=tmp_path / "update.log",
+        version="2.0.0",
+    )
+
+    assert "function Relaunch(" in script
+    assert "if ($copied) {" in script
+    assert "} else {" in script
+    # Both the success and failure branches must call the same relaunch
+    # helper against the (single, always-valid) current_exe path.
+    assert script.count(f"Relaunch '{tmp_path / 'current.exe'}'") == 2
+    assert "could not replace the running executable" in script
+
+
+def test_render_relaunch_script_unblocks_before_relaunching(tmp_path):
+    """`Start-Process` with a bare -FilePath goes through the same
+    ShellExecute path as an Explorer double-click, so a Mark-of-the-Web left
+    over on the installed .exe (it usually lives wherever the user's browser
+    first downloaded it) could silently reproduce the SmartScreen prompt on
+    every self-relaunch. Stripping it first avoids that regardless of where
+    the installed .exe lives."""
+    script = _render_relaunch_script(
+        pid=1234,
+        new_exe=tmp_path / "new.exe",
+        current_exe=tmp_path / "current.exe",
+        script_path=tmp_path / "script.ps1",
+        log_path=tmp_path / "update.log",
+        version="2.0.0",
+    )
+
+    assert "Unblock-File -LiteralPath $exePath" in script
+
+
+def test_render_relaunch_script_path_arguments_are_single_quoted(tmp_path):
+    """Paths are interpolated with single quotes, not double quotes: a `$`
+    in a username or folder name is valid on Windows but is PowerShell
+    variable-expansion syntax inside a double-quoted string, which would
+    silently corrupt the path."""
+    current_exe = tmp_path / "current.exe"
+    new_exe = tmp_path / "new.exe"
+    script = _render_relaunch_script(
+        pid=1234,
+        new_exe=new_exe,
+        current_exe=current_exe,
+        script_path=tmp_path / "script.ps1",
+        log_path=tmp_path / "update.log",
+        version="2.0.0",
+    )
+
+    assert f"'{current_exe}'" in script
+    assert f'"{current_exe}"' not in script
+    assert f"'{new_exe}'" in script
+    assert f'"{new_exe}"' not in script
