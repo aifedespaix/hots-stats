@@ -7,6 +7,7 @@ from src.api_client import (
     ApiClient,
     ApiClientError,
     AuthError,
+    QuarantinedError,
     ValidationError,
     fetch_summary,
     fetch_version,
@@ -71,6 +72,18 @@ def test_post_replay_validation_error_not_retried(tmp_path):
             client.post_replay({"replayHash": "abc"})
 
     assert exc_info.value.detail == {"error": {"fieldErrors": {"map": ["Required"]}}}
+    post.assert_called_once()
+
+
+def test_post_replay_quarantined_raises_and_not_retried(tmp_path):
+    client = ApiClient(_config(tmp_path))
+    quarantined = _response(202, {"quarantined": True, "baseBuild": 93943})
+
+    with patch.object(client._session, "post", return_value=quarantined) as post:
+        with pytest.raises(QuarantinedError) as exc_info:
+            client.post_replay({"replayHash": "abc"})
+
+    assert exc_info.value.base_build == 93943
     post.assert_called_once()
 
 

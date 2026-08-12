@@ -241,6 +241,33 @@ def test_ingest_file_reports_auth_error_with_base_build(tmp_path):
     assert report["baseBuild"] == 93943
 
 
+def test_ingest_file_quarantined_returns_error_outcome_without_reporting_error(tmp_path):
+    """Regression test for the KeyError('upserted') crash: the server
+    quarantines replays whose game build isn't verified yet (202 with
+    `{quarantined: true, baseBuild}`, no `upserted`/`matchId` keys) instead
+    of ingesting them. That must come back as a clear, retryable error --
+    not an unhandled KeyError -- and must not double-report the failure via
+    `_report_error`, since the server already recorded it server-side as
+    part of quarantining it (see `raw_replays_quarantine`)."""
+    client = api_client.ApiClient(_config(tmp_path))
+    replay = tmp_path / "game.StormReplay"
+    replay.write_bytes(b"some replay bytes")
+    sync_state = SyncState(tmp_path / "synced.json")
+
+    payload = {"replayHash": "abc", "parserVersion": constants.PARSER_VERSION, "m_baseBuild": 93943}
+    with patch("src.ingestion.replay_parser.parse_replay", return_value=payload):
+        with patch.object(client, "post_replay", side_effect=api_client.QuarantinedError("quarantined", 93943)):
+            with patch.object(client, "post_ingest_error") as post_ingest_error:
+                outcome = ingest_file(client, replay, sync_state)
+
+    assert outcome.status == "error"
+    post_ingest_error.assert_not_called()
+    records = sync_state.get_error_records()
+    assert len(records) == 1
+    assert records[0].replay_hash == "abc"
+    assert sync_state.is_up_to_date("abc", constants.PARSER_VERSION) is False
+
+
 def test_ingest_file_marks_synced_with_api_version_and_match_id(tmp_path):
     client = api_client.ApiClient(_config(tmp_path))
     replay = tmp_path / "game.StormReplay"

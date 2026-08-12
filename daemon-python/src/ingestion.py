@@ -163,6 +163,19 @@ def ingest_file(
             message=str(err),
         )
         return IngestOutcome("error", str(err))
+    except api_client.QuarantinedError as err:
+        # The server already recorded this replay server-side for review
+        # (`raw_replays_quarantine`, see apps/api/src/services/
+        # quarantine.service.ts) as part of returning this response --
+        # forwarding it again via `_report_error` would just duplicate that
+        # under a misleading "server error" label with a less complete copy
+        # (no raw payload), so unlike the branches below this deliberately
+        # skips it. Still recorded locally via `mark_error` so it's retried
+        # automatically once the build is verified server-side.
+        logger.warning("%s: %s", path, err)
+        if sync_state is not None:
+            sync_state.mark_error(payload["replayHash"], str(path), str(err), traceback.format_exc())
+        return IngestOutcome("error", str(err))
     except api_client.ValidationError as err:
         logger.error("Server rejected %s: %s (detail: %s)", path, err, err.detail)
         message = f"{err} ({err.detail})"
