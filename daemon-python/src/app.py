@@ -74,6 +74,8 @@ def _sync_api_version(config: Config, sync_state: SyncState) -> str | None:
     reports a `minParserVersion`, drops the local "already synced" record
     for anything synced below it (see `SyncState.invalidate_stale`) so it
     gets reparsed and re-uploaded on this run instead of being skipped.
+    Also checks `dataResetAt` (see below) for the same "reprocess
+    everything" trigger, scoped to this account instead of every daemon.
 
     This is deliberately API-driven rather than daemon-driven: the daemon
     never decides on its own to "resync everything", it only ever reacts to
@@ -97,6 +99,29 @@ def _sync_api_version(config: Config, sync_state: SyncState) -> str | None:
                 min_parser_version,
                 invalidated,
             )
+
+    # `dataResetAt` is set once this account ever uses "Réinitialiser mes
+    # données" in the Settings page (POST /auth/me/reset-data): every match
+    # they'd uploaded is gone server-side, so the local cache of "already
+    # synced" replays is now entirely wrong -- not just stale for some -- and
+    # must be dropped wholesale rather than filtered by version. Compared
+    # against the last value *this daemon install* has seen (`meta` table),
+    # not simply "is it set", so a) a fresh install with nothing to wipe
+    # doesn't bother, and b) each account only triggers one wipe per reset,
+    # not one on every single startup thereafter.
+    data_reset_at = info.get("dataResetAt")
+    if data_reset_at:
+        last_seen_reset_at = sync_state.get_meta("data_reset_at")
+        if last_seen_reset_at is not None and last_seen_reset_at != data_reset_at:
+            wiped = sync_state.wipe_all()
+            logger.info(
+                "Account data was reset (%s): %d local replay record(s) cleared, "
+                "everything will be reparsed and re-uploaded from disk.",
+                data_reset_at,
+                wiped,
+            )
+        sync_state.set_meta("data_reset_at", data_reset_at)
+
     if api_version:
         sync_state.set_meta("api_version", api_version)
     return api_version

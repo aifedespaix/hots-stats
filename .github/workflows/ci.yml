@@ -25,3 +25,26 @@ jobs:
         run: bun run build
         env:
           NUXT_PUBLIC_API_BASE: http://localhost:3001
+
+  daemon-tests:
+    # Separate from `build` (and from build-daemon.yml's Windows/Nuitka
+    # release build, which never runs pytest) so a daemon regression shows
+    # up as a fast, ordinary CI failure on every push/PR that touches
+    # daemon-python -- not just when someone remembers to run pytest by
+    # hand, and without waiting on a full Windows compile.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: daemon-python
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install daemon + dev dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run tests
+        run: pytest -q

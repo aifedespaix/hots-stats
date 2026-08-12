@@ -461,6 +461,14 @@ def build_payload(
     duration_seconds = max(0, round((header["m_elapsedGameLoops"] - gates_open_loop) / _GAMELOOPS_PER_SECOND))
 
     return {
+        # Blizzard's own field name, kept as-is (not camelCased) since
+        # that's what `POST /ingest` reads at the payload root to route
+        # through the quarantine/adapter system for builds `DefaultAdapter`
+        # hasn't been confirmed compatible with yet (see
+        # apps/api/src/routes/ingest.ts and adapters/registry.ts). Dropped
+        # silently by `replayPayloadSchema` itself (no `.strict()`), so
+        # sending it doesn't affect normal ingestion.
+        "m_baseBuild": header["m_version"]["m_baseBuild"],
         "replayHash": replay_hash,
         "parserVersion": constants.PARSER_VERSION,
         "map": _slugify(map_display_name),

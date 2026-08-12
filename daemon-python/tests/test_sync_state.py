@@ -110,6 +110,26 @@ def test_invalidate_stale_is_noop_when_nothing_stale(tmp_path):
     assert state.is_up_to_date("new", "1.1") is True
 
 
+def test_wipe_all_clears_synced_and_error_records(tmp_path):
+    state = SyncState(tmp_path / "sync_state.db")
+    state.mark_synced("synced-one", "1.1", file_path="a")
+    state.mark_synced("synced-two", "1.1", file_path="b")
+    state.mark_error("errored", "c", "boom")
+
+    wiped = state.wipe_all()
+
+    assert wiped == 3
+    assert state.is_up_to_date("synced-one", "1.0") is False
+    assert state.is_up_to_date("synced-two", "1.0") is False
+    assert state.get_error_records() == []
+
+
+def test_wipe_all_is_noop_on_empty_state(tmp_path):
+    state = SyncState(tmp_path / "sync_state.db")
+
+    assert state.wipe_all() == 0
+
+
 def test_refresh_file_existence_flags_missing_source_files(tmp_path):
     state = SyncState(tmp_path / "sync_state.db")
     state.mark_synced("abc", "1.0", file_path="C:\\replays\\a.StormReplay")

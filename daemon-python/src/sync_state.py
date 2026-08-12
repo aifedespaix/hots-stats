@@ -228,6 +228,24 @@ class SyncState:
                 self._conn.commit()
         return len(stale)
 
+    def wipe_all(self) -> int:
+        """Drops every "synced"/"error" record, regardless of parser version
+        -- unlike `invalidate_stale`, which only drops entries older than a
+        given version. Every replay still on disk is reparsed and
+        re-uploaded from scratch on the next pass.
+
+        Used when the API reports a new `dataResetAt` for this account (see
+        `app.py`'s `_sync_api_version`): the server-side matches are already
+        gone at that point, so there's nothing version-comparison could
+        preserve -- the local cache just needs to match reality again.
+        Returns how many rows were dropped, for the log line callers emit.
+        """
+        with self._lock:
+            row = self._conn.execute("SELECT COUNT(*) FROM replays").fetchone()
+            self._conn.execute("DELETE FROM replays")
+            self._conn.commit()
+        return row[0] if row else 0
+
     # -- file existence ----------------------------------------------------
 
     def refresh_file_existence(self, existing_paths: set[str]) -> None:
