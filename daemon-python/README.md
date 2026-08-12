@@ -105,6 +105,17 @@ refreshes, per tracked replay, whether its source file is still present on
 disk (`SyncState.refresh_file_existence`), so a moved/deleted replay shows
 up as such in the Debug report instead of just going stale silently.
 
+The same `GET /ingest/version` response also carries `dataResetAt`: set
+once an account uses **Réinitialiser mes données** in the web app's
+Settings page (Zone dangereuse), which wipes every match that account
+uploaded server-side. When `_sync_api_version` sees this value change from
+what it last saw (`SyncState.wipe_all`), it drops the *entire* local sync
+cache — not just entries below some version — since the server has nothing
+left to compare against; every `.StormReplay` still on disk gets reparsed
+and re-uploaded from scratch on this run. Only replays whose file has since
+been deleted from disk are lost for good — the button warns about this in
+the UI.
+
 ## Auto-update
 
 The packaged `.exe` checks GitHub Releases for a newer daemon build shortly

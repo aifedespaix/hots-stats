@@ -138,6 +138,53 @@ async function revokeToken(id: string) {
   });
   await refreshTokens();
 }
+
+// -- "Zone dangereuse" : réinitialisation des données -----------------------
+//
+// Efface toutes les parties uploadées par ce compte (base de données), et
+// stampe `dataResetAt` côté serveur pour que le démon (GET /ingest/version)
+// sache qu'il doit tout resynchroniser depuis les fichiers .StormReplay
+// encore présents sur le disque au prochain démarrage. Confirmation par
+// saisie du mot "SUPPRIMER" : action irréversible côté serveur (les parties
+// dont le .StormReplay a été supprimé du disque ne pourront pas être
+// recréées).
+const RESET_CONFIRM_WORD = "SUPPRIMER";
+const resetModalOpen = ref(false);
+const resetConfirmText = ref("");
+const resetting = ref(false);
+const resetError = ref("");
+const resetResult = ref<{ deletedMatches: number } | null>(null);
+
+const canConfirmReset = computed(
+  () => resetConfirmText.value.trim().toUpperCase() === RESET_CONFIRM_WORD,
+);
+
+function openResetModal() {
+  resetConfirmText.value = "";
+  resetError.value = "";
+  resetResult.value = null;
+  resetModalOpen.value = true;
+}
+
+async function confirmReset() {
+  if (!canConfirmReset.value) return;
+  resetting.value = true;
+  resetError.value = "";
+  try {
+    const res = await $fetch<{ deletedMatches: number; dataResetAt: string }>("/auth/me/reset-data", {
+      method: "POST",
+      baseURL: config.public.apiBase,
+      credentials: "include",
+    });
+    resetResult.value = { deletedMatches: res.deletedMatches };
+    resetModalOpen.value = false;
+  } catch (err) {
+    resetError.value =
+      (err as { data?: { error?: string } })?.data?.error ?? "Erreur lors de la réinitialisation";
+  } finally {
+    resetting.value = false;
+  }
+}
 </script>
 
 <template>
@@ -233,5 +280,51 @@ async function revokeToken(id: string) {
         <UButton block class="sm:w-auto" @click="createToken">Générer</UButton>
       </div>
     </section>
+
+    <section class="space-y-4 rounded-lg border border-danger p-4 sm:p-6">
+      <h2 class="font-heading text-lg text-danger">Zone dangereuse</h2>
+      <p class="text-sm text-muted">
+        Des parties mal enregistrées (mauvais héros, mode de jeu incorrect...) ? En général c'est un bug
+        du parser déjà corrigé côté démon - il suffit de le relancer pour qu'il resynchronise tout. Si
+        certaines parties restent incohérentes, tu peux repartir de zéro : ça supprime toutes les parties
+        que <strong>tu as uploadées</strong> (pas celles de tes amis) et demande à ton démon de tout
+        renvoyer depuis les fichiers <code class="font-mono text-xs">.StormReplay</code> encore présents
+        sur ton disque.
+      </p>
+      <p class="text-sm text-muted">
+        <strong>Important :</strong> seules les parties dont le fichier replay existe encore localement
+        peuvent être recréées. Le démon ne resynchronise qu'à son prochain démarrage - quitte-le puis
+        relance-le après confirmation.
+      </p>
+
+      <div v-if="resetResult" class="rounded-md border border-border bg-surface p-4 text-sm">
+        {{ resetResult.deletedMatches }} partie(s) supprimée(s). Relance le démon (icône dans la zone de
+        notification &rarr; Quitter, puis relance-le) pour qu'il resynchronise tes parties.
+      </div>
+      <p v-if="resetError" class="text-sm text-danger">{{ resetError }}</p>
+
+      <UButton color="red" variant="outline" @click="openResetModal">Réinitialiser mes données</UButton>
+    </section>
+
+    <UModal v-model="resetModalOpen">
+      <div class="p-6">
+        <h2 class="font-heading text-lg font-semibold text-danger">Réinitialiser mes données</h2>
+        <p class="mt-2 text-sm text-muted">
+          Cette action supprime définitivement toutes les parties que tu as uploadées. Les parties dont le
+          fichier <code class="font-mono text-xs">.StormReplay</code> n'existe plus sur ton disque seront
+          perdues pour de bon.
+        </p>
+        <p class="mt-4 text-sm">
+          Tape <strong>{{ RESET_CONFIRM_WORD }}</strong> pour confirmer :
+        </p>
+        <UInput v-model="resetConfirmText" class="mt-2" placeholder="SUPPRIMER" />
+        <div class="mt-6 flex justify-end gap-2">
+          <UButton variant="ghost" @click="resetModalOpen = false">Annuler</UButton>
+          <UButton color="red" :disabled="!canConfirmReset" :loading="resetting" @click="confirmReset">
+            Confirmer la suppression
+          </UButton>
+        </div>
+      </div>
+    </UModal>
   </div>
 </template>

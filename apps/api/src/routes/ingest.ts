@@ -36,7 +36,18 @@ export const ingestRoute = new Hono<Env>()
     // app.py's `_sync_api_version`) so *the API* -- not the daemon -- gets
     // to decide when previously-synced replays need reprocessing, and
     // shown as-is in the settings window (gui.py).
-    return c.json({ apiVersion: API_VERSION, minParserVersion: MIN_PARSER_VERSION });
+    //
+    // `dataResetAt` is the same idea scoped to one account instead of every
+    // daemon: null until this user ever hits "Réinitialiser mes données" in
+    // Settings (see routes/auth.ts's POST /me/reset-data), after which the
+    // daemon drops ALL of its local sync state (not just stale entries) so
+    // every replay still on disk gets reparsed and re-uploaded from scratch.
+    const user = c.get("user");
+    return c.json({
+      apiVersion: API_VERSION,
+      minParserVersion: MIN_PARSER_VERSION,
+      dataResetAt: user.dataResetAt ? user.dataResetAt.toISOString() : null,
+    });
   })
   .post("/", async (c) => {
     const body = await c.req.json().catch(() => null);

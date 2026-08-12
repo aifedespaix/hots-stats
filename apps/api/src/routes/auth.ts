@@ -10,6 +10,7 @@ import { google } from "../lib/oauth";
 import { SESSION_COOKIE_MAX_AGE, SESSION_COOKIE_NAME, createSessionToken } from "../lib/session";
 import { authSession, requireUser } from "../middleware/auth-session";
 import { authToken } from "../middleware/auth-token";
+import { resetUserData } from "../services/data-reset.service";
 
 const OAUTH_STATE_COOKIE = "hots_oauth_state";
 const OAUTH_VERIFIER_COOKIE = "hots_oauth_verifier";
@@ -196,4 +197,18 @@ export const authRoute = new Hono()
   .get("/verify-token", authToken, (c) => {
     const user = c.get("user");
     return c.json({ user: toPublicUser(user) });
+  })
+  // "Zone dangereuse" of the Settings page: deletes every match this account
+  // uploaded and stamps `dataResetAt` so the daemon (see GET /ingest/version)
+  // knows to forget its local sync state and re-upload everything from the
+  // `.StormReplay` files still on disk -- the escape hatch for corrupted
+  // history left over from a since-fixed parser bug.
+  .post("/me/reset-data", authSession, requireUser, async (c) => {
+    const user = c.get("user");
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const { deletedMatches, dataResetAt } = await resetUserData(user.id);
+    return c.json({ deletedMatches, dataResetAt: dataResetAt.toISOString() });
   });

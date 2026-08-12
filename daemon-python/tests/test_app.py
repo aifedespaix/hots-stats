@@ -109,6 +109,53 @@ def test_sync_api_version_keeps_replays_at_or_above_min_version(tmp_path):
     assert sync_state.is_up_to_date("current", "1.1") is True
 
 
+def test_sync_api_version_ignores_data_reset_at_on_first_sighting(tmp_path):
+    """A daemon that has never seen a `dataResetAt` before (fresh install,
+    or an account that has never used the reset button) must not wipe its
+    (already-empty, in the fresh-install case) local state -- only a
+    *change* from a previously-seen value should trigger a wipe."""
+    sync_state = SyncState(tmp_path / "sync_state.db")
+    sync_state.mark_synced("old", "1.0", file_path="a")
+
+    with patch(
+        "src.app.api_client.fetch_version",
+        return_value={"apiVersion": "1.5.0", "minParserVersion": "1.0", "dataResetAt": "2026-08-12T10:00:00Z"},
+    ):
+        _sync_api_version(_config(tmp_path), sync_state)
+
+    assert sync_state.is_up_to_date("old", "1.0") is True
+    assert sync_state.get_meta("data_reset_at") == "2026-08-12T10:00:00Z"
+
+
+def test_sync_api_version_wipes_everything_when_data_reset_at_changes(tmp_path):
+    sync_state = SyncState(tmp_path / "sync_state.db")
+    sync_state.mark_synced("old", "1.0", file_path="a")
+    sync_state.set_meta("data_reset_at", "2026-08-01T10:00:00Z")
+
+    with patch(
+        "src.app.api_client.fetch_version",
+        return_value={"apiVersion": "1.5.0", "minParserVersion": "1.0", "dataResetAt": "2026-08-12T10:00:00Z"},
+    ):
+        _sync_api_version(_config(tmp_path), sync_state)
+
+    assert sync_state.is_up_to_date("old", "1.0") is False
+    assert sync_state.get_meta("data_reset_at") == "2026-08-12T10:00:00Z"
+
+
+def test_sync_api_version_does_not_rewipe_on_unchanged_data_reset_at(tmp_path):
+    sync_state = SyncState(tmp_path / "sync_state.db")
+    sync_state.set_meta("data_reset_at", "2026-08-12T10:00:00Z")
+    sync_state.mark_synced("current", "1.0", file_path="a")
+
+    with patch(
+        "src.app.api_client.fetch_version",
+        return_value={"apiVersion": "1.5.0", "minParserVersion": "1.0", "dataResetAt": "2026-08-12T10:00:00Z"},
+    ):
+        _sync_api_version(_config(tmp_path), sync_state)
+
+    assert sync_state.is_up_to_date("current", "1.0") is True
+
+
 def _wait_until(predicate, timeout: float = 2.0) -> None:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:

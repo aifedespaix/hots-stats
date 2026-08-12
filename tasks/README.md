@@ -121,13 +121,55 @@ rappelle donc le contexte nécessaire plutôt que de supposer une continuité.
   vrai changement de structure surviendra, cf. `daemon-python/src/parser.py`
   qui a déjà `header["m_version"]["m_baseBuild"]` sous la main.
 
+- **Epic 8 — Réparation des données corrompues & resync piloté par
+  compte** : suite de l'Epic 7, deux angles complémentaires pour des
+  parties mal enregistrées (mauvais héros, mode incorrect...).
+  1. Le daemon (`parser.py`) envoie désormais `m_baseBuild` à la racine du
+     payload (`header["m_version"]["m_baseBuild"]`, silencieusement ignoré
+     par `replayPayloadSchema` qui n'a pas de `.strict()`) -- jusqu'ici
+     c'était le seul chaînon manquant de l'Epic 7 : le système de
+     quarantaine/adaptateurs existait côté API mais ne s'activait jamais
+     puisque le daemon ne transmettait pas le build. Un futur changement de
+     structure de replay sera donc mis en quarantaine (202) au lieu d'être
+     silencieusement mal-parsé et inséré tel quel.
+  2. Nouveau bouton "Réinitialiser mes données" dans `pages/settings/index.vue`
+     (section "Zone dangereuse", confirmation par saisie du mot
+     "SUPPRIMER") : `POST /auth/me/reset-data`
+     (`services/data-reset.service.ts`) supprime toutes les `matches` dont
+     `uploadedByUserId` est le compte connecté (cascade vers
+     `match_players`/`talent_picks`) et stamp `users.dataResetAt`
+     (migration `0005_nifty_the_spike.sql`). `GET /ingest/version` expose
+     ce timestamp ; `app.py`'s `_sync_api_version` compare avec la dernière
+     valeur vue (`sync_state.meta`) et appelle le nouveau
+     `SyncState.wipe_all()` (par opposition à `invalidate_stale`, qui ne
+     filtre que par version) si elle a changé -- toute la file locale
+     "déjà synchronisé" est vidée en une fois, donc chaque `.StormReplay`
+     encore sur le disque est reparsé et ré-uploadé au prochain démarrage
+     du démon. Seules les parties dont le fichier replay a été supprimé du
+     disque sont perdues (annoncé dans l'UI).
+  3. `ci.yml` fait maintenant tourner la suite pytest du daemon
+     (`daemon-tests`, ubuntu-latest) à chaque push/PR -- jusqu'ici les 173
+     tests existants ne tournaient nulle part en CI, seul
+     `build-daemon.yml` (Windows/Nuitka, un `--help` en guise de smoke
+     test) gérait le daemon, et uniquement sur push vers `main`.
+  Note pour la suite : `PARSER_VERSION` n'a volontairement pas été bumpé
+  (l'ajout de `m_baseBuild` ne change rien pour les parties déjà correctes
+  en base) ; `daemon-python`'s `pyproject.toml`/`APP_VERSION` non plus --
+  `build-daemon.yml` bump et tag automatiquement au prochain push sur
+  `main` touchant `daemon-python/**`, donc rien à faire à la main pour
+  publier une nouvelle release une fois mergé.
+
 ## À faire
 
 Tous les epics du roadmap initial (1 à 6) sont marqués comme faits
 ci-dessus. Prochaines pistes possibles, à transformer en brief si besoin :
 stats communautaires globales, timeline temporelle de partie (nécessite
 d'étendre le parser de l'Epic 3), vérification end-to-end du CI/CD daemon
-sur un vrai runner Windows (cf. note Epic 4).
+sur un vrai runner Windows (cf. note Epic 4). Aussi identifié pendant
+l'Epic 8 : pas de bouton/CLI équivalent pour la quarantaine côté admin
+(actuellement `bun run check-build` seulement, en ligne de commande) --
+utile si un nouveau build HotS pose problème avant qu'on ait le temps
+d'écrire un adaptateur sur-mesure.
 
 Une fois un Epic terminé dans sa session, mettre à jour ce README (cocher
 dans "Déjà fait") avant de lancer le suivant.

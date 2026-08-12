@@ -205,8 +205,8 @@ def _battletags() -> dict[str, str]:
     return {"1-Hero-1-1001": "Foo#1111", "1-Hero-1-1002": "Bar#2222"}
 
 
-def _header(elapsed_loops: int) -> dict:
-    return {"m_elapsedGameLoops": elapsed_loops}
+def _header(elapsed_loops: int, base_build: int = 12345) -> dict:
+    return {"m_elapsedGameLoops": elapsed_loops, "m_version": {"m_baseBuild": base_build}}
 
 
 def test_build_payload_happy_path():
@@ -221,6 +221,7 @@ def test_build_payload_happy_path():
     )
 
     assert payload["replayHash"] == "a" * 64
+    assert payload["m_baseBuild"] == 12345
     assert payload["map"] == "cursed-hollow"
     assert payload["gameMode"] == "QuickMatch"
     assert payload["region"] == "1"
