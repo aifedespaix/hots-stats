@@ -42,6 +42,7 @@ from .config import (
     save_config,
 )
 from .constants import APP_VERSION
+from .draft_capture import CapturePhase, DraftCaptureCoordinator
 from .status import StatusTracker
 from .sync_state import SyncState
 from .updater import UpdatePhase, UpdateStatus, UpdateStatusTracker
@@ -149,6 +150,7 @@ def run_settings_window(
     status_tracker: StatusTracker | None = None,
     sync_state: SyncState | None = None,
     update_status: UpdateStatusTracker | None = None,
+    draft_capture_status: DraftCaptureCoordinator | None = None,
 ) -> bool:
     """Opens the settings window and blocks (on the calling thread) until
     it's closed. Returns True if the user saved a valid configuration.
@@ -159,7 +161,8 @@ def run_settings_window(
     fetched from the API. `sync_state`, same condition, backs the Debug
     button's error report. `update_status`, same condition, backs the
     Update tab's live progress and lets its "Vérifier les mises à jour"
-    button report back to something.
+    button report back to something. `draft_capture_status`, same
+    condition, backs the Draft Live tab's "capture in progress" indicator.
     """
     result = {"saved": False}
     root = tk.Tk()
@@ -170,6 +173,7 @@ def run_settings_window(
         status_tracker=status_tracker,
         sync_state=sync_state,
         update_status=update_status,
+        draft_capture_status=draft_capture_status,
     )
     root.mainloop()
     return result["saved"]
@@ -312,6 +316,7 @@ class _SettingsWindow:
         status_tracker: StatusTracker | None = None,
         sync_state: SyncState | None = None,
         update_status: UpdateStatusTracker | None = None,
+        draft_capture_status: DraftCaptureCoordinator | None = None,
     ) -> None:
         self._root = root
         self._is_first_run = is_first_run
@@ -319,9 +324,11 @@ class _SettingsWindow:
         self._status_tracker = status_tracker
         self._sync_state = sync_state
         self._update_status = update_status
+        self._draft_capture_status = draft_capture_status
         self._debounce_job: str | None = None
         self._live_stats_job: str | None = None
         self._update_status_job: str | None = None
+        self._draft_capture_status_job: str | None = None
         self._hotkey_capturing = False
 
         root.title("HotS Analytics — Configuration")
@@ -348,6 +355,8 @@ class _SettingsWindow:
             # see `_build_ui` -- so this must stay in sync with that guard.
             if updater.IS_FROZEN and self._update_status is not None:
                 self._refresh_update_status()
+            if self._draft_capture_status is not None:
+                self._refresh_draft_capture_status()
 
         root.after(50, lambda: self._api_entry.focus_set())
 
@@ -577,6 +586,17 @@ class _SettingsWindow:
             justify="left",
         ).grid(row=4, column=0, columnspan=3, sticky="w", pady=(10, 0))
 
+        if self._draft_capture_status is not None:
+            self._draft_capture_animating = False
+            self._draft_capture_status_label = ttk.Label(inner, text="", style="PanelMuted.TLabel")
+            self._draft_capture_status_label.grid(row=5, column=0, columnspan=3, sticky="w", pady=(14, 4))
+            self._draft_capture_progress_bar = ttk.Progressbar(
+                inner, orient="horizontal", length=200, mode="indeterminate"
+            )
+            # Not gridded here -- only shown while a capture is actually in
+            # progress (see _refresh_draft_capture_status), so idle time
+            # (almost always) doesn't show an empty bar doing nothing.
+
     def _on_draft_enabled_toggled(self) -> None:
         state = "normal" if self._draft_enabled_var.get() else "disabled"
         self._draft_hotkey_record_btn.configure(state=state)
@@ -646,6 +666,33 @@ class _SettingsWindow:
 
         self._draft_hotkey_var.set(normalized)
         self._check_draft_hotkey()
+
+    def _refresh_draft_capture_status(self) -> None:
+        """Polled while the window is open (see `__init__`/`_on_close`) so a
+        hotkey-triggered capture is visible instead of the screenshot +
+        crop + OCR + upload happening invisibly in the fraction of a second
+        it takes -- there was previously no feedback at all beyond whatever
+        eventually shows up on the dashboard's Live Draft page, which
+        looked identical whether the hotkey had done nothing or was still
+        working."""
+        assert self._draft_capture_status is not None
+        status = self._draft_capture_status.snapshot()
+
+        if status.phase is CapturePhase.IDLE:
+            if self._draft_capture_animating:
+                self._draft_capture_animating = False
+                self._draft_capture_progress_bar.stop()
+                self._draft_capture_progress_bar.grid_remove()
+            self._draft_capture_status_label.configure(text="")
+        else:
+            if not self._draft_capture_animating:
+                self._draft_capture_animating = True
+                self._draft_capture_progress_bar.grid(row=6, column=0, columnspan=3, sticky="ew")
+                self._draft_capture_progress_bar.start(12)
+            text = "Capture en cours…" if status.phase is CapturePhase.CAPTURING else "Envoi de la capture…"
+            self._draft_capture_status_label.configure(text=text)
+
+        self._draft_capture_status_job = self._root.after(_LIVE_STATS_POLL_MS, self._refresh_draft_capture_status)
 
     # -- Synchronisation tab ------------------------------------------------
 
@@ -1062,16 +1109,31 @@ class _SettingsWindow:
             )
         if hasattr(self, "_update_status_label"):
             placeholders.append((self._update_status_label, "x" * _UPDATE_STATUS_MAX_CHARS))
+        if self._draft_capture_status is not None:
+            # Not unbounded external text like the others above (only ever
+            # one of two short fixed phrases -- see
+            # `_refresh_draft_capture_status`), so the longer of the two is
+            # its own worst case, no "x"*N filler needed.
+            placeholders.append((self._draft_capture_status_label, "Envoi de la capture…"))
 
         originals = [(label, label.cget("text")) for label, _ in placeholders]
         for label, placeholder in placeholders:
             label.configure(text=placeholder)
+
+        # The progress bar itself is normally hidden (grid_remove'd) until a
+        # capture starts -- briefly showing it here too means its height is
+        # already accounted for in the locked window size, so the window
+        # doesn't need to grow the first time a real capture actually shows it.
+        if self._draft_capture_status is not None:
+            self._draft_capture_progress_bar.grid(row=6, column=0, columnspan=3, sticky="ew")
 
         self._root.update_idletasks()
         width, height = self._root.winfo_reqwidth(), self._root.winfo_reqheight()
 
         for label, original in originals:
             label.configure(text=original)
+        if self._draft_capture_status is not None:
+            self._draft_capture_progress_bar.grid_remove()
 
         return width, height
 
@@ -1127,6 +1189,9 @@ class _SettingsWindow:
         if self._update_status_job is not None:
             self._root.after_cancel(self._update_status_job)
             self._update_status_job = None
+        if self._draft_capture_status_job is not None:
+            self._root.after_cancel(self._draft_capture_status_job)
+            self._draft_capture_status_job = None
 
     def _on_close(self) -> None:
         if self._is_first_run:

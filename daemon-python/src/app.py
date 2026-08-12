@@ -146,21 +146,32 @@ class _DaemonRunner:
         self.status = StatusTracker()
         self.sync_state: SyncState | None = None
         # `_client` is swapped by every `start()` call; the hotkey manager
-        # itself is built once and kept for the app's whole lifetime so
-        # settings-window rebinds (`start()` again with a new hotkey) just
-        # re-register on the same instance instead of leaking a new one.
+        # and draft-capture coordinator are built once and kept for the
+        # app's whole lifetime so settings-window rebinds (`start()` again
+        # with a new hotkey) just re-register on the same instances instead
+        # of leaking new ones -- and so the coordinator's "is this the most
+        # recent capture" generation counter survives across rebinds too.
         self._client: api_client.ApiClient | None = None
         self.hotkey_manager = hotkey.HotkeyManager(on_trigger=self._trigger_draft_capture)
+        self.draft_capture_status = draft_capture.DraftCaptureCoordinator()
 
     def _trigger_draft_capture(self) -> None:
         # Runs on `keyboard`'s own internal dispatch thread -- handing off
         # to a fresh thread immediately keeps a slow capture (screenshot +
-        # OCR) from delaying that thread's next keystroke.
+        # OCR) from delaying that thread's next keystroke. Pressing the
+        # hotkey again before this thread finishes doesn't queue up a
+        # second one behind it -- both run, but `draft_capture_status`
+        # makes the older one notice it's been superseded and bail instead
+        # of finishing after (and overwriting) the newer one.
         client = self._client
         if client is None:
             return
         threading.Thread(
-            target=draft_capture.capture_and_submit, args=(client,), name="hots-draft-capture", daemon=True
+            target=draft_capture.capture_and_submit,
+            args=(client,),
+            kwargs={"coordinator": self.draft_capture_status},
+            name="hots-draft-capture",
+            daemon=True,
         ).start()
 
     def start(self, config: Config) -> None:
@@ -265,6 +276,7 @@ def run_app() -> int:
             status_tracker=daemon.status,
             sync_state=daemon.sync_state,
             update_status=update_status,
+            draft_capture_status=daemon.draft_capture_status,
         ):
             try:
                 new_config = load_config()

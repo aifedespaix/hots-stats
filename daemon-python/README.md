@@ -109,6 +109,39 @@ so one bad crop degrades that one slot instead of the whole capture. The
 feature can be turned off entirely from the settings window — rebinding
 takes effect on save, no restart needed.
 
+While the settings window is open, its Draft Live tab shows a short
+"Capture en cours… / Envoi de la capture…" progress indicator while a
+hotkey press is being processed (`draft_capture.DraftCaptureCoordinator`,
+polled by `gui.py`'s `_refresh_draft_capture_status`) — there was
+previously no feedback at all beyond whatever eventually shows up on the
+dashboard. Pressing the hotkey again before a capture has finished doesn't
+queue a second one behind it: the same coordinator hands the newer press a
+fresh generation number, and the older run checks at its two natural
+checkpoints (right after screenshotting, and right before committing its
+result) whether it's still the current one -- if not, it gives up instead
+of finishing and possibly submitting stale data after (or racing with) the
+fresher capture. Python can't forcibly kill a running thread, so this is
+cooperative rather than a hard cancel, but since every checkpoint bails
+*before* writing anything, the practical effect is the one that matters: a
+superseded capture never wins over a newer one.
+
+**OCR accuracy:** each player-name crop is already known to contain
+exactly one line of text and nothing else (that's the entire point of
+`draft_layout.py`'s hand-tuned boxes) — but RapidOCR's default pipeline
+runs a *detection* stage first, meant for finding text within an arbitrary
+photo or document, before ever reading it. On a crop this small and this
+tightly bound, detection frequently fails to find a box at all, which
+silently discards the crop before the model that actually reads characters
+ever runs — a generic "throw the whole image at an OCR tool" comparison
+looks nothing like this, since a full screenshot gives that stage plenty to
+detect. `ocr.py`'s `read_player_name` now calls RapidOCR with
+`use_det=False` to skip straight to recognition (the step that already
+knows how to read a single line of text), and upscales each crop 3x
+(Lanczos) beforehand so that recognition step has more effective detail to
+work with than a native ~30px-tall crop provides. Both are standard
+techniques for exactly this "already-isolated single line of text" shape of
+problem.
+
 ### Crop tuning
 
 The 10 player-name crop boxes (plus the left/right team-split crop and

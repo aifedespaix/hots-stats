@@ -203,4 +203,4 @@ def test_trigger_draft_capture_spawns_thread_with_current_client():
         runner._trigger_draft_capture()
         _wait_until(lambda: capture.called)
 
-    capture.assert_called_once_with(fake_client)
+    capture.assert_called_once_with(fake_client, coordinator=runner.draft_capture_status)
