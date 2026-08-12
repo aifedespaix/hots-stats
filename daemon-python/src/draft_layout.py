@@ -76,10 +76,23 @@ def _crop_rel(image: Image.Image, box: RelBox) -> Image.Image:
     return image.crop((x1, y1, x2, y2))
 
 
-def _extract_team(screenshot: Image.Image, layout: TeamLayout) -> list[Image.Image | None]:
+@dataclass(frozen=True)
+class TeamCropResult:
+    """Every image the crop pipeline produces for one team, not just the
+    final 5 player-name crops -- kept around so live-draft debug snapshots
+    (see draft_debug.py) can show the intermediate strip/rotation steps,
+    which is what makes a bad tuning (vs. a bad OCR read) obvious to spot."""
+
+    layout: TeamLayout
+    strip: Image.Image
+    rotated: Image.Image
+    player_crops: list[Image.Image | None]
+
+
+def _extract_team(screenshot: Image.Image, layout: TeamLayout) -> TeamCropResult:
     strip = _crop_rel(screenshot, layout.initial_crop)
     if strip.width == 0 or strip.height == 0:
-        return [None] * 5
+        return TeamCropResult(layout=layout, strip=strip, rotated=strip, player_crops=[None] * 5)
 
     # `expand=True` recomputes the bounding box so the rotated strip isn't
     # clipped -- the Pillow equivalent of the reference script's
@@ -92,7 +105,15 @@ def _extract_team(screenshot: Image.Image, layout: TeamLayout) -> list[Image.Ima
     for box in layout.player_crops:
         crop = _crop_rel(rotated, box)
         crops.append(crop if crop.width > 0 and crop.height > 0 else None)
-    return crops
+    return TeamCropResult(layout=layout, strip=strip, rotated=rotated, player_crops=crops)
+
+
+def extract_team_crops(screenshot: Image.Image) -> tuple[TeamCropResult, TeamCropResult]:
+    """Like `extract_player_crops`, but also returns the intermediate
+    strip/rotated images and the layout each team was cropped with -- used by
+    `draft_capture.py` so its debug snapshot (draft_debug.py) can save every
+    step of the pipeline, not just the final 10 crops."""
+    return _extract_team(screenshot, LEFT_TEAM), _extract_team(screenshot, RIGHT_TEAM)
 
 
 def extract_player_crops(screenshot: Image.Image) -> tuple[list[Image.Image | None], list[Image.Image | None]]:
@@ -100,4 +121,5 @@ def extract_player_crops(screenshot: Image.Image) -> tuple[list[Image.Image | No
     in slot order (top to bottom). A slot is `None` when its crop came out
     empty -- a screenshot smaller than expected, or an unexpected aspect
     ratio -- so a bad capture degrades one slot at a time instead of raising."""
-    return _extract_team(screenshot, LEFT_TEAM), _extract_team(screenshot, RIGHT_TEAM)
+    left, right = extract_team_crops(screenshot)
+    return left.player_crops, right.player_crops

@@ -82,6 +82,23 @@ feature can be turned off entirely from the settings window, which is also
 where the hotkey field lives -- rebinding takes effect on save, no restart
 needed.
 
+### Debugging a capture
+
+Every hotkey press writes its debug artifacts under
+`%APPDATA%\hots-analytics\live-draft\` (`src/draft_debug.py`), regardless of
+whether OCR or the API submit succeeds:
+
+- `captures\<timestamp>\` — one folder per capture, holding the full
+  screenshot, each team's pre- and post-rotation strip crop
+  (`left-strip.png` / `left-rotated.png`, and the same for `right-`), each of
+  the 10 player-name crops (`left-slot-1.png` … `right-slot-5.png`, skipped
+  when a slot came out empty), and `crop-info.json` — the relative and pixel
+  box for every crop plus what OCR read from it and at what confidence. Only
+  the most recent 20 captures are kept.
+- `live-draft.log` — every `WARNING`+ record from `draft_capture.py`,
+  `draft_layout.py`, `ocr.py` and `screen_capture.py`, so a failed capture is
+  on disk even if nobody was watching the console when it happened.
+
 ## Sync state
 
 Which replays are already synced (and which failed) is tracked in
@@ -178,6 +195,7 @@ src/
   draft_layout.py   Crops the 10 player-name regions off a draft-screen screenshot
   ocr.py            Reads a player-name crop via RapidOCR
   draft_capture.py  Wires the above together and POSTs the result to /draft/snapshot
+  draft_debug.py    Saves every capture's crops + a crop-info.json under %APPDATA%\hots-analytics\live-draft\, and mirrors WARNING+ logs from the draft modules to live-draft.log
   api_client.py HTTP client (retrying, for real ingestion) + light ping/summary/version helpers (for the settings UI)
   sync_state.py SQLite-backed "already synced" cache + per-replay error log, keyed by content hash
   status.py     Thread-safe found/synced/currently-syncing/last-error snapshot, for the settings window
