@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import type { GameMode } from "@hots-stats/shared-types";
 import type { PlayerListResponse } from "~/types/analytics";
 
 definePageMeta({ middleware: "auth" });
@@ -20,7 +19,7 @@ useSeoMeta({
 type SortableColumn = "battletag" | "gamesTogether" | "gamesAsAlly" | "gamesAsOpponent" | "wins" | "losses";
 const { sortKey, sortDir, onSort } = useSortState<SortableColumn>("gamesTogether", "desc");
 
-const mode = ref<GameMode | "">("");
+const mode = ref("");
 const search = ref("");
 const config = useRuntimeConfig();
 
@@ -49,7 +48,7 @@ async function addFriend(accountUserId: string) {
   }
 }
 
-const modeOptions = [{ value: "" as const, label: "Tous les modes" }, ...gameModeOptions()];
+const modeOptions = [{ value: "" as const, label: "Tous les modes" }, ...gameModeFilterOptions()];
 
 const rows = computed(() => {
   const searchTerm = search.value.trim().toLowerCase();

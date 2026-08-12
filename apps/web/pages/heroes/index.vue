@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import type { GameMode } from "@hots-stats/shared-types";
 import type { HeroListResponse, HeroStats } from "~/types/analytics";
 
 definePageMeta({ middleware: "auth" });
@@ -17,7 +16,7 @@ useSeoMeta({
   robots: "noindex, follow",
 });
 
-const mode = ref<GameMode | "">("");
+const mode = ref("");
 const search = ref("");
 
 const { scope, saving: scopeSaving, setScope } = useHeroStatsScope();
@@ -31,7 +30,7 @@ const { data } = await useApiFetch<HeroListResponse>("/heroes", { query });
 
 const { sortKey, sortDir, onSort } = useSortState<keyof HeroStats>("gamesPlayed", "desc");
 
-const modeOptions = [{ value: "" as const, label: "Tous les modes" }, ...gameModeOptions()];
+const modeOptions = [{ value: "" as const, label: "Tous les modes" }, ...gameModeFilterOptions()];
 
 const sortedHeroes = computed(() => {
   const searchTerm = search.value.trim().toLowerCase();

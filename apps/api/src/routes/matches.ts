@@ -1,9 +1,9 @@
 import { type User, db, heroes, matchPlayers, matches, maps, talentPicks } from "@hots-stats/db";
-import { gameModeSchema } from "@hots-stats/shared-types";
 import { and, asc, desc, eq, exists, gte, inArray, lte, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { Hono } from "hono";
 import { z } from "zod";
+import { gameModeListSchema } from "../lib/query";
 import { authSession, requireUser } from "../middleware/auth-session";
 
 type Env = { Variables: { user: User } };
@@ -19,7 +19,7 @@ const SORTABLE_COLUMNS = {
 } as const;
 
 const filtersQuerySchema = z.object({
-  mode: gameModeSchema.optional(),
+  mode: gameModeListSchema.optional(),
   heroId: z.string().optional(),
   mapId: z.string().optional(),
   dateFrom: z.string().datetime().optional(),
@@ -46,7 +46,7 @@ function buildMatchConditions(userId: string, filters: z.infer<typeof filtersQue
   const ally = alias(matchPlayers, "ally");
 
   const conditions = [eq(matchPlayers.userId, userId)];
-  if (mode) conditions.push(eq(matches.gameMode, mode));
+  if (mode && mode.length > 0) conditions.push(inArray(matches.gameMode, mode));
   if (heroId) conditions.push(eq(matchPlayers.heroId, heroId));
   if (mapId) conditions.push(eq(matches.mapId, mapId));
   if (dateFrom) conditions.push(gte(matches.playedAt, new Date(dateFrom)));

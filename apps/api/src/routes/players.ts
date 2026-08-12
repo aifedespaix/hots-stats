@@ -1,7 +1,7 @@
 import type { User } from "@hots-stats/db";
-import { gameModeSchema } from "@hots-stats/shared-types";
 import { Hono } from "hono";
 import { z } from "zod";
+import { gameModeListSchema } from "../lib/query";
 import { authSession, requireUser } from "../middleware/auth-session";
 import {
   getPlayerEncounter,
@@ -16,7 +16,7 @@ const listQuerySchema = z.object({
     .enum(["battletag", "gamesTogether", "gamesAsAlly", "gamesAsOpponent", "wins", "losses"])
     .default("gamesTogether"),
   sortDir: z.enum(["asc", "desc"]).default("desc"),
-  mode: gameModeSchema.optional(),
+  mode: gameModeListSchema.optional(),
 });
 
 export const playersRoute = new Hono<Env>()

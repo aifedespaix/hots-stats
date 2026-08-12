@@ -5,6 +5,7 @@ import pytest
 from src._protocol_versions import KNOWN_PROTOCOL_BUILDS
 from src.parser import (
     ReplayParseError,
+    _attribute_scope_by_player_list_index,
     _build_protocol,
     _protocol_module,
     _slugify,
@@ -337,3 +338,87 @@ def test_build_payload_rejects_missing_battletag():
             battletags={},
             replay_hash="a" * 64,
         )
+
+
+def test_build_payload_resolves_aram_game_mode():
+    # Regression test: ARAM's ammId (50101) was missing from
+    # GAME_MODE_BY_AMM_ID and silently fell back to "Custom".
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(amm_id=50101),
+        tracker_events=_base_tracker_events(),
+        attributes_events=_base_attributes_events(),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+    )
+
+    assert payload["gameMode"] == "ARAM"
+
+
+def test_build_payload_resolves_hero_by_player_list_position_not_tracker_id():
+    """Regression test: a player's hero must be resolved by their
+    `m_playerList` position, not by whichever tracker id `PlayerInit`
+    happened to assign them -- the two numberings aren't guaranteed to
+    match (see `_attribute_scope_by_player_list_index`). Here `PlayerInit`
+    fires in the *reverse* of `m_playerList` order (Foo, listed first, gets
+    tracker id 2; Bar, listed second, gets tracker id 1), while the
+    attribute-events scopes still follow plain `m_playerList` order
+    (scope 1 = Foo = Li-Ming, scope 2 = Bar = Malfurion). The previous
+    tracker-id-keyed lookup would swap their heroes.
+    """
+    events = [
+        _player_init_event(2, "1-Hero-1-1001"),  # Foo (m_playerList[0])
+        _player_init_event(1, "1-Hero-1-1002"),  # Bar (m_playerList[1])
+        _gates_open_event(610),
+        _score_event(REQUIRED_STATS),
+        # EndOfGameTalentChoices is keyed by tracker id, a separate,
+        # internally-consistent numbering -- unaffected by this bug, and
+        # deliberately left swapped-looking here to prove it stays correct.
+        _end_of_game_event(2, b"Win", b"CursedHollow", {1: "TalentA"}),
+        _end_of_game_event(1, b"Loss", b"CursedHollow", {1: "TalentC"}),
+    ]
+
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=events,
+        attributes_events=_attributes_events({1: b"Wiza", 2: b"Malf"}),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+    )
+
+    players_by_tag = {p["battletag"]: p for p in payload["players"]}
+    assert players_by_tag["Foo#1111"]["heroId"] == "li-ming"
+    assert players_by_tag["Bar#2222"]["heroId"] == "malfurion"
+    # Talents/result, sourced from the tracker-id-keyed event, are correct
+    # for the *tracker id* each player actually got (2 for Foo, 1 for Bar).
+    assert players_by_tag["Foo#1111"]["winner"] is True
+    assert players_by_tag["Foo#1111"]["talents"] == [{"tier": 1, "talentId": "TalentA", "talentName": "TalentA"}]
+    assert players_by_tag["Bar#2222"]["winner"] is False
+    assert players_by_tag["Bar#2222"]["talents"] == [{"tier": 1, "talentId": "TalentC", "talentName": "TalentC"}]
+
+
+def test_attribute_scope_by_player_list_index_skips_open_slots():
+    # Scope 2 is an unfilled ("open") lobby slot between two real players --
+    # the 2nd real player's scope (3) must map to `m_playerList` position 2,
+    # not 3. Mirrors Heroes.ReplayParser's `ApplyAttributes` adjustment.
+    attributes_events = {
+        "scopes": {
+            1: {500: [{"value": b"humn"}]},
+            2: {500: [{"value": b"open"}]},
+            3: {500: [{"value": b"humn"}]},
+        }
+    }
+
+    assert _attribute_scope_by_player_list_index(attributes_events, player_count=2) == {1: 1, 2: 3}
+
+
+def test_attribute_scope_by_player_list_index_falls_back_to_identity_without_player_type_data():
+    # Very old replay builds may not carry `PlayerTypeAttribute` (id 500)
+    # at all -- assume a fully-filled lobby (scope N == position N) rather
+    # than failing hero resolution outright.
+    attributes_events = {"scopes": {1: {4002: [{"value": b"Wiza"}]}, 2: {4002: [{"value": b"Malf"}]}}}
+
+    assert _attribute_scope_by_player_list_index(attributes_events, player_count=2) == {1: 1, 2: 2}

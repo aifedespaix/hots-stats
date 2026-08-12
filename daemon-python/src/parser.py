@@ -7,6 +7,12 @@ ids and hero attribute codes used below are cross-checked against the
 community-maintained `hots-parser` project (MIT,
 https://github.com/ebshimizu/hots-parser) and its real-replay test
 fixtures, since they aren't documented anywhere in `heroprotocol` itself.
+Hero resolution specifically (`_attribute_scope_by_player_list_index`)
+instead follows `Heroes.ReplayParser` (MIT,
+https://github.com/Heroes-Profile/Heroes.ReplayParser, the parser behind
+HeroesProfile.com) -- `hots-parser`'s approach of keying
+`replay.attributes.events` by the tracker "PlayerID" doesn't reliably match
+that stream's own scope numbering (see that function's docstring).
 """
 
 from __future__ import annotations
@@ -163,12 +169,14 @@ def _build_protocol(header: dict):
 
 
 _HERO_ATTRIBUTE_ID = 4002
+_PLAYER_TYPE_ATTRIBUTE_ID = 500
 
 
-def _hero_attribute_code(attributes_events: dict, tracker_id: int) -> str | None:
+def _hero_attribute_code(attributes_events: dict, scope: int) -> str | None:
     """Resolves a player's hero via `replay.attributes.events` (attribute id
-    4002, scoped by tracker player id) -- the same source `hots-parser` reads
-    it from (`attributeevents.scopes[trackerId]['4002'][0].value`).
+    4002), scoped by `scope` -- an attribute-events "scope" id, *not* a
+    tracker player id (see `_attribute_scope_by_player_list_index`, which
+    resolves the right one for a given `m_playerList` position).
 
     Deliberately *not* `m_playerList[i].m_hero` in `replay.details`: that
     field holds the *localized* hero display name (e.g. "Fénix", "Aile de
@@ -176,10 +184,58 @@ def _hero_attribute_code(attributes_events: dict, tracker_id: int) -> str | None
     than the stable short code `HERO_DISPLAY_NAMES` is keyed by, so using it
     directly makes every non-English replay fail hero resolution.
     """
-    entries = attributes_events.get("scopes", {}).get(tracker_id, {}).get(_HERO_ATTRIBUTE_ID)
+    entries = attributes_events.get("scopes", {}).get(scope, {}).get(_HERO_ATTRIBUTE_ID)
     if not entries:
         return None
     return _s(entries[0]["value"])
+
+
+def _attribute_scope_by_player_list_index(attributes_events: dict, player_count: int) -> dict[int, int]:
+    """Maps each `m_playerList` position (1-based) to its matching
+    `replay.attributes.events` scope id.
+
+    `replay.attributes.events` scopes are numbered 1..N in *lobby slot*
+    order -- including any slot left empty ("open") in an under-filled
+    lobby -- which is SC2-lobby-heritage numbering, a genuinely different
+    address space from the tracker "PlayerID" that `PlayerInit` tracker
+    events use (confirmed against Heroes.ReplayParser's `ApplyAttributes`,
+    the parser behind HeroesProfile.com's ingestion pipeline: its own
+    comment there is explicit that this "PlayerID... does not seem to
+    match any existing player array" other than `m_playerList`, adjusted
+    for open slots). Scope N only equals `m_playerList` position N once
+    "open" slots are skipped, tracked here via `PlayerTypeAttribute` (id
+    500, one of "comp"/"humn"/"open" per scope).
+
+    Using the tracker PlayerID as a stand-in for this (the previous
+    approach, matching `hots-parser`'s own JS implementation) happens to
+    coincide for *most* games, since both numberings are usually assigned
+    in the same slot order -- but not reliably, which silently attributed
+    one player's hero to a different player in the same match while
+    leaving every other tracker-event-sourced field (talents, stats, win
+    result) correct, since those stay entirely within the tracker
+    numbering and never cross into this one.
+    """
+    scopes = attributes_events.get("scopes", {})
+    player_types: dict[int, str] = {}
+    for scope, attrs in scopes.items():
+        entries = attrs.get(_PLAYER_TYPE_ATTRIBUTE_ID)
+        if entries:
+            player_types[scope] = _s(entries[0]["value"]).strip("\x00").lower()
+
+    if not player_types:
+        # No `PlayerTypeAttribute` data at all (very old replay build) --
+        # assume a fully-filled lobby, where scope N already equals
+        # `m_playerList` position N with no "open" slots to skip.
+        return {i: i for i in range(1, player_count + 1)}
+
+    open_slots = 0
+    index_to_scope: dict[int, int] = {}
+    for scope in sorted(player_types):
+        if player_types[scope] == "open":
+            open_slots += 1
+            continue
+        index_to_scope[scope - open_slots] = scope
+    return index_to_scope
 
 
 def _apply_score_event(tracker_events: list[dict], tracker_id_to_toon: dict[int, str], players: dict) -> None:
@@ -263,9 +319,9 @@ def build_payload(
     """
     player_list = details["m_playerList"]
 
-    # Built first (rather than inline in the `EndOfGameTalentChoices`/score
-    # handling below) because hero resolution also needs it: `attributes_events`
-    # is scoped by tracker player id, not by toon handle.
+    # Still needed below for talents/stats (`EndOfGameTalentChoices` /
+    # `SScoreResultEvent`, both scoped by tracker player id) -- but *not*
+    # for hero resolution anymore, see `_attribute_scope_by_player_list_index`.
     tracker_id_to_toon: dict[int, str] = {}
     for event in tracker_events:
         if event.get("_event") != "NNet.Replay.Tracker.SStatGameEvent":
@@ -277,13 +333,14 @@ def build_payload(
         tracker_id = event["m_intData"][0]["m_value"]
         toon_handle = _s(event["m_stringData"][1]["m_value"])
         tracker_id_to_toon[tracker_id] = toon_handle
-    toon_to_tracker_id = {toon: tracker_id for tracker_id, toon in tracker_id_to_toon.items()}
+
+    scope_by_player_list_index = _attribute_scope_by_player_list_index(attributes_events, len(player_list))
 
     players: dict[str, dict[str, Any]] = {}
-    for player in player_list:
+    for index, player in enumerate(player_list, start=1):
         toon_handle = _toon_handle(player["m_toon"])
-        tracker_id = toon_to_tracker_id.get(toon_handle)
-        hero_code = _hero_attribute_code(attributes_events, tracker_id) if tracker_id is not None else None
+        scope = scope_by_player_list_index.get(index)
+        hero_code = _hero_attribute_code(attributes_events, scope) if scope is not None else None
         if hero_code is None:
             raise ReplayParseError(f"Could not determine hero for player {_s(player['m_name'])!r}.")
         hero_name = constants.HERO_DISPLAY_NAMES.get(hero_code)
