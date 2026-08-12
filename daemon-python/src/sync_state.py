@@ -57,6 +57,21 @@ CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+-- (file_path, file_size, mtime) -> content hash, so a replay already hashed
+-- once doesn't need its full bytes read again on every daemon startup just
+-- to confirm it hasn't changed (see `SyncState.cached_hash` /
+-- `ingestion.ingest_file`, and tasks/daemon-audit-2026-08-12.md, 2.4). Keyed
+-- by path (not hash) since the lookup always starts from "what's this file
+-- on disk right now" -- a changed size or mtime for that path is a miss,
+-- same as a path never seen before; the row is simply overwritten with the
+-- freshly computed hash rather than needing an explicit invalidation step.
+CREATE TABLE IF NOT EXISTS file_hash_cache (
+    file_path TEXT PRIMARY KEY,
+    file_size INTEGER NOT NULL,
+    mtime REAL NOT NULL,
+    replay_hash TEXT NOT NULL
+);
 """
 
 
@@ -290,6 +305,44 @@ class SyncState:
             )
             for row in rows
         ]
+
+    # -- file-hash cache (avoids re-reading unchanged files on startup) -----
+
+    def cached_hash(self, file_path: str, file_size: int, mtime: float) -> str | None:
+        """Returns the previously computed hash for `file_path`, but only if
+        its size and mtime still match what was recorded when that hash was
+        computed -- either one changing means the file was edited (or
+        replaced) since, so the cache is treated as a miss rather than
+        risking a stale hash. Called before `hasher.hash_replay_file` (see
+        `ingestion.ingest_file`) so a replay whose bytes haven't changed
+        since the last time this daemon ran doesn't need to be read in full
+        again just to confirm that.
+        """
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT replay_hash FROM file_hash_cache WHERE file_path = ? AND file_size = ? AND mtime = ?",
+                (file_path, file_size, mtime),
+            ).fetchone()
+        return row[0] if row else None
+
+    def cache_hash(self, file_path: str, file_size: int, mtime: float, replay_hash: str) -> None:
+        """Records `file_path`'s freshly computed hash alongside the
+        size/mtime it was computed from, so the next `cached_hash` lookup
+        for the same path can skip re-reading the file -- until either of
+        those two changes."""
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO file_hash_cache (file_path, file_size, mtime, replay_hash)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(file_path) DO UPDATE SET
+                    file_size = excluded.file_size,
+                    mtime = excluded.mtime,
+                    replay_hash = excluded.replay_hash
+                """,
+                (file_path, file_size, mtime, replay_hash),
+            )
+            self._conn.commit()
 
     # -- misc metadata (currently: last known API version) ------------------
 
