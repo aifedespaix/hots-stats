@@ -33,6 +33,23 @@ class ValidationError(ApiClientError):
         self.detail = detail
 
 
+class QuarantinedError(ApiClientError):
+    """The server doesn't yet recognize this replay's game build
+    (`m_baseBuild`) and has quarantined it server-side for review instead of
+    ingesting it (see apps/api/src/routes/ingest.ts, the `resolveAdapter`
+    branch, and `raw_replays_quarantine`). Not retried within `post_replay`
+    since resending the same build won't change the outcome -- but
+    `ingest_file` still records it as a retryable local error, since this is
+    expected to start succeeding on its own once someone verifies the build
+    server-side (`bun run check-build`) and the next sync attempt picks up
+    the same replay again.
+    """
+
+    def __init__(self, message: str, base_build: int | None) -> None:
+        super().__init__(message)
+        self.base_build = base_build
+
+
 @dataclass(frozen=True)
 class IngestResult:
     upserted: bool
@@ -72,6 +89,19 @@ class ApiClient:
                 if response.status_code < 500:
                     response.raise_for_status()
                     body = response.json()
+                    if body.get("quarantined"):
+                        # 202 with `{quarantined: true, baseBuild}` -- no
+                        # `upserted`/`matchId` keys, unlike every other
+                        # sub-500 response this endpoint returns. Must be
+                        # checked before the `body["upserted"]` access below,
+                        # which would otherwise raise a bare KeyError here.
+                        base_build = body.get("baseBuild")
+                        raise QuarantinedError(
+                            "Server does not yet recognize this replay's game build "
+                            f"({base_build}); it has been quarantined server-side for "
+                            "review and will sync automatically once the build is verified.",
+                            base_build,
+                        )
                     return IngestResult(
                         upserted=body["upserted"],
                         match_id=body["matchId"],
