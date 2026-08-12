@@ -17,7 +17,7 @@ import threading
 from pathlib import Path
 from typing import Callable
 
-from . import api_client, draft_capture, draft_layout, hotkey, single_instance
+from . import api_client, draft_capture, draft_layout, hotkey, ocr, single_instance
 from .config import Config, ConfigError, config_exists, is_auto_update_enabled, load_config
 from .ingestion import ingest_file
 from .status import StatusTracker
@@ -268,6 +268,15 @@ def run_app() -> int:
 
     daemon = _DaemonRunner()
     daemon.start(config)
+
+    if config.draft_feature_enabled:
+        # Pays the RapidOCR model-load cost (over a second, see ocr.py) now,
+        # in the background, instead of on the player's first real hotkey
+        # press of the session -- stacked on top of the screenshot/crop/OCR
+        # work `capture_and_submit` already has to do before anything shows
+        # up on the dashboard.
+        threading.Thread(target=ocr.warm_up, name="hots-ocr-warmup", daemon=True).start()
+
     update_status = UpdateStatusTracker()
 
     def _on_open_settings() -> None:

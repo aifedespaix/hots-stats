@@ -331,6 +331,14 @@ class _SettingsWindow:
         self._update_status_job: str | None = None
         self._draft_capture_status_job: str | None = None
         self._hotkey_capturing = False
+        # Flipped once the window starts closing (see `_on_close`/`_save`),
+        # before `root.destroy()`. Background worker threads (the
+        # connection/token checks, the hotkey-combo listener) can still be
+        # mid-flight at that point; `_after_if_open` uses this to drop their
+        # results instead of handing a destroyed Tk root/widget back to
+        # `root.after`, which would otherwise raise from a thread nothing is
+        # watching.
+        self._closed = False
 
         root.title("HotS Analytics — Configuration")
         root.configure(bg=_BG)
@@ -415,6 +423,25 @@ class _SettingsWindow:
 
     def _open_data_folder(self) -> None:
         open_config_folder()
+
+    def _after_if_open(self, func, *args) -> None:
+        """`self._root.after(0, func, *args)`, but a no-op once the window
+        has closed. Every call site is a background worker thread (a
+        connection/token check, the hotkey-combo listener) handing a result
+        back to the Tk thread -- those threads aren't cancelled when the
+        window closes (there's no clean way to interrupt a blocking
+        `requests.get`/`keyboard.read_hotkey` call), so without this guard a
+        result that arrives after `_on_close`/`_save` already destroyed the
+        root would either touch already-destroyed widgets or hand `after` a
+        dead interpreter, raising from a thread nothing is watching instead
+        of just being silently discarded like it should be.
+        """
+        if self._closed:
+            return
+        try:
+            self._root.after(0, func, *args)
+        except (RuntimeError, tk.TclError):
+            pass
 
     # -- Config tab -------------------------------------------------------
 
@@ -644,7 +671,7 @@ class _SettingsWindow:
         except Exception as err:  # pragma: no cover -- exercised via error branch in tests
             combo = None
             error = str(err)
-        self._root.after(0, self._finish_hotkey_capture, combo, error)
+        self._after_if_open(self._finish_hotkey_capture, combo, error)
 
     def _finish_hotkey_capture(self, combo: str | None, error: str | None) -> None:
         self._hotkey_capturing = False
@@ -951,22 +978,22 @@ class _SettingsWindow:
 
     def _check_connection_worker(self, base_url: str, token: str) -> None:
         reachable = api_client.ping_health(base_url)
-        self._root.after(0, self._apply_api_status, reachable)
+        self._after_if_open(self._apply_api_status, reachable)
 
         if not reachable:
             # Can't tell if the token itself is valid without a reachable
             # API — leave it neutral rather than mislabeling it "invalid".
-            self._root.after(0, self._apply_token_status, "unknown")
+            self._after_if_open(self._apply_token_status, "unknown")
             return
         if not token:
-            self._root.after(0, self._apply_token_status, "unknown")
+            self._after_if_open(self._apply_token_status, "unknown")
             return
 
         summary = api_client.fetch_summary(base_url, token)
-        self._root.after(0, self._apply_token_status, summary if summary is not None else "invalid")
+        self._after_if_open(self._apply_token_status, summary if summary is not None else "invalid")
 
         version_info = api_client.fetch_version(base_url, token)
-        self._root.after(0, self._apply_api_version, version_info)
+        self._after_if_open(self._apply_api_version, version_info)
 
     def _apply_api_version(self, info: dict | None) -> None:
         if hasattr(self, "_api_version_label"):
@@ -1000,10 +1027,10 @@ class _SettingsWindow:
     def _load_stats_worker(self, base_url: str, token: str) -> None:
         summary = api_client.fetch_summary(base_url, token)
         games = summary.get("gamesPlayed", "—") if summary else "—"
-        self._root.after(0, lambda: self._games_count_label.configure(text=str(games)))
+        self._after_if_open(lambda: self._games_count_label.configure(text=str(games)))
 
         version_info = api_client.fetch_version(base_url, token)
-        self._root.after(0, self._apply_api_version, version_info)
+        self._after_if_open(self._apply_api_version, version_info)
 
     # -- debug report ---------------------------------------------------------
 
@@ -1151,6 +1178,13 @@ class _SettingsWindow:
         return width, height
 
     def _save(self) -> None:
+        if self._hotkey_capturing:
+            self._show_error(
+                "Terminez la capture du raccourci (appuyez sur une combinaison de touches, "
+                "ou Échap pour annuler) avant d'enregistrer."
+            )
+            return
+
         api_base_url = self._api_var.get().strip()
         access_token = self._token_var.get().strip()
         replays_dir = self._replays_var.get().strip()
@@ -1196,6 +1230,12 @@ class _SettingsWindow:
         self._error_label.configure(text=_truncate(message, _ERROR_LABEL_MAX_CHARS))
 
     def _stop_background_jobs(self) -> None:
+        # Marks the window as closing so `_after_if_open` drops any
+        # still-in-flight worker-thread result instead of handing it to the
+        # root we're about to destroy. Set here (the one place both `_save`
+        # and `_on_close` call right before `root.destroy()`) rather than in
+        # each of them separately.
+        self._closed = True
         if self._live_stats_job is not None:
             self._root.after_cancel(self._live_stats_job)
             self._live_stats_job = None
@@ -1207,6 +1247,23 @@ class _SettingsWindow:
             self._draft_capture_status_job = None
 
     def _on_close(self) -> None:
+        if self._hotkey_capturing:
+            # `keyboard.read_hotkey()` (see `_capture_hotkey_worker`) is a
+            # blocking call with no cancellation API: it keeps its low-level
+            # hook installed, suppressing input, until the next key combo is
+            # pressed -- whenever that is. Closing the window out from under
+            # it wouldn't stop it; it would just mean the *next* keys the
+            # player presses anywhere (e.g. an ability in the game itself)
+            # get silently swallowed by that orphaned hook instead of a
+            # rebind. Forcing the capture to finish (a combo, or Échap to
+            # cancel) first is what actually releases the hook.
+            messagebox.showinfo(
+                "HotS Analytics",
+                "Terminez la capture du raccourci (appuyez sur une combinaison de touches, "
+                "ou Échap pour annuler) avant de fermer cette fenêtre.",
+                parent=self._root,
+            )
+            return
         if self._is_first_run:
             if not messagebox.askyesno(
                 "Quitter", "Aucune configuration n'a été enregistrée. Quitter quand même ?", parent=self._root

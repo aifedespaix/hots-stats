@@ -173,3 +173,8 @@ d'écrire un adaptateur sur-mesure.
 
 Une fois un Epic terminé dans sa session, mettre à jour ce README (cocher
 dans "Déjà fait") avant de lancer le suivant.
+
+Voir aussi `tasks/daemon-audit-2026-08-12.md` : état des lieux critique du
+daemon (perf/logique/UX), 3 corrections déjà appliquées, et 5 chantiers plus
+gros identifiés (notifications proactives du tray, sync initiale
+parallélisée, etc.) qui restent à valider avant implémentation.
