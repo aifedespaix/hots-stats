@@ -14,6 +14,15 @@ dependencies = [
     "mpyq>=0.2.5",
     "pystray>=0.19.5",
     "pillow>=10.0",
+    # Live-draft capture feature (src/hotkey.py, screen_capture.py, ocr.py):
+    # global hotkey hook, window screenshot, and OCR respectively. `pywin32`
+    # only installs on Windows (this whole daemon targets Windows, but the
+    # marker keeps `pip install -e ".[dev]"` working for headless CI/dev on
+    # other platforms, same reasoning as `winreg` in autostart.py).
+    "keyboard>=0.13.5",
+    "mss>=9.0.1",
+    "pywin32>=306; sys_platform == 'win32'",
+    "rapidocr-onnxruntime>=1.3.24",
 ]
 
 [project.optional-dependencies]

@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { env } from "./lib/env";
 import { authRoute } from "./routes/auth";
+import { draftRoute } from "./routes/draft";
 import { friendsRoute } from "./routes/friends";
 import { healthRoute } from "./routes/health";
 import { heroesRoute } from "./routes/heroes";
@@ -34,6 +35,7 @@ app.route("/stats", statsRoute);
 app.route("/heroes", heroesRoute);
 app.route("/players", playersRoute);
 app.route("/friends", friendsRoute);
+app.route("/draft", draftRoute);
 app.route("/public", publicRoute);
 app.route("/_internal", internalRoute);
 

@@ -14,6 +14,7 @@ interface NavItem {
 // Logical order for the desktop sidebar (home first, settings last).
 const navItems: NavItem[] = [
   { to: "/", label: "Dashboard", icon: "i-heroicons-squares-2x2", featured: true },
+  { to: "/draft", label: "Live Draft", icon: "i-heroicons-bolt" },
   { to: "/matches", label: "Historique", icon: "i-heroicons-clock" },
   { to: "/heroes", label: "Héros", icon: "i-heroicons-fire" },
   { to: "/players", label: "Joueurs", icon: "i-heroicons-user-group" },

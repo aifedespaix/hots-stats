@@ -20,11 +20,20 @@ class ConfigError(Exception):
     """Raised when required configuration is missing or invalid."""
 
 
+# Default global hotkey for the live-draft capture feature, in the
+# `keyboard` package's hotkey syntax (see src/hotkey.py). Chosen because
+# it's free in HotS's own default keybinds and not claimed by Windows,
+# Discord, OBS or streaming software's own defaults.
+DEFAULT_DRAFT_HOTKEY = "ctrl+shift+d"
+
+
 @dataclass(frozen=True)
 class Config:
     api_base_url: str
     access_token: str
     replays_dir: Path
+    draft_feature_enabled: bool = True
+    draft_hotkey: str = DEFAULT_DRAFT_HOTKEY
 
 
 def config_file_path() -> Path:
@@ -53,15 +62,23 @@ def read_config_file() -> dict:
         raise ConfigError(f"Failed to read config file at {path}: {err}") from err
 
 
-def save_config(api_base_url: str, access_token: str, replays_dir: str) -> None:
-    """Writes the 3 user-provided fields to the JSON config file, creating
-    its parent directory (`%APPDATA%\\hots-analytics\\`) if needed."""
+def save_config(
+    api_base_url: str,
+    access_token: str,
+    replays_dir: str,
+    draft_feature_enabled: bool = True,
+    draft_hotkey: str = DEFAULT_DRAFT_HOTKEY,
+) -> None:
+    """Writes the user-provided fields to the JSON config file, creating its
+    parent directory (`%APPDATA%\\hots-analytics\\`) if needed."""
     path = config_file_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "apiBaseUrl": api_base_url.rstrip("/"),
         "accessToken": access_token,
         "replaysDir": replays_dir,
+        "draftFeatureEnabled": draft_feature_enabled,
+        "draftHotkey": draft_hotkey,
     }
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
@@ -125,4 +142,13 @@ def load_config() -> Config:
                 f"`replaysDir` in {config_file_path()}."
             )
 
-    return Config(api_base_url=api_base_url.rstrip("/"), access_token=access_token, replays_dir=replays_dir)
+    draft_feature_enabled = file_values.get("draftFeatureEnabled")
+    draft_hotkey = os.environ.get("HOTS_DRAFT_HOTKEY") or file_values.get("draftHotkey") or DEFAULT_DRAFT_HOTKEY
+
+    return Config(
+        api_base_url=api_base_url.rstrip("/"),
+        access_token=access_token,
+        replays_dir=replays_dir,
+        draft_feature_enabled=True if draft_feature_enabled is None else bool(draft_feature_enabled),
+        draft_hotkey=draft_hotkey,
+    )

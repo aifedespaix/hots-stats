@@ -113,6 +113,8 @@ def test_config_exists_false_before_save_true_after(monkeypatch, tmp_path):
         "apiBaseUrl": "https://api.example.com",
         "accessToken": "hots_pat_abc",
         "replaysDir": str(tmp_path),
+        "draftFeatureEnabled": True,
+        "draftHotkey": "ctrl+shift+d",
     }
 
 
@@ -123,3 +125,42 @@ def test_save_config_strips_trailing_slash_from_api_base_url(monkeypatch, tmp_pa
 
     saved = json.loads(config_file_path().read_text(encoding="utf-8"))
     assert saved["apiBaseUrl"] == "https://api.example.com"
+
+
+def test_load_config_defaults_draft_fields_when_absent(monkeypatch, tmp_path):
+    monkeypatch.setenv("HOTS_API_BASE_URL", "https://api.example.com")
+    monkeypatch.setenv("HOTS_ACCESS_TOKEN", "hots_pat_abc")
+    monkeypatch.setenv("HOTS_REPLAYS_DIR", str(tmp_path))
+
+    config = load_config()
+
+    assert config.draft_feature_enabled is True
+    assert config.draft_hotkey == "ctrl+shift+d"
+
+
+def test_save_and_load_config_round_trips_draft_fields(monkeypatch, tmp_path):
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
+
+    save_config(
+        "https://api.example.com",
+        "hots_pat_abc",
+        str(tmp_path),
+        draft_feature_enabled=False,
+        draft_hotkey="ctrl+alt+g",
+    )
+
+    config = load_config()
+
+    assert config.draft_feature_enabled is False
+    assert config.draft_hotkey == "ctrl+alt+g"
+
+
+def test_load_config_draft_hotkey_env_override(monkeypatch, tmp_path):
+    monkeypatch.setenv("HOTS_API_BASE_URL", "https://api.example.com")
+    monkeypatch.setenv("HOTS_ACCESS_TOKEN", "hots_pat_abc")
+    monkeypatch.setenv("HOTS_REPLAYS_DIR", str(tmp_path))
+    monkeypatch.setenv("HOTS_DRAFT_HOTKEY", "ctrl+alt+g")
+
+    config = load_config()
+
+    assert config.draft_hotkey == "ctrl+alt+g"
