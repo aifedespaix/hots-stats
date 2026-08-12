@@ -64,13 +64,13 @@ def test_extract_team_crops_exposes_intermediate_strip_and_rotated_images():
         ]
 
 
-# -- player-name crop Y-shift -------------------------------------------
+# -- built-in tuning pin --------------------------------------------------
 
 
-def test_left_team_slot_1_matches_the_shifted_reference_example():
-    # "cropBoxRelative": [0.12, 0.24, 0.3, 0.26] -> [0.12, 0.26, 0.3, 0.28]:
-    # y1,y2 move to y2,y2+(y2-y1), only for player-name crops.
-    assert LEFT_TEAM.player_crops[0] == RelBox(0.12, 0.26, 0.3, 0.28)
+def test_left_team_slot_1_matches_the_current_tuning():
+    # Pins the built-in default so a future crop retune is a deliberate,
+    # visible diff here too.
+    assert LEFT_TEAM.player_crops[0] == RelBox(0.12, 0.27, 0.3, 0.3)
 
 
 def test_team_split_crop_is_unaffected_by_the_player_crop_shift():

@@ -143,6 +143,7 @@ jobs:
           --include-package=pystray
           --include-package=PIL
           --include-package=src
+          --include-package-data=rapidocr_onnxruntime
           --output-dir=dist
           --output-filename=hots-analytics-daemon-v${{ steps.version.outputs.version }}.exe
           run.py
@@ -196,6 +197,19 @@ jobs:
         # analysis can miss — this forces the full package tree into the
         # build regardless. --include-package=src is belt-and-suspenders
         # alongside run.py's static `from src.main import main`.
+        #
+        # --include-package-data=rapidocr_onnxruntime: RapidOCR (src/ocr.py)
+        # locates its config.yaml and its three bundled ONNX models
+        # (models/*.onnx) at runtime as plain files next to its own package
+        # directory (`Path(__file__).resolve().parent`), not as Python
+        # imports. Nuitka's default import-following only bundles the
+        # package's .py files, not that non-code data, so without this flag
+        # the .exe builds and runs fine until the first live-draft capture,
+        # which fails with `FileNotFoundError: ...\rapidocr_onnxruntime\
+        # config.yaml` from inside the onefile temp extraction dir --
+        # caught by ocr.py's `except Exception` and logged, so it degrades
+        # to "unreadable" names instead of crashing, which is also why this
+        # was easy to miss until someone actually read the daemon's logs.
 
       - name: Smoke test the executable
         shell: bash

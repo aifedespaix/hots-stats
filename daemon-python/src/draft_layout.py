@@ -58,16 +58,11 @@ class TeamLayout:
     player_crops: tuple[RelBox, RelBox, RelBox, RelBox, RelBox]
 
 
-# Player-name crop boxes only (not `initial_crop`, the left/right team
-# split) are shifted down by their own height from the original hand-tuned
-# values: y1,y2 -> y2,y2+(y2-y1). The original boxes sat a touch too high
-# against the name text; shifting each one down by exactly its own height
-# re-centers it without changing its size or the (unrelated) team-split crop.
 LEFT_TEAM = TeamLayout(
     initial_crop=RelBox(0, 0, 0.15, 1),
     rotation_degrees=30,
     player_crops=(
-        RelBox(0.12, 0.26, 0.3, 0.28),
+        RelBox(0.12, 0.27, 0.3, 0.3),
         RelBox(0.34, 0.355, 0.53, 0.382),
         RelBox(0.34, 0.54, 0.53, 0.57),
         RelBox(0.57, 0.635, 0.76, 0.665),
@@ -79,7 +74,7 @@ RIGHT_TEAM = TeamLayout(
     initial_crop=RelBox(0.85, 0, 1, 1),
     rotation_degrees=-30,
     player_crops=(
-        RelBox(0.7, 0.26, 0.88, 0.28),
+        RelBox(0.7, 0.27, 0.88, 0.3),
         RelBox(0.47, 0.355, 0.66, 0.382),
         RelBox(0.47, 0.54, 0.66, 0.57),
         RelBox(0.24, 0.635, 0.43, 0.665),
