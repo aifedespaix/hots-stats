@@ -56,6 +56,7 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -207,8 +208,6 @@ def cleanup_stale_downloads() -> None:
     for child in directory.iterdir():
         try:
             if child.is_dir():
-                import shutil
-
                 shutil.rmtree(child)
             else:
                 child.unlink()
@@ -442,6 +441,55 @@ def _render_relaunch_script(*, pid: int, new_exe: Path, current_exe: Path, scrip
     )
 
 
+def _powershell_diagnostics() -> str:
+    """A best-effort environment fingerprint, logged right before every
+    relaunch attempt so a failure has real evidence behind it instead of the
+    generic "likely blocked by antivirus or a security policy" guess in
+    `apply_update_and_exit`. Deliberately a synchronous `-Command` probe
+    rather than piggy-backing on the relaunch script itself: a policy that
+    blocks loading a *script file* (`-File`, exactly the failure this module
+    exists to guard against) commonly still allows inline cmdlets via
+    `-Command`, so this can report useful state even in exactly the scenario
+    it's meant to help diagnose.
+
+    Reports the resolved `powershell.exe` path, its version/edition, the
+    effective `Get-ExecutionPolicy` at every scope (a Group Policy/MDM-pushed
+    `AllSigned`/`Restricted` at the Machine or User scope silently overrides
+    our own `-ExecutionPolicy Bypass` flag -- that's by design, not a bug,
+    and would explain a clean, instant, code-0 exit that never reaches a
+    single line of our script), and the Smart App Control policy state
+    (Windows 11's unsigned-code blocker -- a separate subsystem from Windows
+    Defender antivirus, not affected by toggling real-time protection, and a
+    very plausible culprit for a machine with no third-party AV).
+
+    Never raises: any failure here must not stop the update attempt that
+    follows it. On non-Windows machines (dev, CI) `powershell.exe` isn't on
+    PATH at all, so this is a cheap no-op short-circuit there.
+    """
+    ps_path = shutil.which("powershell.exe")
+    if ps_path is None:
+        return "powershell.exe not found on PATH"
+
+    probe = (
+        "$ep = (Get-ExecutionPolicy -List | ForEach-Object { $_.Scope.ToString() + '=' + $_.ExecutionPolicy.ToString() }) -join ', '; "
+        "$sac = try { Get-ItemPropertyValue -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\CI\\Policy' -Name VerifiedAndReputablePolicyState -ErrorAction Stop } catch { 'n/a' }; "
+        "Write-Output ('PSVersion=' + $PSVersionTable.PSVersion.ToString() + ' PSEdition=' + $PSVersionTable.PSEdition + ' ExecutionPolicy=[' + $ep + '] SmartAppControl(0=off,1=on,2=audit,n/a=no-such-key)=' + $sac)"
+    )
+    try:
+        result = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", probe],
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=10,
+            creationflags=_DETACHED_PROCESS | _CREATE_NEW_PROCESS_GROUP,
+        )
+        output = (result.stdout or "").strip() or (result.stderr or "").strip()
+        return f"powershell={ps_path} (exit {result.returncode}) {output}"[:1000]
+    except (OSError, subprocess.TimeoutExpired, subprocess.SubprocessError) as err:
+        return f"powershell={ps_path} probe failed: {err}"
+
+
 def apply_update_and_exit(new_exe: Path, version: str = "?") -> bool:
     """Hands off to a detached PowerShell script that waits for this process
     (by pid) to exit, replaces the *actually installed* .exe (see
@@ -480,6 +528,8 @@ def apply_update_and_exit(new_exe: Path, version: str = "?") -> bool:
     except OSError:
         pass
 
+    _append_update_log_line(version, f"Diagnostics: {_powershell_diagnostics()}")
+
     fd, script_path_str = tempfile.mkstemp(suffix=".ps1", prefix="hots-analytics-update-")
     script_path = Path(script_path_str)
     with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -509,6 +559,21 @@ def apply_update_and_exit(new_exe: Path, version: str = "?") -> bool:
             ],
             creationflags=_DETACHED_PROCESS | _CREATE_NEW_PROCESS_GROUP,
             close_fds=True,
+            stdin=subprocess.DEVNULL,
+            # Captured (rather than left to the default inherited/hidden-console
+            # handles) so that if the process dies within the liveness check
+            # below, whatever PowerShell itself printed -- an execution-policy
+            # or "not digitally signed" error, for instance -- ends up in
+            # update.log instead of silently vanishing into a console that
+            # `-WindowStyle Hidden`/`DETACHED_PROCESS` never created. Unread in
+            # the success path (script outlives the check, we exit right
+            # after), which is safe here only because `_RELAUNCH_SCRIPT` never
+            # itself writes to stdout/stderr (see its own comments) -- so
+            # there's nothing that could ever fill the pipe buffer.
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            encoding="utf-8",
+            errors="replace",
         )
     except OSError as err:
         logger.error("Could not launch the relaunch script: %s", err)
@@ -523,10 +588,17 @@ def apply_update_and_exit(new_exe: Path, version: str = "?") -> bool:
                 process.pid,
                 process.returncode,
             )
+            output = ""
+            try:
+                stdout_text, stderr_text = process.communicate(timeout=2)
+                output = (stderr_text or stdout_text or "").strip()
+            except Exception:
+                logger.debug("Could not read the relaunch script's output", exc_info=True)
+            detail = f" PowerShell said: {output[:500]!r}." if output else " (PowerShell produced no output.)"
             _append_update_log_line(
                 version,
                 f"Relaunch script exited immediately (code {process.returncode}) -- likely blocked by "
-                "antivirus or a security policy. Update aborted, staying on the current version.",
+                f"antivirus or a security policy.{detail} Update aborted, staying on the current version.",
             )
             return False
         time.sleep(0.1)
@@ -587,10 +659,21 @@ def trigger_manual_update(status: UpdateStatusTracker) -> None:
     what the settings window's "Mettre à jour maintenant" button calls.
     Safe to call even while the background `watch_for_updates` loop is
     mid-cycle: `perform_update`'s `try_begin` guard means only one of them
-    actually downloads."""
+    actually downloads.
+
+    Always logs `_powershell_diagnostics()` up front, even when no update
+    turns out to be available: `apply_update_and_exit` (and the diagnostics
+    line it writes) only ever runs during an actual pending-update attempt,
+    which requires a newer release to exist -- so once a user is already on
+    the latest version, there'd otherwise be no way to produce a fresh
+    diagnostic short of waiting for the next release. Logging it here too
+    means the existing "Vérifier les mises à jour" button doubles as an
+    on-demand self-test the user can run (and then read back via "Voir le
+    journal") whenever asked to help debug a relaunch failure."""
 
     def _run() -> None:
         status.set(phase=UpdatePhase.CHECKING, message=None)
+        _append_update_log_line(APP_VERSION, f"Manual update check triggered. Diagnostics: {_powershell_diagnostics()}")
         update = check_for_update()
         if update is None:
             status.set(phase=UpdatePhase.IDLE, version=None, progress=None, message="Aucune mise à jour disponible.")
