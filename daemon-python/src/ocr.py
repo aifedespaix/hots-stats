@@ -57,6 +57,28 @@ def _get_engine():
     return _engine
 
 
+def warm_up() -> None:
+    """Eagerly loads and caches the RapidOCR engine (see `_get_engine`)
+    instead of waiting for the first real `read_player_name` call to pay
+    that cost. Meant to be called once, on a background thread, right after
+    daemon startup when the live-draft feature is enabled (see app.py) --
+    without this, that model-load time (over a second) is paid inline
+    during the player's *first actual draft* of the session, stacked on top
+    of the screenshot/crop/OCR work `capture_and_submit` already has to do
+    before it can show any result. Idempotent and safe to call more than
+    once: `_get_engine` only ever builds the engine the first time.
+
+    Best-effort: a failure here (e.g. a packaging issue with the bundled
+    ONNX models) is logged and swallowed rather than raised -- it just means
+    the engine falls back to loading lazily on the first real capture,
+    exactly as it did before this existed.
+    """
+    try:
+        _get_engine()
+    except Exception:
+        logger.exception("Failed to warm up the OCR engine (will load lazily on first use instead)")
+
+
 @dataclass(frozen=True)
 class OcrResult:
     text: str | None

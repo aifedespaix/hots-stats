@@ -4,7 +4,8 @@ from unittest.mock import MagicMock
 import pytest
 from PIL import Image
 
-from src.ocr import OcrResult, read_player_name
+from src import ocr
+from src.ocr import OcrResult, read_player_name, warm_up
 
 
 @pytest.fixture
@@ -97,3 +98,30 @@ def test_read_player_name_upscales_the_crop_before_ocr(fake_rapidocr):
     (passed_array,), _kwargs = fake_rapidocr.call_args
     assert passed_array.shape[0] == crop.height * 3
     assert passed_array.shape[1] == crop.width * 3
+
+
+def test_warm_up_builds_the_engine_once(fake_rapidocr, monkeypatch):
+    """`warm_up` (called from app.py at startup so a real draft's first
+    hotkey press doesn't pay the model-load cost) must go through the same
+    cached singleton `read_player_name` uses -- otherwise pre-loading here
+    wouldn't actually save anything on the first real capture."""
+    build_engine = sys.modules["rapidocr_onnxruntime"].RapidOCR
+
+    warm_up()
+    warm_up()
+
+    assert ocr._engine is fake_rapidocr
+    build_engine.assert_called_once()
+
+    read_player_name(_crop())  # doesn't build a second engine either
+    build_engine.assert_called_once()
+
+
+def test_warm_up_swallows_engine_load_failures(monkeypatch):
+    """A packaging/environment issue that breaks engine construction must
+    log, not raise -- this runs unattended on a background thread at daemon
+    startup (see app.py) with nothing to catch an exception."""
+    monkeypatch.setattr(ocr, "_engine", None)
+    monkeypatch.setattr(ocr, "_get_engine", MagicMock(side_effect=RuntimeError("boom")))
+
+    warm_up()  # must not raise
