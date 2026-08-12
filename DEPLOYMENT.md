@@ -46,6 +46,7 @@ multi-arch et tournent nativement en arm64, sans émulation.
    | `GOOGLE_CLIENT_ID` | (Google Cloud Console) |
    | `GOOGLE_CLIENT_SECRET` | (Google Cloud Console) |
    | `SESSION_SECRET` | `openssl rand -hex 32` |
+   | `CLAUDE_INTERNAL_SECRET` | `openssl rand -hex 32` |
 
    `DATABASE_URL` n'est **pas** à définir manuellement : le compose la
    construit automatiquement à partir des variables `POSTGRES_*` (service

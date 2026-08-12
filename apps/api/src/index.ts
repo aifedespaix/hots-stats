@@ -7,6 +7,7 @@ import { friendsRoute } from "./routes/friends";
 import { healthRoute } from "./routes/health";
 import { heroesRoute } from "./routes/heroes";
 import { ingestRoute } from "./routes/ingest";
+import { internalRoute } from "./routes/internal";
 import { matchesRoute } from "./routes/matches";
 import { playersRoute } from "./routes/players";
 import { publicRoute } from "./routes/public";
@@ -34,6 +35,7 @@ app.route("/heroes", heroesRoute);
 app.route("/players", playersRoute);
 app.route("/friends", friendsRoute);
 app.route("/public", publicRoute);
+app.route("/_internal", internalRoute);
 
 export default {
   port: env.PORT,
