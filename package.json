@@ -15,6 +15,7 @@
     "db:migrate": "bun run --filter './packages/db' migrate",
     "db:seed": "bun run --filter './packages/db' seed",
     "db:studio": "bun run --filter './packages/db' studio",
+    "check-build": "bun run --filter './apps/api' check-build",
     "typecheck": "bun run --filter '*' typecheck",
     "docker:dev:up": "docker compose -f docker-compose.dev.yml up -d",
     "docker:dev:down": "docker compose -f docker-compose.dev.yml down"

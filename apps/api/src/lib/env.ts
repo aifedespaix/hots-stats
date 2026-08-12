@@ -17,6 +17,10 @@ const envSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().min(1),
   GOOGLE_CLIENT_SECRET: z.string().min(1),
   SESSION_SECRET: z.string().min(32),
+  // Shared secret for the internal `/_internal/*` routes (e.g. quarantine
+  // sample inspection) -- not tied to a user account, so it can't reuse
+  // `authToken`/`authSession`. Not meant to be exposed to the daemon or web app.
+  CLAUDE_INTERNAL_SECRET: z.string().min(32),
 });
 
 export const env = envSchema.parse(process.env);

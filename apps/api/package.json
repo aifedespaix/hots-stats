@@ -7,7 +7,8 @@
     "dev": "bun run --hot src/index.ts",
     "start": "bun run src/index.ts",
     "build": "bun build src/index.ts --outdir dist --target bun",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check-build": "bun run scripts/check-build.ts"
   },
   "dependencies": {
     "@hots-stats/db": "workspace:*",

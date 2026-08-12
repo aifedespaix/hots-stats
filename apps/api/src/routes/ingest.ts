@@ -1,12 +1,20 @@
 import type { User } from "@hots-stats/db";
-import { replayPayloadSchema } from "@hots-stats/shared-types";
 import { Hono } from "hono";
+import { DefaultAdapter, ReplayValidationError, resolveAdapter } from "../adapters";
+import type { ReplayAdapter } from "../adapters";
 import { API_VERSION, MIN_PARSER_VERSION } from "../constants";
 import { authToken } from "../middleware/auth-token";
+import { quarantineRawReplay } from "../services/quarantine.service";
 import { upsertReplay } from "../services/replay-upsert.service";
 import { getStatsSummary } from "../services/stats.service";
 
 type Env = { Variables: { user: User } };
+
+/** `m_baseBuild` is Blizzard's own replay header field name -- kept as-is at the top level of the payload rather than camelCased, so adapters can read it the same way regardless of what else changed in a given build's structure. */
+function extractBaseBuild(body: Record<string, unknown>): number | null {
+  const value = body.m_baseBuild;
+  return typeof value === "number" && Number.isInteger(value) ? value : null;
+}
 
 /**
  * POST /ingest, GET /ingest/summary, GET /ingest/version — called by the
@@ -32,17 +40,44 @@ export const ingestRoute = new Hono<Env>()
   })
   .post("/", async (c) => {
     const body = await c.req.json().catch(() => null);
-    if (body === null) {
+    if (body === null || typeof body !== "object" || Array.isArray(body)) {
       return c.json({ error: "Invalid JSON body" }, 400);
     }
 
-    const parsed = replayPayloadSchema.safeParse(body);
-    if (!parsed.success) {
-      return c.json({ error: parsed.error.flatten() }, 400);
+    const record = body as Record<string, unknown>;
+    const hasBaseBuild = "m_baseBuild" in record;
+    const baseBuild = extractBaseBuild(record);
+    if (hasBaseBuild && baseBuild === null) {
+      return c.json({ error: "m_baseBuild must be an integer" }, 400);
     }
 
     const user = c.get("user");
 
-    const result = await upsertReplay(parsed.data, user.id);
+    // No `m_baseBuild` at all: a daemon version predating this feature --
+    // always the default (and, until now, only) structure. A build number
+    // *is* present goes through adapter resolution/quarantine below.
+    let adapter: ReplayAdapter;
+    if (baseBuild === null) {
+      adapter = DefaultAdapter;
+    } else {
+      const resolved = await resolveAdapter(baseBuild);
+      if (!resolved) {
+        await quarantineRawReplay({ baseBuild, rawPayload: record, uploadedByUserId: user.id });
+        return c.json({ quarantined: true, baseBuild }, 202);
+      }
+      adapter = resolved;
+    }
+
+    let parsed: ReturnType<ReplayAdapter["parse"]>;
+    try {
+      parsed = adapter.parse(record);
+    } catch (err) {
+      if (err instanceof ReplayValidationError) {
+        return c.json({ error: err.zodError.flatten() }, 400);
+      }
+      throw err;
+    }
+
+    const result = await upsertReplay(parsed, user.id);
     return c.json(result, result.upserted ? 201 : 200);
   });

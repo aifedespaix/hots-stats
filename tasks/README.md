@@ -88,6 +88,38 @@ rappelle donc le contexte nécessaire plutôt que de supposer une continuité.
   précédents) — seul `bun run typecheck` (répo entier) a pu être exécuté ;
   à valider manuellement avec de vraies données avant de considérer le
   jalon testable du brief comme acquis.
+- **Epic 7 — Data Adapters & versionnage des builds** : gestion des
+  changements de structure JSON entre versions du jeu (`m_baseBuild`).
+  Nouvelles tables `raw_replays_quarantine` (payload brut + `base_build` +
+  statut `pending`/`processed`/`failed`) et `known_builds` (builds
+  confirmés compatibles avec l'adaptateur par défaut) dans
+  `packages/db/src/schema/quarantine.ts`. Architecture d'adaptateurs dans
+  `apps/api/src/adapters/` : interface `ReplayAdapter` (`parse(rawData):
+  ParsedReplayData`), `DefaultAdapter` (valide via `replayPayloadSchema`,
+  structure actuelle), registre statique `m_baseBuild -> adaptateur
+  sur-mesure` + `resolveAdapter()` qui retombe sur `known_builds` en base.
+  `POST /ingest` (`routes/ingest.ts`) lit `m_baseBuild` à la racine du
+  payload : absent (daemons antérieurs à cette feature) -> `DefaultAdapter`
+  direct, comme avant ; connu (adaptateur sur-mesure ou build vérifié) ->
+  traitement normal ; inconnu -> mise en quarantaine (202), aucune écriture
+  dans `matches`/`match_players`. Nouvelle route interne
+  `GET /_internal/quarantine/:buildId` (3 à 5 échantillons bruts, param
+  `limit`), protégée par un nouveau secret partagé
+  `CLAUDE_INTERNAL_SECRET` (`middleware/internal-secret.ts`, comparaison
+  `timingSafeEqual`). Script `bun run check-build <buildId>`
+  (`apps/api/scripts/check-build.ts`) : rejoue les replays en quarantaine
+  pour ce build via `DefaultAdapter` ; si tout valide, marque le build
+  compatible dans `known_builds` et insère les parties en attente
+  (`upsertReplay`) ; sinon affiche les erreurs Zod par replay et laisse le
+  build en quarantaine. Testé de bout en bout en local (Postgres +
+  migration générée `drizzle/0003_giant_lifeguard.sql`, serveur API
+  démarré, scénarios curl + CLI) : legacy sans `m_baseBuild`, build
+  inconnu -> quarantaine, build vérifié -> ingestion directe, build
+  toujours incompatible -> `check-build` échoue proprement avec le détail
+  des erreurs de schéma. Non couvert : le daemon Python
+  (`daemon-python/`) n'envoie pas encore `m_baseBuild` -- à faire quand un
+  vrai changement de structure surviendra, cf. `daemon-python/src/parser.py`
+  qui a déjà `header["m_version"]["m_baseBuild"]` sous la main.
 
 ## À faire
 
