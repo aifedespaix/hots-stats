@@ -111,6 +111,65 @@ async function toViewerSnapshot(viewerUserId: string, stored: StoredSnapshot): P
   };
 }
 
+/** Every distinct, normalized name read successfully (`status: "ok"`) across
+ * both teams of a snapshot -- pooled rather than kept per-team/per-slot
+ * because a 5-stack can queue again and land on the *other* side, so
+ * "did the roster change" has to be judged across all 10 slots at once,
+ * not team-by-team. */
+function pooledNames(snapshot: Pick<StoredSnapshot, "teamLeft" | "teamRight">): Set<string> {
+  const names = new Set<string>();
+  for (const slot of [...snapshot.teamLeft, ...snapshot.teamRight]) {
+    if (slot.status === "ok" && slot.rawName) names.add(slot.rawName.trim().toLowerCase());
+  }
+  return names;
+}
+
+/** A new draft only ever *adds* players HotS hasn't shown this viewer
+ * before in the current one -- players never change slot mid-draft. So a
+ * capture introducing a name absent from what's already stored means the
+ * hotkey was pressed on a genuinely new draft (even a 5-stack replaying
+ * together shows at least the 5 new opponents), while a capture that reads
+ * back only names already known is either a retry on the same draft or a
+ * bad capture (menu, loading screen) that must not be treated as one. */
+function isNewGame(existing: StoredSnapshot, incoming: StoredSnapshot): boolean {
+  const existingNames = pooledNames(existing);
+  for (const name of pooledNames(incoming)) {
+    if (!existingNames.has(name)) return true;
+  }
+  return false;
+}
+
+/** Slot-by-slot: a fresh "ok" read replaces (and can correct) what's there,
+ * but a slot the new capture couldn't read keeps whatever the previous
+ * capture had for that same team+slot, rather than regressing it to
+ * unreadable. */
+function mergeTeam(existingTeam: ResolvedSlot[], incomingTeam: ResolvedSlot[]): ResolvedSlot[] {
+  return incomingTeam.map((incoming, index) => {
+    if (incoming.status === "ok" && incoming.rawName) return incoming;
+    return existingTeam[index] ?? incoming;
+  });
+}
+
+/**
+ * Decides what to actually persist/publish for one recipient of a new
+ * capture: a wholesale replacement for a new draft (or when nothing usable
+ * is on record yet), otherwise a merge that never lets a bad capture --
+ * hotkey pressed on the menu, loading screen, or a mid-draft retry that
+ * partially fails OCR -- erase names this viewer's client already has.
+ * `incoming`'s `id`/`capturedAt` are always kept so the snapshot stays
+ * "fresh" (and its SSE TTL keeps extending) even on a merge.
+ */
+function reconcileSnapshot(existing: StoredSnapshot | undefined, incoming: StoredSnapshot): StoredSnapshot {
+  if (!existing || Date.now() - existing.createdAtMs > DRAFT_SNAPSHOT_TTL_MS || isNewGame(existing, incoming)) {
+    return incoming;
+  }
+  return {
+    ...incoming,
+    teamLeft: mergeTeam(existing.teamLeft, incoming.teamLeft),
+    teamRight: mergeTeam(existing.teamRight, incoming.teamRight),
+  };
+}
+
 async function publish(userId: string, stored: StoredSnapshot): Promise<void> {
   const sinks = subscribersByUserId.get(userId);
   if (!sinks || sinks.size === 0) return;
@@ -155,7 +214,7 @@ export async function ingestDraftSnapshot(submitterUserId: string, input: DraftS
 
   const audience = new Set<string>([submitterUserId, ...matchedUsers.map((row) => row.id)]);
 
-  const stored: StoredSnapshot = {
+  const incoming: StoredSnapshot = {
     id: crypto.randomUUID(),
     capturedAt: input.capturedAt,
     teamLeft: resolvedSlots.slice(0, 5),
@@ -165,6 +224,9 @@ export async function ingestDraftSnapshot(submitterUserId: string, input: DraftS
 
   await Promise.all(
     [...audience].map(async (userId) => {
+      // Reconciled per recipient, not shared: two viewers of the same draft
+      // can each have a different (or no) snapshot already on record.
+      const stored = reconcileSnapshot(latestSnapshotByUserId.get(userId), incoming);
       latestSnapshotByUserId.set(userId, stored);
       await publish(userId, stored);
     }),

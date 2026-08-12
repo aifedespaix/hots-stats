@@ -1,6 +1,6 @@
 from PIL import Image
 
-from src.draft_layout import extract_player_crops
+from src.draft_layout import extract_player_crops, extract_team_crops
 
 
 def _synthetic_screenshot(width: int = 1920, height: int = 1080) -> Image.Image:
@@ -30,3 +30,16 @@ def test_extract_player_crops_degrades_to_none_on_tiny_screenshot():
 
     for crop in [*left, *right]:
         assert crop is None or (crop.width > 0 and crop.height > 0)
+
+
+def test_extract_team_crops_exposes_intermediate_strip_and_rotated_images():
+    left, right = extract_team_crops(_synthetic_screenshot())
+    expected_left, expected_right = extract_player_crops(_synthetic_screenshot())
+
+    for result, expected in ((left, expected_left), (right, expected_right)):
+        assert result.strip.width > 0 and result.strip.height > 0
+        assert result.rotated.width > 0 and result.rotated.height > 0
+        assert len(result.player_crops) == 5
+        assert [crop.size if crop else None for crop in result.player_crops] == [
+            crop.size if crop else None for crop in expected
+        ]
