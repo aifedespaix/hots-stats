@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable
 
@@ -33,6 +34,26 @@ from .watcher import watch_replays
 
 logger = logging.getLogger(__name__)
 
+# Concurrency for the *initial backlog* pass only (see `_run_sync_loop`) --
+# new replays trickling in afterwards via `watch_replays` still go through
+# one at a time inline, since they arrive too slowly to need it. Kept
+# deliberately modest rather than "as many as the CPU allows": each worker's
+# `ingest_file` call ends in a network POST to the API, so this number is
+# also how many of those can be in flight at once -- a library of thousands
+# of replays must not turn into thousands of concurrent requests. A
+# separately-tuned (likely higher) limit just for the CPU-bound hash+parse
+# step, decoupled from the upload step, is possible future work -- see
+# tasks/daemon-audit-2026-08-12.md, 2.3.
+_INITIAL_SYNC_WORKERS = 4
+
+# How many *consecutive* ingestion failures (no success in between) it takes
+# before the tray gets a one-time "something's persistently wrong" toast --
+# see `_DaemonRunner._maybe_notify_persistent_failure`. High enough that a
+# couple of unrelated one-off failures (one corrupt replay, one dropped
+# request) don't trigger it, low enough to still notify well before a whole
+# large backlog silently fails end to end (e.g. a revoked token).
+_PERSISTENT_FAILURE_THRESHOLD = 5
+
 
 def _run_sync_loop(
     replays_dir: Path,
@@ -40,27 +61,51 @@ def _run_sync_loop(
     stop_event: threading.Event,
     status: StatusTracker,
     sync_state: SyncState | None = None,
+    on_initial_scan: Callable[[int], None] | None = None,
 ) -> None:
-    """Uploads every replay already on disk, then hands off to `watch_replays`
+    """Uploads every replay already on disk -- via a small pool of worker
+    threads, see `_INITIAL_SYNC_WORKERS` -- then hands off to `watch_replays`
     for new ones.
 
     Without this initial pass, a folder full of replays from before the
     daemon was ever configured would sit there forever: `watch_replays` only
     reacts to files *created* while it's watching, so plugging in an already
     populated folder looked like "configured the daemon, nothing uploads".
+
+    `on_initial_scan`, when given, is called once with the count found,
+    before any of them are ingested -- lets a caller (`_DaemonRunner.start`)
+    tell the player a backlog was found and is being worked on, instead of
+    the settings window just closing with no visible sign anything is
+    happening (see tasks/daemon-audit-2026-08-12.md, 2.1).
     """
     existing = sorted(replays_dir.glob("*.StormReplay"))
     status.set_found(len(existing))
     logger.info("Found %d replay(s) already on disk in %s", len(existing), replays_dir)
+    if on_initial_scan is not None:
+        on_initial_scan(len(existing))
     if sync_state is not None:
         # So the Debug report can flag "source file missing" for anything
         # tracked that's no longer where it was synced from (moved,
         # deleted, or a replays folder that got repointed elsewhere).
         sync_state.refresh_file_existence({str(path) for path in existing})
-    for path in existing:
-        if stop_event.is_set():
-            return
-        ingest(path)
+
+    if existing:
+        # `ingest` (really `_DaemonRunner.start`'s `_ingest_and_track`) is
+        # what actually does the hashing/parsing/uploading -- parallelizing
+        # this loop is what parallelizes that work. `SyncState` already
+        # tolerates concurrent callers (its own internal lock + a
+        # `check_same_thread=False` connection), so no changes were needed
+        # there for this to be safe.
+        with ThreadPoolExecutor(max_workers=_INITIAL_SYNC_WORKERS, thread_name_prefix="hots-initial-sync") as pool:
+            futures = []
+            for path in existing:
+                if stop_event.is_set():
+                    break
+                futures.append(pool.submit(ingest, path))
+            for future in futures:
+                future.result()  # propagate anything unexpected; ingest_file itself never raises
+    if stop_event.is_set():
+        return
 
     def _on_new_replay(path: Path) -> None:
         status.bump_found()
@@ -154,6 +199,52 @@ class _DaemonRunner:
         self._client: api_client.ApiClient | None = None
         self.hotkey_manager = hotkey.HotkeyManager(on_trigger=self._trigger_draft_capture)
         self.draft_capture_status = draft_capture.DraftCaptureCoordinator()
+        # Set by `run_app()` via `set_tray_notify`, once the tray icon
+        # exists -- None here (and in every headless test constructing a
+        # `_DaemonRunner` directly) so the proactive notifications below are
+        # simply skipped rather than crashing on a missing tray.
+        self._tray_notify: Callable[[str, str], None] | None = None
+        # Guards `_maybe_notify_persistent_failure` against sending the same
+        # "persistent failure" toast again for every failure past the
+        # threshold -- reset on the next success (the streak is over) or the
+        # next `start()` (fresh run, fresh judgment).
+        self._failure_notified = False
+        self._notify_lock = threading.Lock()
+
+    def set_tray_notify(self, notify: Callable[[str, str], None]) -> None:
+        """Wires up `TrayController.notify` (message, title) so this runner
+        can proactively surface a found-backlog or a persistent-failure
+        toast -- see `start()`'s `announce_initial_scan` and
+        `_maybe_notify_persistent_failure`. Called from `run_app()` once the
+        tray exists, which is why tray construction was moved ahead of the
+        first `start()` call -- see tasks/daemon-audit-2026-08-12.md, 2.1."""
+        self._tray_notify = notify
+
+    def _maybe_notify_persistent_failure(self) -> None:
+        """Checks the just-updated status and, the first time consecutive
+        failures cross `_PERSISTENT_FAILURE_THRESHOLD`, sends one tray toast
+        pointing the player at the settings window instead of leaving a
+        stuck sync silently failing in the background forever. Cheap to call
+        after every ingestion (a lock + a status snapshot), and safe to call
+        from several worker threads at once (see `_INITIAL_SYNC_WORKERS`)
+        without risking a duplicate toast.
+        """
+        status = self.status.snapshot()
+        if status.consecutive_failures == 0:
+            with self._notify_lock:
+                self._failure_notified = False
+            return
+        if self._tray_notify is None or status.consecutive_failures < _PERSISTENT_FAILURE_THRESHOLD:
+            return
+        with self._notify_lock:
+            if self._failure_notified:
+                return
+            self._failure_notified = True
+        self._tray_notify(
+            f"Échec de synchronisation répété ({status.consecutive_failures} tentatives). "
+            "Ouvrez les paramètres pour voir le détail.",
+            "HotS Analytics",
+        )
 
     def _trigger_draft_capture(self) -> None:
         # Runs on `keyboard`'s own internal dispatch thread -- handing off
@@ -174,9 +265,19 @@ class _DaemonRunner:
             daemon=True,
         ).start()
 
-    def start(self, config: Config) -> None:
+    def start(self, config: Config, *, announce_initial_scan: bool = False) -> None:
+        """`announce_initial_scan`, when True, has the tray post a one-time
+        "found N replays, syncing" toast if the initial on-disk scan finds
+        any -- see `_run_sync_loop`'s `on_initial_scan`. Deliberately opt-in
+        (only `run_app()`'s very first `start()` call, on a true first-ever
+        run, passes it) rather than on every restart: a returning player
+        with thousands of already-synced replays on disk would otherwise get
+        this toast on every reboot, even though almost nothing is actually
+        about to sync -- see tasks/daemon-audit-2026-08-12.md, 2.1.
+        """
         self.stop()  # ensure any previous thread is fully stopped before starting a new one
         self.status = StatusTracker()  # fresh counters for this run
+        self._failure_notified = False
 
         client = api_client.ApiClient(config)
         self._client = client
@@ -198,13 +299,29 @@ class _DaemonRunner:
             self.status.start_syncing(path.name)
             outcome = ingest_file(client, path, sync_state, api_version=api_version_box["value"])
             self.status.finish_syncing(
+                path.name,
                 ok=outcome.status in ("uploaded", "skipped"),
                 error=outcome.detail if outcome.status == "error" else None,
             )
+            self._maybe_notify_persistent_failure()
+
+        def _on_initial_scan(found: int) -> None:
+            if announce_initial_scan and found > 0 and self._tray_notify is not None:
+                self._tray_notify(
+                    f"{found} replay(s) trouvé(s), synchronisation en cours…",
+                    "HotS Analytics",
+                )
 
         def _run() -> None:
             api_version_box["value"] = _sync_api_version(config, sync_state)
-            _run_sync_loop(config.replays_dir, _ingest_and_track, stop_event, self.status, sync_state)
+            _run_sync_loop(
+                config.replays_dir,
+                _ingest_and_track,
+                stop_event,
+                self.status,
+                sync_state,
+                on_initial_scan=_on_initial_scan,
+            )
 
         thread = threading.Thread(target=_run, name="hots-replay-watcher", daemon=True)
         self._thread = thread
@@ -248,7 +365,13 @@ def run_app() -> int:
         _notify_already_running()
         return 1
 
-    if not config_exists():
+    # Captured before the first-run setup window (below) creates the config
+    # file, so it stays True for the rest of this call -- used later to gate
+    # the one-time "found N replays, syncing" tray toast (see
+    # `_DaemonRunner.start`'s `announce_initial_scan`) to a genuine first
+    # run, not every restart. See tasks/daemon-audit-2026-08-12.md, 2.1.
+    first_run = not config_exists()
+    if first_run:
         logger.info("No configuration found, opening first-run setup window.")
         if not run_settings_window(is_first_run=True):
             logger.info("Setup was cancelled, exiting.")
@@ -267,16 +390,6 @@ def run_app() -> int:
     draft_layout.ensure_crop_config_file()
 
     daemon = _DaemonRunner()
-    daemon.start(config)
-
-    if config.draft_feature_enabled:
-        # Pays the RapidOCR model-load cost (over a second, see ocr.py) now,
-        # in the background, instead of on the player's first real hotkey
-        # press of the session -- stacked on top of the screenshot/crop/OCR
-        # work `capture_and_submit` already has to do before anything shows
-        # up on the dashboard.
-        threading.Thread(target=ocr.warm_up, name="hots-ocr-warmup", daemon=True).start()
-
     update_status = UpdateStatusTracker()
 
     def _on_open_settings() -> None:
@@ -311,8 +424,22 @@ def run_app() -> int:
     # Constructed before the update-checker thread starts (but only `.run()`
     # at the very end) so `_on_update_found` below has a tray icon to post
     # its notification to as soon as an update is found, not just once the
-    # tray's own message loop gets around to starting.
+    # tray's own message loop gets around to starting. Also, critically,
+    # before `daemon.start()`: the daemon needs a tray to notify through
+    # from the very first replay it finds (see `set_tray_notify` and
+    # tasks/daemon-audit-2026-08-12.md, 2.1), which used to be impossible --
+    # the daemon was started before the tray existed at all.
     tray = TrayController(on_open_settings=_on_open_settings, on_quit=_on_quit, window_lock=window_lock)
+    daemon.set_tray_notify(tray.notify)
+    daemon.start(config, announce_initial_scan=first_run)
+
+    if config.draft_feature_enabled:
+        # Pays the RapidOCR model-load cost (over a second, see ocr.py) now,
+        # in the background, instead of on the player's first real hotkey
+        # press of the session -- stacked on top of the screenshot/crop/OCR
+        # work `capture_and_submit` already has to do before anything shows
+        # up on the dashboard.
+        threading.Thread(target=ocr.warm_up, name="hots-ocr-warmup", daemon=True).start()
 
     def _show_update_progress_popup(version: str) -> None:
         # Non-blocking: if the settings window (or a previous popup) already

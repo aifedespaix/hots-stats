@@ -2,7 +2,12 @@ import threading
 import time
 from unittest.mock import MagicMock, patch
 
-from src.app import _DaemonRunner, _run_sync_loop, _sync_api_version
+from src.app import (
+    _PERSISTENT_FAILURE_THRESHOLD,
+    _DaemonRunner,
+    _run_sync_loop,
+    _sync_api_version,
+)
 from src.config import Config
 from src.status import StatusTracker
 from src.sync_state import SyncState
@@ -27,11 +32,38 @@ def test_run_sync_loop_ingests_existing_replays_before_watching(tmp_path):
     with patch("src.app.watch_replays") as watch:
         _run_sync_loop(tmp_path, ingested.append, stop_event, status)
 
-    assert ingested == [a, b]
+    # The initial backlog is now ingested by a small thread pool (see
+    # _INITIAL_SYNC_WORKERS), so both are still ingested exactly once each,
+    # but not necessarily in on-disk order.
+    assert sorted(ingested) == sorted([a, b])
     assert status.snapshot().found == 2
     watch.assert_called_once()
     assert watch.call_args.args[0] == tmp_path
     assert watch.call_args.kwargs["stop_event"] is stop_event
+
+
+def test_run_sync_loop_calls_on_initial_scan_once_with_the_found_count(tmp_path):
+    _touch_replay(tmp_path, "A.StormReplay")
+    _touch_replay(tmp_path, "B.StormReplay")
+    status = StatusTracker()
+    stop_event = threading.Event()
+    on_initial_scan = MagicMock()
+
+    with patch("src.app.watch_replays"):
+        _run_sync_loop(tmp_path, lambda _p: None, stop_event, status, on_initial_scan=on_initial_scan)
+
+    on_initial_scan.assert_called_once_with(2)
+
+
+def test_run_sync_loop_calls_on_initial_scan_with_zero_when_folder_is_empty(tmp_path):
+    status = StatusTracker()
+    stop_event = threading.Event()
+    on_initial_scan = MagicMock()
+
+    with patch("src.app.watch_replays"):
+        _run_sync_loop(tmp_path, lambda _p: None, stop_event, status, on_initial_scan=on_initial_scan)
+
+    on_initial_scan.assert_called_once_with(0)
 
 
 def test_run_sync_loop_stops_early_when_stop_event_set(tmp_path):
@@ -204,3 +236,134 @@ def test_trigger_draft_capture_spawns_thread_with_current_client():
         _wait_until(lambda: capture.called)
 
     capture.assert_called_once_with(fake_client, coordinator=runner.draft_capture_status)
+
+
+# -- proactive tray notifications (tasks/daemon-audit-2026-08-12.md, 2.1) ----
+
+
+def _fail_once(runner: _DaemonRunner, name: str) -> None:
+    runner.status.start_syncing(name)
+    runner.status.finish_syncing(name, ok=False, error="boom")
+    runner._maybe_notify_persistent_failure()
+
+
+def test_maybe_notify_persistent_failure_fires_once_at_the_threshold():
+    runner = _DaemonRunner()
+    notify = MagicMock()
+    runner.set_tray_notify(notify)
+
+    for i in range(_PERSISTENT_FAILURE_THRESHOLD - 1):
+        _fail_once(runner, f"g{i}")
+    notify.assert_not_called()  # not yet -- one short of the threshold
+
+    _fail_once(runner, "g-threshold")
+    notify.assert_called_once()
+
+    # Further failures past the threshold don't repeat the toast.
+    _fail_once(runner, "g-extra")
+    notify.assert_called_once()
+
+
+def test_maybe_notify_persistent_failure_resets_after_a_success():
+    """A run of failures crossing the threshold, then recovering, then
+    failing again just as many times must notify twice -- once per distinct
+    incident -- not stay silently suppressed forever after the first one."""
+    runner = _DaemonRunner()
+    notify = MagicMock()
+    runner.set_tray_notify(notify)
+
+    for i in range(_PERSISTENT_FAILURE_THRESHOLD):
+        _fail_once(runner, f"g{i}")
+    notify.assert_called_once()
+
+    runner.status.start_syncing("ok")
+    runner.status.finish_syncing("ok", ok=True)
+    runner._maybe_notify_persistent_failure()
+
+    for i in range(_PERSISTENT_FAILURE_THRESHOLD):
+        _fail_once(runner, f"h{i}")
+
+    assert notify.call_count == 2
+
+
+def test_maybe_notify_persistent_failure_is_a_noop_without_a_tray():
+    """A `_DaemonRunner` that never had `set_tray_notify` called (every
+    headless test constructing one directly, same as before this feature
+    existed) must not raise just because failures accumulate."""
+    runner = _DaemonRunner()
+    for i in range(_PERSISTENT_FAILURE_THRESHOLD + 2):
+        _fail_once(runner, f"g{i}")  # no exception
+
+
+def _wait_until_called(mock: MagicMock, timeout: float = 2.0) -> None:
+    _wait_until(lambda: mock.called, timeout)
+
+
+def test_start_announces_initial_scan_when_requested(tmp_path):
+    config = Config(
+        api_base_url="https://api.example.com",
+        access_token="hots_pat_abc",
+        replays_dir=tmp_path,
+        draft_feature_enabled=False,  # keeps this test off the real `keyboard` hook
+    )
+    runner = _DaemonRunner()
+    notify = MagicMock()
+    runner.set_tray_notify(notify)
+
+    with patch("src.app.SyncState"), patch("src.app.api_client.fetch_version", return_value=None):
+        with patch("src.app._run_sync_loop") as run_sync_loop:
+            runner.start(config, announce_initial_scan=True)
+            _wait_until_called(run_sync_loop)
+            on_initial_scan = run_sync_loop.call_args.kwargs["on_initial_scan"]
+            on_initial_scan(3)
+        runner.stop()
+
+    notify.assert_called_once()
+    assert "3 replay" in notify.call_args.args[0]
+
+
+def test_start_without_announce_initial_scan_does_not_notify(tmp_path):
+    config = Config(
+        api_base_url="https://api.example.com",
+        access_token="hots_pat_abc",
+        replays_dir=tmp_path,
+        draft_feature_enabled=False,
+    )
+    runner = _DaemonRunner()
+    notify = MagicMock()
+    runner.set_tray_notify(notify)
+
+    with patch("src.app.SyncState"), patch("src.app.api_client.fetch_version", return_value=None):
+        with patch("src.app._run_sync_loop") as run_sync_loop:
+            runner.start(config)  # announce_initial_scan defaults to False
+            _wait_until_called(run_sync_loop)
+            on_initial_scan = run_sync_loop.call_args.kwargs["on_initial_scan"]
+            on_initial_scan(3)
+        runner.stop()
+
+    notify.assert_not_called()
+
+
+def test_start_does_not_announce_an_empty_initial_scan(tmp_path):
+    """A first run whose replays folder is empty has nothing to report --
+    the toast exists to reassure the player their existing replays are being
+    picked up, not to fire unconditionally on every first launch."""
+    config = Config(
+        api_base_url="https://api.example.com",
+        access_token="hots_pat_abc",
+        replays_dir=tmp_path,
+        draft_feature_enabled=False,
+    )
+    runner = _DaemonRunner()
+    notify = MagicMock()
+    runner.set_tray_notify(notify)
+
+    with patch("src.app.SyncState"), patch("src.app.api_client.fetch_version", return_value=None):
+        with patch("src.app._run_sync_loop") as run_sync_loop:
+            runner.start(config, announce_initial_scan=True)
+            _wait_until_called(run_sync_loop)
+            on_initial_scan = run_sync_loop.call_args.kwargs["on_initial_scan"]
+            on_initial_scan(0)
+        runner.stop()
+
+    notify.assert_not_called()

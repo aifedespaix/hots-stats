@@ -244,6 +244,54 @@ def test_capture_and_submit_bails_when_superseded_after_screenshot():
     client.post_draft_snapshot.assert_not_called()
 
 
+# -- run_test_capture (tasks/daemon-audit-2026-08-12.md, 2.2) ----------------
+
+
+def test_run_test_capture_never_posts_to_the_api():
+    left = _team_result(["l1", None, "l3", "l4", "l5"])
+    right = _team_result(["r1", "r2", "r3", "r4", "r5"])
+
+    with patch("src.draft_capture.screen_capture.capture_foreground_window", return_value="screenshot"):
+        with patch("src.draft_capture.extract_team_crops", return_value=(left, right)):
+            with patch("src.draft_capture.ocr.read_player_name", return_value=OcrResult("X", 0.9)):
+                with patch("src.draft_capture.draft_debug.save_capture") as save_capture:
+                    result = draft_capture.run_test_capture()
+
+    assert result.left is left
+    assert result.right is right
+    assert len(result.left_results) == 5
+    assert all(r.text == "X" for r in result.left_results)
+    save_capture.assert_called_once()
+
+
+def test_run_test_capture_uses_the_foreground_window_not_the_game_window():
+    """The whole point of the test-capture button is working against
+    whatever window is focused, not requiring a live HotS window -- see
+    `screen_capture.find_foreground_window`."""
+    left = _team_result([None] * 5)
+    right = _team_result([None] * 5)
+
+    with patch("src.draft_capture.screen_capture.capture_foreground_window", return_value="s") as capture_fg:
+        with patch("src.draft_capture.screen_capture.capture_game_window") as capture_game:
+            with patch("src.draft_capture.extract_team_crops", return_value=(left, right)):
+                with patch("src.draft_capture.draft_debug.save_capture"):
+                    draft_capture.run_test_capture()
+
+    capture_fg.assert_called_once()
+    capture_game.assert_not_called()
+
+
+def test_run_test_capture_raises_when_no_window_has_focus():
+    """Unlike `capture_and_submit`, this has a real caller (the settings
+    window) that can show the error -- it must propagate, not be swallowed."""
+    with patch(
+        "src.draft_capture.screen_capture.capture_foreground_window",
+        side_effect=screen_capture.GameWindowNotFoundError("no active window"),
+    ):
+        with pytest.raises(screen_capture.GameWindowNotFoundError):
+            draft_capture.run_test_capture()
+
+
 def test_capture_and_submit_bails_when_superseded_before_submit():
     client = _client()
     coordinator = draft_capture.DraftCaptureCoordinator()

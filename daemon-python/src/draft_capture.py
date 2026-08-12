@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from enum import Enum
 
 from . import api_client, draft_debug, ocr, screen_capture
-from .draft_layout import ensure_crop_config_file, extract_team_crops
+from .draft_layout import TeamCropResult, ensure_crop_config_file, extract_team_crops
 from .ocr import OcrResult
 
 logger = logging.getLogger(__name__)
@@ -189,3 +189,46 @@ def capture_and_submit(client: api_client.ApiClient, coordinator: DraftCaptureCo
     finally:
         if coordinator is not None and not failed:
             coordinator.finish(generation)
+
+
+@dataclass(frozen=True)
+class TestCaptureResult:
+    """Everything the settings window's "Tester la capture" button (see
+    `run_test_capture` below, and gui.py) needs to render its result window:
+    both teams' crop images (so the player can actually see what got cut
+    out, not just the text) alongside what OCR read from each."""
+
+    left: TeamCropResult
+    right: TeamCropResult
+    left_results: list[OcrResult]
+    right_results: list[OcrResult]
+
+
+def run_test_capture() -> TestCaptureResult:
+    """Runs the same screenshot -> crop -> OCR pipeline as a real hotkey
+    press (`capture_and_submit`), but against the current *foreground*
+    window instead of requiring a live HotS draft, and without ever POSTing
+    anything to the API. Lets a player sanity-check the pipeline -- and see
+    exactly what each crop/OCR read looks like -- from the settings window,
+    instead of the only way to test it being to be mid-draft in an actual
+    game (see tasks/daemon-audit-2026-08-12.md, 2.2).
+
+    Unlike `capture_and_submit` (called from a hotkey callback with no
+    caller to report to, so it never raises), this always has a caller --
+    the settings window's worker thread -- that can catch and show a failure
+    directly, so it's allowed to raise (`screen_capture.GameWindowNotFoundError`
+    when nothing has focus, or anything unexpected from screenshotting).
+    """
+    ensure_crop_config_file()
+    screenshot = screen_capture.capture_foreground_window()
+    left, right = extract_team_crops(screenshot)
+    _left_slots, left_results = _build_team_payload(left.player_crops)
+    _right_slots, right_results = _build_team_payload(right.player_crops)
+
+    captured_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    # Same debug snapshot a real capture would leave behind (see
+    # draft_debug.py) -- a test capture is exactly the kind of thing worth
+    # inspecting more closely under %APPDATA% afterwards too.
+    draft_debug.save_capture(screenshot, captured_at, left, right, left_results, right_results)
+
+    return TestCaptureResult(left=left, right=right, left_results=left_results, right_results=right_results)

@@ -84,14 +84,46 @@ construit qu'une fois).
 Fichiers modifiés : `src/gui.py`, `src/app.py`, `src/ocr.py`,
 `tests/test_ocr.py` (2 nouveaux tests).
 
-## 2. Chantiers identifiés nécessitant validation avant implémentation
+## 2. Chantiers identifiés, implémentés dans une session de suivi
 
-Classés par priorité perçue. Aucun n'est un bug qui casse une
-fonctionnalité aujourd'hui — ce sont des choix de conception ou des trous
-UX qui valent la peine d'une décision produit avant d'y toucher.
+Classés par priorité perçue. Aucun n'était un bug qui cassait une
+fonctionnalité — ce sont des choix de conception ou des trous UX. Les
+sections 2.1 à 2.4 ont été implémentées dans une session de suivi
+(2026-08-12, `268 passed`, `ruff check` sans nouvelle régression) ; chacune
+documente ci-dessous le choix retenu là où le texte original appelait
+explicitement une décision produit. 2.5 reste volontairement non traitée
+(voir cette sous-section : ce n'est pas un problème visible aujourd'hui).
 
 ### 2.1 [UX — priorité haute] Le daemon ne signale jamais proactivement son
 état ; il faut ouvrir les Paramètres pour tout voir
+
+**Implémenté.** `TrayController.notify` est maintenant relié à la sync de
+replays via `_DaemonRunner` (`app.py`) : la construction du tray a été
+déplacée *avant* le premier `daemon.start()` dans `run_app()` (elle avait
+lieu après), ce qui permet à `_DaemonRunner.set_tray_notify` de brancher
+`tray.notify` avant que quoi que ce soit ne parte en synchronisation. Deux
+notifications, correspondant aux deux pistes évoquées ci-dessous :
+
+- **Scan initial** : `_run_sync_loop` prend un callback `on_initial_scan`,
+  appelé une fois avec le nombre de replays trouvés sur disque avant toute
+  ingestion. `_DaemonRunner.start(config, announce_initial_scan=...)`
+  n'active ce toast que pour le tout premier lancement (`first_run`, calculé
+  dans `run_app()` avant que la fenêtre de configuration initiale ne crée
+  `config.json`) — décision délibérée pour ne pas re-notifier à chaque
+  redémarrage normal du daemon (un joueur qui redémarre son PC avec des
+  milliers de replays déjà synchronisés n'a pas besoin de revoir ce message
+  à chaque fois, puisque `status.set_found` compte tous les fichiers sur
+  disque, pas seulement les non-synchronisés).
+- **Échecs persistants** : `StatusTracker` suit désormais
+  `consecutive_failures` (remis à zéro à chaque succès). Au-delà de
+  `_PERSISTENT_FAILURE_THRESHOLD = 5` échecs d'affilée,
+  `_DaemonRunner._maybe_notify_persistent_failure` déclenche un toast unique
+  ("Ouvrez les paramètres pour voir le détail"), protégé par un verrou pour
+  rester idempotent malgré la parallélisation de 2.3. Le seuil de 5 est un
+  choix arbitraire raisonnable (assez haut pour ignorer un fichier isolé
+  corrompu, assez bas pour prévenir avant qu'un token révoqué ne fasse
+  échouer tout un backlog) — pas de notion de "tentatives espacées dans le
+  temps" au-delà de ça, jugée superflue pour une première version.
 
 Le tray icon est statique quel que soit l'état du daemon : pas de couleur,
 pas de badge, pas de notification pour une erreur de sync persistante. Deux
@@ -140,6 +172,22 @@ crops + le texte OCR + la confiance directement dans une fenêtre, sans
 POST réel vers `/draft/snapshot`. Réduirait beaucoup la friction pour un
 joueur non technique qui n'a jamais ouvert `%APPDATA%`.
 
+**Implémenté.** `screen_capture.find_foreground_window` /
+`capture_foreground_window` (nouveau) screenshotent la fenêtre qui a le
+focus, sans filtrage de titre — contrairement à `find_game_window`, utilisé
+par le hotkey réel. `draft_capture.run_test_capture` (nouveau) réutilise le
+pipeline crop/OCR de `capture_and_submit` sur cette capture, sans jamais
+construire de client API ni appeler `post_draft_snapshot` : structurellement
+impossible d'envoyer un POST réel. Le bouton « Tester la capture » (onglet
+Draft Live, `gui.py`) déclenche un compte à rebours de 3s avant la capture
+(le clic laisse la fenêtre des paramètres au premier plan — le compte à
+rebours laisse le temps de basculer vers la fenêtre à tester), puis ouvre
+une fenêtre de résultat avec les 10 vignettes (agrandies ×~2-3 pour rester
+lisibles) et le texte OCR + confiance de chaque slot, coloré comme le reste
+de l'UI (vert = lu, rouge = illisible). Disponible même au tout premier
+lancement, indépendamment de la case « Activer la capture de draft en
+direct » — le but est justement de pouvoir tester avant de s'engager.
+
 ### 2.3 [Performance — priorité moyenne] Synchronisation initiale
 strictement séquentielle, mono-thread
 
@@ -164,6 +212,27 @@ serveur), et l'ordre d'affichage dans `StatusTracker.currently_syncing`
 devenir une liste avec plusieurs fichiers en parallèle. Changement
 structurel, pas une correction ponctuelle.
 
+**Implémenté**, avec un choix de compromis délibéré sur le point qui
+appelait explicitement une décision produit (le parallélisme des
+*uploads*) : `app._run_sync_loop` traite désormais le backlog initial via
+un `ThreadPoolExecutor` (`_INITIAL_SYNC_WORKERS = 4`), un seul pool pour
+tout le pipeline `ingest_file` (hash+parse *et* upload), plutôt que deux
+paliers de parallélisme distincts (un plus élevé pour le CPU-bound, un plus
+bas et séparément réglé pour le réseau) — ce découplage plus fin reste
+possible en évolution future mais aurait ajouté une vraie complexité pour
+un premier jet. 4 requêtes concurrentes vers l'API reste modeste (l'ordre de
+grandeur d'un navigateur vers un seul host), et chaque requête garde son
+propre retry/backoff (`api_client.ApiClient.post_replay`) — donc pas de
+"bombardement" au sens où l'audit initial s'en inquiétait. Les nouveaux
+replays détectés après le backlog initial (`watch_replays`) restent traités
+un par un, comme avant : ils arrivent trop rarement pour bénéficier du
+parallélisme. `StatusTracker.currently_syncing` est passé de `str | None` à
+`frozenset[str]` (plusieurs fichiers "en cours" à la fois), et l'onglet
+Synchronisation (`gui.py`) les affiche joints par une virgule. `SyncState`
+n'a nécessité aucun changement : son verrou interne et sa connexion
+`check_same_thread=False` géraient déjà l'accès concurrent, comme
+l'audit initial l'avait anticipé.
+
 ### 2.4 [Performance — priorité basse] Re-hachage complet de chaque replay
 déjà synchronisé à chaque redémarrage du daemon
 
@@ -184,6 +253,18 @@ renommage du fichier, contrairement à un couple chemin+mtime) — le
 invalidation si l'un de ces trois change, ce qui touche le schéma de la
 table `replays` et mérite d'être pensé avec le reste du schéma plutôt que
 patché isolément.
+
+**Implémenté**, exactement selon la piste décrite ci-dessus : nouvelle
+table `file_hash_cache` (chemin, taille, mtime, hash) dans `sync_state.py`
+— une table séparée plutôt qu'une extension de `replays`, pour ne pas
+mélanger "identité stable d'un replay" (la table `replays`, clé = hash) et
+"raccourci de calcul pour un chemin donné" (clé = chemin), deux besoins de
+forme différente. `SyncState.cached_hash`/`cache_hash` : `ingest_file`
+(`ingestion.py`) consulte le cache par `(chemin, taille, mtime)` avant de
+lire le fichier ; toute différence sur taille ou mtime est traitée comme un
+cache miss (recalcul + réécriture), ce qui couvre nativement le cas d'un
+fichier modifié sur place. Un chemin jamais vu est aussi un miss simple —
+pas besoin d'invalidation explicite au sens propre.
 
 ### 2.5 [Robustesse — priorité basse] Vérification de mise à jour GitHub
 non authentifiée

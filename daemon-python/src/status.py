@@ -20,7 +20,15 @@ class DaemonStatus:
     found: int = 0
     synced: int = 0
     failed: int = 0
-    currently_syncing: str | None = None
+    # How many ingestions have failed *in a row*, reset to 0 on the next
+    # success -- unlike `failed` (a lifetime total for this run), this is
+    # what `app.py` watches to notify the tray once a run of failures looks
+    # persistent rather than a one-off blip (see tasks/daemon-audit-2026-08-12.md, 2.1).
+    consecutive_failures: int = 0
+    # A set, not a single name: the initial backlog is now ingested by a
+    # small pool of worker threads (see app.py's `_run_sync_loop`), so more
+    # than one replay can genuinely be "in progress" at once.
+    currently_syncing: frozenset[str] = frozenset()
     last_error: str | None = None
 
 
@@ -41,15 +49,17 @@ class StatusTracker:
             self._status = replace(self._status, found=self._status.found + by)
 
     def start_syncing(self, name: str) -> None:
-        self._update(currently_syncing=name)
+        with self._lock:
+            self._status = replace(self._status, currently_syncing=self._status.currently_syncing | {name})
 
-    def finish_syncing(self, *, ok: bool, error: str | None = None) -> None:
+    def finish_syncing(self, name: str, *, ok: bool, error: str | None = None) -> None:
         with self._lock:
             self._status = replace(
                 self._status,
-                currently_syncing=None,
+                currently_syncing=self._status.currently_syncing - {name},
                 synced=self._status.synced + (1 if ok else 0),
                 failed=self._status.failed + (0 if ok else 1),
+                consecutive_failures=0 if ok else self._status.consecutive_failures + 1,
                 last_error=error if error is not None else self._status.last_error,
             )
 

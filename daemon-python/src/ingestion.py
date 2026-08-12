@@ -81,34 +81,59 @@ def ingest_file(
     the server (newly uploaded, or already up to date there) is recorded so
     future calls skip it too, tagged with `api_version` (the version
     `GET /ingest/version` reported at daemon startup, see `app.py`) for the
-    Debug report. A replay that errors (e.g. an unparseable file, or a
-    server rejection) is recorded with its error and full traceback instead
-    -- shown in the Debug window (gui.py) -- and retried on the next call,
-    since fixing the underlying issue (a code update, a reachable API) is
-    exactly what should make it sync next time.
+    Debug report. Figuring out "already synced" needs the file's content
+    hash, which normally means reading it in full (`hasher.hash_replay_file`)
+    -- but if this exact path, size and mtime were already hashed on a
+    previous call, `sync_state.cached_hash` returns that hash straight away
+    instead, so an unchanged replay isn't read from disk again on every
+    daemon startup just to learn nothing changed (see
+    tasks/daemon-audit-2026-08-12.md, 2.4). A replay that errors (e.g. an
+    unparseable file, or a server rejection) is recorded with its error and
+    full traceback instead -- shown in the Debug window (gui.py) -- and
+    retried on the next call, since fixing the underlying issue (a code
+    update, a reachable API) is exactly what should make it sync next time.
 
     Never raises: every failure this function knows how to name (a bad
     replay file, a rejected/unreachable API call) gets a specific handler
     below, and anything it doesn't recognize -- a malformed API response, a
     local sqlite hiccup -- still falls through to a final catch-all rather
     than escaping. One bad replay must never take the whole sync loop down
-    with it (`app.py`'s `_run_sync_loop` calls this in a plain `for` loop
-    with no try/except of its own): before this guarantee existed, an
-    unanticipated exception here would silently kill the background
-    "hots-replay-watcher" thread mid-run, leaving the settings window frozen
-    on "en cours de synchronisation : <this file>" forever with the
-    remaining replays never attempted and no error shown anywhere.
+    with it (`app.py`'s `_run_sync_loop` calls this from a small pool of
+    worker threads, with no try/except of its own around each call): before
+    this guarantee existed, an unanticipated exception here would silently
+    kill the background "hots-replay-watcher" thread mid-run, leaving the
+    settings window frozen on "en cours de synchronisation : <this file>"
+    forever with the remaining replays never attempted and no error shown
+    anywhere.
     """
     replay_hash: str | None = None
     if sync_state is not None:
         try:
-            replay_hash = hash_replay_file(path)
+            stat = path.stat()
         except OSError as err:
-            logger.warning("Could not hash %s, parsing it in full: %s", path, err)
+            logger.warning("Could not stat %s, hashing it in full: %s", path, err)
+            stat = None
+
+        cached = sync_state.cached_hash(str(path), stat.st_size, stat.st_mtime) if stat is not None else None
+        if cached is not None:
+            # Same path, size and mtime as the last time this daemon hashed
+            # it -- the content hasn't changed, so skip reading the file's
+            # bytes again just to recompute a hash we already know. This is
+            # what keeps a startup with thousands of already-synced replays
+            # from re-reading every single one of them in full every time.
+            replay_hash = cached
         else:
-            if sync_state.is_up_to_date(replay_hash, constants.PARSER_VERSION):
-                logger.debug("Skipping %s: already synced", path)
-                return IngestOutcome("skipped", "already synced")
+            try:
+                replay_hash = hash_replay_file(path)
+            except OSError as err:
+                logger.warning("Could not hash %s, parsing it in full: %s", path, err)
+            else:
+                if stat is not None:
+                    sync_state.cache_hash(str(path), stat.st_size, stat.st_mtime, replay_hash)
+
+        if replay_hash is not None and sync_state.is_up_to_date(replay_hash, constants.PARSER_VERSION):
+            logger.debug("Skipping %s: already synced", path)
+            return IngestOutcome("skipped", "already synced")
 
     payload: dict | None = None
     try:

@@ -148,6 +148,44 @@ def test_refresh_file_existence_flags_missing_source_files(tmp_path):
     assert records_source[0] == 1
 
 
+def test_cached_hash_is_a_miss_before_anything_is_cached(tmp_path):
+    state = SyncState(tmp_path / "sync_state.db")
+    assert state.cached_hash("C:\\replays\\a.StormReplay", 1024, 12345.0) is None
+
+
+def test_cache_hash_then_cached_hash_hits_on_exact_match(tmp_path):
+    state = SyncState(tmp_path / "sync_state.db")
+    state.cache_hash("C:\\replays\\a.StormReplay", 1024, 12345.0, "abc")
+
+    assert state.cached_hash("C:\\replays\\a.StormReplay", 1024, 12345.0) == "abc"
+
+
+def test_cached_hash_misses_when_size_differs(tmp_path):
+    state = SyncState(tmp_path / "sync_state.db")
+    state.cache_hash("C:\\replays\\a.StormReplay", 1024, 12345.0, "abc")
+
+    assert state.cached_hash("C:\\replays\\a.StormReplay", 2048, 12345.0) is None
+
+
+def test_cached_hash_misses_when_mtime_differs(tmp_path):
+    """A replay overwritten in place (same size, by coincidence) but with a
+    newer mtime must not reuse the old hash -- the whole point of keying on
+    both is that either changing means the bytes may have changed too."""
+    state = SyncState(tmp_path / "sync_state.db")
+    state.cache_hash("C:\\replays\\a.StormReplay", 1024, 12345.0, "abc")
+
+    assert state.cached_hash("C:\\replays\\a.StormReplay", 1024, 99999.0) is None
+
+
+def test_cache_hash_overwrites_stale_entry_for_the_same_path(tmp_path):
+    state = SyncState(tmp_path / "sync_state.db")
+    state.cache_hash("C:\\replays\\a.StormReplay", 1024, 12345.0, "abc")
+    state.cache_hash("C:\\replays\\a.StormReplay", 2048, 67890.0, "def")
+
+    assert state.cached_hash("C:\\replays\\a.StormReplay", 1024, 12345.0) is None
+    assert state.cached_hash("C:\\replays\\a.StormReplay", 2048, 67890.0) == "def"
+
+
 def test_meta_roundtrip(tmp_path):
     state = SyncState(tmp_path / "sync_state.db")
     assert state.get_meta("api_version") is None

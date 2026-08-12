@@ -76,6 +76,63 @@ def test_ingest_file_skips_already_synced_replay_without_parsing(tmp_path):
     assert outcome.status == "skipped"
 
 
+def test_ingest_file_reuses_cached_hash_instead_of_rereading_the_file(tmp_path):
+    """Regression test for 2.4 in tasks/daemon-audit-2026-08-12.md: a replay
+    already hashed once (same path, size and mtime) must not have its bytes
+    read again on a later `ingest_file` call, e.g. a subsequent daemon
+    startup with the same file already on disk."""
+    client = api_client.ApiClient(_config(tmp_path))
+    replay = tmp_path / "game.StormReplay"
+    replay.write_bytes(b"some replay bytes")
+    sync_state = SyncState(tmp_path / "synced.json")
+
+    from src.hasher import hash_replay_file
+
+    replay_hash = hash_replay_file(replay)
+    stat = replay.stat()
+    sync_state.mark_synced(replay_hash, constants.PARSER_VERSION)
+    sync_state.cache_hash(str(replay), stat.st_size, stat.st_mtime, replay_hash)
+
+    with patch("src.ingestion.hash_replay_file") as hash_fn:
+        outcome = ingest_file(client, replay, sync_state)
+
+    hash_fn.assert_not_called()
+    assert outcome.status == "skipped"
+
+
+def test_ingest_file_caches_hash_after_computing_it(tmp_path):
+    client = api_client.ApiClient(_config(tmp_path))
+    replay = tmp_path / "game.StormReplay"
+    replay.write_bytes(b"some replay bytes")
+    sync_state = SyncState(tmp_path / "synced.json")
+
+    from src.hasher import hash_replay_file
+
+    replay_hash = hash_replay_file(replay)
+    stat = replay.stat()
+
+    with patch("src.ingestion.replay_parser.parse_replay", return_value={"replayHash": replay_hash}):
+        with patch.object(client, "post_replay", side_effect=api_client.AuthError("nope")):
+            ingest_file(client, replay, sync_state)
+
+    assert sync_state.cached_hash(str(replay), stat.st_size, stat.st_mtime) == replay_hash
+
+
+def test_ingest_file_recomputes_hash_when_the_file_changed_since_caching(tmp_path):
+    client = api_client.ApiClient(_config(tmp_path))
+    replay = tmp_path / "game.StormReplay"
+    replay.write_bytes(b"some replay bytes")
+    sync_state = SyncState(tmp_path / "synced.json")
+
+    sync_state.cache_hash(str(replay), file_size=999999, mtime=1.0, replay_hash="stale-hash")
+
+    with patch("src.ingestion.replay_parser.parse_replay", return_value={"replayHash": "abc"}):
+        with patch.object(client, "post_replay", return_value=api_client.IngestResult(upserted=True, match_id="m1")):
+            outcome = ingest_file(client, replay, sync_state)
+
+    assert outcome == IngestOutcome("uploaded")
+
+
 def test_ingest_file_marks_synced_on_success(tmp_path):
     client = api_client.ApiClient(_config(tmp_path))
     replay = tmp_path / "game.StormReplay"

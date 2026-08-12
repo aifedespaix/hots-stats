@@ -31,7 +31,9 @@ import webbrowser
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from . import api_client, autostart, hotkey, updater
+from PIL import Image, ImageTk
+
+from . import api_client, autostart, draft_capture, hotkey, updater
 from .config import (
     DEFAULT_DRAFT_HOTKEY,
     config_file_path,
@@ -43,6 +45,8 @@ from .config import (
 )
 from .constants import APP_VERSION
 from .draft_capture import CapturePhase, DraftCaptureCoordinator
+from .draft_layout import TeamCropResult
+from .ocr import OcrResult
 from .status import StatusTracker
 from .sync_state import SyncState
 from .updater import UpdatePhase, UpdateStatus, UpdateStatusTracker
@@ -62,7 +66,21 @@ _SYNCING_LABEL_MAX_CHARS = 60
 _ERROR_LABEL_MAX_CHARS = 220
 _UPDATE_STATUS_MAX_CHARS = 90
 _DRAFT_CAPTURE_STATUS_MAX_CHARS = 90
+_TEST_CAPTURE_STATUS_MAX_CHARS = 90
 _LABEL_WRAPLENGTH = 460
+
+# How long the "Tester la capture" button waits, after being clicked, before
+# actually taking the screenshot -- gives the player a moment to alt-tab to
+# whatever window they actually want to test (the click itself leaves the
+# settings window focused, which would otherwise be the only thing ever
+# captured). See `_SettingsWindow._start_test_capture`.
+_TEST_CAPTURE_DELAY_SECONDS = 3
+
+# Display width (px) each of the 10 crop thumbnails is scaled to in the test
+# capture's result window -- the raw crops are tiny (hand-tuned name-strip
+# boxes, see draft_layout.py), so shown at native size they'd be nearly
+# unreadable.
+_TEST_CAPTURE_THUMB_WIDTH = 220
 
 # A small, dark, "gamer tool" palette. Kept in one place so the whole window
 # reads as one deliberate look rather than default-tk gray.
@@ -330,6 +348,8 @@ class _SettingsWindow:
         self._live_stats_job: str | None = None
         self._update_status_job: str | None = None
         self._draft_capture_status_job: str | None = None
+        self._test_capture_countdown_job: str | None = None
+        self._test_capture_running = False
         self._hotkey_capturing = False
         # Flipped once the window starts closing (see `_on_close`/`_save`),
         # before `root.destroy()`. Background worker threads (the
@@ -625,6 +645,22 @@ class _SettingsWindow:
             # progress (see _refresh_draft_capture_status), so idle time
             # (almost always) doesn't show an empty bar doing nothing.
 
+        # "Tester la capture" -- runs the same screenshot -> crop -> OCR
+        # pipeline against whatever window has focus, without ever POSTing
+        # anything, so a player can check hotkey/crop/OCR calibration
+        # without needing to be mid-draft in an actual game (see
+        # draft_capture.run_test_capture). Independent of the "Activer la
+        # capture de draft en direct" checkbox above and of any saved
+        # config -- available even on first run, before anything's saved.
+        test_row = ttk.Frame(inner, style="Panel.TFrame")
+        test_row.grid(row=7, column=0, columnspan=3, sticky="w", pady=(18, 0))
+        self._test_capture_btn = ttk.Button(
+            test_row, text="Tester la capture", style="Ghost.TButton", command=self._start_test_capture
+        )
+        self._test_capture_btn.pack(side="left")
+        self._test_capture_status_label = ttk.Label(inner, text="", style="PanelMuted.TLabel")
+        self._test_capture_status_label.grid(row=8, column=0, columnspan=3, sticky="w", pady=(6, 0))
+
     def _on_draft_enabled_toggled(self) -> None:
         state = "normal" if self._draft_enabled_var.get() else "disabled"
         self._draft_hotkey_record_btn.configure(state=state)
@@ -734,6 +770,112 @@ class _SettingsWindow:
 
         self._draft_capture_status_job = self._root.after(_LIVE_STATS_POLL_MS, self._refresh_draft_capture_status)
 
+    # -- Draft Live tab: "Tester la capture" ---------------------------------
+
+    def _start_test_capture(self) -> None:
+        if self._test_capture_running:
+            return
+        self._test_capture_running = True
+        self._test_capture_btn.configure(state="disabled")
+        self._test_capture_countdown(_TEST_CAPTURE_DELAY_SECONDS)
+
+    def _test_capture_countdown(self, remaining: int) -> None:
+        # Clicking the button leaves *this* window focused -- capturing
+        # immediately would only ever screenshot the settings window itself.
+        # This short countdown gives the player a moment to alt-tab to
+        # whatever window they actually want to test (the game, or anything
+        # else -- see `draft_capture.run_test_capture`).
+        if remaining > 0:
+            self._set_status(
+                self._test_capture_status_label,
+                f"Basculez vers la fenêtre à tester… capture dans {remaining}s",
+                _NEUTRAL,
+            )
+            self._test_capture_countdown_job = self._root.after(
+                1000, lambda: self._test_capture_countdown(remaining - 1)
+            )
+            return
+        self._test_capture_countdown_job = None
+        self._set_status(self._test_capture_status_label, "Capture en cours…", _NEUTRAL)
+        threading.Thread(target=self._test_capture_worker, daemon=True, name="hots-test-capture").start()
+
+    def _test_capture_worker(self) -> None:
+        try:
+            result = draft_capture.run_test_capture()
+        except Exception as err:
+            self._after_if_open(self._finish_test_capture, None, str(err))
+            return
+        self._after_if_open(self._finish_test_capture, result, None)
+
+    def _finish_test_capture(
+        self, result: draft_capture.TestCaptureResult | None, error: str | None
+    ) -> None:
+        self._test_capture_running = False
+        self._test_capture_btn.configure(state="normal")
+
+        if error is not None:
+            self._set_status(
+                self._test_capture_status_label, _truncate(f"✗ {error}", _TEST_CAPTURE_STATUS_MAX_CHARS), _ERROR
+            )
+            return
+        assert result is not None
+        self._set_status(self._test_capture_status_label, "✓ Capture terminée, voir la fenêtre de résultat.", _OK)
+        self._open_test_capture_window(result)
+
+    def _crop_to_photo(self, crop: Image.Image | None) -> ImageTk.PhotoImage | None:
+        if crop is None or crop.width == 0 or crop.height == 0:
+            return None
+        scale = _TEST_CAPTURE_THUMB_WIDTH / crop.width
+        resized = crop.resize((_TEST_CAPTURE_THUMB_WIDTH, max(1, round(crop.height * scale))), Image.LANCZOS)
+        return ImageTk.PhotoImage(resized)
+
+    def _open_test_capture_window(self, result: draft_capture.TestCaptureResult) -> None:
+        win = tk.Toplevel(self._root)
+        win.title("HotS Analytics — Test de capture")
+        win.configure(bg=_BG)
+        win.transient(self._root)
+
+        body = ttk.Frame(win, padding=18)
+        body.pack(fill="both", expand=True)
+
+        # PhotoImage instances are garbage-collected by Tk the moment nothing
+        # in Python still references them -- kept alive for the window's
+        # whole lifetime by stashing them on it directly.
+        photos: list[ImageTk.PhotoImage] = []
+        win._test_capture_photos = photos  # type: ignore[attr-defined]
+
+        def _build_team_column(title: str, team: TeamCropResult, ocr_results: list[OcrResult], column: int) -> None:
+            padx = (0, 0) if column == 0 else (28, 0)
+            ttk.Label(body, text=title, style="Title.TLabel").grid(row=0, column=column, sticky="w", padx=padx)
+            for i, (crop, read) in enumerate(zip(team.player_crops, ocr_results), start=1):
+                cell = ttk.Frame(body, style="TFrame")
+                cell.grid(row=i, column=column, sticky="w", pady=(12, 0), padx=padx)
+
+                photo = self._crop_to_photo(crop)
+                if photo is not None:
+                    photos.append(photo)
+                    tk.Label(cell, image=photo, bg=_BG).pack(anchor="w")
+                else:
+                    tk.Label(cell, text="(pas de crop)", bg=_BG, fg=_TEXT_MUTED, font=("Segoe UI", 9)).pack(
+                        anchor="w"
+                    )
+
+                ok = bool(read.text)
+                text = read.text if ok else "— illisible —"
+                ttk.Label(
+                    cell,
+                    text=f"Slot {i} : {text}  ({round(read.confidence * 100)} %)",
+                    foreground=_OK if ok else _ERROR,
+                    style="TLabel",
+                ).pack(anchor="w")
+
+        _build_team_column("Équipe gauche", result.left, result.left_results, 0)
+        _build_team_column("Équipe droite", result.right, result.right_results, 1)
+
+        ttk.Button(body, text="Fermer", style="Ghost.TButton", command=win.destroy).grid(
+            row=6, column=0, columnspan=2, sticky="e", pady=(18, 0)
+        )
+
     # -- Synchronisation tab ------------------------------------------------
 
     def _build_sync_tab(self, parent: ttk.Frame) -> None:
@@ -812,7 +954,14 @@ class _SettingsWindow:
         self._synced_count_label.configure(
             text=f"{status.synced} ok" + (f", {status.failed} échouées" if status.failed else "")
         )
-        syncing_text = _truncate(status.currently_syncing, _SYNCING_LABEL_MAX_CHARS) if status.currently_syncing else "—"
+        # A small pool of worker threads ingests the initial backlog (see
+        # app.py's `_INITIAL_SYNC_WORKERS`), so more than one filename can be
+        # "in progress" at once -- joined here rather than only ever showing
+        # one of them and hiding the rest.
+        if status.currently_syncing:
+            syncing_text = _truncate(", ".join(sorted(status.currently_syncing)), _SYNCING_LABEL_MAX_CHARS)
+        else:
+            syncing_text = "—"
         self._currently_syncing_label.configure(text=syncing_text)
 
         done = status.synced + status.failed
@@ -1155,6 +1304,7 @@ class _SettingsWindow:
             # short fixed in-progress phrases -- same "x"*N filler pattern
             # as the other unbounded-text labels above.
             placeholders.append((self._draft_capture_status_label, "x" * _DRAFT_CAPTURE_STATUS_MAX_CHARS))
+        placeholders.append((self._test_capture_status_label, "x" * _TEST_CAPTURE_STATUS_MAX_CHARS))
 
         originals = [(label, label.cget("text")) for label, _ in placeholders]
         for label, placeholder in placeholders:
@@ -1245,6 +1395,9 @@ class _SettingsWindow:
         if self._draft_capture_status_job is not None:
             self._root.after_cancel(self._draft_capture_status_job)
             self._draft_capture_status_job = None
+        if self._test_capture_countdown_job is not None:
+            self._root.after_cancel(self._test_capture_countdown_job)
+            self._test_capture_countdown_job = None
 
     def _on_close(self) -> None:
         if self._hotkey_capturing:
