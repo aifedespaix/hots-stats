@@ -137,13 +137,31 @@ tightly bound, detection frequently fails to find a box at all, which
 silently discards the crop before the model that actually reads characters
 ever runs — a generic "throw the whole image at an OCR tool" comparison
 looks nothing like this, since a full screenshot gives that stage plenty to
-detect. `ocr.py`'s `read_player_name` now calls RapidOCR with
-`use_det=False` to skip straight to recognition (the step that already
-knows how to read a single line of text), and upscales each crop 3x
-(Lanczos) beforehand so that recognition step has more effective detail to
-work with than a native ~30px-tall crop provides. Both are standard
-techniques for exactly this "already-isolated single line of text" shape of
-problem.
+detect. `ocr.py`'s `read_player_name` calls RapidOCR with `use_det=False`
+to skip straight to recognition (the step that already knows how to read a
+single line of text), upscales each crop 3x (Lanczos) beforehand so that
+recognition step has more effective detail to work with than a native
+~30px-tall crop provides, and pads it afterwards with a border matching its
+own background color — the crop's natural width:height ratio otherwise
+exceeds what the recognition model was trained on, which measurably hurt
+accuracy on its own. All three are standard techniques for exactly this
+"already-isolated single line of text" shape of problem.
+
+Two recognition models run per crop, not RapidOCR's bundled default alone:
+a second one (`en_PP-OCRv5_rec_mobile.onnx`, bundled under `src/models/`)
+trained specifically on Latin-script text. HotS display names are almost
+always Latin-script (this app's UI is French), and the bundled default's
+6000+-character dictionary spends most of its capacity on Chinese glyphs —
+which measurably hurt it on exactly what matters most here: telling a
+capital "I" apart from "L"/"1", and reading accented letters (the game's
+own "I.A. Élite" bot label was the clearest reproduction — the default
+model read it as "L.A.Elite" or similar almost every time). The bundled
+default keeps running alongside it as a fallback, so a genuinely non-Latin
+pseudo (Cyrillic, CJK — scripts the Latin model's dictionary cannot
+represent at all) still gets read using whatever support already existed
+before this file started preferring the Latin model; see `ocr.py`'s module
+docstring and `_choose_reading` for exactly how the two engines' readings
+are reconciled.
 
 ### Troubleshooting: the hotkey doesn't seem to do anything
 
@@ -417,7 +435,8 @@ src/
   hotkey.py         Global keyboard shortcut (the `keyboard` package) that triggers a draft capture
   screen_capture.py Finds the HotS window and screenshots its client area (win32gui + mss)
   draft_layout.py   Crops the 10 player-name regions off a draft-screen screenshot; loads/seeds the appdata crop config
-  ocr.py            Reads a player-name crop via RapidOCR
+  ocr.py            Reads a player-name crop via two RapidOCR engines (bundled multilingual + a Latin-specialized one)
+  models/           Bundled en_PP-OCRv5_rec_mobile.onnx (ocr.py's Latin-specialized recognition model)
   draft_capture.py  Wires the above together and POSTs the result to /draft/snapshot
   draft_debug.py    Saves the latest capture's crops + a crop-info.json under %APPDATA%\hots-analytics\live-draft\captures\latest\, and mirrors WARNING+ logs from the draft modules to live-draft.log
   api_client.py HTTP client (retrying, for real ingestion) + light ping/summary/version helpers (for the settings UI)

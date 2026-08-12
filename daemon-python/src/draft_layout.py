@@ -60,25 +60,25 @@ class TeamLayout:
 
 LEFT_TEAM = TeamLayout(
     initial_crop=RelBox(0, 0, 0.15, 1),
-    rotation_degrees=30,
+    rotation_degrees=30.8,
     player_crops=(
-        RelBox(0.12, 0.27, 0.3, 0.3),
-        RelBox(0.34, 0.355, 0.53, 0.382),
-        RelBox(0.34, 0.54, 0.53, 0.57),
-        RelBox(0.57, 0.635, 0.76, 0.665),
-        RelBox(0.57, 0.815, 0.76, 0.845),
+        RelBox(0.143, 0.278, 0.311, 0.294),
+        RelBox(0.358, 0.366, 0.526, 0.382),
+        RelBox(0.358, 0.547, 0.526, 0.563),
+        RelBox(0.572, 0.637, 0.74, 0.653),
+        RelBox(0.573, 0.819, 0.741, 0.835),
     ),
 )
 
 RIGHT_TEAM = TeamLayout(
     initial_crop=RelBox(0.85, 0, 1, 1),
-    rotation_degrees=-30,
+    rotation_degrees=-30.8,
     player_crops=(
-        RelBox(0.7, 0.27, 0.88, 0.3),
-        RelBox(0.47, 0.355, 0.66, 0.382),
-        RelBox(0.47, 0.54, 0.66, 0.57),
-        RelBox(0.24, 0.635, 0.43, 0.665),
-        RelBox(0.24, 0.815, 0.43, 0.845),
+        RelBox(0.69, 0.277, 0.87, 0.295),
+        RelBox(0.475, 0.366, 0.655, 0.384),
+        RelBox(0.47, 0.547, 0.65, 0.565),
+        RelBox(0.255, 0.638, 0.435, 0.656),
+        RelBox(0.25, 0.818, 0.43, 0.836),
     ),
 )
 
