@@ -1,19 +1,10 @@
 #!/usr/bin/env bun
-import { DefaultAdapter, type ParsedReplayData, ReplayValidationError } from "../src/adapters";
-import {
-  getPendingQuarantinedReplays,
-  markBuildVerified,
-  markQuarantineFailed,
-  markQuarantineProcessed,
-} from "../src/services/quarantine.service";
-import { upsertReplay } from "../src/services/replay-upsert.service";
+import { verifyQuarantinedBuild } from "../src/services/build-verification.service";
 
 /**
- * `bun run check-build <buildId>` -- most game updates don't change the
- * replay JSON structure at all, so before writing a bespoke adapter, check
- * whether `DefaultAdapter` already handles a quarantined build. Success
- * marks the build verified in `known_builds` and drains its quarantine
- * (see `apps/api/src/routes/ingest.ts` for what reads that verification).
+ * `bun run check-build <buildId>` -- thin CLI wrapper around
+ * `verifyQuarantinedBuild` (see `build-verification.service.ts` for the
+ * actual logic, shared with `POST /_internal/quarantine/:buildId/verify`).
  */
 async function main() {
   const buildArg = process.argv[2];
@@ -23,59 +14,32 @@ async function main() {
     process.exit(1);
   }
 
-  const pending = await getPendingQuarantinedReplays(baseBuild);
-  if (pending.length === 0) {
+  const result = await verifyQuarantinedBuild(baseBuild);
+  if (result === null) {
     console.log(`No pending quarantined replays for build ${baseBuild}.`);
     return;
   }
 
-  console.log(`Testing ${pending.length} quarantined replay(s) for build ${baseBuild} against DefaultAdapter...`);
+  console.log(
+    `Testing ${result.testedCount} quarantined replay(s) for build ${baseBuild} against DefaultAdapter...`,
+  );
 
-  const parsedByRowId = new Map<string, ParsedReplayData>();
-  const failures: { id: string; issues: unknown }[] = [];
-
-  for (const row of pending) {
-    try {
-      parsedByRowId.set(row.id, DefaultAdapter.parse(row.rawPayload));
-    } catch (err) {
-      if (!(err instanceof ReplayValidationError)) throw err;
-      failures.push({ id: row.id, issues: err.zodError.flatten() });
-    }
-  }
-
-  if (failures.length > 0) {
+  if (!result.compatible) {
     console.error(
       `\n✗ Build ${baseBuild} is NOT compatible with DefaultAdapter ` +
-        `(${failures.length}/${pending.length} replay(s) failed validation). A custom adapter is required.\n`,
+        `(${result.failures.length}/${result.testedCount} replay(s) failed validation). A custom adapter is required.\n`,
     );
-    for (const failure of failures) {
+    for (const failure of result.failures) {
       console.error(`Replay ${failure.id}:`);
       console.error(JSON.stringify(failure.issues, null, 2));
-      await markQuarantineFailed(failure.id, failure.issues);
     }
     process.exit(1);
   }
 
-  console.log(`\n✓ Build ${baseBuild} is compatible with DefaultAdapter. Marking as verified...`);
-  await markBuildVerified(baseBuild);
-
-  let inserted = 0;
-  for (const row of pending) {
-    const parsed = parsedByRowId.get(row.id);
-    if (!parsed) continue;
-    // uploadedByUserId can go null after quarantine insert if the
-    // uploading account was since deleted (`onDelete: "set null"`) --
-    // nothing sane to attribute the match to, so leave it pending.
-    if (!row.uploadedByUserId) {
-      console.warn(`Skipping replay ${row.id}: uploading user no longer exists.`);
-      continue;
-    }
-    await upsertReplay(parsed, row.uploadedByUserId);
-    await markQuarantineProcessed(row.id);
-    inserted++;
-  }
-
-  console.log(`Done: ${inserted}/${pending.length} quarantined replay(s) inserted into the main tables.`);
+  console.log(`\n✓ Build ${baseBuild} is compatible with DefaultAdapter. Marked as verified.`);
+  console.log(
+    `Done: ${result.insertedCount}/${result.testedCount} quarantined replay(s) inserted into the main tables.`,
+  );
 }
 
 main()

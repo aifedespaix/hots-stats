@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { internalSecret } from "../middleware/internal-secret";
+import { verifyQuarantinedBuild } from "../services/build-verification.service";
 import { getDaemonErrorGroups, markDaemonErrorsResolved } from "../services/daemon-errors.service";
 import { getQuarantineOverview, getQuarantineSamples } from "../services/quarantine.service";
 
@@ -22,10 +23,11 @@ const resolveErrorsSchema = z.object({
 
 /**
  * `/_internal/*` -- tooling routes for triaging replay ingestion problems
- * without needing direct DB access: comparing raw replay JSON across builds
- * while writing/updating an adapter, and reviewing daemon-reported
- * ingestion failures (see `daemon-errors.service.ts`). Not called by the
- * daemon or the web app. Guarded by `internalSecret`, mounted in `index.ts`.
+ * without needing direct DB access: discovering/inspecting/verifying
+ * quarantined builds (see `quarantine.service.ts` /
+ * `build-verification.service.ts`), and reviewing daemon-reported ingestion
+ * failures (see `daemon-errors.service.ts`). Not called by the daemon or
+ * the web app. Guarded by `internalSecret`, mounted in `index.ts`.
  */
 export const internalRoute = new Hono()
   .use("*", internalSecret)
@@ -45,6 +47,21 @@ export const internalRoute = new Hono()
 
     const samples = await getQuarantineSamples(params.data.buildId, query.data.limit);
     return c.json({ baseBuild: params.data.buildId, count: samples.length, samples });
+  })
+  .post("/quarantine/:buildId/verify", async (c) => {
+    // HTTP equivalent of `bun run check-build <buildId>` (see
+    // `build-verification.service.ts`) -- lets a build get tested against
+    // `DefaultAdapter` and, if compatible, verified + drained without shell
+    // or DATABASE_URL access to the deployment.
+    const params = paramsSchema.safeParse(c.req.param());
+    if (!params.success) {
+      return c.json({ error: params.error.flatten() }, 400);
+    }
+    const result = await verifyQuarantinedBuild(params.data.buildId);
+    if (result === null) {
+      return c.json({ baseBuild: params.data.buildId, message: "No pending quarantined replays for this build." }, 404);
+    }
+    return c.json(result);
   })
   .get("/errors", async (c) => {
     const query = errorsQuerySchema.safeParse(c.req.query());
