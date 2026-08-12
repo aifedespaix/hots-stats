@@ -109,11 +109,14 @@ def test_sync_api_version_keeps_replays_at_or_above_min_version(tmp_path):
     assert sync_state.is_up_to_date("current", "1.1") is True
 
 
-def test_sync_api_version_ignores_data_reset_at_on_first_sighting(tmp_path):
-    """A daemon that has never seen a `dataResetAt` before (fresh install,
-    or an account that has never used the reset button) must not wipe its
-    (already-empty, in the fresh-install case) local state -- only a
-    *change* from a previously-seen value should trigger a wipe."""
+def test_sync_api_version_wipes_on_first_sighting_of_data_reset_at(tmp_path):
+    """Regression test: an install that has synced replays before but has
+    never yet recorded a `dataResetAt` locally (i.e. this is the first time
+    this account ever hit "Réinitialiser mes données") must still wipe its
+    local state on the first startup that observes it -- "never seen
+    locally" is not the same as "nothing to wipe". Previously this was
+    (wrongly) treated as a no-op, so a first-ever reset silently never
+    resynced anything until the user manually deleted their local appdata."""
     sync_state = SyncState(tmp_path / "sync_state.db")
     sync_state.mark_synced("old", "1.0", file_path="a")
 
@@ -123,7 +126,23 @@ def test_sync_api_version_ignores_data_reset_at_on_first_sighting(tmp_path):
     ):
         _sync_api_version(_config(tmp_path), sync_state)
 
-    assert sync_state.is_up_to_date("old", "1.0") is True
+    assert sync_state.is_up_to_date("old", "1.0") is False
+    assert sync_state.get_meta("data_reset_at") == "2026-08-12T10:00:00Z"
+
+
+def test_sync_api_version_first_sighting_is_a_noop_on_a_fresh_install(tmp_path):
+    """A genuinely fresh install (empty sync-state table, nothing ever
+    synced) seeing a `dataResetAt` for the first time still "wipes", but
+    there's nothing to wipe -- just confirms this doesn't error and records
+    the value for future comparisons."""
+    sync_state = SyncState(tmp_path / "sync_state.db")
+
+    with patch(
+        "src.app.api_client.fetch_version",
+        return_value={"apiVersion": "1.5.0", "minParserVersion": "1.0", "dataResetAt": "2026-08-12T10:00:00Z"},
+    ):
+        _sync_api_version(_config(tmp_path), sync_state)
+
     assert sync_state.get_meta("data_reset_at") == "2026-08-12T10:00:00Z"
 
 

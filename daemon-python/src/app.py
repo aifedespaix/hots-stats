@@ -111,13 +111,18 @@ def _sync_api_version(config: Config, sync_state: SyncState) -> str | None:
     # synced" replays is now entirely wrong -- not just stale for some -- and
     # must be dropped wholesale rather than filtered by version. Compared
     # against the last value *this daemon install* has seen (`meta` table),
-    # not simply "is it set", so a) a fresh install with nothing to wipe
-    # doesn't bother, and b) each account only triggers one wipe per reset,
-    # not one on every single startup thereafter.
+    # not simply "is it set", so each account only triggers one wipe per
+    # reset, not one on every single startup thereafter. Deliberately *not*
+    # gated on `last_seen_reset_at is not None`: an install that has synced
+    # replays before but never yet observed a `dataResetAt` (i.e. this is the
+    # first time this account ever hit the reset button) must still wipe --
+    # "never seen locally" is not the same as "nothing to wipe". A fresh
+    # install with an empty sync-state table just wipes zero rows, so there's
+    # no need to special-case it.
     data_reset_at = info.get("dataResetAt")
     if data_reset_at:
         last_seen_reset_at = sync_state.get_meta("data_reset_at")
-        if last_seen_reset_at is not None and last_seen_reset_at != data_reset_at:
+        if last_seen_reset_at != data_reset_at:
             wiped = sync_state.wipe_all()
             logger.info(
                 "Account data was reset (%s): %d local replay record(s) cleared, "
