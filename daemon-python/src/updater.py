@@ -49,6 +49,18 @@ version (left untouched on disk) instead of leaving the app closed --
 otherwise a single failed update permanently "bricks" the daemon until the
 user notices and manually reruns an old installer from wherever they kept
 it.
+
+Two distinct failure modes -- this process never even managing to hand off
+to the relaunch script (`apply_update_and_exit` returning False), and the
+script itself never managing to replace the installed .exe (the
+copy-retries-exhausted case above) -- both also leave the already-downloaded
+build as a "new-"-prefixed copy right next to the installed .exe (see
+`manual_fallback_exe_path`) and tell the player exactly how to finish the
+install by hand, instead of a fully-good build sitting unreachable in a temp
+folder until the next silent retry. See `stage_manual_fallback` for the
+first case (this process is still alive) and `_render_relaunch_script`'s
+copy-failure branch for the second (this process has already exited, so the
+script shows the dialog itself).
 """
 
 from __future__ import annotations
@@ -83,6 +95,14 @@ _LATEST_RELEASE_URL = f"https://api.github.com/repos/{_GITHUB_REPO}/releases/lat
 _ASSET_NAME = "hots-analytics-daemon.exe"
 _REQUEST_TIMEOUT_SECONDS = 15
 _DOWNLOAD_TIMEOUT_SECONDS = 60
+
+# Prefix used for the downloaded build left next to the installed .exe when
+# the automatic swap+relaunch could not be completed at all -- see
+# `manual_fallback_exe_path`, `stage_manual_fallback`, and
+# `_render_relaunch_script`'s copy-failure branch. Both sides of the handoff
+# (this process, and the relaunch script it hands off to) use the same
+# prefix so a player only ever has to recognize one file-naming pattern.
+_MANUAL_FALLBACK_PREFIX = "new-"
 
 _STARTUP_DELAY_SECONDS = 30  # let the daemon finish its first sync pass before checking
 _CHECK_INTERVAL_SECONDS = 6 * 60 * 60  # 6h
@@ -134,6 +154,55 @@ def installed_exe_path() -> Path:
     if onefile_binary:
         return Path(onefile_binary).resolve()
     return Path(sys.executable).resolve()
+
+
+def manual_fallback_exe_path() -> Path:
+    """Where a downloaded update ends up if the automatic swap+relaunch
+    could never be completed -- right next to the installed .exe, prefixed
+    so it can never collide with it. Same naming scheme on both sides of the
+    handoff: this process uses it via `stage_manual_fallback` when
+    `apply_update_and_exit` couldn't even hand off to the relaunch script;
+    the script itself (see `_render_relaunch_script`) uses the equivalent
+    path when its own `Copy-Item` retries are exhausted."""
+    current = installed_exe_path()
+    return current.with_name(f"{_MANUAL_FALLBACK_PREFIX}{current.name}")
+
+
+def stage_manual_fallback(new_exe: Path) -> Path | None:
+    """Best-effort copy of the already-downloaded `new_exe` to
+    `manual_fallback_exe_path()`, for the case where `apply_update_and_exit`
+    returns False -- the handoff to the relaunch script couldn't even start
+    (see `perform_update`). Without this, a fully-downloaded, valid update
+    simply sat in `downloads_dir()`, a temp folder nobody has a reason to
+    look in, with nothing on screen pointing at it -- the only way forward
+    was silently waiting for the next 6-hour retry cycle to maybe succeed.
+
+    Returns the destination path on success, `None` if the copy itself
+    failed (disk full, permission denied, ...): this only ever runs as an
+    extra courtesy on top of an already-failed update, so a failure here
+    must never raise -- there's simply nothing extra to point the user at.
+    """
+    destination = manual_fallback_exe_path()
+    try:
+        shutil.copy2(new_exe, destination)
+    except OSError:
+        logger.warning("Could not stage the manual-fallback build at %s", destination, exc_info=True)
+        return None
+    return destination
+
+
+def manual_fallback_message(version: str, fallback_path: Path) -> str:
+    """The actionable instructions shown (see gui.py) next to the "Ouvrir le
+    dossier" button when `stage_manual_fallback` succeeds -- naming the
+    real files involved instead of a generic "update failed", so following
+    them is a matter of reading, not guessing."""
+    current_name = installed_exe_path().name
+    return (
+        f"La mise à jour v{version} a été téléchargée mais le lancement automatique a échoué "
+        "(probablement bloqué par un antivirus). Pour l'installer à la main : fermez HotS "
+        f"Analytics, supprimez « {current_name} », puis relancez l'application en ouvrant "
+        f"« {fallback_path.name} » dans le même dossier."
+    )
 
 
 def downloads_dir() -> Path:
@@ -237,6 +306,12 @@ class UpdateStatus:
     version: str | None = None
     progress: float | None = None  # 0..1 while phase is DOWNLOADING
     message: str | None = None  # extra context: an error, or "up to date"
+    # Set alongside `message` only when `stage_manual_fallback` staged a
+    # downloaded-but-uninstallable build (see `perform_update`) -- lets the
+    # GUI show an "Ouvrir le dossier" button pointing straight at it instead
+    # of just the message text. See `UpdateStatusTracker.set` for why this
+    # is reset by default on every other status update.
+    manual_fallback_path: Path | None = None
 
 
 class UpdateStatusTracker:
@@ -255,6 +330,15 @@ class UpdateStatusTracker:
 
     def set(self, **kwargs: object) -> None:
         with self._lock:
+            # `manual_fallback_path` only ever makes sense alongside the
+            # exact failure it was staged for (see `perform_update`) -- reset
+            # it here by default so it can't silently survive (via
+            # `replace`'s "keep whatever the field already was" behavior)
+            # into a later, unrelated status such as the next background
+            # check or download that never meant to carry it forward. The
+            # one caller that *does* want it set passes it explicitly as a
+            # kwarg, which overrides this default.
+            kwargs.setdefault("manual_fallback_path", None)
             self._status = replace(self._status, **kwargs)
 
     def try_begin(self, version: str) -> bool:
@@ -362,6 +446,13 @@ def download_update(
 # exactly like the app permanently forgetting how to start -- and since the
 # installed .exe was never actually replaced, every future launch would
 # redetect the same "new" release and repeat the identical failure.
+#
+# On top of that fallback, the copy-failure branch also stages the build
+# that couldn't be installed next to the one that's still running (see
+# `manual_fallback_exe_path`) and offers a one-click way to go find it, so a
+# persistent failure leaves the player an actual manual escape hatch instead
+# of just "wait for the next retry and hope" -- a `Test-Path` before staging
+# keeps that dialog from reappearing on every single 6-hour retry.
 _RELAUNCH_SCRIPT = """\
 $ErrorActionPreference = 'Continue'
 function Log($msg) {{
@@ -421,6 +512,41 @@ if ($copied) {{
     if (-not (Relaunch '{current_exe}' "Copy failed, falling back to the previous version")) {{
         Log "Fallback relaunch of the previous version also failed -- the app will not restart on its own."
     }}
+
+    # Best-effort courtesy on top of the fallback above: leave the build
+    # that couldn't be installed right next to the one that's still
+    # running, under a "new-" prefixed name, and offer to open that folder.
+    # `Test-Path` before staging is a cheap, stateless "already told them"
+    # guard -- without it, a machine with a persistent block (antivirus,
+    # Smart App Control) would re-pop this dialog every single retry cycle
+    # (every 6h), forever. It under-notifies in one narrow case (a
+    # *different*, later version failing the same way after the player
+    # never acted on an earlier prompt just silently refreshes the staged
+    # file instead of prompting again) -- an accepted tradeoff for staying
+    # a plain file check instead of tracking state across runs.
+    $fallbackAlreadyStaged = Test-Path -LiteralPath '{fallback_exe}'
+    try {{
+        Copy-Item -LiteralPath '{new_exe}' -Destination '{fallback_exe}' -Force
+        Log "Staged the downloaded build at '{fallback_exe}' for manual install."
+        if (-not $fallbackAlreadyStaged) {{
+            try {{
+                Add-Type -AssemblyName System.Windows.Forms
+                $choice = [System.Windows.Forms.MessageBox]::Show(
+                    '{fallback_message}',
+                    'HotS Analytics — Mise à jour',
+                    [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                    [System.Windows.Forms.MessageBoxIcon]::Warning
+                )
+                if ($choice -eq [System.Windows.Forms.DialogResult]::Yes) {{
+                    Start-Process -FilePath 'explorer.exe' -ArgumentList '{current_exe.parent}'
+                }}
+            }} catch {{
+                Log "Could not show the manual-install dialog: $($_.Exception.Message)"
+            }}
+        }}
+    }} catch {{
+        Log "Could not stage the downloaded build for manual install: $($_.Exception.Message)"
+    }}
 }}
 
 Remove-Item -LiteralPath '{script_path}' -Force -ErrorAction SilentlyContinue
@@ -431,6 +557,17 @@ def _render_relaunch_script(*, pid: int, new_exe: Path, current_exe: Path, scrip
     """Pure string-formatting split out from `apply_update_and_exit` so the
     script's content is unit-testable without actually spawning PowerShell
     or exiting the process."""
+    fallback_exe = current_exe.with_name(f"{_MANUAL_FALLBACK_PREFIX}{current_exe.name}")
+    # Escaped for interpolation into a single-quoted PowerShell string
+    # literal, where a literal `'` must be doubled -- the message is built
+    # from natural French (lots of apostrophes: "n'a pas pu", "l'ancienne"),
+    # so this isn't optional the way it might be for an all-ASCII string.
+    fallback_message = (
+        f"La mise à jour v{version} n'a pas pu s'installer automatiquement "
+        "(probablement bloquée par un antivirus) -- l'application précédente a été relancée. "
+        f"Pour terminer à la main : fermez HotS Analytics, supprimez « {current_exe.name} », "
+        f"puis relancez-la en ouvrant « {fallback_exe.name} » dans le même dossier."
+    ).replace("'", "''")
     return _RELAUNCH_SCRIPT.format(
         pid=pid,
         new_exe=new_exe,
@@ -438,6 +575,8 @@ def _render_relaunch_script(*, pid: int, new_exe: Path, current_exe: Path, scrip
         script_path=script_path,
         log_path=log_path,
         version=version,
+        fallback_exe=fallback_exe,
+        fallback_message=fallback_message,
     )
 
 
@@ -652,12 +791,23 @@ def perform_update(update: AvailableUpdate, status: UpdateStatusTracker) -> bool
     # couldn't be confirmed -- see `apply_update_and_exit`'s docstring. On
     # success it exits the process instead, so this line is never reached.
     if not apply_update_and_exit(new_exe, version=update.version):
+        # The handoff never got far enough to touch the installed .exe (see
+        # `apply_update_and_exit`), so this process is still the one
+        # running -- the last chance to hand the player something more
+        # actionable than "retry next cycle" before the fully-downloaded
+        # build goes back to sitting unnoticed in a temp folder.
+        fallback_path = stage_manual_fallback(new_exe)
         status.set(
             phase=UpdatePhase.ERROR,
             message=(
-                "Le redémarrage automatique a échoué (probablement bloqué par un antivirus) -- "
-                "l'application précédente continue de fonctionner ; nouvel essai au prochain cycle."
+                manual_fallback_message(update.version, fallback_path)
+                if fallback_path is not None
+                else (
+                    "Le redémarrage automatique a échoué (probablement bloqué par un antivirus) -- "
+                    "l'application précédente continue de fonctionner ; nouvel essai au prochain cycle."
+                )
             ),
+            manual_fallback_path=fallback_path,
         )
     return True
 
