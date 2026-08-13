@@ -171,6 +171,13 @@ l'Epic 8 : pas de bouton/CLI équivalent pour la quarantaine côté admin
 utile si un nouveau build HotS pose problème avant qu'on ait le temps
 d'écrire un adaptateur sur-mesure.
 
+Brief prêt à implémenter : `tasks/epic-9-hero-matchups.md` — section
+"Matchups" sur `pages/heroes/[slug].vue` (meilleurs/pires contres avec
+Delta Winrate ajusté par shrinkage, deltas KDA/participation/dégâts/XP, et
+recherche Head-to-Head générant une carte Face à Face héros vs héros).
+Réutilise le pattern self-join de `face-a-face.service.ts` mais keyé par
+`heroId` des deux côtés plutôt que par `battletag`.
+
 Une fois un Epic terminé dans sa session, mettre à jour ce README (cocher
 dans "Déjà fait") avant de lancer le suivant.
 
