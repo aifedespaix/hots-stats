@@ -11,6 +11,16 @@ interface NavItem {
   featured?: boolean;
 }
 
+interface NavSpacer {
+  spacer: true;
+}
+
+type MobileNavEntry = NavItem | NavSpacer;
+
+function isSpacer(entry: MobileNavEntry): entry is NavSpacer {
+  return "spacer" in entry;
+}
+
 // Logical order for the desktop sidebar (home first, settings last).
 const navItems: NavItem[] = [
   { to: "/", label: "Dashboard", icon: "i-heroicons-squares-2x2", featured: true },
@@ -24,14 +34,18 @@ const navItems: NavItem[] = [
 ];
 
 // The mobile app bar renders the featured item as a centered FAB, so it
-// needs the featured item moved to the middle of the row instead.
-const mobileNavItems = computed(() => {
+// needs the featured item moved to the middle of the row, with an equal
+// number of items on each side. When the remaining items are odd in
+// number, a non-clickable spacer pads the shorter side so the FAB stays
+// centered.
+const mobileNavItems = computed<MobileNavEntry[]>(() => {
   const featuredIndex = navItems.findIndex((item) => item.featured);
   if (featuredIndex === -1) return navItems;
   const featured = navItems[featuredIndex]!;
-  const rest = navItems.filter((_, index) => index !== featuredIndex);
-  const middle = Math.ceil(rest.length / 2);
-  return [...rest.slice(0, middle), featured, ...rest.slice(middle)];
+  const rest: MobileNavEntry[] = navItems.filter((_, index) => index !== featuredIndex);
+  const padded = rest.length % 2 === 0 ? rest : [...rest, { spacer: true as const }];
+  const middle = padded.length / 2;
+  return [...padded.slice(0, middle), featured, ...padded.slice(middle)];
 });
 
 function isActive(to: string) {
@@ -136,24 +150,30 @@ async function handleLogout() {
       class="fixed inset-x-0 bottom-0 z-40 flex items-stretch justify-around border-t border-border bg-surface/95 backdrop-blur md:hidden"
       style="padding-bottom: env(safe-area-inset-bottom)"
     >
-      <NuxtLink
-        v-for="item in mobileNavItems"
-        :key="item.to"
-        :to="item.to"
-        :aria-current="isActive(item.to) ? 'page' : undefined"
-        class="flex flex-1 flex-col items-center justify-center gap-1 py-2 text-[11px] transition-colors"
-        :class="item.featured ? 'text-foreground' : isActive(item.to) ? 'text-brand' : 'text-muted'"
+      <div
+        v-for="(item, index) in mobileNavItems"
+        :key="isSpacer(item) ? `spacer-${index}` : item.to"
+        class="flex flex-1"
       >
-        <span
-          v-if="item.featured"
-          class="-mt-7 flex h-12 w-12 items-center justify-center rounded-full bg-brand text-white shadow-lg shadow-brand/40 ring-4 ring-background transition-transform"
-          :class="isActive(item.to) ? 'scale-105' : ''"
+        <span v-if="isSpacer(item)" class="flex-1" aria-hidden="true" />
+        <NuxtLink
+          v-else
+          :to="item.to"
+          :aria-current="isActive(item.to) ? 'page' : undefined"
+          class="flex flex-1 flex-col items-center justify-center gap-1 py-2 text-[11px] transition-colors"
+          :class="item.featured ? 'text-foreground' : isActive(item.to) ? 'text-brand' : 'text-muted'"
         >
-          <UIcon :name="item.icon" class="h-6 w-6" />
-        </span>
-        <UIcon v-else :name="item.icon" class="h-5 w-5" />
-        <span :class="item.featured ? 'font-medium' : ''">{{ item.label }}</span>
-      </NuxtLink>
+          <span
+            v-if="item.featured"
+            class="-mt-7 flex h-12 w-12 items-center justify-center rounded-full bg-brand text-white shadow-lg shadow-brand/40 ring-4 ring-background transition-transform"
+            :class="isActive(item.to) ? 'scale-105' : ''"
+          >
+            <UIcon :name="item.icon" class="h-6 w-6" />
+          </span>
+          <UIcon v-else :name="item.icon" class="h-5 w-5" />
+          <span v-if="isActive(item.to)" class="truncate px-0.5" :class="item.featured ? 'font-medium' : ''">{{ item.label }}</span>
+        </NuxtLink>
+      </div>
     </nav>
   </div>
 </template>
