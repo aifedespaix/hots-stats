@@ -20,3 +20,8 @@ daemon-python/build/
 daemon-python/dist/
 daemon-python/**/*.egg-info/
 daemon-python/.pytest_cache/
+# CI and this project install deps via `pip install -e` from pyproject.toml
+# (see build-daemon.yml) -- uv.lock is only ever a side effect of a
+# contributor choosing to run tests locally via `uv run`, never read by
+# anything in this repo.
+daemon-python/uv.lock
