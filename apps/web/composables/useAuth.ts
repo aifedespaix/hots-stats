@@ -2,12 +2,19 @@ import type { HeroStatsScope } from "@hots-stats/shared-types";
 
 export interface AuthUser {
   id: string;
-  email: string;
+  // Only Google accounts have one -- Battle.net's OAuth never returns an
+  // email (see apps/api/src/routes/auth.ts).
+  email: string | null;
   displayName: string;
   avatarUrl: string | null;
   battletag: string | null;
   publicHandle: string | null;
   heroStatsScope: HeroStatsScope;
+}
+
+export interface AuthProviders {
+  google: boolean;
+  battlenet: boolean;
 }
 
 export function useAuthUser() {
@@ -22,9 +29,25 @@ export function useAuthUser() {
   });
 }
 
+// Which login buttons /login should show -- Battle.net is only enabled when
+// the server has BATTLENET_CLIENT_ID/SECRET configured.
+export function useAuthProviders() {
+  const config = useRuntimeConfig();
+
+  return useFetch<AuthProviders>("/auth/providers", {
+    baseURL: config.public.apiBase,
+    key: "auth-providers",
+  });
+}
+
 export function googleLoginUrl(): string {
   const config = useRuntimeConfig();
   return `${config.public.apiBase}/auth/google`;
+}
+
+export function battlenetLoginUrl(): string {
+  const config = useRuntimeConfig();
+  return `${config.public.apiBase}/auth/battlenet`;
 }
 
 export async function logout(): Promise<void> {

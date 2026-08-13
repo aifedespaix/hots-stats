@@ -21,8 +21,8 @@ function extractBaseBuild(body: Record<string, unknown>): number | null {
 /**
  * POST /ingest, GET /ingest/summary, GET /ingest/version — called by the
  * Python daemon, authenticated via Personal Access Token (Bearer), not the
- * Google session cookie (unlike every other route, which the web dashboard
- * calls with a cookie via `authSession`).
+ * session cookie (unlike every other route, which the web dashboard calls
+ * with a cookie via `authSession`).
  */
 export const ingestRoute = new Hono<Env>()
   .use("*", authToken)

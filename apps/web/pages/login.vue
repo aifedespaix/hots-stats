@@ -6,13 +6,13 @@ if (data.value?.user) {
   await navigateTo("/");
 }
 
+const { data: providers } = await useAuthProviders();
+
 useSeoMeta({
   title: "Connexion",
-  description:
-    "Connecte-toi avec Google pour accéder à tes statistiques Heroes of the Storm sur HotS Analytics.",
+  description: "Connecte-toi pour accéder à tes statistiques Heroes of the Storm sur HotS Analytics.",
   ogTitle: "Connexion - HotS Analytics",
-  ogDescription:
-    "Connecte-toi avec Google pour accéder à tes statistiques Heroes of the Storm sur HotS Analytics.",
+  ogDescription: "Connecte-toi pour accéder à tes statistiques Heroes of the Storm sur HotS Analytics.",
   ogImage: "/og/login.png",
   twitterCard: "summary_large_image",
   twitterImage: "/og/login.png",
@@ -28,9 +28,29 @@ useSeoMeta({
         <h1 class="font-heading text-2xl">HotS Analytics</h1>
       </div>
       <p class="text-muted text-sm mb-6">Connecte-toi pour accéder à tes statistiques.</p>
-      <UButton :to="googleLoginUrl()" external block color="primary" size="lg">
-        Se connecter avec Google
-      </UButton>
+      <div class="flex flex-col gap-3">
+        <UButton
+          :to="googleLoginUrl()"
+          external
+          block
+          color="primary"
+          size="lg"
+          icon="i-simple-icons-google"
+        >
+          Se connecter avec Google
+        </UButton>
+        <UButton
+          v-if="providers?.battlenet"
+          :to="battlenetLoginUrl()"
+          external
+          block
+          color="sky"
+          size="lg"
+          icon="i-simple-icons-battledotnet"
+        >
+          Se connecter avec Battle.net
+        </UButton>
+      </div>
     </UCard>
   </main>
 </template>
