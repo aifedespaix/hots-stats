@@ -96,8 +96,9 @@ const medals = ["🥇", "🥈", "🥉"];
       </div>
 
       <div v-else-if="stats" class="space-y-5">
-        <div>
+        <div class="flex flex-wrap items-center gap-2">
           <p class="break-all font-mono text-lg font-semibold">{{ stats.battletag }}</p>
+          <PlayersAnnotationBadges :battletag="stats.battletag" />
         </div>
 
         <div class="grid grid-cols-2 gap-3">

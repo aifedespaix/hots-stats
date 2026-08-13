@@ -55,9 +55,11 @@ class TrayController:
         self._icon = pystray.Icon(
             name="hots-analytics",
             icon=_build_icon_image(),
-            title="HotS Analytics — synchronisation active",
+            title="HotS Analytics - synchronisation active",
             menu=pystray.Menu(
-                pystray.MenuItem("Ouvrir les paramètres", self._handle_open_settings, default=True),
+                pystray.MenuItem(
+                    "Ouvrir les paramètres", self._handle_open_settings, default=True
+                ),
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem("Quitter", self._handle_quit),
             ),
@@ -77,11 +79,15 @@ class TrayController:
         except Exception:
             logger.debug("Tray notification failed (non-fatal)", exc_info=True)
 
-    def _handle_open_settings(self, _icon: pystray.Icon, _item: pystray.MenuItem) -> None:
+    def _handle_open_settings(
+        self, _icon: pystray.Icon, _item: pystray.MenuItem
+    ) -> None:
         if self._settings_open.locked():
             logger.debug("Settings window already open, ignoring click.")
             return
-        threading.Thread(target=self._run_settings, daemon=True, name="hots-settings-window").start()
+        threading.Thread(
+            target=self._run_settings, daemon=True, name="hots-settings-window"
+        ).start()
 
     def _run_settings(self) -> None:
         with self._settings_open:

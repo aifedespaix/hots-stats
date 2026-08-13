@@ -1,18 +1,6 @@
 <script setup lang="ts">
 import type { FaceAFaceRoleDistributionEntry } from "@hots-stats/shared-types";
-import {
-  BarController,
-  BarElement,
-  CategoryScale,
-  Chart as ChartJS,
-  Legend,
-  LinearScale,
-  Tooltip,
-  type TooltipItem,
-} from "chart.js";
-import { Bar } from "vue-chartjs";
-
-ChartJS.register(BarController, BarElement, CategoryScale, LinearScale, Tooltip, Legend);
+import type { TooltipItem } from "chart.js";
 
 const props = defineProps<{
   me: FaceAFaceRoleDistributionEntry[];
@@ -21,7 +9,7 @@ const props = defineProps<{
   friendName: string;
 }>();
 
-const { themeColor } = useThemeColor();
+const themeColor = useChartThemeColor();
 
 interface MergedRole {
   role: string | null;
@@ -74,8 +62,6 @@ const chartData = computed(() => ({
 
 const chartOptions = computed(() => ({
   indexAxis: "y" as const,
-  responsive: true,
-  maintainAspectRatio: false,
   scales: {
     x: {
       min: -axisMax.value,
@@ -112,7 +98,7 @@ const chartOptions = computed(() => ({
       <p v-if="!hasData" class="flex h-full items-center justify-center text-sm text-muted">
         Aucune partie à comparer.
       </p>
-      <Bar v-else :data="chartData" :options="chartOptions" />
+      <ChartsBarChart v-else :data="chartData" :options="chartOptions" />
     </div>
   </div>
 </template>

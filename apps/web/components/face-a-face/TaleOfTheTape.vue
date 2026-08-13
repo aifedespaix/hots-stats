@@ -42,8 +42,8 @@ const rows = computed<Row[]>(() => [
   },
   {
     label: "Temps de jeu",
-    meValue: formatTotalPlaytime(props.me.totalDurationSeconds),
-    friendValue: formatTotalPlaytime(props.friend.totalDurationSeconds),
+    meValue: formatTotalDuration(props.me.totalDurationSeconds),
+    friendValue: formatTotalDuration(props.friend.totalDurationSeconds),
     ...winner(props.me.totalDurationSeconds, props.friend.totalDurationSeconds),
   },
 ]);

@@ -42,6 +42,15 @@ function isAlly(player: MatchDetailPlayer): boolean {
   return myTeam.value !== null && player.team === myTeam.value;
 }
 
+const annotationsStore = usePlayerAnnotationsStore();
+watch(
+  allPlayers,
+  (players) => {
+    if (players.length > 0) annotationsStore.fetchMany(players.map((player) => player.battletag));
+  },
+  { immediate: true },
+);
+
 /** Priority order for the default sort: me, then my teammates, then opponents. */
 function rank(player: MatchDetailPlayer): number {
   if (isMe(player)) return 0;
@@ -135,7 +144,17 @@ const columns = [
         <span class="ml-1 text-xs text-muted">{{ (row as unknown as MatchDetailPlayer).heroRole }}</span>
       </template>
       <template #cell-battletag="{ row }">
-        <span class="font-mono">{{ row.battletag }}</span>
+        <div class="flex items-center gap-2">
+          <NuxtLink
+            v-if="!isMe(row as unknown as MatchDetailPlayer)"
+            :to="`/players/${encodeURIComponent(row.battletag as string)}`"
+            class="font-mono underline-offset-2 hover:underline"
+          >
+            {{ row.battletag }}
+          </NuxtLink>
+          <span v-else class="font-mono">{{ row.battletag }}</span>
+          <PlayersAnnotationBadges :battletag="row.battletag as string" />
+        </div>
       </template>
       <template #cell-heroDamage="{ row }">{{ (row.heroDamage as number).toLocaleString() }}</template>
       <template #cell-siegeDamage="{ row }">{{ (row.siegeDamage as number).toLocaleString() }}</template>

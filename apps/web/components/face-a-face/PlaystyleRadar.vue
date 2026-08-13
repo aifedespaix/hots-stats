@@ -1,19 +1,6 @@
 <script setup lang="ts">
 import type { FaceAFaceOverviewStats } from "@hots-stats/shared-types";
-import {
-  Chart as ChartJS,
-  Filler,
-  Legend,
-  LineElement,
-  PointElement,
-  RadarController,
-  RadialLinearScale,
-  Tooltip,
-  type TooltipItem,
-} from "chart.js";
-import { Radar } from "vue-chartjs";
-
-ChartJS.register(RadarController, RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend);
+import type { TooltipItem } from "chart.js";
 
 const props = defineProps<{
   me: FaceAFaceOverviewStats;
@@ -22,7 +9,7 @@ const props = defineProps<{
   friendName: string;
 }>();
 
-const { themeColor } = useThemeColor();
+const themeColor = useChartThemeColor();
 
 interface Axis {
   label: string;
@@ -106,8 +93,6 @@ const chartData = computed(() => ({
 }));
 
 const chartOptions = computed(() => ({
-  responsive: true,
-  maintainAspectRatio: false,
   scales: {
     r: {
       min: 0,
@@ -140,7 +125,7 @@ const chartOptions = computed(() => ({
       <p v-if="!hasData" class="flex h-full items-center justify-center text-center text-sm text-muted">
         Pas encore assez de parties pour comparer vos styles de jeu.
       </p>
-      <Radar v-else :data="chartData" :options="chartOptions" />
+      <ChartsRadarChart v-else :data="chartData" :options="chartOptions" />
     </div>
   </div>
 </template>

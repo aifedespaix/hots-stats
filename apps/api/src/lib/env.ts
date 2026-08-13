@@ -16,6 +16,11 @@ const envSchema = z.object({
   COOKIE_DOMAIN: z.string().optional(),
   GOOGLE_CLIENT_ID: z.string().min(1),
   GOOGLE_CLIENT_SECRET: z.string().min(1),
+  // Optional, unlike Google's: Battle.net login is only offered (see
+  // GET /auth/providers) when both are set. Lets self-hosted instances skip
+  // registering a Battle.net OAuth client entirely.
+  BATTLENET_CLIENT_ID: z.string().min(1).optional(),
+  BATTLENET_CLIENT_SECRET: z.string().min(1).optional(),
   SESSION_SECRET: z.string().min(32),
   // Shared secret for the internal `/_internal/*` routes (e.g. quarantine
   // sample inspection) -- not tied to a user account, so it can't reuse

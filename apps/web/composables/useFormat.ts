@@ -46,13 +46,13 @@ export function formatDuration(totalSeconds: number): string {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
-/** For a cumulative playtime total (hundreds+ of hours across a full match
- * history) -- `formatDuration` is calibrated for one match's ~M:SS length
- * and would render something like "14523:07", technically correct but unreadable. */
-export function formatTotalPlaytime(totalSeconds: number): string {
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  return `${hours}h${minutes.toString().padStart(2, "0")}`;
+/** Formats a *cumulative* duration (e.g. total playtime for a role across many matches) as "Xh YYmin", unlike `formatDuration` which is for a single match's M:SS. */
+export function formatTotalDuration(totalSeconds: number): string {
+  const totalMinutes = Math.round(totalSeconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) return `${minutes}min`;
+  return `${hours}h ${minutes.toString().padStart(2, "0")}min`;
 }
 
 export function formatDate(iso: string): string {
@@ -85,6 +85,12 @@ export function formatHeroRole(role: string | null): string {
 
 export function formatAvg(value: number): string {
   return value.toFixed(1);
+}
+
+/** `kda` is null when the average death count is 0 (nothing to divide by) -- a genuinely "perfect" KDA. */
+export function formatKda(kda: number | null): string {
+  if (kda === null) return "Parfait";
+  return kda.toFixed(2);
 }
 
 /**

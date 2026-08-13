@@ -24,6 +24,7 @@ frontend appelle l'API via son URL publique, configurée au build via
   - `api.mondomaine.fr` -> backend
   (En local sans domaine, Dokploy peut aussi exposer via IP:port — voir sa doc "Domains".)
 - Des identifiants OAuth Google (Google Cloud Console -> Credentials -> OAuth Client ID, type "Web application"), avec comme Authorized redirect URI : `https://api.mondomaine.fr/auth/google/callback`.
+- (Optionnel) Des identifiants OAuth Battle.net pour proposer aussi la connexion Battle.net -- voir la section dédiée plus bas.
 
 Les images Docker utilisées (`oven/bun:1-slim`, `postgres:17-alpine`) sont
 multi-arch et tournent nativement en arm64, sans émulation.
@@ -45,6 +46,8 @@ multi-arch et tournent nativement en arm64, sans émulation.
    | `COOKIE_DOMAIN` | `.mondomaine.fr` |
    | `GOOGLE_CLIENT_ID` | (Google Cloud Console) |
    | `GOOGLE_CLIENT_SECRET` | (Google Cloud Console) |
+   | `BATTLENET_CLIENT_ID` | (optionnel -- Battle.net API Access, voir plus bas) |
+   | `BATTLENET_CLIENT_SECRET` | (optionnel -- idem) |
    | `SESSION_SECRET` | `openssl rand -hex 32` |
    | `CLAUDE_INTERNAL_SECRET` | `openssl rand -hex 32` |
 
@@ -59,6 +62,21 @@ multi-arch et tournent nativement en arm64, sans émulation.
    reçu du navigateur) ne le voit jamais — l'utilisateur reste bloqué sur
    `/login` après une connexion Google pourtant réussie. Utiliser le domaine
    parent commun avec un point en préfixe, ex : `.mondomaine.fr`.
+
+   `BATTLENET_CLIENT_ID`/`BATTLENET_CLIENT_SECRET` sont optionnels : tant
+   qu'ils ne sont pas tous les deux définis, la page `/login` n'affiche que
+   Google. Pour activer la connexion Battle.net :
+
+   1. Créer un client OAuth sur le [portail développeur Battle.net](https://develop.battle.net/access/clients)
+      (`https://develop.battle.net/access/clients`).
+   2. Renseigner comme **Redirect URL** (à l'identique, avec le même domaine
+      que `API_PUBLIC_URL`) : `https://api.mondomaine.fr/auth/battlenet/callback`.
+   3. Copier le **Client ID** et le **Client secret** générés dans
+      `BATTLENET_CLIENT_ID` / `BATTLENET_CLIENT_SECRET`.
+
+   Un compte créé via Battle.net n'a pas d'email (l'API Battle.net n'en
+   fournit pas) : c'est normal, `email` est optionnel en base pour ces
+   comptes-là.
 
 5. Onglet **Domains** : ajouter `api.mondomaine.fr` -> port conteneur `3001`,
    activer HTTPS (Let's Encrypt géré par Dokploy).

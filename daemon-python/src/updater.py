@@ -186,7 +186,11 @@ def stage_manual_fallback(new_exe: Path) -> Path | None:
     try:
         shutil.copy2(new_exe, destination)
     except OSError:
-        logger.warning("Could not stage the manual-fallback build at %s", destination, exc_info=True)
+        logger.warning(
+            "Could not stage the manual-fallback build at %s",
+            destination,
+            exc_info=True,
+        )
         return None
     return destination
 
@@ -281,7 +285,9 @@ def cleanup_stale_downloads() -> None:
             else:
                 child.unlink()
         except OSError:
-            logger.debug("Could not remove stale update download at %s", child, exc_info=True)
+            logger.debug(
+                "Could not remove stale update download at %s", child, exc_info=True
+            )
 
 
 @dataclass(frozen=True)
@@ -349,12 +355,14 @@ class UpdateStatusTracker:
         with self._lock:
             if self._status.phase in (UpdatePhase.DOWNLOADING, UpdatePhase.INSTALLING):
                 return False
-            self._status = UpdateStatus(phase=UpdatePhase.DOWNLOADING, version=version, progress=0.0)
+            self._status = UpdateStatus(
+                phase=UpdatePhase.DOWNLOADING, version=version, progress=0.0
+            )
             return True
 
 
 def parse_version(version: str) -> tuple[int, ...] | None:
-    """"v1.2.3" / "1.2.3" -> (1, 2, 3). None for anything that isn't a plain
+    """ "v1.2.3" / "1.2.3" -> (1, 2, 3). None for anything that isn't a plain
     dotted-numeric version, e.g. the "0.0.0-dev.<sha>" builds produced by
     manual/non-tag runs -- those are never treated as an update candidate,
     in either direction."""
@@ -384,7 +392,9 @@ def find_update(release: dict, current_version: str) -> AvailableUpdate | None:
                 asset_name=asset["name"],
             )
 
-    logger.warning("Release %s has no '%s' asset, skipping.", release.get("tag_name"), _ASSET_NAME)
+    logger.warning(
+        "Release %s has no '%s' asset, skipping.", release.get("tag_name"), _ASSET_NAME
+    )
     return None
 
 
@@ -403,14 +413,18 @@ def check_for_update(current_version: str = APP_VERSION) -> AvailableUpdate | No
 
 
 def download_update(
-    update: AvailableUpdate, dest_dir: Path, on_progress: Callable[[float | None], None] | None = None
+    update: AvailableUpdate,
+    dest_dir: Path,
+    on_progress: Callable[[float | None], None] | None = None,
 ) -> Path:
     """Streams the release asset to `dest_dir / update.asset_name`, calling
     `on_progress` with a 0..1 fraction after each chunk (or `None` if the
     server didn't report a Content-Length to compute one against)."""
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / update.asset_name
-    with requests.get(update.download_url, stream=True, timeout=_DOWNLOAD_TIMEOUT_SECONDS) as response:
+    with requests.get(
+        update.download_url, stream=True, timeout=_DOWNLOAD_TIMEOUT_SECONDS
+    ) as response:
         response.raise_for_status()
         total = response.headers.get("Content-Length")
         total_bytes = int(total) if total is not None and total.isdigit() else None
@@ -533,7 +547,7 @@ if ($copied) {{
                 Add-Type -AssemblyName System.Windows.Forms
                 $choice = [System.Windows.Forms.MessageBox]::Show(
                     '{fallback_message}',
-                    'HotS Analytics — Mise à jour',
+                    'HotS Analytics - Mise à jour',
                     [System.Windows.Forms.MessageBoxButtons]::YesNo,
                     [System.Windows.Forms.MessageBoxIcon]::Warning
                 )
@@ -553,7 +567,15 @@ Remove-Item -LiteralPath '{script_path}' -Force -ErrorAction SilentlyContinue
 """
 
 
-def _render_relaunch_script(*, pid: int, new_exe: Path, current_exe: Path, script_path: Path, log_path: Path, version: str) -> str:
+def _render_relaunch_script(
+    *,
+    pid: int,
+    new_exe: Path,
+    current_exe: Path,
+    script_path: Path,
+    log_path: Path,
+    version: str,
+) -> str:
     """Pure string-formatting split out from `apply_update_and_exit` so the
     script's content is unit-testable without actually spawning PowerShell
     or exiting the process."""
@@ -677,7 +699,9 @@ def apply_update_and_exit(new_exe: Path, version: str = "?") -> bool:
 
     _append_update_log_line(version, f"Diagnostics: {_powershell_diagnostics()}")
 
-    fd, script_path_str = tempfile.mkstemp(suffix=".ps1", prefix="hots-analytics-update-")
+    fd, script_path_str = tempfile.mkstemp(
+        suffix=".ps1", prefix="hots-analytics-update-"
+    )
     script_path = Path(script_path_str)
     with os.fdopen(fd, "w", encoding="utf-8") as f:
         f.write(
@@ -724,7 +748,9 @@ def apply_update_and_exit(new_exe: Path, version: str = "?") -> bool:
         )
     except OSError as err:
         logger.error("Could not launch the relaunch script: %s", err)
-        _append_update_log_line(version, f"Could not launch powershell.exe for the relaunch script: {err}.")
+        _append_update_log_line(
+            version, f"Could not launch powershell.exe for the relaunch script: {err}."
+        )
         return False
 
     deadline = time.monotonic() + _RELAUNCH_LIVENESS_CHECK_SECONDS
@@ -740,8 +766,14 @@ def apply_update_and_exit(new_exe: Path, version: str = "?") -> bool:
                 stdout_text, stderr_text = process.communicate(timeout=2)
                 output = (stderr_text or stdout_text or "").strip()
             except Exception:
-                logger.debug("Could not read the relaunch script's output", exc_info=True)
-            detail = f" PowerShell said: {output[:500]!r}." if output else " (PowerShell produced no output.)"
+                logger.debug(
+                    "Could not read the relaunch script's output", exc_info=True
+                )
+            detail = (
+                f" PowerShell said: {output[:500]!r}."
+                if output
+                else " (PowerShell produced no output.)"
+            )
             _append_update_log_line(
                 version,
                 f"Relaunch script exited immediately (code {process.returncode}) -- likely blocked by "
@@ -751,7 +783,9 @@ def apply_update_and_exit(new_exe: Path, version: str = "?") -> bool:
         time.sleep(0.1)
 
     logger.info("Handed off to the relaunch script, exiting to update to v%s.", version)
-    _append_update_log_line(version, f"Handed off to relaunch script (pid {process.pid}), exiting now.")
+    _append_update_log_line(
+        version, f"Handed off to relaunch script (pid {process.pid}), exiting now."
+    )
     os._exit(0)
 
 
@@ -831,10 +865,18 @@ def trigger_manual_update(status: UpdateStatusTracker) -> None:
 
     def _run() -> None:
         status.set(phase=UpdatePhase.CHECKING, message=None)
-        _append_update_log_line(APP_VERSION, f"Manual update check triggered. Diagnostics: {_powershell_diagnostics()}")
+        _append_update_log_line(
+            APP_VERSION,
+            f"Manual update check triggered. Diagnostics: {_powershell_diagnostics()}",
+        )
         update = check_for_update()
         if update is None:
-            status.set(phase=UpdatePhase.IDLE, version=None, progress=None, message="Aucune mise à jour disponible.")
+            status.set(
+                phase=UpdatePhase.IDLE,
+                version=None,
+                progress=None,
+                message="Aucune mise à jour disponible.",
+            )
             return
         perform_update(update, status)
 
@@ -878,16 +920,25 @@ def watch_for_updates(
         status.set(phase=UpdatePhase.CHECKING, message=None)
         update = check_for_update()
         if update is None:
-            status.set(phase=UpdatePhase.IDLE, version=None, progress=None, message=None)
+            status.set(
+                phase=UpdatePhase.IDLE, version=None, progress=None, message=None
+            )
         else:
-            status.set(phase=UpdatePhase.AVAILABLE, version=update.version, progress=None, message=None)
+            status.set(
+                phase=UpdatePhase.AVAILABLE,
+                version=update.version,
+                progress=None,
+                message=None,
+            )
             if update.version != notified_version:
                 notified_version = update.version
                 if on_update_found is not None:
                     try:
                         on_update_found(update)
                     except Exception:
-                        logger.warning("Update-found notification callback failed", exc_info=True)
+                        logger.warning(
+                            "Update-found notification callback failed", exc_info=True
+                        )
             if auto_update_enabled():
                 logger.info("Update v%s available, downloading...", update.version)
                 perform_update(update, status)  # never returns on success

@@ -1,18 +1,5 @@
 <script setup lang="ts">
-import {
-  CategoryScale,
-  Chart as ChartJS,
-  Filler,
-  LinearScale,
-  LineController,
-  LineElement,
-  PointElement,
-  Tooltip,
-  type TooltipItem,
-} from "chart.js";
-import { Line } from "vue-chartjs";
-
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, LineController, Tooltip, Filler);
+import type { TooltipItem } from "chart.js";
 
 const props = defineProps<{
   open: boolean;
@@ -78,7 +65,7 @@ const cumulative = computed<CumulativePoint[]>(() => {
   });
 });
 
-const { themeColor } = useThemeColor();
+const themeColor = useChartThemeColor();
 
 const chartData = computed(() => ({
   labels: cumulative.value.map((p) => formatDate(p.playedAt)),
@@ -112,8 +99,6 @@ const chartData = computed(() => ({
 }));
 
 const chartOptions = computed(() => ({
-  responsive: true,
-  maintainAspectRatio: false,
   interaction: { mode: "index" as const, intersect: false },
   scales: {
     x: {
@@ -144,21 +129,16 @@ const chartOptions = computed(() => ({
 </script>
 
 <template>
-  <UModal :model-value="open" @update:model-value="(value) => emit('update:open', value)">
-    <div class="p-6">
-      <h2 class="font-heading text-lg font-semibold">Évolution du winrate</h2>
-      <p class="mt-1 text-sm text-muted">Winrate cumulé, partie après partie, pour les filtres actuellement appliqués.</p>
-
-      <div class="mt-4 h-72">
-        <p v-if="pending" class="flex h-full items-center justify-center text-sm text-muted">Chargement…</p>
-        <p v-else-if="errored" class="flex h-full items-center justify-center text-sm text-danger">
-          Impossible de charger le graphique.
-        </p>
-        <p v-else-if="cumulative.length === 0" class="flex h-full items-center justify-center text-sm text-muted">
-          Aucune partie pour ces filtres.
-        </p>
-        <Line v-else :data="chartData" :options="chartOptions" />
-      </div>
-    </div>
-  </UModal>
+  <ChartsChartModal
+    :model-value="open"
+    title="Évolution du winrate"
+    description="Winrate cumulé, partie après partie, pour les filtres actuellement appliqués."
+    :pending="pending"
+    :errored="errored"
+    :empty="!pending && !errored && cumulative.length === 0"
+    empty-text="Aucune partie pour ces filtres."
+    @update:model-value="(value) => emit('update:open', value)"
+  >
+    <ChartsLineChart :data="chartData" :options="chartOptions" />
+  </ChartsChartModal>
 </template>
