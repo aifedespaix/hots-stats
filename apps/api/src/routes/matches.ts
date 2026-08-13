@@ -43,6 +43,17 @@ const listQuerySchema = filtersQuerySchema.extend({
   pageSize: z.coerce.number().int().positive().max(50).default(20),
 });
 
+/**
+ * `GET /matches/trend` filters, plus an optional `limit` -- the "form
+ * tracker" widget's "Volume" mode ("les X dernières parties") caps the
+ * window to the last N matches instead of a date range, unlike the plain
+ * trend chart on the matches page which always wants the full filtered
+ * history.
+ */
+const trendQuerySchema = filtersQuerySchema.extend({
+  limit: z.coerce.number().int().positive().max(500).optional(),
+});
+
 /** Escapes ILIKE wildcards so a battletag search term is matched literally. */
 function likeTerm(value: string): string {
   return `%${value.trim().replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
@@ -191,15 +202,31 @@ export const matchesRoute = new Hono<Env>()
     });
   })
   // Every match matching the given filters (no pagination), ordered
-  // chronologically, for the "win rate evolution" chart on the matches
-  // page -- it needs the full filtered history, not just one page of it.
+  // chronologically, for the "win rate evolution" chart on the matches page
+  // and the "form tracker" widget (heroes/maps/matches pages) -- it needs
+  // the full filtered history, not just one page of it. With `limit`, only
+  // the last N matches are returned (still chronological ascending) for the
+  // form tracker's "Volume" mode.
   .get("/trend", async (c) => {
     const user = c.get("user");
-    const parsed = filtersQuerySchema.safeParse(c.req.query());
+    const parsed = trendQuerySchema.safeParse(c.req.query());
     if (!parsed.success) {
       return c.json({ error: parsed.error.flatten() }, 400);
     }
-    const where = buildMatchConditions(user.id, parsed.data);
+    const { limit, ...filters } = parsed.data;
+    const where = buildMatchConditions(user.id, filters);
+
+    if (limit) {
+      const lastN = await db
+        .select({ playedAt: matches.playedAt, winner: matchPlayers.winner })
+        .from(matchPlayers)
+        .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
+        .where(where)
+        .orderBy(desc(matches.playedAt))
+        .limit(limit);
+
+      return c.json({ points: lastN.reverse() });
+    }
 
     const rows = await db
       .select({ playedAt: matches.playedAt, winner: matchPlayers.winner })
