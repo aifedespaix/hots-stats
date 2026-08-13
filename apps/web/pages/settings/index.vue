@@ -194,7 +194,7 @@ async function confirmReset() {
     <section class="space-y-4 rounded-lg border border-border p-4 sm:p-6">
       <h2 class="font-heading text-lg">Pseudo</h2>
       <p class="text-sm text-muted">
-        Le nom affiché sur le site. Ce n'est pas ton nom Google - choisis ce que tu veux.
+        Le nom affiché sur le site. Choisis ce que tu veux, indépendamment de ton compte de connexion.
       </p>
       <div class="flex flex-col gap-2 sm:flex-row">
         <UInput v-model="pseudo" placeholder="Mon pseudo" class="flex-1" />

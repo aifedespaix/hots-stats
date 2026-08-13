@@ -7,8 +7,15 @@ export const heroStatsScopeEnum = pgEnum("hero_stats_scope", ["personal", "globa
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
-  googleId: text("google_id").notNull().unique(),
-  email: text("email").notNull().unique(),
+  // Exactly one of googleId/battlenetId is set, depending on which provider
+  // the account was created through -- neither is required at the column
+  // level since a given user only ever has one of them.
+  googleId: text("google_id").unique(),
+  battlenetId: text("battlenet_id").unique(),
+  // Only Google's OIDC userinfo returns an email; Battle.net's OAuth
+  // userinfo only ever returns { sub, id, battletag }, so accounts created
+  // through it never have one.
+  email: text("email").unique(),
   displayName: text("display_name").notNull(),
   avatarUrl: text("avatar_url"),
   battletag: text("battletag").unique(),
