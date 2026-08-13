@@ -80,8 +80,6 @@ const query = computed(() => ({
 
 const { data: matchesData, pending } = await useApiFetch<MatchListResponse>("/matches", { query });
 
-const isChartOpen = ref(false);
-
 watch([mode, heroId, mapId, dateFrom, dateTo, opponentBattletag], () => {
   page.value = 1;
 });
@@ -108,17 +106,11 @@ function goToMatch(row: Record<string, unknown>) {
 
 <template>
   <div class="space-y-6">
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <h1 class="font-heading text-2xl font-semibold">Historique des parties</h1>
-      <UButton
-        icon="i-lucide-line-chart"
-        color="gray"
-        variant="outline"
-        class="justify-center"
-        @click="isChartOpen = true"
-      >
-        Voir le graphique
-      </UButton>
+    <h1 class="font-heading text-2xl font-semibold">Historique des parties</h1>
+
+    <div>
+      <h2 class="mb-3 font-heading text-lg font-medium">Dashboard</h2>
+      <StatsDashboard :filters="activeFilters" />
     </div>
 
     <div class="grid grid-cols-1 gap-3 rounded-lg border border-border bg-surface p-4 sm:grid-cols-3 lg:grid-cols-6">
@@ -201,7 +193,5 @@ function goToMatch(row: Record<string, unknown>) {
         :disabled="pending"
       />
     </div>
-
-    <ChartsWinrateTrendModal :open="isChartOpen" :filters="activeFilters" @update:open="isChartOpen = $event" />
   </div>
 </template>
