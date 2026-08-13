@@ -53,7 +53,12 @@ const sendingRequest = ref(false);
 const requestError = ref("");
 
 const annotationsStore = usePlayerAnnotationsStore();
-const managementForm = reactive({ isFdp: false, isPgm: false, note: "" });
+const managementForm = reactive<{ isFdp: boolean; isPgm: boolean; rating: number | null; note: string }>({
+  isFdp: false,
+  isPgm: false,
+  rating: null,
+  note: "",
+});
 const managementLoaded = ref(false);
 const savingManagement = ref(false);
 const managementSaved = ref(false);
@@ -65,6 +70,7 @@ onMounted(async () => {
   ]);
   managementForm.isFdp = annotation.isFdp;
   managementForm.isPgm = annotation.isPgm;
+  managementForm.rating = annotation.rating;
   managementForm.note = annotation.note;
   managementLoaded.value = true;
 });
@@ -162,7 +168,11 @@ function goToMatch(row: Record<string, unknown>) {
       </p>
       <div class="flex flex-wrap gap-6">
         <UCheckbox v-model="managementForm.isFdp" label="Marquer comme FDP" />
-        <UCheckbox v-model="managementForm.isPgm" label="Marquer comme PGM" />
+        <UCheckbox v-model="managementForm.isPgm" label="Marquer comme sympa" />
+      </div>
+      <div>
+        <label class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">Évaluation (1 à 5 étoiles)</label>
+        <UiStarRating v-model="managementForm.rating" :readonly="false" size="h-5 w-5" />
       </div>
       <div>
         <label class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">Note</label>

@@ -63,6 +63,14 @@ export const playersRoute = new Hono<Env>()
     const annotations = await listSharedPlayerAnnotations(user.id, battletags);
     return c.json({ annotations: Object.fromEntries(annotations.map((a) => [a.battletag, a])) });
   })
+  .get("/me/ratings", async (c) => {
+    const user = c.get("user");
+    if (!user.battletag) {
+      return c.json({ annotation: null });
+    }
+    const [annotation] = await listSharedPlayerAnnotations(user.id, [user.battletag]);
+    return c.json({ annotation });
+  })
   .get("/:battletag/annotation", async (c) => {
     const user = c.get("user");
     const annotation = await getPlayerAnnotation(user.id, c.req.param("battletag"));

@@ -3,9 +3,9 @@ import type { PlayerAnnotation, PlayerAnnotationInput, SharedPlayerAnnotation } 
 import { and, eq, inArray } from "drizzle-orm";
 import { listFriends } from "./friendships.service";
 
-const DEFAULT_ANNOTATION = { isFdp: false, isPgm: false, note: "" };
+const DEFAULT_ANNOTATION = { isFdp: false, isPgm: false, rating: null, note: "" };
 
-type AnnotationRow = { isFdp: boolean; isPgm: boolean; note: string };
+type AnnotationRow = { isFdp: boolean; isPgm: boolean; rating: number | null; note: string };
 
 function toPlayerAnnotation(battletag: string, row?: AnnotationRow): PlayerAnnotation {
   return { battletag, ...(row ?? DEFAULT_ANNOTATION) };
@@ -13,7 +13,12 @@ function toPlayerAnnotation(battletag: string, row?: AnnotationRow): PlayerAnnot
 
 export async function getPlayerAnnotation(viewerUserId: string, battletag: string): Promise<PlayerAnnotation> {
   const [row] = await db
-    .select({ isFdp: playerAnnotations.isFdp, isPgm: playerAnnotations.isPgm, note: playerAnnotations.note })
+    .select({
+      isFdp: playerAnnotations.isFdp,
+      isPgm: playerAnnotations.isPgm,
+      rating: playerAnnotations.rating,
+      note: playerAnnotations.note,
+    })
     .from(playerAnnotations)
     .where(and(eq(playerAnnotations.viewerUserId, viewerUserId), eq(playerAnnotations.battletag, battletag)));
 
@@ -32,17 +37,23 @@ export async function upsertPlayerAnnotation(
       target: [playerAnnotations.viewerUserId, playerAnnotations.battletag],
       set: { ...input, updatedAt: new Date() },
     })
-    .returning({ isFdp: playerAnnotations.isFdp, isPgm: playerAnnotations.isPgm, note: playerAnnotations.note });
+    .returning({
+      isFdp: playerAnnotations.isFdp,
+      isPgm: playerAnnotations.isPgm,
+      rating: playerAnnotations.rating,
+      note: playerAnnotations.note,
+    });
 
   return toPlayerAnnotation(battletag, row);
 }
 
 /**
  * Friend-aware view used everywhere annotations are *displayed* (players list, live draft,
- * player detail, match detail): for each battletag, aggregates the viewer's own annotation
- * together with every accepted friend's annotation on that same battletag -- FDP/PGM vote
- * counts plus the individual notes with their author, so a battletag tagged by several
- * friends surfaces all of their input instead of just the viewer's own.
+ * player detail, match detail, and a player's own "what my friends think of me" view):
+ * for each battletag, aggregates the viewer's own annotation together with every accepted
+ * friend's annotation on that same battletag -- FDP/Sympa vote counts, average star rating,
+ * and the individual notes with their author, so a battletag tagged by several friends
+ * surfaces all of their input instead of just the viewer's own.
  */
 export async function listSharedPlayerAnnotations(
   viewerUserId: string,
@@ -60,6 +71,7 @@ export async function listSharedPlayerAnnotations(
       battletag: playerAnnotations.battletag,
       isFdp: playerAnnotations.isFdp,
       isPgm: playerAnnotations.isPgm,
+      rating: playerAnnotations.rating,
       note: playerAnnotations.note,
     })
     .from(playerAnnotations)
@@ -74,14 +86,23 @@ export async function listSharedPlayerAnnotations(
   }
 
   return battletags.map((battletag) => {
-    const entries = byBattletag.get(battletag) ?? [];
-    const mineRow = entries.find((entry) => entry.authorId === viewerUserId);
+    const rowsForBattletag = byBattletag.get(battletag) ?? [];
+    const mineRow = rowsForBattletag.find((entry) => entry.authorId === viewerUserId);
+    const ratedRows = rowsForBattletag.filter((entry) => entry.rating !== null);
+    const ratingAverage = ratedRows.length
+      ? Math.round((ratedRows.reduce((sum, entry) => sum + (entry.rating ?? 0), 0) / ratedRows.length) * 10) / 10
+      : null;
+
     return {
       battletag,
-      fdpCount: entries.filter((entry) => entry.isFdp).length,
-      pgmCount: entries.filter((entry) => entry.isPgm).length,
-      mine: mineRow ? { isFdp: mineRow.isFdp, isPgm: mineRow.isPgm, note: mineRow.note } : DEFAULT_ANNOTATION,
-      entries: entries
+      fdpCount: rowsForBattletag.filter((entry) => entry.isFdp).length,
+      pgmCount: rowsForBattletag.filter((entry) => entry.isPgm).length,
+      ratingCount: ratedRows.length,
+      ratingAverage,
+      mine: mineRow
+        ? { isFdp: mineRow.isFdp, isPgm: mineRow.isPgm, rating: mineRow.rating, note: mineRow.note }
+        : DEFAULT_ANNOTATION,
+      entries: rowsForBattletag
         .filter((entry) => entry.note.trim().length > 0)
         .map((entry) => ({
           authorId: entry.authorId,
@@ -89,6 +110,7 @@ export async function listSharedPlayerAnnotations(
           isMine: entry.authorId === viewerUserId,
           isFdp: entry.isFdp,
           isPgm: entry.isPgm,
+          rating: entry.rating,
           note: entry.note,
         })),
     };

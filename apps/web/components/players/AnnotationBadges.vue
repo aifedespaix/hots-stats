@@ -1,11 +1,11 @@
 <script setup lang="ts">
 /**
- * Compact FDP/PGM vote-count badges + "has notes" indicator for a battletag, read from the
- * shared annotations cache (usePlayerAnnotationsStore) -- counts and notes are aggregated
- * across the connected user and their accepted friends. The parent is responsible for having
- * called `fetchMany`/`refreshOne` for this battletag at some point -- this component only
- * renders whatever's already cached, it never fetches on its own, so dropping dozens of these
- * in a table doesn't fire dozens of requests.
+ * Compact FDP/Sympa vote-count badges + average star rating + "has notes" indicator for a
+ * battletag, read from the shared annotations cache (usePlayerAnnotationsStore) -- counts and
+ * notes are aggregated across the connected user and their accepted friends. The parent is
+ * responsible for having called `fetchMany`/`refreshOne` for this battletag at some point --
+ * this component only renders whatever's already cached, it never fetches on its own, so
+ * dropping dozens of these in a table doesn't fire dozens of requests.
  */
 const props = defineProps<{ battletag: string }>();
 
@@ -35,7 +35,10 @@ function openNoteModal() {
 
 <template>
   <span
-    v-if="annotation && (annotation.fdpCount > 0 || annotation.pgmCount > 0 || entries.length > 0)"
+    v-if="
+      annotation &&
+      (annotation.fdpCount > 0 || annotation.pgmCount > 0 || annotation.ratingCount > 0 || entries.length > 0)
+    "
     class="inline-flex items-center gap-1"
   >
     <span
@@ -49,10 +52,18 @@ function openNoteModal() {
     <span
       v-if="annotation.pgmCount > 0"
       class="inline-flex items-center gap-0.5 rounded-full bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent"
-      :title="`Marqué PGM par ${annotation.pgmCount} joueur(s)`"
+      :title="`Marqué sympa par ${annotation.pgmCount} joueur(s)`"
     >
-      <UIcon name="i-heroicons-star" class="h-3 w-3" />
-      PGM · {{ annotation.pgmCount }}
+      <UIcon name="i-heroicons-face-smile" class="h-3 w-3" />
+      Sympa · {{ annotation.pgmCount }}
+    </span>
+    <span
+      v-if="annotation.ratingCount > 0"
+      class="inline-flex items-center gap-1 rounded-full bg-background px-1.5 py-0.5 text-[10px] font-semibold text-foreground"
+      :title="`Note moyenne ${annotation.ratingAverage} / 5 (${annotation.ratingCount} vote(s))`"
+    >
+      <UIcon name="i-heroicons-star-solid" class="h-3 w-3 text-accent" />
+      {{ annotation.ratingAverage }} · {{ annotation.ratingCount }}
     </span>
     <button
       v-if="entries.length > 0"
@@ -79,11 +90,18 @@ function openNoteModal() {
           />
         </div>
 
-        <div v-if="selectedEntry" class="mt-4">
-          <p class="text-xs font-medium uppercase tracking-wide text-muted">
-            {{ selectedEntry.isMine ? `${selectedEntry.authorName} (moi)` : selectedEntry.authorName }}
-          </p>
-          <p class="mt-1 whitespace-pre-wrap text-sm text-foreground">{{ selectedEntry.note }}</p>
+        <div v-if="selectedEntry" class="mt-4 space-y-2">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <p class="text-xs font-medium uppercase tracking-wide text-muted">
+              {{ selectedEntry.isMine ? `${selectedEntry.authorName} (moi)` : selectedEntry.authorName }}
+            </p>
+            <UiStarRating v-if="selectedEntry.rating" :model-value="selectedEntry.rating" size="h-3.5 w-3.5" />
+          </div>
+          <div class="flex gap-2 text-[10px] font-semibold uppercase tracking-wide">
+            <span v-if="selectedEntry.isFdp" class="text-danger">FDP</span>
+            <span v-if="selectedEntry.isPgm" class="text-accent">Sympa</span>
+          </div>
+          <p class="whitespace-pre-wrap text-sm text-foreground">{{ selectedEntry.note }}</p>
         </div>
 
         <div class="mt-6 flex justify-end">

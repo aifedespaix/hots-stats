@@ -2,7 +2,7 @@ import { defineStore } from "pinia";
 import type { PlayerAnnotation, PlayerAnnotationInput, SharedPlayerAnnotation } from "@hots-stats/shared-types";
 
 /**
- * Client-side cache of FDP/PGM vote counts and notes for battletags, aggregated across the
+ * Client-side cache of FDP/Sympa vote counts, star ratings and notes for battletags, aggregated across the
  * connected user and their accepted friends (see apps/api/src/services/player-annotations.service.ts
  * `listSharedPlayerAnnotations`). Shared across the players list, live draft and match detail
  * views so a given battletag is only fetched once per session instead of once per component
