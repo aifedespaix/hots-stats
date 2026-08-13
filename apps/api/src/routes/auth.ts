@@ -84,9 +84,9 @@ function defaultDisplayNameFromBattleTag(battletag: string): string {
   return name && name.length >= 2 && name.length <= 24 ? name : generateDefaultPseudo();
 }
 
-async function isBattleTagTaken(battletag: string): Promise<boolean> {
-  const [conflicting] = await db.select({ id: users.id }).from(users).where(eq(users.battletag, battletag)).limit(1);
-  return Boolean(conflicting);
+async function findBattleTagOwner(battletag: string): Promise<User | null> {
+  const [owner] = await db.select().from(users).where(eq(users.battletag, battletag)).limit(1);
+  return owner ?? null;
 }
 
 export const authRoute = new Hono()
@@ -200,21 +200,33 @@ export const authRoute = new Hono()
 
     let user = existing;
     if (!user) {
-      // A Google account may already have self-reported this exact tag by
-      // hand (see PATCH /me below, which doesn't verify Blizzard ownership)
-      // -- don't let that block the real owner's signup, just skip the
-      // auto-fill and let them claim it manually from Settings instead.
-      const battletagTaken = await isBattleTagTaken(battlenetUser.battletag);
+      // Another account (typically a Google signup that later self-reported
+      // this exact tag from Settings -- PATCH /me, which doesn't verify
+      // Blizzard ownership) may already claim this battletag. Battle.net's
+      // OAuth *does* prove ownership, so if that account isn't already
+      // linked to a different Battle.net identity, this login is almost
+      // certainly the same person reconnecting: link this Battle.net id to
+      // it instead of spinning up a disconnected, empty duplicate account
+      // that would leave them staring at none of their own history.
+      const battletagOwner = await findBattleTagOwner(battlenetUser.battletag);
 
-      [user] = await db
-        .insert(users)
-        .values({
-          battlenetId,
-          displayName: defaultDisplayNameFromBattleTag(battlenetUser.battletag),
-          battletag: battletagTaken ? null : battlenetUser.battletag,
-        })
-        .returning();
-    } else if (!user.battletag && !(await isBattleTagTaken(battlenetUser.battletag))) {
+      if (battletagOwner && !battletagOwner.battlenetId) {
+        [user] = await db
+          .update(users)
+          .set({ battlenetId, updatedAt: new Date() })
+          .where(eq(users.id, battletagOwner.id))
+          .returning();
+      } else {
+        [user] = await db
+          .insert(users)
+          .values({
+            battlenetId,
+            displayName: defaultDisplayNameFromBattleTag(battlenetUser.battletag),
+            battletag: battletagOwner ? null : battlenetUser.battletag,
+          })
+          .returning();
+      }
+    } else if (!user.battletag && !(await findBattleTagOwner(battlenetUser.battletag))) {
       // Retry the auto-fill skipped at signup (see above) on every login
       // where it's still empty, in case the conflicting account has since
       // freed it up. Never overwrites a battletag that's already set, auto-
