@@ -6,7 +6,7 @@ import { gameModeListSchema } from "../lib/query";
 import { authSession, requireUser } from "../middleware/auth-session";
 import {
   getPlayerAnnotation,
-  listPlayerAnnotations,
+  listSharedPlayerAnnotations,
   upsertPlayerAnnotation,
 } from "../services/player-annotations.service";
 import {
@@ -60,7 +60,7 @@ export const playersRoute = new Hono<Env>()
           .filter(Boolean),
       ),
     ];
-    const annotations = await listPlayerAnnotations(user.id, battletags);
+    const annotations = await listSharedPlayerAnnotations(user.id, battletags);
     return c.json({ annotations: Object.fromEntries(annotations.map((a) => [a.battletag, a])) });
   })
   .get("/:battletag/annotation", async (c) => {

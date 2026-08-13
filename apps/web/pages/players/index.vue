@@ -120,8 +120,8 @@ watch(
 
 function rowClass(row: Record<string, unknown>): string {
   const annotation = annotationsStore.annotationFor(row.battletag as string);
-  if (annotation?.isFdp) return "bg-danger/5 hover:bg-danger/10";
-  if (annotation?.isPgm) return "bg-accent/5 hover:bg-accent/10";
+  if (annotation?.fdpCount) return "bg-danger/5 hover:bg-danger/10";
+  if (annotation?.pgmCount) return "bg-accent/5 hover:bg-accent/10";
   return "";
 }
 

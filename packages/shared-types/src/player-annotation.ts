@@ -18,3 +18,23 @@ export const playerAnnotationInputSchema = z.object({
   note: z.string().max(2000),
 });
 export type PlayerAnnotationInput = z.infer<typeof playerAnnotationInputSchema>;
+
+/** One friend's (or the viewer's own) note on a battletag, with authorship for display. */
+export interface PlayerAnnotationEntry {
+  authorId: string;
+  authorName: string;
+  isMine: boolean;
+  isFdp: boolean;
+  isPgm: boolean;
+  note: string;
+}
+
+/** Aggregated view of a battletag's annotations across the viewer and their accepted friends --
+ * see `listSharedPlayerAnnotations` in apps/api/src/services/player-annotations.service.ts. */
+export interface SharedPlayerAnnotation {
+  battletag: string;
+  fdpCount: number;
+  pgmCount: number;
+  mine: { isFdp: boolean; isPgm: boolean; note: string };
+  entries: PlayerAnnotationEntry[];
+}

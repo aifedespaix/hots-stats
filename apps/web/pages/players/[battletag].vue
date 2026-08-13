@@ -59,7 +59,10 @@ const savingManagement = ref(false);
 const managementSaved = ref(false);
 
 onMounted(async () => {
-  const annotation = await annotationsStore.fetchOne(battletag);
+  const [annotation] = await Promise.all([
+    annotationsStore.fetchMine(battletag),
+    annotationsStore.fetchMany([battletag]),
+  ]);
   managementForm.isFdp = annotation.isFdp;
   managementForm.isPgm = annotation.isPgm;
   managementForm.note = annotation.note;
@@ -154,6 +157,9 @@ function goToMatch(row: Record<string, unknown>) {
 
     <div class="space-y-3 rounded-lg border border-border bg-surface p-4 sm:p-6">
       <h2 class="font-heading text-lg font-medium">Gestion</h2>
+      <p class="text-xs text-muted">
+        Ton marquage et ta note sont visibles par tes amis (et inversement) sur ce joueur.
+      </p>
       <div class="flex flex-wrap gap-6">
         <UCheckbox v-model="managementForm.isFdp" label="Marquer comme FDP" />
         <UCheckbox v-model="managementForm.isPgm" label="Marquer comme PGM" />
