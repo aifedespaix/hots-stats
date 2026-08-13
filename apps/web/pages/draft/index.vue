@@ -37,6 +37,18 @@ function applyOverrides(slots: DraftPlayerSlot[] | undefined): DraftPlayerSlot[]
 const teamLeft = computed(() => applyOverrides(snapshot.value?.teamLeft));
 const teamRight = computed(() => applyOverrides(snapshot.value?.teamRight));
 
+const annotationsStore = usePlayerAnnotationsStore();
+watch(
+  [teamLeft, teamRight],
+  ([left, right]) => {
+    const battletags = [...left, ...right]
+      .map((slot) => slot.effectiveBattletag)
+      .filter((battletag): battletag is string => Boolean(battletag));
+    if (battletags.length > 0) annotationsStore.fetchMany(battletags);
+  },
+  { immediate: true },
+);
+
 // The team that doesn't contain the viewer -- the one worth scouting for
 // bans/threats. Empty (panel hidden) when the viewer's own slot isn't
 // resolved yet, since "enemy team" is meaningless without it.

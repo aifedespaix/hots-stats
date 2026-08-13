@@ -57,6 +57,13 @@
       "when": 1786623764063,
       "tag": "0007_cute_screwball",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1786639586698,
+      "tag": "0008_nice_meltdown",
+      "breakpoints": true
     }
   ]
 }
