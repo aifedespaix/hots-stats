@@ -115,14 +115,14 @@
     "semantic_hash": "a82ab7a1f434bee08c7f2fe1cb804b45"
   },
   "apps/api/src/routes/internal.ts": {
-    "mtime": 1786551201.7247334,
-    "ast_hash": "973d13d0ddbc756afb49f31ac2572c40",
-    "semantic_hash": "973d13d0ddbc756afb49f31ac2572c40"
+    "mtime": 1786625437.5570438,
+    "ast_hash": "0ca0e8e0f400921dc0d7317017d009e6",
+    "semantic_hash": ""
   },
   "apps/api/src/routes/matches.ts": {
-    "mtime": 1786527852.6980028,
-    "ast_hash": "77f0e71000152ca824fce66e63cde42a",
-    "semantic_hash": "77f0e71000152ca824fce66e63cde42a"
+    "mtime": 1786625437.5575473,
+    "ast_hash": "9e91df277d1aedfb9016a8e2e2ab8d71",
+    "semantic_hash": ""
   },
   "apps/api/src/routes/players.ts": {
     "mtime": 1786621339.3766687,
@@ -210,9 +210,9 @@
     "semantic_hash": "34ad87cf6b35aac66ae2c080f311d039"
   },
   "apps/web/components/charts/WinrateTrendModal.vue": {
-    "mtime": 1786527852.7060022,
-    "ast_hash": "e1908941d917ca18d0224eba053e083e",
-    "semantic_hash": "e1908941d917ca18d0224eba053e083e"
+    "mtime": 1786625437.564561,
+    "ast_hash": "16670c961ba914908bbb0694b3df3ed3",
+    "semantic_hash": ""
   },
   "apps/web/components/draft/DraftPlayerStats.vue": {
     "mtime": 1786604166.6498823,
@@ -265,8 +265,8 @@
     "semantic_hash": "d7fc1ee5a322675e7d83e95a0ff28599"
   },
   "apps/web/composables/useFormat.ts": {
-    "mtime": 1786604166.6508818,
-    "ast_hash": "319456dd13e1d3dd23ee3984eda931e8",
+    "mtime": 1786625437.5710828,
+    "ast_hash": "a7e08590e45b1128725f8f72240e2a56",
     "semantic_hash": ""
   },
   "apps/web/composables/useHeroStatsScope.ts": {
@@ -355,8 +355,8 @@
     "semantic_hash": ""
   },
   "apps/web/pages/matches/index.vue": {
-    "mtime": 1786621339.3866975,
-    "ast_hash": "40d95ace4298b97ce38e1b8538e73445",
+    "mtime": 1786625437.5725884,
+    "ast_hash": "b440366bf689e5dbcd0461865ff61e48",
     "semantic_hash": ""
   },
   "apps/web/pages/players/[battletag].vue": {
@@ -410,9 +410,9 @@
     "semantic_hash": "5be0a6187b2517e1ee5c978926f19b9d"
   },
   "apps/web/types/matches.ts": {
-    "mtime": 1786527852.7269504,
-    "ast_hash": "fe78ba369fc8ba37c21e146d296f879e",
-    "semantic_hash": "fe78ba369fc8ba37c21e146d296f879e"
+    "mtime": 1786625437.5735948,
+    "ast_hash": "8bcec932c71608ba68e9857e37a7c8d7",
+    "semantic_hash": ""
   },
   "apps/web/utils/slugify.ts": {
     "mtime": 1786472464.363819,
@@ -430,8 +430,8 @@
     "semantic_hash": "83c505bd862f99a04ccc8d730a3fa28a"
   },
   "daemon-python/pyproject.toml": {
-    "mtime": 1786621339.3992355,
-    "ast_hash": "308ecec4add1f42dec3c1046841ece73",
+    "mtime": 1786621675.327546,
+    "ast_hash": "1f892d0c77335b59c790b77e53717865",
     "semantic_hash": ""
   },
   "daemon-python/run.py": {
@@ -475,8 +475,8 @@
     "semantic_hash": "8c430066a5e715ddff8bfcd3cf9ad00e"
   },
   "daemon-python/src/constants.py": {
-    "mtime": 1786621339.4012423,
-    "ast_hash": "f8cc01a848d0147e0c437f7504122a94",
+    "mtime": 1786621675.328546,
+    "ast_hash": "5abfd5a2000970237d3ec894507fd849",
     "semantic_hash": ""
   },
   "daemon-python/src/draft_capture.py": {
@@ -1092,6 +1092,11 @@
   "daemon-python/scripts/diagnose_hero_mapping.py": {
     "mtime": 1786604166.661908,
     "ast_hash": "acf7aabc6e5239f4d80799755835f402",
+    "semantic_hash": ""
+  },
+  "tasks/analyse-frontend.md": {
+    "mtime": 1786624920.2996023,
+    "ast_hash": "f2e4ffb7da911ac4591ffd04baf738b3",
     "semantic_hash": ""
   }
 }

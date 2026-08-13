@@ -1,16 +1,16 @@
 # Graph Report - hots-stats  (2026-08-13)
 
 ## Corpus Check
-- 201 files · ~192,387 words
+- 202 files · ~192,684 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1754 nodes · 3375 edges · 130 communities (108 shown, 22 thin omitted)
+- 1755 nodes · 3375 edges · 131 communities (109 shown, 22 thin omitted)
 - Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 62 edges (avg confidence: 0.63)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `6b280ad6`
+- Built from commit: `97560e77`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -165,7 +165,7 @@
 - **Epics Roadmap Bundle** — tasks_readme_roadmap, tasks_epic_3_daemon_ingestion_brief, tasks_epic_4_daemon_cicd_brief, tasks_epic_5_web_core_brief, tasks_epic_6_web_analytics_brief [EXTRACTED 1.00]
 - **Daemon Hardening Audit Program** — daemon_python_readme_guide, tasks_daemon_audit_2026_08_12_report, concept_file_hash_cache, concept_initial_sync_threadpool, concept_proactive_tray_notifications [INFERRED 0.85]
 
-## Communities (130 total, 22 thin omitted)
+## Communities (131 total, 22 thin omitted)
 
 ### Community 0 - "test_parser.py"
 Cohesion: 0.07
@@ -548,24 +548,24 @@ Cohesion: 0.67
 Nodes (3): Hexagon Brand Logo (F monogram), User Profile OG Image, /u/[handle] Public Profile Page
 
 ## Knowledge Gaps
-- **407 isolated node(s):** `QuarantineVerificationResult`, `DaemonErrorGroup`, `KnownBuild`, `NewKnownBuild`, `NewRawReplayQuarantine` (+402 more)
+- **407 isolated node(s):** `QuarantineVerificationResult`, `DaemonErrorGroup`, `PatSummary`, `Env`, `FriendRequest` (+402 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **22 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `_SettingsWindow` connect `_SettingsWindow` to `gui.py`, `guess_settings_url`, `app.py`, `._crop_to_photo`, `._build_ui`, `updater.py`, `UpdateStatusTracker`, `test_config.py`?**
-  _High betweenness centrality (0.042) - this node is a cross-community bridge._
-- **Why does `UpdateStatusTracker` connect `UpdateStatusTracker` to `gui.py`, `test_updater.py`, `_FakeStreamingResponse`, `_DaemonRunner`, `app.py`, `trigger_manual_update`, `updater.py`, `_SettingsWindow`?**
-  _High betweenness centrality (0.025) - this node is a cross-community bridge._
 - **Why does `SyncState` connect `SyncState` to `ApiClient`, `_DaemonRunner`, `app.py`, `_version_gte`, `sync_state_file_path`, `test_config.py`, `ReplayErrorRecord`, `test_app.py`, `_now`?**
-  _High betweenness centrality (0.018) - this node is a cross-community bridge._
+  _High betweenness centrality (0.047) - this node is a cross-community bridge._
+- **Why does `_SettingsWindow` connect `_SettingsWindow` to `gui.py`, `guess_settings_url`, `app.py`, `._crop_to_photo`, `._build_ui`, `updater.py`, `UpdateStatusTracker`, `test_config.py`?**
+  _High betweenness centrality (0.031) - this node is a cross-community bridge._
+- **Why does `UpdateStatusTracker` connect `UpdateStatusTracker` to `gui.py`, `test_updater.py`, `_FakeStreamingResponse`, `_DaemonRunner`, `app.py`, `trigger_manual_update`, `updater.py`, `_SettingsWindow`?**
+  _High betweenness centrality (0.027) - this node is a cross-community bridge._
 - **Are the 2 inferred relationships involving `SyncState` (e.g. with `_DaemonRunner` and `IngestOutcome`) actually correct?**
   _`SyncState` has 2 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 3 inferred relationships involving `_SettingsWindow` (e.g. with `UpdatePhase` and `UpdateStatus`) actually correct?**
   _`_SettingsWindow` has 3 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 5 inferred relationships involving `UpdateStatusTracker` (e.g. with `_DaemonRunner` and `_ProgressBarDriver`) actually correct?**
   _`UpdateStatusTracker` has 5 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `QuarantineVerificationResult`, `DaemonErrorGroup`, `KnownBuild` to the rest of the system?**
+- **What connects `QuarantineVerificationResult`, `DaemonErrorGroup`, `PatSummary` to the rest of the system?**
   _407 weakly-connected nodes found - possible documentation gaps or missing edges._
