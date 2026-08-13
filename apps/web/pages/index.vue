@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { MatchListResponse, StatsSummary } from "~/types/matches";
+import type { WeaknessesResponse } from "~/types/weaknesses";
 
 definePageMeta({ middleware: "auth" });
 
@@ -23,6 +24,9 @@ const { data: summary } = await useApiFetch<StatsSummary>("/stats/summary");
 const { data: recentMatches } = await useApiFetch<MatchListResponse>("/matches", {
   query: { page: 1, pageSize: 8 },
 });
+
+const { data: weaknesses } = await useApiFetch<WeaknessesResponse>("/weaknesses");
+const topLeak = computed(() => (weaknesses.value ? getTopWeaknesses(weaknesses.value, { limit: 1 })[0] : undefined));
 
 const columns = [
   { key: "playedAt", label: "Date" },
@@ -60,6 +64,19 @@ function goToMatch(row: Record<string, unknown>) {
         :value="summary ? formatDuration(summary.avgDurationSeconds) : '-'"
       />
     </div>
+
+    <NuxtLink
+      v-if="topLeak"
+      to="/analysis"
+      class="flex items-center gap-3 rounded-lg border border-danger/30 bg-danger/5 p-4 transition-colors hover:bg-danger/10"
+    >
+      <UIcon name="i-heroicons-exclamation-triangle" class="h-5 w-5 shrink-0 text-danger" />
+      <div class="min-w-0 flex-1">
+        <p class="text-xs uppercase tracking-wide text-muted">Ton point faible du moment</p>
+        <p class="truncate text-sm font-medium">{{ topLeak.label }}</p>
+      </div>
+      <UIcon name="i-heroicons-chevron-right" class="h-4 w-4 shrink-0 text-muted" />
+    </NuxtLink>
 
     <div>
       <div class="mb-3 flex items-center justify-between">

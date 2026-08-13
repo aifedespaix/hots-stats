@@ -14,13 +14,24 @@ from __future__ import annotations
 # resolution mis-scoped `replay.attributes.events` by the tracker
 # PlayerID instead of `m_playerList` position, occasionally attributing
 # one player's hero (and only the hero -- talents/stats stayed correct)
-# to a different player in the same match. Bumping this flags every
-# previously-ingested match as stale so the daemon's API-driven resync
-# (see sync_state.py's `invalidate_stale`) reparses and re-uploads it.
-PARSER_VERSION = "1.1"
+# to a different player in the same match.
+# 1.2: `replay.attributes.events`' `HeroAttributeId` (the only hero source
+# before this version, including the 1.1 fix above) was observed to no
+# longer reliably reflect the hero actually played on current replays --
+# real matches where *every* player's attribute-resolved hero named someone
+# nobody in the match played, with zero overlap with the actual 10 heroes
+# (talents/stats/win result staying correct throughout, since those never
+# read this attribute). Hero is now resolved primarily from the player's own
+# talent picks (`EndOfGameTalentChoices`, tracker-events based -- see
+# `_hero_from_talent_prefix` in parser.py), falling back to
+# `HeroAttributeId` only when no talent is available to match against.
+# Bumping this flags every previously-ingested match as stale so the
+# daemon's API-driven resync (see sync_state.py's `invalidate_stale`)
+# reparses and re-uploads it.
+PARSER_VERSION = "1.2"
 
 # Shown in the settings window. Bump alongside `[project].version` in pyproject.toml.
-APP_VERSION = "1.0.22"
+APP_VERSION = "1.0.24"
 
 # HotS talent tiers are always at these character levels, in pick order.
 TALENT_TIER_LEVELS = (1, 4, 7, 10, 13, 16, 20)

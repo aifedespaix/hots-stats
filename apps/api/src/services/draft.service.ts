@@ -2,15 +2,19 @@ import { db, draftPseudoPreferences, heroes, matchPlayers, matches, users } from
 import {
   DRAFT_MIN_RANKED_GAMES_FOR_RANKING,
   DRAFT_RANKED_MODES,
+  DRAFT_RECENT_GAMES_LIMIT,
   type DraftHeroStat,
   type DraftPlayerSlot,
   type DraftPlayerStats,
+  type DraftRecentGame,
   type DraftSlotInput,
   type DraftSnapshot,
   type DraftSnapshotInput,
+  type TeamThreatEntry,
 } from "@hots-stats/shared-types";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { getPlayerEncounter } from "./players.service";
+import { getMatchupWeaknesses } from "./weaknesses.service";
 
 /**
  * Everything the live-draft feature needs beyond a plain DB query: a draft
@@ -284,7 +288,7 @@ export async function setDraftPseudoPreference(
  * in across the whole app, regardless of who uploaded it.
  */
 export async function getPlayerDraftStats(viewerUserId: string, battletag: string): Promise<DraftPlayerStats> {
-  const [encounter, heroRows] = await Promise.all([
+  const [encounter, heroRows, recentRows] = await Promise.all([
     getPlayerEncounter(viewerUserId, battletag),
     db
       .select({
@@ -301,6 +305,24 @@ export async function getPlayerDraftStats(viewerUserId: string, battletag: strin
       .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
       .where(and(eq(matchPlayers.battletag, battletag), inArray(matches.gameMode, [...DRAFT_RANKED_MODES])))
       .groupBy(matchPlayers.heroId, heroes.name),
+    // Not restricted to ranked modes, unlike the sections above -- this is a
+    // "what has this player actually been doing lately" recency signal
+    // (queueing pattern, tilt, hot streak), which a QM/ARAM blind spot would
+    // undermine. The UI shows each game's mode alongside it instead.
+    db
+      .select({
+        heroId: matchPlayers.heroId,
+        heroName: heroes.name,
+        winner: matchPlayers.winner,
+        playedAt: matches.playedAt,
+        gameMode: matches.gameMode,
+      })
+      .from(matchPlayers)
+      .innerJoin(heroes, eq(heroes.id, matchPlayers.heroId))
+      .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
+      .where(eq(matchPlayers.battletag, battletag))
+      .orderBy(desc(matches.playedAt))
+      .limit(DRAFT_RECENT_GAMES_LIMIT),
   ]);
 
   const heroStats: DraftHeroStat[] = heroRows.map((row) => ({
@@ -315,6 +337,14 @@ export async function getPlayerDraftStats(viewerUserId: string, battletag: strin
   const topWinrate = [...eligible].sort((a, b) => b.winrate - a.winrate).slice(0, 3);
   const topKda = [...eligible].sort((a, b) => b.kda - a.kda).slice(0, 2);
 
+  const recentGames: DraftRecentGame[] = recentRows.map((row) => ({
+    heroId: row.heroId,
+    heroName: row.heroName,
+    winner: row.winner,
+    playedAt: row.playedAt.toISOString(),
+    gameMode: row.gameMode,
+  }));
+
   return {
     battletag,
     encounters: encounter?.gamesTogether ?? 0,
@@ -322,5 +352,81 @@ export async function getPlayerDraftStats(viewerUserId: string, battletag: strin
     topPlayed,
     topWinrate,
     topKda,
+    recentGames,
   };
+}
+
+/**
+ * The live-draft "who's dangerous" panel: for each of the given battletags
+ * (one team), their single best eligible ranked hero (highest winrate among
+ * hero/battletag pairs with >= `DRAFT_MIN_RANKED_GAMES_FOR_RANKING` games,
+ * falling back to their most-played hero when none clears that floor so a
+ * team of unknowns doesn't just render an empty panel), cross-referenced
+ * against the *viewer's* own losing matchups so a double threat stands out.
+ * One entry per battletag (so at most 5, matching a team) rather than a
+ * pooled top-N -- during a timed draft, "who specifically should I watch"
+ * is more actionable than an anonymous hero list.
+ */
+export async function getTeamThreats(viewerUserId: string, battletags: string[]): Promise<TeamThreatEntry[]> {
+  if (battletags.length === 0) return [];
+
+  const [rows, personalWeaknesses] = await Promise.all([
+    db
+      .select({
+        battletag: matchPlayers.battletag,
+        heroId: matchPlayers.heroId,
+        heroName: heroes.name,
+        gamesPlayed: sql<number>`count(*)::int`,
+        wins: sql<number>`count(*) filter (where ${matchPlayers.winner})::int`,
+      })
+      .from(matchPlayers)
+      .innerJoin(heroes, eq(heroes.id, matchPlayers.heroId))
+      .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
+      .where(and(inArray(matchPlayers.battletag, battletags), inArray(matches.gameMode, [...DRAFT_RANKED_MODES])))
+      .groupBy(matchPlayers.battletag, matchPlayers.heroId, heroes.name),
+    getMatchupWeaknesses(viewerUserId),
+  ]);
+
+  const rowsByBattletag = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const list = rowsByBattletag.get(row.battletag) ?? [];
+    list.push(row);
+    rowsByBattletag.set(row.battletag, list);
+  }
+
+  const weakHeroIds = new Set(
+    personalWeaknesses
+      .filter((m) => m.gamesPlayed >= DRAFT_MIN_RANKED_GAMES_FOR_RANKING && m.winrate < 0.5)
+      .map((m) => m.heroId),
+  );
+
+  const entries: TeamThreatEntry[] = [];
+  for (const battletag of battletags) {
+    const heroRows = rowsByBattletag.get(battletag);
+    if (!heroRows || heroRows.length === 0) continue;
+
+    const scored = heroRows.map((row) => ({
+      ...row,
+      winrate: row.gamesPlayed > 0 ? row.wins / row.gamesPlayed : 0,
+      smallSample: row.gamesPlayed < DRAFT_MIN_RANKED_GAMES_FOR_RANKING,
+    }));
+    scored.sort((a, b) => {
+      if (a.smallSample !== b.smallSample) return a.smallSample ? 1 : -1;
+      if (b.winrate !== a.winrate) return b.winrate - a.winrate;
+      return b.gamesPlayed - a.gamesPlayed;
+    });
+
+    const best = scored[0]!;
+    entries.push({
+      battletag,
+      heroId: best.heroId,
+      heroName: best.heroName,
+      gamesPlayed: best.gamesPlayed,
+      winrate: best.winrate,
+      smallSample: best.smallSample,
+      isPersonalWeakness: weakHeroIds.has(best.heroId),
+    });
+  }
+
+  return entries.sort((a, b) => b.winrate - a.winrate);
 }

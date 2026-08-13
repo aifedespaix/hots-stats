@@ -77,3 +77,25 @@ export function formatHeroRole(role: string | null): string {
 export function formatAvg(value: number): string {
   return value.toFixed(1);
 }
+
+/**
+ * Talent names come straight from the replay's internal identifier --
+ * unspaced PascalCase, often prefixed with the hero's internal codename
+ * (e.g. "LiMingCritGlassCannon"). The prefix is only stripped when it
+ * actually matches this hero's name: some heroes' internal codenames don't
+ * match their display name (e.g. E.T.C.), so this must degrade to "just
+ * spaced out" rather than risk mangling the name.
+ */
+export function formatTalentName(talentName: string, heroName: string): string {
+  const heroAlnum = heroName.replace(/[^a-zA-Z0-9]/g, "");
+  const body =
+    heroAlnum.length > 0 && talentName.toLowerCase().startsWith(heroAlnum.toLowerCase())
+      ? talentName.slice(heroAlnum.length)
+      : talentName;
+
+  return (body || talentName)
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim();
+}
