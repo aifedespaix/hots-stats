@@ -286,6 +286,19 @@ class _UpdateProgressWindow:
             command=self._open_fallback_folder,
         )
 
+        # Shown, prominently, alongside the failure -- a fallback with a
+        # completely different failure surface than the PowerShell handoff
+        # that just failed (see `updater.release_page_url`): a normal
+        # browser download + double-click, unaffected by whatever blocked
+        # the automatic swap (antivirus, Smart App Control, a locked-down
+        # execution policy).
+        self._manual_download_button = ttk.Button(
+            outer,
+            text="⬇ Mise à jour manuelle",
+            style="Accent.TButton",
+            command=lambda: webbrowser.open(updater.release_page_url()),
+        )
+
         self._close_button = ttk.Button(
             outer, text="Fermer", style="Ghost.TButton", command=root.destroy
         )
@@ -312,12 +325,13 @@ class _UpdateProgressWindow:
         if status.phase is UpdatePhase.ERROR:
             if not self._close_button_visible:
                 self._close_button_visible = True
+                self._manual_download_button.pack(anchor="e", pady=(12, 4))
                 if status.manual_fallback_path is not None:
                     self._fallback_path = status.manual_fallback_path
-                    self._open_fallback_button.pack(anchor="e", pady=(12, 4))
+                    self._open_fallback_button.pack(anchor="e", pady=(0, 4))
                     self._close_button.pack(anchor="e")
                 else:
-                    self._close_button.pack(anchor="e", pady=(12, 0))
+                    self._close_button.pack(anchor="e", pady=(0, 0))
             return  # stop polling -- wait for the user to dismiss it
 
         self._poll_job = self._root.after(300, self._poll)
@@ -1265,6 +1279,21 @@ class _SettingsWindow:
             side="left", padx=(10, 0) if self._update_status is not None else (0, 0)
         )
 
+        # Always available (unlike the buttons above, needs no
+        # `update_status` -- it's just a browser link) as a fallback with a
+        # completely different failure surface than the automatic
+        # PowerShell handoff: see `updater.release_page_url`.
+        # `_refresh_update_status` switches it to `Accent.TButton` while the
+        # last automatic attempt is in `UpdatePhase.ERROR`, so it's easy to
+        # spot exactly when it's actually needed.
+        self._manual_download_button = ttk.Button(
+            button_row,
+            text="⬇ Mise à jour manuelle",
+            style="Ghost.TButton",
+            command=self._open_manual_download,
+        )
+        self._manual_download_button.pack(side="left", padx=(10, 0))
+
         if self._update_status is not None:
             # Built but left unpacked -- `_refresh_update_status` packs it in
             # only while the current status carries a `manual_fallback_path`
@@ -1319,6 +1348,9 @@ class _SettingsWindow:
     def _open_update_log(self) -> None:
         open_path(updater.update_log_file_path())
 
+    def _open_manual_download(self) -> None:
+        webbrowser.open(updater.release_page_url())
+
     def _open_fallback_folder(self) -> None:
         if self._fallback_path is not None:
             open_path(self._fallback_path.parent)
@@ -1337,6 +1369,12 @@ class _SettingsWindow:
             UpdatePhase.INSTALLING,
         )
         self._check_update_button.configure(state="disabled" if busy else "normal")
+
+        self._manual_download_button.configure(
+            style="Accent.TButton"
+            if status.phase is UpdatePhase.ERROR
+            else "Ghost.TButton"
+        )
 
         if status.manual_fallback_path is not None:
             self._fallback_path = status.manual_fallback_path

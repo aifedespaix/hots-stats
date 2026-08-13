@@ -87,6 +87,16 @@ logger = logging.getLogger(__name__)
 
 _GITHUB_REPO = "aifedespaix/hots-stats"
 _LATEST_RELEASE_URL = f"https://api.github.com/repos/{_GITHUB_REPO}/releases/latest"
+# Human-facing counterpart of `_LATEST_RELEASE_URL` -- GitHub redirects this
+# to whatever tag is actually current, so it never goes stale the way
+# pinning a version number would. Opened in the player's browser by the
+# "Mise à jour manuelle" button (see gui.py) as a fallback with a completely
+# different failure surface than `apply_update_and_exit`'s PowerShell
+# handoff: it's just a normal browser download + double-click, the same
+# trusted everyday flow as any other .exe from the web, so it isn't subject
+# to the unsigned-script blocking (antivirus, Smart App Control, a locked-down
+# execution policy) that can silently kill the automatic swap.
+_RELEASE_PAGE_URL = f"https://github.com/{_GITHUB_REPO}/releases/latest"
 # Deliberately not versioned -- see build-daemon.yml's ASSET_NAME comment.
 # The release's tag_name (below, via `find_update`) is the only source of
 # truth for the version; the asset itself is always this exact name, so
@@ -207,6 +217,11 @@ def manual_fallback_message(version: str, fallback_path: Path) -> str:
         f"Analytics, supprimez « {current_name} », puis relancez l'application en ouvrant "
         f"« {fallback_path.name} » dans le même dossier."
     )
+
+
+def release_page_url() -> str:
+    """The GitHub "latest release" page -- see `_RELEASE_PAGE_URL`."""
+    return _RELEASE_PAGE_URL
 
 
 def downloads_dir() -> Path:
