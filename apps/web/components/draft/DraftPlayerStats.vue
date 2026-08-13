@@ -8,6 +8,17 @@ const config = useRuntimeConfig();
 const stats = ref<DraftPlayerStats | null>(null);
 const pending = ref(false);
 const errored = ref(false);
+const showProfileModal = ref(false);
+
+// The battletag panel is showing may change (another slot picked) while the
+// modal stays open -- close it rather than silently swapping the profile
+// underneath the viewer.
+watch(
+  () => props.battletag,
+  () => {
+    showProfileModal.value = false;
+  },
+);
 
 watch(
   () => props.battletag,
@@ -96,9 +107,14 @@ const medals = ["🥇", "🥈", "🥉"];
       </div>
 
       <div v-else-if="stats" class="space-y-5">
-        <div class="flex flex-wrap items-center gap-2">
-          <p class="break-all font-mono text-lg font-semibold">{{ stats.battletag }}</p>
-          <PlayersAnnotationBadges :battletag="stats.battletag" />
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex flex-wrap items-center gap-2">
+            <p class="break-all font-mono text-lg font-semibold">{{ stats.battletag }}</p>
+            <PlayersAnnotationBadges :battletag="stats.battletag" />
+          </div>
+          <UButton size="xs" variant="soft" icon="i-heroicons-user-circle" @click="showProfileModal = true">
+            Profil complet
+          </UButton>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
@@ -125,18 +141,21 @@ const medals = ["🥇", "🥈", "🥉"];
               <li
                 v-for="game in stats.recentGames"
                 :key="game.playedAt"
-                class="flex items-start gap-2.5 rounded-md px-1.5 py-1"
+                class="flex items-center gap-2.5 rounded-md border-l-2 px-2 py-1.5"
+                :class="game.winner ? 'border-success bg-success/10' : 'border-danger bg-danger/10'"
               >
-                <span
-                  class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
-                  :class="game.winner ? 'bg-success' : 'bg-danger'"
-                />
                 <div class="min-w-0 flex-1">
                   <p class="truncate text-sm">{{ game.heroName }}</p>
                   <p class="text-[11px] text-muted">
                     {{ formatGameMode(game.gameMode) }} · {{ formatDate(game.playedAt) }}
                   </p>
                 </div>
+                <span
+                  class="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide"
+                  :class="game.winner ? 'bg-success/20 text-success' : 'bg-danger/20 text-danger'"
+                >
+                  {{ game.winner ? "Victoire" : "Défaite" }}
+                </span>
               </li>
             </ul>
           </template>
@@ -166,5 +185,7 @@ const medals = ["🥇", "🥈", "🥉"];
         </div>
       </div>
     </div>
+
+    <PlayersProfileModal v-model="showProfileModal" :battletag="battletag" />
   </div>
 </template>

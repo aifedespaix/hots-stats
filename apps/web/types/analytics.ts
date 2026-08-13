@@ -1,4 +1,5 @@
 import type { HeroStatsScope, PlayerEncounterStats, TalentTierStats } from "@hots-stats/shared-types";
+import type { StatsSummary } from "./matches";
 
 export interface HeroStats {
   heroId: string;
@@ -49,8 +50,18 @@ export interface PlayerMapBreakdown {
   winrate: number;
 }
 
+export interface PlayerOwnStats {
+  summary: StatsSummary;
+  topHeroes: HeroStats[];
+}
+
 export interface PlayerDetailResponse {
   player: PlayerEncounterStats;
+  /** The player's own real stats (all their games, not just shared ones) --
+   * only present when they have a registered account AND are a friend
+   * (or the connected user themselves): sharing your full history is a
+   * friends-only privilege, not something any stranger you've matched with can see. */
+  ownStats: PlayerOwnStats | null;
   heroBreakdown: PlayerHeroBreakdown[];
   opponentHeroBreakdown: PlayerHeroBreakdown[];
   mapBreakdown: PlayerMapBreakdown[];

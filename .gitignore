@@ -22,3 +22,5 @@ daemon-python/**/*.egg-info/
 daemon-python/.pytest_cache/
 
 graphify-out/cache/
+
+prompts
