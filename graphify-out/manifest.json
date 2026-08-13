@@ -1095,8 +1095,93 @@
     "semantic_hash": ""
   },
   "tasks/analyse-frontend.md": {
-    "mtime": 1786624920.2996023,
-    "ast_hash": "f2e4ffb7da911ac4591ffd04baf738b3",
+    "mtime": 1786625756.0839605,
+    "ast_hash": "01d21139088f8530bbda077bd7318523",
+    "semantic_hash": ""
+  },
+  "apps/api/src/services/uploads-diagnostics.service.ts": {
+    "mtime": 1786625437.5585518,
+    "ast_hash": "c6a4ba473c87e678decd23f927ee1c42",
+    "semantic_hash": ""
+  },
+  "apps/web/components/charts/BarChart.vue": {
+    "mtime": 1786625437.5595546,
+    "ast_hash": "2b2803895431fb2fd4499466ebf0f529",
+    "semantic_hash": ""
+  },
+  "apps/web/components/charts/ChartModal.vue": {
+    "mtime": 1786625437.5595546,
+    "ast_hash": "c413a95559f672775c691888e667e2f0",
+    "semantic_hash": ""
+  },
+  "apps/web/components/charts/DoughnutChart.vue": {
+    "mtime": 1786625437.5615554,
+    "ast_hash": "f57ba49cdd8052155fd790ba805304ec",
+    "semantic_hash": ""
+  },
+  "apps/web/components/charts/LineChart.vue": {
+    "mtime": 1786625437.5615554,
+    "ast_hash": "4dbd6cbcb6f25bb2ab62951624e4f639",
+    "semantic_hash": ""
+  },
+  "apps/web/components/charts/MapResultsModal.vue": {
+    "mtime": 1786625437.562555,
+    "ast_hash": "639802a21e9574450ec315a6a7a7f7da",
+    "semantic_hash": ""
+  },
+  "apps/web/components/charts/PerformanceRadarModal.vue": {
+    "mtime": 1786625437.5630577,
+    "ast_hash": "6bdfbe79a70403681be6c3581c5b9394",
+    "semantic_hash": ""
+  },
+  "apps/web/components/charts/RadarChart.vue": {
+    "mtime": 1786625437.5630577,
+    "ast_hash": "b9840baff9f331835ab62fcceb749903",
+    "semantic_hash": ""
+  },
+  "apps/web/components/charts/RolePlaytimeModal.vue": {
+    "mtime": 1786625437.564561,
+    "ast_hash": "26b2a81a401b37f4ab41c1ca03c6dbfc",
+    "semantic_hash": ""
+  },
+  "apps/web/components/stats/ChartLauncherGroup.vue": {
+    "mtime": 1786625437.565565,
+    "ast_hash": "ad6984a549437a5639f89a8812e07ec5",
+    "semantic_hash": ""
+  },
+  "apps/web/components/stats/Dashboard.vue": {
+    "mtime": 1786625437.5665648,
+    "ast_hash": "5c2c9e24c1f0870bcfcf6f093447e32d",
+    "semantic_hash": ""
+  },
+  "apps/web/components/stats/MiniStat.vue": {
+    "mtime": 1786625437.5670676,
+    "ast_hash": "f55d641657308a89d04ded6e4533cd01",
+    "semantic_hash": ""
+  },
+  "apps/web/components/stats/RankBadgeList.vue": {
+    "mtime": 1786625437.5680718,
+    "ast_hash": "c3c0e1643e65079f5ce4b1a060aa3cb5",
+    "semantic_hash": ""
+  },
+  "apps/web/components/stats/StatCard.vue": {
+    "mtime": 1786625437.569078,
+    "ast_hash": "dd72e0c5c14346682026b15533d3a276",
+    "semantic_hash": ""
+  },
+  "apps/web/composables/useChartTheme.ts": {
+    "mtime": 1786625437.5710828,
+    "ast_hash": "729862f39ea968248e8b15be7c8bf988",
+    "semantic_hash": ""
+  },
+  "apps/web/utils/heroRoleVisuals.ts": {
+    "mtime": 1786625437.5745938,
+    "ast_hash": "9713f783a332b771573dfb16fadbbf9f",
+    "semantic_hash": ""
+  },
+  "apps/web/utils/initials.ts": {
+    "mtime": 1786625437.5745938,
+    "ast_hash": "09f44fe6bfa14ef968c9988f4920621f",
     "semantic_hash": ""
   }
 }
