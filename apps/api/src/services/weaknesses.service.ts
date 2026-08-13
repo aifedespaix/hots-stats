@@ -6,6 +6,7 @@ import {
   TALENT_HABIT_MIN_WINRATE_GAP,
   type MapWeaknessStats,
   type MatchupWeaknessStats,
+  type OverperformingTalentStats,
   type UnderperformingTalentStats,
 } from "@hots-stats/shared-types";
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
@@ -73,17 +74,26 @@ export async function getMatchupWeaknesses(userId: string): Promise<MatchupWeakn
     .sort((a, b) => a.winrate - b.winrate);
 }
 
+interface TalentHabitGap {
+  stat: UnderperformingTalentStats;
+  /** otherWinrate - talentWinrate: positive when the habit underperforms
+   * its alternatives, negative when it outperforms them. */
+  gapVsOtherPicks: number;
+}
+
 /**
  * Talents the user picks as their de facto default at a tier (>= floor
- * picks, dominant share of that tier's picks for that hero) despite
- * winning noticeably less often with them than with whatever else they
- * occasionally picked instead at the same tier/hero -- a habit worth
- * reconsidering, not a one-off bad game. The internal "vs other picks" gap
+ * picks, dominant share of that tier's picks for that hero), paired with how
+ * much better or worse they do with that pick than with whatever else they
+ * occasionally picked instead at the same tier/hero. Shared by
+ * `getUnderperformingTalents` and `getOverperformingTalents`, which just
+ * threshold and sort this in opposite directions -- a habit worth
+ * reconsidering vs. one worth keeping. The internal "vs other picks" gap
  * (rather than a simple "vs hero's overall win rate") avoids a dominant
  * pick diluting its own baseline: at 90% pick rate, "overall win rate on
  * this hero" is mostly *this talent's* results already.
  */
-export async function getUnderperformingTalents(userId: string): Promise<UnderperformingTalentStats[]> {
+async function getTalentHabitGaps(userId: string): Promise<TalentHabitGap[]> {
   const [talentRows, heroRows] = await Promise.all([
     db
       .select({
@@ -120,7 +130,7 @@ export async function getUnderperformingTalents(userId: string): Promise<Underpe
     tierTotals.set(key, (tierTotals.get(key) ?? 0) + row.picks);
   }
 
-  const flagged: { stat: UnderperformingTalentStats; gapVsOtherPicks: number }[] = [];
+  const gaps: TalentHabitGap[] = [];
   for (const row of talentRows) {
     if (row.picks < TALENT_HABIT_MIN_PICKS) continue;
 
@@ -135,10 +145,8 @@ export async function getUnderperformingTalents(userId: string): Promise<Underpe
 
     const talentWinrate = row.wins / row.picks;
     const otherWinrate = (heroTotal.wins - row.wins) / otherGames;
-    const gapVsOtherPicks = otherWinrate - talentWinrate;
-    if (gapVsOtherPicks < TALENT_HABIT_MIN_WINRATE_GAP) continue;
 
-    flagged.push({
+    gaps.push({
       stat: {
         heroId: row.heroId,
         heroName: row.heroName,
@@ -150,9 +158,36 @@ export async function getUnderperformingTalents(userId: string): Promise<Underpe
         talentWinrate,
         heroWinrate: heroTotal.gamesPlayed > 0 ? heroTotal.wins / heroTotal.gamesPlayed : 0,
       },
-      gapVsOtherPicks,
+      gapVsOtherPicks: otherWinrate - talentWinrate,
     });
   }
 
-  return flagged.sort((a, b) => b.gapVsOtherPicks - a.gapVsOtherPicks).map((f) => f.stat);
+  return gaps;
+}
+
+/**
+ * Habitual talents that underperform their alternatives by at least
+ * `TALENT_HABIT_MIN_WINRATE_GAP`, worst gap first -- a habit worth
+ * reconsidering, not a one-off bad game.
+ */
+export async function getUnderperformingTalents(userId: string): Promise<UnderperformingTalentStats[]> {
+  const gaps = await getTalentHabitGaps(userId);
+  return gaps
+    .filter((g) => g.gapVsOtherPicks >= TALENT_HABIT_MIN_WINRATE_GAP)
+    .sort((a, b) => b.gapVsOtherPicks - a.gapVsOtherPicks)
+    .map((g) => g.stat);
+}
+
+/**
+ * Mirror of `getUnderperformingTalents`: habitual talents that outperform
+ * their alternatives by at least `TALENT_HABIT_MIN_WINRATE_GAP`, best gap
+ * first -- the "keep doing this" counterpart used for the Diagnostic page's
+ * strengths panel.
+ */
+export async function getOverperformingTalents(userId: string): Promise<OverperformingTalentStats[]> {
+  const gaps = await getTalentHabitGaps(userId);
+  return gaps
+    .filter((g) => g.gapVsOtherPicks <= -TALENT_HABIT_MIN_WINRATE_GAP)
+    .sort((a, b) => a.gapVsOtherPicks - b.gapVsOtherPicks)
+    .map((g) => g.stat);
 }

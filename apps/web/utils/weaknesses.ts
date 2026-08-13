@@ -1,4 +1,9 @@
-import type { MapWeaknessStats, MatchupWeaknessStats, UnderperformingTalentStats } from "@hots-stats/shared-types";
+import type {
+  MapWeaknessStats,
+  MatchupWeaknessStats,
+  OverperformingTalentStats,
+  UnderperformingTalentStats,
+} from "@hots-stats/shared-types";
 import { DRAFT_MIN_RANKED_GAMES_FOR_RANKING } from "@hots-stats/shared-types";
 import { formatPercent } from "../composables/useFormat";
 
@@ -6,7 +11,7 @@ export interface WeaknessLeak {
   key: string;
   label: string;
   detail: string;
-  /** Higher = worse. Only meaningful for ranking within this list, not as an absolute score. */
+  /** Higher = more notable within this list (worse for a leak, better for a strength) -- only meaningful for ranking, not as an absolute score. */
   severity: number;
 }
 
@@ -77,4 +82,61 @@ export function getTopWeaknesses(
   }
 
   return leaks.sort((a, b) => b.severity - a.severity).slice(0, limit);
+}
+
+/**
+ * Mirror of `getTopWeaknesses`: the single best map, best matchup, best
+ * talent habit (and, optionally, a warming-up recent-form trend) into one
+ * ranked list -- the "keep doing this" counterpart shown next to the leaks
+ * list on the Diagnostic page.
+ */
+export function getTopStrengths(
+  data: { maps: MapWeaknessStats[]; matchups: MatchupWeaknessStats[]; talentStrengths: OverperformingTalentStats[] },
+  options: { limit?: number; trend?: WeaknessTrend } = {},
+): WeaknessLeak[] {
+  const { limit = 3, trend } = options;
+  const strengths: WeaknessLeak[] = [];
+
+  for (const map of data.maps) {
+    if (map.gamesPlayed < DRAFT_MIN_RANKED_GAMES_FOR_RANKING || map.winrate <= 0.5) continue;
+    strengths.push({
+      key: `map:${map.mapId}`,
+      label: map.mapName,
+      detail: `${formatPercent(map.winrate)} de victoires sur ${map.gamesPlayed} parties classées`,
+      severity: map.winrate - 0.5,
+    });
+  }
+
+  for (const matchup of data.matchups) {
+    if (matchup.gamesPlayed < DRAFT_MIN_RANKED_GAMES_FOR_RANKING || matchup.winrate <= 0.5) continue;
+    strengths.push({
+      key: `matchup:${matchup.heroId}`,
+      label: `Face à ${matchup.heroName}`,
+      detail: `${formatPercent(matchup.winrate)} de victoires sur ${matchup.gamesPlayed} parties classées`,
+      severity: matchup.winrate - 0.5,
+    });
+  }
+
+  for (const talent of data.talentStrengths) {
+    strengths.push({
+      key: `talent:${talent.heroId}:${talent.tier}:${talent.talentId}`,
+      label: `${talent.heroName} - palier ${talent.tier}`,
+      detail: `Ton choix habituel (${formatPercent(talent.pickRate)} des picks) gagne ${formatPercent(talent.talentWinrate)}, contre ${formatPercent(talent.heroWinrate)} en moyenne sur ce héros`,
+      severity: talent.talentWinrate - talent.heroWinrate,
+    });
+  }
+
+  if (trend && trend.recentGames >= DRAFT_MIN_RANKED_GAMES_FOR_RANKING) {
+    const delta = trend.recentWinrate - trend.allTimeWinrate;
+    if (delta >= 0.1) {
+      strengths.push({
+        key: "trend",
+        label: "Forme récente en hausse",
+        detail: `${formatPercent(trend.recentWinrate)} sur tes ${trend.recentGames} dernières parties classées, contre ${formatPercent(trend.allTimeWinrate)} habituellement`,
+        severity: delta,
+      });
+    }
+  }
+
+  return strengths.sort((a, b) => b.severity - a.severity).slice(0, limit);
 }
