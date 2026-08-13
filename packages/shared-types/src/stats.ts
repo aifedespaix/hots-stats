@@ -159,14 +159,32 @@ export interface FaceAFaceSynergyStats {
   gamesPlayed: number;
   wins: number;
   winrate: number;
-  /** Up to 3 best duo combos meeting `FACE_A_FACE_MIN_GAMES_FOR_COMBO`, best
-   * winrate first -- empty (not backfilled) when none qualify, since "not
-   * enough games together yet" is a normal, honest state to show as-is. */
+  /** Up to 3 best duo combos, best winrate first. Backfilled with the
+   * most-played remaining combos (flagged `smallSample`) when fewer than 3
+   * clear `FACE_A_FACE_MIN_GAMES_FOR_COMBO`, same rule as signature heroes --
+   * empty only when the two players have never shared a team. */
   topCombos: FaceAFaceHeroCombo[];
 }
 
+/** Stats for games where the two players were on opposing teams -- the raw
+ * material for "what should I pick against them" / "what do they beat me
+ * with". Both lists use the same top-3-with-backfill rule as `topCombos`. */
+export interface FaceAFaceMatchupStats {
+  gamesPlayed: number;
+  wins: number;
+  winrate: number;
+  /** Up to 3 of my hero picks with the best winrate against one of their
+   * heroes -- my best counters. */
+  bestMatchups: FaceAFaceHeroCombo[];
+  /** Up to 3 of my hero picks with the worst winrate against one of their
+   * heroes -- what to avoid drafting into them. */
+  worstMatchups: FaceAFaceHeroCombo[];
+}
+
 export interface FaceAFacePlayerSide {
-  userId: string;
+  /** Null when this side has no registered account -- comparisons work for
+   * any battletag encountered in a recorded match, not just registered friends. */
+  userId: string | null;
   displayName: string;
   avatarUrl: string | null;
   battletag: string | null;

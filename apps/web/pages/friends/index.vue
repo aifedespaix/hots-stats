@@ -250,15 +250,28 @@ async function removeFriend(userId: string) {
           :key="friend.id"
           class="flex items-center justify-between gap-3 py-3"
         >
-          <NuxtLink :to="`/friends/${friend.id}`" class="min-w-0 flex-1 hover:text-brand">
+          <NuxtLink
+            :to="friend.battletag ? `/players/${encodeURIComponent(friend.battletag)}` : `/friends/${friend.id}`"
+            class="min-w-0 flex-1 hover:text-brand"
+          >
             <p class="truncate font-medium">{{ friend.displayName }}</p>
             <p v-if="friend.battletag" class="truncate font-mono text-xs text-muted">{{ friend.battletag }}</p>
           </NuxtLink>
           <div class="flex shrink-0 items-center gap-2">
-            <UButton :to="`/friends/${friend.id}`" size="sm" variant="soft" icon="i-heroicons-chart-bar">
-              Stats
+            <UButton
+              :to="friend.battletag ? `/players/${encodeURIComponent(friend.battletag)}` : `/friends/${friend.id}`"
+              size="sm"
+              variant="soft"
+              icon="i-heroicons-user-circle"
+            >
+              Profil
             </UButton>
-            <UButton :to="`/face-a-face/${friend.id}`" size="sm" icon="i-lucide-swords">
+            <UButton
+              v-if="friend.battletag"
+              :to="`/face-a-face/${encodeURIComponent(friend.battletag)}`"
+              size="sm"
+              icon="i-lucide-swords"
+            >
               Face-à-Face
             </UButton>
             <UButton size="sm" variant="ghost" color="red" icon="i-heroicons-user-minus" @click="removeFriend(friend.id)" />
