@@ -20,6 +20,7 @@ useSeoMeta({
 interface FiltersResponse {
   heroes: { id: string; name: string }[];
   maps: { id: string; name: string }[];
+  players: { battletag: string }[];
 }
 
 const { data: filterOptions } = await useApiFetch<FiltersResponse>("/matches/filters");
@@ -89,6 +90,10 @@ watch([sortKey, sortDir], () => {
 });
 
 const modeOptions = [{ value: "" as const, label: "Tous les modes" }, ...gameModeFilterOptions()];
+const opponentOptions = computed(() => [
+  { battletag: "", label: "Tous les joueurs" },
+  ...(filterOptions.value?.players ?? []).map((player) => ({ battletag: player.battletag, label: player.battletag })),
+]);
 
 const columns = [
   { key: "playedAt", label: "Date", sortable: true },
@@ -137,7 +142,15 @@ function goToMatch(row: Record<string, unknown>) {
       />
       <UInput v-model="dateFrom" type="date" placeholder="Du" />
       <UInput v-model="dateTo" type="date" placeholder="Au" />
-      <UInput v-model="opponentBattletag" placeholder="Joueur croisé (Pseudo#12345)" />
+      <USelectMenu
+        v-model="opponentBattletag"
+        :options="opponentOptions"
+        value-attribute="battletag"
+        option-attribute="label"
+        searchable
+        searchable-placeholder="Rechercher un pseudo..."
+        placeholder="Joueur croisé"
+      />
     </div>
 
     <div class="flex flex-wrap gap-2">
