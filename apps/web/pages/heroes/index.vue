@@ -16,8 +16,17 @@ useSeoMeta({
   robots: "noindex, follow",
 });
 
-const mode = ref("");
-const search = ref("");
+const filtersStore = useHeroesFiltersStore();
+const { filters, sortKey, sortDir } = storeToRefs(filtersStore);
+const mode = computed({
+  get: () => filters.value.mode,
+  set: (value: string) => (filters.value.mode = value),
+});
+const search = computed({
+  get: () => filters.value.search,
+  set: (value: string) => (filters.value.search = value),
+});
+const onSort = filtersStore.onSort;
 
 const { scope, saving: scopeSaving, setScope } = useHeroStatsScope();
 
@@ -28,8 +37,6 @@ const query = computed(() => ({
 
 const { data } = await useApiFetch<HeroListResponse>("/heroes", { query });
 
-const { sortKey, sortDir, onSort } = useSortState<keyof HeroStats>("gamesPlayed", "desc");
-
 const modeOptions = [{ value: "" as const, label: "Tous les modes" }, ...gameModeFilterOptions()];
 
 const sortedHeroes = computed(() => {
@@ -39,8 +46,8 @@ const sortedHeroes = computed(() => {
   );
   const dir = sortDir.value === "asc" ? 1 : -1;
   return heroes.sort((a, b) => {
-    const av = a[sortKey.value];
-    const bv = b[sortKey.value];
+    const av = a[sortKey.value as keyof HeroStats];
+    const bv = b[sortKey.value as keyof HeroStats];
     if (typeof av === "string" && typeof bv === "string") {
       return av.localeCompare(bv) * dir;
     }
@@ -90,6 +97,21 @@ function goToHero(row: Record<string, unknown>) {
         placeholder="Mode"
       />
       <UInput v-model="search" placeholder="Rechercher un héros" icon="i-lucide-search" />
+    </div>
+
+    <div class="flex flex-wrap gap-2">
+      <UButton size="xs" color="gray" variant="soft" icon="i-heroicons-x-mark" @click="filtersStore.resetFilters()">
+        Réinitialiser les filtres
+      </UButton>
+      <UButton
+        size="xs"
+        color="gray"
+        variant="soft"
+        icon="i-heroicons-arrows-up-down"
+        @click="filtersStore.resetSort()"
+      >
+        Réinitialiser le tri
+      </UButton>
     </div>
 
     <UiDataTable

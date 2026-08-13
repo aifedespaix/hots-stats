@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { MatchListResponse } from "~/types/matches";
+import type { MatchesSortableColumn } from "~/stores/useMatchesFiltersStore";
 
 definePageMeta({ middleware: "auth" });
 
@@ -23,17 +24,38 @@ interface FiltersResponse {
 
 const { data: filterOptions } = await useApiFetch<FiltersResponse>("/matches/filters");
 
-const mode = ref("");
-const heroId = ref("");
-const mapId = ref("");
-const dateFrom = ref("");
-const dateTo = ref("");
-const opponentBattletag = ref("");
+const filtersStore = useMatchesFiltersStore();
+const { filters, sortKey, sortDir } = storeToRefs(filtersStore);
+const mode = computed({
+  get: () => filters.value.mode,
+  set: (value: string) => (filters.value.mode = value),
+});
+const heroId = computed({
+  get: () => filters.value.heroId,
+  set: (value: string) => (filters.value.heroId = value),
+});
+const mapId = computed({
+  get: () => filters.value.mapId,
+  set: (value: string) => (filters.value.mapId = value),
+});
+const dateFrom = computed({
+  get: () => filters.value.dateFrom,
+  set: (value: string) => (filters.value.dateFrom = value),
+});
+const dateTo = computed({
+  get: () => filters.value.dateTo,
+  set: (value: string) => (filters.value.dateTo = value),
+});
+const opponentBattletag = computed({
+  get: () => filters.value.opponentBattletag,
+  set: (value: string) => (filters.value.opponentBattletag = value),
+});
+function onSort(key: string) {
+  filtersStore.onSort(key as MatchesSortableColumn);
+}
+
 const page = ref(1);
 const pageSize = 20;
-
-type SortableColumn = "playedAt" | "durationSeconds" | "gameMode" | "mapName" | "heroName" | "result";
-const { sortKey, sortDir, onSort } = useSortState<SortableColumn>("playedAt", "desc");
 
 // The "result" column (shown as Victoire/Défaite) sorts by the underlying
 // `winner` boolean server-side, which isn't its own visible column.
@@ -124,6 +146,21 @@ function goToMatch(row: Record<string, unknown>) {
       <UInput v-model="dateFrom" type="date" placeholder="Du" />
       <UInput v-model="dateTo" type="date" placeholder="Au" />
       <UInput v-model="opponentBattletag" placeholder="Joueur croisé (Pseudo#12345)" />
+    </div>
+
+    <div class="flex flex-wrap gap-2">
+      <UButton size="xs" color="gray" variant="soft" icon="i-heroicons-x-mark" @click="filtersStore.resetFilters()">
+        Réinitialiser les filtres
+      </UButton>
+      <UButton
+        size="xs"
+        color="gray"
+        variant="soft"
+        icon="i-heroicons-arrows-up-down"
+        @click="filtersStore.resetSort()"
+      >
+        Réinitialiser le tri
+      </UButton>
     </div>
 
     <UiDataTable
