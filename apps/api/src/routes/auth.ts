@@ -10,6 +10,7 @@ import { battlenet, battlenetEnabled, google } from "../lib/oauth";
 import { SESSION_COOKIE_MAX_AGE, SESSION_COOKIE_NAME, createSessionToken } from "../lib/session";
 import { authSession, requireUser } from "../middleware/auth-session";
 import { authToken } from "../middleware/auth-token";
+import { linkUnclaimedMatchPlayers, suggestBattletag } from "../services/account-linking.service";
 import { resetUserData } from "../services/data-reset.service";
 
 const OAUTH_STATE_COOKIE = "hots_oauth_state";
@@ -226,6 +227,13 @@ export const authRoute = new Hono()
           })
           .returning();
       }
+
+      if (user) {
+        // Relink any history uploaded (by this player, or by a teammate's
+        // daemon) before this account claimed the tag -- covers both the
+        // freshly-linked existing account above and a brand new one.
+        await linkUnclaimedMatchPlayers(user.id, battlenetUser.battletag);
+      }
     } else if (!user.battletag && !(await findBattleTagOwner(battlenetUser.battletag))) {
       // Retry the auto-fill skipped at signup (see above) on every login
       // where it's still empty, in case the conflicting account has since
@@ -236,6 +244,10 @@ export const authRoute = new Hono()
         .set({ battletag: battlenetUser.battletag, updatedAt: new Date() })
         .where(eq(users.id, user.id))
         .returning();
+
+      if (user) {
+        await linkUnclaimedMatchPlayers(user.id, battlenetUser.battletag);
+      }
     }
 
     if (!user) {
@@ -267,6 +279,19 @@ export const authRoute = new Hono()
   .get("/me", authSession, (c) => {
     const user = c.get("user");
     return c.json({ user: user ? toPublicUser(user) : null });
+  })
+  // Best-effort "is this you?" nudge for an account that never set a
+  // battletag but already has upload history -- see account-linking.service.ts.
+  .get("/me/battletag-suggestion", authSession, requireUser, async (c) => {
+    const user = c.get("user");
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+    if (user.battletag) {
+      return c.json({ suggestion: null });
+    }
+    const suggestion = await suggestBattletag(user.id);
+    return c.json({ suggestion });
   })
   .patch("/me", authSession, requireUser, async (c) => {
     const user = c.get("user");
@@ -312,6 +337,14 @@ export const authRoute = new Hono()
       })
       .where(eq(users.id, user.id))
       .returning();
+
+    if (updated && parsed.data.battletag) {
+      // Relink any history uploaded before this battletag was claimed.
+      // Idempotent (only touches still-unlinked rows), so it's safe to just
+      // re-run on every save rather than requiring transactional coupling
+      // with the update above.
+      await linkUnclaimedMatchPlayers(user.id, parsed.data.battletag);
+    }
 
     return c.json({ user: updated ? toPublicUser(updated) : null });
   })

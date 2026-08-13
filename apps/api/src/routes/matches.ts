@@ -5,6 +5,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { gameModeListSchema } from "../lib/query";
 import { authSession, requireUser } from "../middleware/auth-session";
+import { getFriendshipStatuses } from "../services/friendships.service";
 
 type Env = { Variables: { user: User } };
 
@@ -378,8 +379,18 @@ export const matchesRoute = new Hono<Env>()
       .where(eq(matchPlayers.matchId, matchId))
       .orderBy(asc(matchPlayers.team));
 
-    if (!players.some((p) => p.userId === user.id)) {
-      return c.json({ error: "Match not found" }, 404);
+    const isParticipant = players.some((p) => p.userId === user.id);
+    if (!isParticipant) {
+      // Not a participant yourself -- still allowed if you're friends with
+      // one, e.g. browsing a friend's match history (GET /friends/:userId/matches
+      // lists their games with no such restriction, so this detail route must
+      // agree or every click into one of their non-shared games 404s).
+      const participantIds = [...new Set(players.map((p) => p.userId).filter((id): id is string => id !== null))];
+      const statuses = await getFriendshipStatuses(user.id, participantIds);
+      const viewerIsFriendOfSomeone = [...statuses.values()].some((status) => status === "friends");
+      if (!viewerIsFriendOfSomeone) {
+        return c.json({ error: "Match not found" }, 404);
+      }
     }
 
     const playerIds = players.map((p) => p.id);

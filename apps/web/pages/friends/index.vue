@@ -258,6 +258,9 @@ async function removeFriend(userId: string) {
             <UButton :to="`/friends/${friend.id}`" size="sm" variant="soft" icon="i-heroicons-chart-bar">
               Stats
             </UButton>
+            <UButton :to="`/face-a-face/${friend.id}`" size="sm" icon="i-lucide-swords">
+              Face-à-Face
+            </UButton>
             <UButton size="sm" variant="ghost" color="red" icon="i-heroicons-user-minus" @click="removeFriend(friend.id)" />
           </div>
         </li>
