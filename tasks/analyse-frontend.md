@@ -20,7 +20,7 @@ Ta première tâche est uniquement la lecture et l'analyse.
 **[PHASE 2 : L'Architecte (Conception de l'API)]**
 Une fois que j'ai validé les patterns, tu endosses le rôle d'Architecte.
 
-1. Conçois les futurs composants mutualisés. En pensant avec une logique composant générique et adapté responsive.
+1. Conçois les futurs composants mutualisés. En pensant avec une logique composant générique et adapté responsive. Ils dovient aussi s'adapter au style du site (notament gestion theme dark / light / contrast)
 2. Propose l'interface TypeScript (Props) détaillée. Le typage doit être strict.
 3. Pense à la flexibilité : utilise le polymorphisme, les children/slots, ou des props de variantes si les anciens blocs de code présentaient des différences visuelles ou structurelles.
 4. Met en place la conception
