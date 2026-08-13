@@ -37,9 +37,20 @@ export interface PlayerHeroBreakdown {
   losses: number;
 }
 
+export interface PlayerMapBreakdown {
+  mapId: string;
+  mapName: string;
+  gamesPlayed: number;
+  wins: number;
+  losses: number;
+  winrate: number;
+}
+
 export interface PlayerDetailResponse {
   player: PlayerEncounterStats;
   heroBreakdown: PlayerHeroBreakdown[];
+  opponentHeroBreakdown: PlayerHeroBreakdown[];
+  mapBreakdown: PlayerMapBreakdown[];
 }
 
 export interface PublicProfileResponse {

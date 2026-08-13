@@ -4,8 +4,10 @@ import { z } from "zod";
 import { gameModeListSchema } from "../lib/query";
 import { authSession, requireUser } from "../middleware/auth-session";
 import {
+  getOpponentHeroBreakdown,
   getPlayerEncounter,
   getPlayerHeroBreakdown,
+  getPlayerMapBreakdown,
   listPlayerEncounters,
 } from "../services/players.service";
 
@@ -41,6 +43,11 @@ export const playersRoute = new Hono<Env>()
     if (!encounter) {
       return c.json({ error: "No shared games with this player" }, 404);
     }
-    const heroBreakdown = await getPlayerHeroBreakdown(user.id, c.req.param("battletag"));
-    return c.json({ player: encounter, heroBreakdown });
+    const battletag = c.req.param("battletag");
+    const [heroBreakdown, opponentHeroBreakdown, mapBreakdown] = await Promise.all([
+      getPlayerHeroBreakdown(user.id, battletag),
+      getOpponentHeroBreakdown(user.id, battletag),
+      getPlayerMapBreakdown(user.id, battletag),
+    ]);
+    return c.json({ player: encounter, heroBreakdown, opponentHeroBreakdown, mapBreakdown });
   });
