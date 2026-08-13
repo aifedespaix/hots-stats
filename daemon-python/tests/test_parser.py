@@ -5,6 +5,7 @@ import pytest
 from src._protocol_versions import KNOWN_PROTOCOL_BUILDS
 from src.parser import (
     ReplayParseError,
+    ReplaySkipped,
     _attribute_scope_by_player_list_index,
     _build_protocol,
     _hero_from_talent_prefix,
@@ -317,7 +318,12 @@ def test_build_payload_rejects_computer_player():
         *_base_tracker_events()[1:],
     ]
 
-    with pytest.raises(ReplayParseError, match="computer"):
+    # ReplaySkipped is a ReplayParseError subclass, so `pytest.raises(ReplayParseError, ...)`
+    # still matches -- but this must specifically be `ReplaySkipped` (not a
+    # plain `ReplayParseError`), since `ingestion.ingest_file` treats the two
+    # very differently: a `ReplaySkipped` is recorded via `mark_skipped` and
+    # kept out of the Debug report's error count, a `ReplayParseError` isn't.
+    with pytest.raises(ReplaySkipped, match="computer") as exc_info:
         build_payload(
             header=_header(610 + 16 * 600),
             details=_details(),
@@ -327,6 +333,7 @@ def test_build_payload_rejects_computer_player():
             battletags=_battletags(),
             replay_hash="a" * 64,
         )
+    assert exc_info.value.reason == "ai_player"
 
 
 def test_build_payload_rejects_unknown_hero():

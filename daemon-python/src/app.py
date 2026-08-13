@@ -302,6 +302,7 @@ class _DaemonRunner:
                 path.name,
                 ok=outcome.status in ("uploaded", "skipped"),
                 error=outcome.detail if outcome.status == "error" else None,
+                skip_reason=outcome.skip_reason,
             )
             self._maybe_notify_persistent_failure()
 

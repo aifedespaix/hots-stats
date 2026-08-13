@@ -64,6 +64,7 @@ _LIVE_STATS_POLL_MS = 500
 # show.
 _SYNCING_LABEL_MAX_CHARS = 60
 _ERROR_LABEL_MAX_CHARS = 220
+_SKIPPED_LABEL_MAX_CHARS = 110
 _UPDATE_STATUS_MAX_CHARS = 90
 _DRAFT_CAPTURE_STATUS_MAX_CHARS = 90
 _TEST_CAPTURE_STATUS_MAX_CHARS = 90
@@ -94,6 +95,17 @@ _ACCENT = "#6c8cff"
 _OK = "#4cd97b"
 _ERROR = "#ef5b5b"
 _NEUTRAL = "#8b90ad"
+
+# Human-readable explanation per `parser.ReplaySkipped` / `IngestOutcome`
+# skip-reason code (see `ingestion.py`/`sync_state.py`, which persist the
+# same short codes) -- shown in the Debug report's "ignorées" section and
+# next to the live counter on the Synchronisation tab. A new skip reason
+# only needs an entry added here.
+_SKIP_REASON_LABELS = {
+    "ai_player": (
+        "Partie avec un joueur IA (bot) — seules les parties entre joueurs réels sont synchronisées."
+    ),
+}
 
 
 def _format_update_status(status: UpdateStatus) -> str:
@@ -936,6 +948,16 @@ class _SettingsWindow:
             )
             self._currently_syncing_label.grid(row=5, column=1, columnspan=3, sticky="w", padx=(40, 0))
 
+            self._skipped_count_label = ttk.Label(
+                inner,
+                text="",
+                style="PanelMuted.TLabel",
+                foreground=_NEUTRAL,
+                wraplength=_LABEL_WRAPLENGTH,
+                justify="left",
+            )
+            self._skipped_count_label.grid(row=6, column=0, columnspan=4, sticky="w", pady=(14, 0))
+
             self._sync_error_label = ttk.Label(
                 inner,
                 text="",
@@ -944,7 +966,7 @@ class _SettingsWindow:
                 wraplength=_LABEL_WRAPLENGTH,
                 justify="left",
             )
-            self._sync_error_label.grid(row=6, column=0, columnspan=4, sticky="w", pady=(14, 0))
+            self._sync_error_label.grid(row=7, column=0, columnspan=4, sticky="w", pady=(6, 0))
 
     def _refresh_live_stats(self) -> None:
         assert self._status_tracker is not None
@@ -954,6 +976,21 @@ class _SettingsWindow:
         self._synced_count_label.configure(
             text=f"{status.synced} ok" + (f", {status.failed} échouées" if status.failed else "")
         )
+        if status.skipped_ai_player:
+            # Already counted inside `synced` above (not a failure -- see
+            # `DaemonStatus.skipped_ai_player`'s docstring), called out on
+            # its own full-width row rather than appended to the narrow
+            # "Synchronisées" column so a 3-digit count can't push the
+            # "En cours de synchronisation" column past this window's fixed
+            # size (see `_measure_worst_case_size`).
+            self._skipped_count_label.configure(
+                text=(
+                    f"ℹ {status.skipped_ai_player} partie(s) avec un joueur IA non synchronisée(s) "
+                    "volontairement (voir Debug pour le détail)."
+                )
+            )
+        else:
+            self._skipped_count_label.configure(text="")
         # A small pool of worker threads ingests the initial backlog (see
         # app.py's `_INITIAL_SYNC_WORKERS`), so more than one filename can be
         # "in progress" at once -- joined here rather than only ever showing
@@ -1187,10 +1224,13 @@ class _SettingsWindow:
         if self._sync_state is None:
             return
         records = self._sync_state.get_error_records()
-        report = self._format_debug_report(records)
+        skipped = self._sync_state.get_skipped_records()
+        report = self._format_debug_report(records, skipped)
 
         win = tk.Toplevel(self._root)
-        win.title(f"HotS Analytics — Debug ({len(records)} erreur(s))")
+        title = f"HotS Analytics — Debug ({len(records)} erreur(s)"
+        title += f", {len(skipped)} ignorée(s))" if skipped else ")"
+        win.title(title)
         win.configure(bg=_BG)
         win.geometry("760x520")
         win.transient(self._root)
@@ -1235,23 +1275,42 @@ class _SettingsWindow:
             side="right", padx=(0, 10)
         )
 
-    def _format_debug_report(self, records: list) -> str:
+    def _format_debug_report(self, records: list, skipped: list) -> str:
         header = [f"HotS Analytics — rapport de debug — daemon v{APP_VERSION}", f"{len(records)} partie(s) en erreur"]
-        if not records:
-            return "\n".join([*header, "", "Aucune erreur de synchronisation enregistrée."])
+        if skipped:
+            header.append(
+                f"{len(skipped)} partie(s) ignorée(s) volontairement (pas des erreurs — détail plus bas)"
+            )
 
         lines = [*header, ""]
-        for record in records:
-            lines.append("-" * 70)
-            lines.append(f"Fichier         : {record.file_path}")
-            lines.append(f"Hash            : {record.replay_hash}")
-            lines.append(f"Fichier présent : {'oui' if record.file_exists else 'non (déplacé ou supprimé)'}")
-            lines.append(f"Dernière tentative : {record.last_attempt_at}")
-            lines.append(f"Erreur          : {record.error_message or '(inconnue)'}")
-            if record.error_log:
-                lines.append("Log complet :")
-                lines.append(record.error_log)
+        if not records:
+            lines.append("Aucune erreur de synchronisation enregistrée.")
+        else:
+            for record in records:
+                lines.append("-" * 70)
+                lines.append(f"Fichier         : {record.file_path}")
+                lines.append(f"Hash            : {record.replay_hash}")
+                lines.append(f"Fichier présent : {'oui' if record.file_exists else 'non (déplacé ou supprimé)'}")
+                lines.append(f"Dernière tentative : {record.last_attempt_at}")
+                lines.append(f"Erreur          : {record.error_message or '(inconnue)'}")
+                if record.error_log:
+                    lines.append("Log complet :")
+                    lines.append(record.error_log)
+                lines.append("")
+
+        if skipped:
+            lines.append("=" * 70)
+            lines.append(f"Parties ignorées volontairement ({len(skipped)}) — ce ne sont pas des erreurs :")
             lines.append("")
+            for record in skipped:
+                lines.append("-" * 70)
+                lines.append(f"Fichier         : {record.file_path}")
+                lines.append(f"Hash            : {record.replay_hash}")
+                lines.append(f"Fichier présent : {'oui' if record.file_exists else 'non (déplacé ou supprimé)'}")
+                lines.append(f"Dernière tentative : {record.last_attempt_at}")
+                lines.append(f"Raison          : {_SKIP_REASON_LABELS.get(record.reason, record.reason)}")
+                lines.append("")
+
         return "\n".join(lines)
 
     # -- autostart --------------------------------------------------------
@@ -1293,6 +1352,7 @@ class _SettingsWindow:
         placeholders: list[tuple[ttk.Label, str]] = [(self._error_label, "x" * _ERROR_LABEL_MAX_CHARS)]
         if self._status_tracker is not None:
             placeholders.append((self._currently_syncing_label, "x" * _SYNCING_LABEL_MAX_CHARS))
+            placeholders.append((self._skipped_count_label, "x" * _SKIPPED_LABEL_MAX_CHARS))
             placeholders.append(
                 (self._sync_error_label, "✗ Dernière erreur de synchronisation : " + "x" * _ERROR_LABEL_MAX_CHARS)
             )

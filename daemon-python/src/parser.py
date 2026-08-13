@@ -58,6 +58,26 @@ class ReplayParseError(Exception):
     """Raised when a replay can't be turned into a valid ingestion payload."""
 
 
+class ReplaySkipped(ReplayParseError):
+    """Raised for a replay that was read fine but is *intentionally* excluded
+    from ingestion -- as opposed to `ReplayParseError` proper, which means
+    something is wrong with the file or our ability to read it. A subclass
+    (not a sibling exception) so any existing `except ReplayParseError`
+    handler -- `parse_replay`'s own re-raise below, and any third-party
+    caller that hasn't been updated -- still catches it unchanged; callers
+    that care about the distinction (`ingestion.ingest_file`) match this
+    subclass first.
+
+    `reason` is a short stable code (not shown to the player), currently
+    only `"ai_player"`, so `ingestion.py`/`sync_state.py`/`gui.py` can count
+    and label skips by category without parsing `str(err)`.
+    """
+
+    def __init__(self, message: str, *, reason: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
 def _s(value: bytes | str) -> str:
     """heroprotocol decodes all string-ish fields as raw bytes."""
     return value.decode("utf-8", errors="replace") if isinstance(value, bytes) else value
@@ -346,9 +366,12 @@ def _read_archive_file(archive: mpyq.MPQArchive, filename: str) -> bytes:
 def parse_replay(path: Path) -> dict[str, Any]:
     """Parses a `.StormReplay` file into a dict matching `replayPayloadSchema`.
 
-    Raises `ReplayParseError` for anything the ingestion API wouldn't accept
-    or that we can't confidently extract (AI players, incomplete games,
-    unrecognized hero/map codes).
+    Raises `ReplayParseError` for anything we can't confidently extract
+    (incomplete games, unrecognized hero/map codes) -- or its subclass
+    `ReplaySkipped` for a replay that parses fine but is intentionally
+    excluded (currently: it includes an AI player). `ingestion.ingest_file`
+    treats the two differently: the former is a failure worth surfacing in
+    the Debug report, the latter isn't.
     """
     try:
         archive = mpyq.MPQArchive(str(path))
@@ -418,7 +441,10 @@ def build_payload(
         if _s(event["m_eventName"]) != "PlayerInit":
             continue
         if _s(event["m_stringData"][0]["m_value"]) == "Computer":
-            raise ReplayParseError("Replay includes a computer (AI) player; only real-player matches are ingested.")
+            raise ReplaySkipped(
+                "Replay includes a computer (AI) player; only real-player matches are ingested.",
+                reason="ai_player",
+            )
         tracker_id = event["m_intData"][0]["m_value"]
         toon_handle = _s(event["m_stringData"][1]["m_value"])
         tracker_id_to_toon[tracker_id] = toon_handle
