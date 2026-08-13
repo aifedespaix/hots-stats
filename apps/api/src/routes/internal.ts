@@ -4,6 +4,7 @@ import { internalSecret } from "../middleware/internal-secret";
 import { verifyQuarantinedBuild } from "../services/build-verification.service";
 import { getDaemonErrorGroups, markDaemonErrorsResolved } from "../services/daemon-errors.service";
 import { getQuarantineOverview, getQuarantineSamples } from "../services/quarantine.service";
+import { getUploadsDiagnostics } from "../services/uploads-diagnostics.service";
 
 const paramsSchema = z.object({
   buildId: z.coerce.number().int().nonnegative(),
@@ -78,4 +79,7 @@ export const internalRoute = new Hono()
     }
     const resolved = await markDaemonErrorsResolved(body.data.ids);
     return c.json({ resolved });
+  })
+  .get("/diagnostics/uploads", async (c) => {
+    return c.json(await getUploadsDiagnostics());
   });
