@@ -59,3 +59,66 @@ export interface MatchDetailResponse {
   };
   teams: { team: number; players: MatchDetailPlayer[] }[];
 }
+
+/** One filtered-vs-all-time-range metric powering a "Dashboard" radar chart axis. */
+export interface DashboardPerformanceMetric {
+  value: number;
+  /** 0-100, the value scaled against the user's own all-time min/max for this metric. */
+  normalized: number;
+}
+
+export interface DashboardOverviewStats {
+  gamesPlayed: number;
+  wins: number;
+  losses: number;
+  winrate: number;
+  avgKills: number;
+  avgDeaths: number;
+  avgAssists: number;
+  /** (kills+assists)/deaths averaged per game; null when the average death count is 0 (a "perfect" KDA). */
+  kda: number | null;
+}
+
+export interface DashboardRoleStats {
+  role: string | null;
+  gamesPlayed: number;
+  wins: number;
+  winrate: number;
+  totalDurationSeconds: number;
+}
+
+export interface DashboardHeroStats {
+  heroId: string;
+  heroName: string;
+  heroRole: string | null;
+  gamesPlayed: number;
+  wins: number;
+  winrate: number;
+}
+
+export interface DashboardMapStats {
+  mapId: string;
+  mapName: string;
+  gamesPlayed: number;
+  wins: number;
+  winrate: number;
+}
+
+export interface DashboardPerformanceProfile {
+  gamesPlayed: number;
+  damage: DashboardPerformanceMetric;
+  healing: DashboardPerformanceMetric;
+  xp: DashboardPerformanceMetric;
+  survival: DashboardPerformanceMetric;
+}
+
+/** Response for `GET /matches/dashboard` -- powers the matches page's "Dashboard"
+ * cards and, via `roles`/`maps`/`performance`, three of its four chart modals
+ * (the fourth, winrate evolution, uses `GET /matches/trend` instead). */
+export interface MatchesDashboardResponse {
+  overview: DashboardOverviewStats;
+  roles: DashboardRoleStats[];
+  heroes: DashboardHeroStats[];
+  maps: DashboardMapStats[];
+  performance: DashboardPerformanceProfile;
+}
