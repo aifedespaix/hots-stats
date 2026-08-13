@@ -320,6 +320,33 @@ def _attribute_scope_by_player_list_index(attributes_events: dict, player_count:
     return index_to_scope
 
 
+def _has_computer_player_attribute(attributes_events: dict) -> bool:
+    """True if any lobby slot's `PlayerTypeAttribute` (id 500, see
+    `_attribute_scope_by_player_list_index`) is `"comp"` -- a second,
+    independent AI-detection signal from `build_payload`'s tracker-based
+    `PlayerInit` "Computer" check.
+
+    Needed because that tracker-based check only ever sees bots that fire
+    their own `PlayerInit` tracker event -- true for a matchmade/custom
+    "vs AI" lobby, but not for every bot-populated game: replays from
+    "Bac à sable" (Sandbox/practice) have been observed where the bot
+    slot's display name comes through as a generic placeholder ("Joueur 2",
+    "Joueur\xa06") and hero/battletag resolution fails for it downstream
+    (`build_payload`'s "Could not determine hero"/"Could not resolve
+    battletag" `ReplayParseError`s below) without a `PlayerInit` "Computer"
+    event ever having been seen for it. `PlayerTypeAttribute` -- read from
+    `replay.attributes.events`, a completely different stream from the
+    tracker events the other check reads -- still flags these slots
+    correctly, since it's set for every lobby slot regardless of whether
+    that slot ever produces its own tracker events.
+    """
+    for attrs in attributes_events.get("scopes", {}).values():
+        entries = attrs.get(_PLAYER_TYPE_ATTRIBUTE_ID)
+        if entries and _s(entries[0]["value"]).strip("\x00").lower() == "comp":
+            return True
+    return False
+
+
 def _apply_score_event(tracker_events: list[dict], tracker_id_to_toon: dict[int, str], players: dict) -> None:
     for event in tracker_events:
         if event.get("_event") != "NNet.Replay.Tracker.SScoreResultEvent":
@@ -429,6 +456,17 @@ def build_payload(
     with synthetic data, independent of `mpyq`/`heroprotocol` decoding.
     """
     player_list = details["m_playerList"]
+
+    # Checked up front, before any per-player work below: cheaper to bail
+    # here than to reach hero/battletag resolution for a bot slot and fail
+    # there instead (see `_has_computer_player_attribute`'s docstring for
+    # why this needs to be a second signal, alongside the tracker-based
+    # "Computer" `PlayerInit` check further down).
+    if _has_computer_player_attribute(attributes_events):
+        raise ReplaySkipped(
+            "Replay includes a computer (AI) player; only real-player matches are ingested.",
+            reason="ai_player",
+        )
 
     # Also used below for talents/stats (`EndOfGameTalentChoices` /
     # `SScoreResultEvent`) and, as of `PARSER_VERSION` 1.2, for hero
