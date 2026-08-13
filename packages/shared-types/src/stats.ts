@@ -89,3 +89,88 @@ export interface PlayerEncounterStats {
   accountUserId: string | null;
   friendshipStatus: PlayerFriendshipStatus;
 }
+
+/** A hero needs at least this many games before it's eligible as a "signature
+ * hero" ranking -- keeps one lucky game from parading as someone's best.
+ * Kept distinct from `DRAFT_MIN_RANKED_GAMES_FOR_RANKING`: this codebase
+ * keeps small-sample floors per-feature rather than sharing one constant. */
+export const FACE_A_FACE_MIN_GAMES_FOR_SIGNATURE_HERO = 5;
+/** Duo hero-combo samples are inherently smaller than solo hero samples
+ * (they need both players on the same team on the same pick), so the floor
+ * for a "best combo" ranking is lower than the signature-hero one. */
+export const FACE_A_FACE_MIN_GAMES_FOR_COMBO = 2;
+
+/** Account-wide (not per-hero) aggregate for one side of a Face-à-Face
+ * comparison -- powers both the Tale of the Tape and the raw inputs to the
+ * playstyle radar. Deliberately not scope-able to "global": a comparison
+ * between two specific people only ever makes sense over their own games. */
+export interface FaceAFaceOverviewStats {
+  gamesPlayed: number;
+  wins: number;
+  winrate: number;
+  totalDurationSeconds: number;
+  avgDurationSeconds: number;
+  avgKills: number;
+  avgDeaths: number;
+  avgAssists: number;
+  kda: number;
+  avgHeroDamage: number;
+  avgSiegeDamage: number;
+  avgHealing: number;
+  avgDamageTaken: number;
+  avgExperienceContribution: number;
+  avgKillParticipation: number;
+}
+
+/** Share of a player's games spent on each hero role -- `role` is nullable
+ * because a hero can have an unknown role (see heroes.ts's schema comment). */
+export interface FaceAFaceRoleDistributionEntry {
+  role: string | null;
+  gamesPlayed: number;
+  percentage: number;
+}
+
+export interface FaceAFaceSignatureHero {
+  heroId: string;
+  heroName: string;
+  gamesPlayed: number;
+  wins: number;
+  winrate: number;
+  kda: number;
+  /** True when this hero is a backfilled "most played" pick because fewer
+   * than 3 heroes cleared `FACE_A_FACE_MIN_GAMES_FOR_SIGNATURE_HERO`. */
+  smallSample: boolean;
+}
+
+/** One hero pairing the two players won/lost together while on the same team. */
+export interface FaceAFaceHeroCombo {
+  myHeroId: string;
+  myHeroName: string;
+  friendHeroId: string;
+  friendHeroName: string;
+  gamesPlayed: number;
+  wins: number;
+  winrate: number;
+  smallSample: boolean;
+}
+
+/** Stats for games where the two players were on the same team. */
+export interface FaceAFaceSynergyStats {
+  gamesPlayed: number;
+  wins: number;
+  winrate: number;
+  /** Up to 3 best duo combos meeting `FACE_A_FACE_MIN_GAMES_FOR_COMBO`, best
+   * winrate first -- empty (not backfilled) when none qualify, since "not
+   * enough games together yet" is a normal, honest state to show as-is. */
+  topCombos: FaceAFaceHeroCombo[];
+}
+
+export interface FaceAFacePlayerSide {
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  battletag: string | null;
+  overview: FaceAFaceOverviewStats;
+  roleDistribution: FaceAFaceRoleDistributionEntry[];
+  signatureHeroes: FaceAFaceSignatureHero[];
+}

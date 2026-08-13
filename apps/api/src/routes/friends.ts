@@ -17,6 +17,12 @@ import {
   searchUsers,
   sendFriendRequest,
 } from "../services/friendships.service";
+import {
+  getPlayerOverviewStats,
+  getRoleDistribution,
+  getSignatureHeroes,
+  getSynergyStats,
+} from "../services/face-a-face.service";
 import { getStatsSummary } from "../services/stats.service";
 import { getHeroSummaries } from "../services/talents.service";
 
@@ -127,6 +133,49 @@ export const friendsRoute = new Hono<Env>()
     ]);
 
     return c.json({ friend, summary, heroes: heroSummaries, scope });
+  })
+  .get("/:userId/face-a-face", async (c) => {
+    const user = c.get("user");
+    const friendId = c.req.param("userId");
+
+    if (!(await areFriends(user.id, friendId))) {
+      return c.json({ error: "Vous n'êtes pas ami avec ce joueur" }, 403);
+    }
+    const friend = await findUserById(friendId);
+    if (!friend) return c.json({ error: "Joueur introuvable" }, 404);
+
+    const [myOverview, myRoles, mySignature, friendOverview, friendRoles, friendSignature, synergy] =
+      await Promise.all([
+        getPlayerOverviewStats(user.id),
+        getRoleDistribution(user.id),
+        getSignatureHeroes(user.id),
+        getPlayerOverviewStats(friendId),
+        getRoleDistribution(friendId),
+        getSignatureHeroes(friendId),
+        getSynergyStats(user.id, friendId),
+      ]);
+
+    return c.json({
+      me: {
+        userId: user.id,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
+        battletag: user.battletag,
+        overview: myOverview,
+        roleDistribution: myRoles,
+        signatureHeroes: mySignature,
+      },
+      friend: {
+        userId: friend.id,
+        displayName: friend.displayName,
+        avatarUrl: friend.avatarUrl,
+        battletag: friend.battletag,
+        overview: friendOverview,
+        roleDistribution: friendRoles,
+        signatureHeroes: friendSignature,
+      },
+      synergy,
+    });
   })
   .get("/:userId/matches", async (c) => {
     const user = c.get("user");

@@ -1,5 +1,5 @@
 import { type User, db, friendships, users } from "@hots-stats/db";
-import { and, eq, ilike, ne, or, sql } from "drizzle-orm";
+import { and, eq, ilike, inArray, ne, or } from "drizzle-orm";
 
 export interface FriendUser {
   id: string;
@@ -54,8 +54,8 @@ export async function getFriendshipStatuses(
     .from(friendships)
     .where(
       or(
-        and(eq(friendships.requesterId, userId), sql`${friendships.addresseeId} = any(${otherUserIds})`),
-        and(eq(friendships.addresseeId, userId), sql`${friendships.requesterId} = any(${otherUserIds})`),
+        and(eq(friendships.requesterId, userId), inArray(friendships.addresseeId, otherUserIds)),
+        and(eq(friendships.addresseeId, userId), inArray(friendships.requesterId, otherUserIds)),
       ),
     );
 
