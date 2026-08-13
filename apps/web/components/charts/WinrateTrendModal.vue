@@ -78,11 +78,7 @@ const cumulative = computed<CumulativePoint[]>(() => {
   });
 });
 
-/** Reads a design token (e.g. "--color-primary") as an `oklch()` color string. */
-function themeColor(cssVar: string): string {
-  if (import.meta.server) return "transparent";
-  return `oklch(${getComputedStyle(document.documentElement).getPropertyValue(cssVar)} / 1)`;
-}
+const { themeColor } = useThemeColor();
 
 const chartData = computed(() => ({
   labels: cumulative.value.map((p) => formatDate(p.playedAt)),

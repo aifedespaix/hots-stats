@@ -1,4 +1,4 @@
-import { boolean, integer, pgTable, smallint, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgTable, smallint, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { heroes } from "./heroes";
 import { matches } from "./matches";
 import { users } from "./users";
@@ -34,6 +34,10 @@ export const matchPlayers = pgTable(
       table.matchId,
       table.battletag,
     ),
+    // Nearly every "personal scope" query in the app (stats, heroes, players,
+    // matches, friends, face-a-face) filters on userId; Postgres doesn't
+    // auto-index FK columns, so without this every one of them is a seq scan.
+    userIdIdx: index("match_players_user_id_idx").on(table.userId),
   }),
 );
 

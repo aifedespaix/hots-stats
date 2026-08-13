@@ -46,6 +46,15 @@ export function formatDuration(totalSeconds: number): string {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
+/** For a cumulative playtime total (hundreds+ of hours across a full match
+ * history) -- `formatDuration` is calibrated for one match's ~M:SS length
+ * and would render something like "14523:07", technically correct but unreadable. */
+export function formatTotalPlaytime(totalSeconds: number): string {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  return `${hours}h${minutes.toString().padStart(2, "0")}`;
+}
+
 export function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("fr-FR", {
     day: "2-digit",

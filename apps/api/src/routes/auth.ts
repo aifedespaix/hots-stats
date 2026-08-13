@@ -10,6 +10,7 @@ import { google } from "../lib/oauth";
 import { SESSION_COOKIE_MAX_AGE, SESSION_COOKIE_NAME, createSessionToken } from "../lib/session";
 import { authSession, requireUser } from "../middleware/auth-session";
 import { authToken } from "../middleware/auth-token";
+import { linkUnclaimedMatchPlayers, suggestBattletag } from "../services/account-linking.service";
 import { resetUserData } from "../services/data-reset.service";
 
 const OAUTH_STATE_COOKIE = "hots_oauth_state";
@@ -146,6 +147,19 @@ export const authRoute = new Hono()
     const user = c.get("user");
     return c.json({ user: user ? toPublicUser(user) : null });
   })
+  // Best-effort "is this you?" nudge for an account that never set a
+  // battletag but already has upload history -- see account-linking.service.ts.
+  .get("/me/battletag-suggestion", authSession, requireUser, async (c) => {
+    const user = c.get("user");
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+    if (user.battletag) {
+      return c.json({ suggestion: null });
+    }
+    const suggestion = await suggestBattletag(user.id);
+    return c.json({ suggestion });
+  })
   .patch("/me", authSession, requireUser, async (c) => {
     const user = c.get("user");
     if (!user) {
@@ -190,6 +204,14 @@ export const authRoute = new Hono()
       })
       .where(eq(users.id, user.id))
       .returning();
+
+    if (updated && parsed.data.battletag) {
+      // Relink any history uploaded before this battletag was claimed.
+      // Idempotent (only touches still-unlinked rows), so it's safe to just
+      // re-run on every save rather than requiring transactional coupling
+      // with the update above.
+      await linkUnclaimedMatchPlayers(user.id, parsed.data.battletag);
+    }
 
     return c.json({ user: updated ? toPublicUser(updated) : null });
   })

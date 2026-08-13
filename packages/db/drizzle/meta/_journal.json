@@ -50,6 +50,13 @@
       "when": 1786541229456,
       "tag": "0006_late_frank_castle",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786623767954,
+      "tag": "0007_fixed_warbound",
+      "breakpoints": true
     }
   ]
 }
