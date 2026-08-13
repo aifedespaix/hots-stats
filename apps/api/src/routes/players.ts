@@ -16,6 +16,8 @@ import {
   getPlayerMapBreakdown,
   listPlayerEncounters,
 } from "../services/players.service";
+import { getStatsSummary } from "../services/stats.service";
+import { getHeroSummaries } from "../services/talents.service";
 
 type Env = { Variables: { user: User } };
 
@@ -84,10 +86,28 @@ export const playersRoute = new Hono<Env>()
       return c.json({ error: "No shared games with this player" }, 404);
     }
     const battletag = c.req.param("battletag");
-    const [heroBreakdown, opponentHeroBreakdown, mapBreakdown] = await Promise.all([
+    const [heroBreakdown, opponentHeroBreakdown, mapBreakdown, ownStats] = await Promise.all([
       getPlayerHeroBreakdown(user.id, battletag),
       getOpponentHeroBreakdown(user.id, battletag),
       getPlayerMapBreakdown(user.id, battletag),
+      getOwnStats(encounter),
     ]);
-    return c.json({ player: encounter, heroBreakdown, opponentHeroBreakdown, mapBreakdown });
+    return c.json({ player: encounter, ownStats, heroBreakdown, opponentHeroBreakdown, mapBreakdown });
   });
+
+/**
+ * A player's own real stats (all their games, not just the ones shared with
+ * the connected user) -- only fetched when they have a registered account
+ * AND are a friend (or the connected user themselves): their full history
+ * is a friends-only privilege, not something any past teammate/opponent can see.
+ */
+async function getOwnStats(encounter: { accountUserId: string | null; friendshipStatus: string }) {
+  if (!encounter.accountUserId) return null;
+  if (encounter.friendshipStatus !== "friends" && encounter.friendshipStatus !== "self") return null;
+
+  const [summary, heroes] = await Promise.all([
+    getStatsSummary(encounter.accountUserId, "personal"),
+    getHeroSummaries(encounter.accountUserId, undefined, "personal"),
+  ]);
+  return { summary, topHeroes: heroes.sort((a, b) => b.gamesPlayed - a.gamesPlayed) };
+}

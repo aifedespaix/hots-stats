@@ -75,7 +75,13 @@ function onScopeChange(value: HeroStatsScope) {
         <h1 class="mt-2 break-words font-heading text-2xl font-semibold">{{ data.friend.displayName }}</h1>
         <p v-if="data.friend.battletag" class="font-mono text-sm text-muted">{{ data.friend.battletag }}</p>
       </div>
-      <UButton :to="`/face-a-face/${friendId}`" icon="i-lucide-swords">Face-à-Face</UButton>
+      <UButton
+        v-if="data.friend.battletag"
+        :to="`/face-a-face/${encodeURIComponent(data.friend.battletag)}`"
+        icon="i-lucide-swords"
+      >
+        Face-à-Face
+      </UButton>
     </div>
 
     <UiStatsScopeToggle
