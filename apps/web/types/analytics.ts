@@ -1,4 +1,4 @@
-import type { PlayerEncounterStats, TalentTierStats } from "@hots-stats/shared-types";
+import type { HeroStatsScope, PlayerEncounterStats, TalentTierStats } from "@hots-stats/shared-types";
 
 export interface HeroStats {
   heroId: string;
@@ -19,6 +19,9 @@ export interface HeroListResponse {
 
 export interface HeroDetailResponse {
   hero: HeroStats;
+  /** Same hero's stats for the opposite scope (personal vs. global), for comparison UI. */
+  other: HeroStats | null;
+  scope: HeroStatsScope;
 }
 
 export interface HeroTalentsResponse {

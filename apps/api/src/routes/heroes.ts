@@ -1,4 +1,5 @@
 import type { User } from "@hots-stats/db";
+import type { HeroStatsScope } from "@hots-stats/shared-types";
 import { heroStatsScopeSchema } from "@hots-stats/shared-types";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -27,11 +28,18 @@ export const heroesRoute = new Hono<Env>()
     const parsed = z.object({ scope: heroStatsScopeSchema.optional() }).safeParse(c.req.query());
     if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
     const scope = parsed.data.scope ?? user.heroStatsScope;
-    const hero = await getHeroSummary(user.id, c.req.param("heroId"), scope);
+    const otherScope: HeroStatsScope = scope === "personal" ? "global" : "personal";
+    const heroId = c.req.param("heroId");
+    // `other` carries the opposite scope's numbers so the frontend can show a
+    // personal-vs-global comparison (tooltip) without a second round trip.
+    const [hero, other] = await Promise.all([
+      getHeroSummary(user.id, heroId, scope),
+      getHeroSummary(user.id, heroId, otherScope),
+    ]);
     if (!hero) {
       return c.json({ error: "Hero not found" }, 404);
     }
-    return c.json({ hero, scope });
+    return c.json({ hero, other, scope });
   })
   .get("/:heroId/talents", async (c) => {
     const user = c.get("user");
