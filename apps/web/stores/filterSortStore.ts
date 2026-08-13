@@ -21,7 +21,7 @@ export function createFilterSortStore<F extends Record<string, unknown>, K exten
     }),
     getters: {
       isFiltersDefault(state): boolean {
-        return (Object.keys(defaultFilters) as (keyof F)[]).every((key) => state.filters[key] === defaultFilters[key]);
+        return (Object.keys(defaultFilters) as (keyof F)[]).every((key) => (state.filters as F)[key] === defaultFilters[key]);
       },
       isSortDefault(state): boolean {
         return state.sortKey === defaultSort.key && state.sortDir === defaultSort.dir;

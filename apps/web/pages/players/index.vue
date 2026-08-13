@@ -145,7 +145,7 @@ function goToPlayer(row: Record<string, unknown>) {
     <div class="flex flex-wrap gap-2">
       <UButton
         size="xs"
-        color="neutral"
+        color="gray"
         variant="soft"
         icon="i-heroicons-x-mark"
         :disabled="filtersStore.isFiltersDefault"
@@ -155,7 +155,7 @@ function goToPlayer(row: Record<string, unknown>) {
       </UButton>
       <UButton
         size="xs"
-        color="neutral"
+        color="gray"
         variant="soft"
         icon="i-heroicons-arrows-up-down"
         :disabled="filtersStore.isSortDefault"
