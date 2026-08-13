@@ -93,6 +93,11 @@ export function formatKda(kda: number | null): string {
   return kda.toFixed(2);
 }
 
+/** Mirrors the backend's `(avgKills + avgAssists) / avgDeaths` convention, null when deathless. */
+export function computeKdaRatio(avgKills: number, avgDeaths: number, avgAssists: number): number | null {
+  return avgDeaths > 0 ? (avgKills + avgAssists) / avgDeaths : null;
+}
+
 /**
  * Talent names come straight from the replay's internal identifier --
  * unspaced PascalCase, often prefixed with the hero's internal codename
