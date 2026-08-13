@@ -137,6 +137,13 @@ function goToMatch(row: Record<string, unknown>) {
   <div class="space-y-6">
     <h1 class="font-heading text-2xl font-semibold">Historique des parties</h1>
 
+    <StatsFormTrackerWidget
+      :context="{}"
+      title="Forme récente"
+      modal-title="Suivi de la forme"
+      modal-description="Winrate sur l'ensemble de ton compte, selon la fenêtre choisie ci-dessous."
+    />
+
     <div>
       <h2 class="mb-3 font-heading text-lg font-medium">Dashboard</h2>
       <StatsDashboard :filters="activeFilters" />

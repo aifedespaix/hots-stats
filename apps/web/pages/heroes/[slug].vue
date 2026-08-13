@@ -110,6 +110,12 @@ const talentsByTier = computed(() => {
       </UButton>
     </div>
 
+    <StatsFormTrackerWidget
+      :context="{ heroId }"
+      title="Forme récente sur ce héros"
+      :modal-description="`Winrate sur ${data.hero.heroName}, selon la fenêtre choisie ci-dessous.`"
+    />
+
     <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
       <UiStatTile
         label="Winrate"

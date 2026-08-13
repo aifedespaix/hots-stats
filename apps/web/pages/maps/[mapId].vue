@@ -107,6 +107,12 @@ function soakBarWidth(winrate: number): string {
       </UButton>
     </div>
 
+    <StatsFormTrackerWidget
+      :context="{ mapId }"
+      title="Forme récente sur cette carte"
+      :modal-description="`Winrate sur ${data.mapName}, selon la fenêtre choisie ci-dessous.`"
+    />
+
     <!-- A. Méta globale -->
     <UiPanel
       v-model:search="metaSearch"
