@@ -19,6 +19,13 @@ const SORTABLE_COLUMNS = {
   winner: matchPlayers.winner,
 } as const;
 
+const playerSearchQuerySchema = z.object({
+  q: z.string().trim().min(3),
+});
+
+/** Cap on `/matches/filters/players` results -- kept small since it backs a typeahead dropdown, not a full list. */
+const PLAYER_SEARCH_LIMIT = 5;
+
 const filtersQuerySchema = z.object({
   mode: gameModeListSchema.optional(),
   heroId: z.string().optional(),
@@ -130,12 +137,15 @@ export const matchesRoute = new Hono<Env>()
 
     return c.json({ matches: rows, page, pageSize, total: countRows[0]?.count ?? 0 });
   })
-  // Distinct heroes/maps/crossed-players the connected user has actually played with, to populate filter dropdowns.
+  // Distinct heroes/maps the connected user has actually played with, to populate filter dropdowns.
+  // Crossed-players aren't listed here -- that list can run into the
+  // thousands, which used to make the "joueur croisé" dropdown render
+  // every opponent ever faced and hang/crash the tab. See `/filters/players`
+  // for the typeahead search that replaced it.
   .get("/filters", async (c) => {
     const user = c.get("user");
-    const other = alias(matchPlayers, "other");
 
-    const [heroRows, mapRows, playerRows] = await Promise.all([
+    const [heroRows, mapRows] = await Promise.all([
       db
         .selectDistinct({ id: heroes.id, name: heroes.name })
         .from(matchPlayers)
@@ -149,15 +159,36 @@ export const matchesRoute = new Hono<Env>()
         .innerJoin(maps, eq(maps.id, matches.mapId))
         .where(eq(matchPlayers.userId, user.id))
         .orderBy(asc(maps.name)),
-      db
-        .selectDistinct({ battletag: other.battletag })
-        .from(matchPlayers)
-        .innerJoin(other, and(eq(other.matchId, matchPlayers.matchId), ne(other.battletag, matchPlayers.battletag)))
-        .where(eq(matchPlayers.userId, user.id))
-        .orderBy(asc(other.battletag)),
     ]);
 
-    return c.json({ heroes: heroRows, maps: mapRows, players: playerRows });
+    return c.json({ heroes: heroRows, maps: mapRows });
+  })
+  // Typeahead search for the "joueur croisé" filter: battletags of players
+  // who've shared a match with the connected user, matching `q` (min 3
+  // chars). Capped at PLAYER_SEARCH_LIMIT so the frontend never renders an
+  // unbounded dropdown -- `hasMore` tells it to ask for more characters
+  // instead of listing everything. The ILIKE below is served by a trigram
+  // GIN index on match_players.battletag (see migration 0011).
+  .get("/filters/players", async (c) => {
+    const user = c.get("user");
+    const parsed = playerSearchQuerySchema.safeParse(c.req.query());
+    if (!parsed.success) {
+      return c.json({ error: parsed.error.flatten() }, 400);
+    }
+    const other = alias(matchPlayers, "other");
+
+    const rows = await db
+      .selectDistinct({ battletag: other.battletag })
+      .from(matchPlayers)
+      .innerJoin(other, and(eq(other.matchId, matchPlayers.matchId), ne(other.battletag, matchPlayers.battletag)))
+      .where(and(eq(matchPlayers.userId, user.id), ilike(other.battletag, likeTerm(parsed.data.q))))
+      .orderBy(asc(other.battletag))
+      .limit(PLAYER_SEARCH_LIMIT + 1);
+
+    return c.json({
+      players: rows.slice(0, PLAYER_SEARCH_LIMIT).map((row) => row.battletag),
+      hasMore: rows.length > PLAYER_SEARCH_LIMIT,
+    });
   })
   // Every match matching the given filters (no pagination), ordered
   // chronologically, for the "win rate evolution" chart on the matches
