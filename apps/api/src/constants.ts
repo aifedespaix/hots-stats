@@ -16,3 +16,11 @@ export const API_VERSION = "1.1.0";
  * unchanged for a daemon release that doesn't touch the payload shape.
  */
 export const MIN_PARSER_VERSION = "1.1";
+
+/**
+ * The site owner's account -- every brand new signup gets auto-friended
+ * with it (see `friendships.service.ts#createDefaultFriendship`) so new
+ * users immediately see what the friends feature does. Removable like any
+ * other friendship; only applied once, at account creation.
+ */
+export const DEFAULT_FRIEND_USER_ID = "8732db6d-0749-4edf-85a6-e23212a24b86";

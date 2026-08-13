@@ -1,5 +1,6 @@
 import { type User, db, friendships, users } from "@hots-stats/db";
 import { and, eq, ilike, inArray, ne, or } from "drizzle-orm";
+import { DEFAULT_FRIEND_USER_ID } from "../constants";
 
 export interface FriendUser {
   id: string;
@@ -147,6 +148,22 @@ export async function removeFriend(userId: string, friendUserId: string): Promis
     )
     .returning({ id: friendships.id });
   return result.length > 0;
+}
+
+/**
+ * Auto-friends a brand new account with the site owner (see
+ * `DEFAULT_FRIEND_USER_ID`) so the friends feature has something to show
+ * from the first login. Called once, right after `INSERT INTO users` for a
+ * genuinely new signup -- never on an existing user logging back in. The
+ * friendship starts already "accepted" and is removable like any other.
+ */
+export async function createDefaultFriendship(newUserId: string): Promise<void> {
+  if (newUserId === DEFAULT_FRIEND_USER_ID) return;
+
+  await db
+    .insert(friendships)
+    .values({ requesterId: DEFAULT_FRIEND_USER_ID, addresseeId: newUserId, status: "accepted" })
+    .onConflictDoNothing();
 }
 
 export async function areFriends(userId: string, otherUserId: string): Promise<boolean> {
