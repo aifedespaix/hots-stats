@@ -105,6 +105,10 @@ _SKIP_REASON_LABELS = {
     "ai_player": (
         "Partie avec un joueur IA (bot) — seules les parties entre joueurs réels sont synchronisées."
     ),
+    "incomplete_game": (
+        "Partie sans résultat (probablement un Bac à sable/entraînement laissé inachevé) — "
+        "seules les parties allées à leur terme sont synchronisées."
+    ),
 }
 
 

@@ -365,6 +365,33 @@ def test_build_payload_rejects_computer_player_detected_via_attribute_only():
     assert exc_info.value.reason == "ai_player"
 
 
+def test_build_payload_ignores_open_slot_player_init_event():
+    """Regression test: an empty ("Open") lobby slot in an under-filled
+    custom/practice lobby fires its own `PlayerInit` tracker event too, but
+    with only a `PlayerType` entry and no `ToonHandle` -- indexing into
+    `m_stringData[1]` for it used to crash the whole parse with an
+    `IndexError` instead of just having nothing to correlate it to."""
+    open_slot_event = {
+        "_event": "NNet.Replay.Tracker.SStatGameEvent",
+        "m_eventName": b"PlayerInit",
+        "m_intData": [{"m_key": b"PlayerID", "m_value": 99}],
+        "m_stringData": [_string_entry(b"PlayerType", b"Open")],
+    }
+    events = [open_slot_event, *_base_tracker_events()]
+
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=events,
+        attributes_events=_base_attributes_events(),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+    )
+
+    assert {p["battletag"] for p in payload["players"]} == {"Foo#1111", "Bar#2222"}
+
+
 def test_build_payload_rejects_unknown_hero():
     with pytest.raises(ReplayParseError, match="hero"):
         build_payload(
@@ -378,10 +405,14 @@ def test_build_payload_rejects_unknown_hero():
         )
 
 
-def test_build_payload_rejects_incomplete_game():
+def test_build_payload_skips_incomplete_game():
+    """A replay that never fires `EndOfGameTalentChoices` for a player --
+    observed on Sandbox/practice sessions left running without ever reaching
+    a real win/loss condition -- is a deliberate skip, not a parse error: see
+    `ReplaySkipped`'s docstring and `ingestion.ingest_file`'s handling of it."""
     events = [e for e in _base_tracker_events() if not (e.get("m_eventName") == b"EndOfGameTalentChoices")]
 
-    with pytest.raises(ReplayParseError, match="result missing"):
+    with pytest.raises(ReplaySkipped, match="result missing") as exc_info:
         build_payload(
             header=_header(610 + 16 * 600),
             details=_details(),
@@ -391,6 +422,7 @@ def test_build_payload_rejects_incomplete_game():
             battletags=_battletags(),
             replay_hash="a" * 64,
         )
+    assert exc_info.value.reason == "incomplete_game"
 
 
 def test_build_payload_rejects_missing_battletag():
