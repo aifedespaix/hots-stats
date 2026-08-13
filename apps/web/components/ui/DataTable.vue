@@ -21,6 +21,8 @@ const props = withDefaults(
     mobileSecondaryKey?: string;
     /** Column shown as a prominent badge in the top-right of the mobile card. */
     mobileBadgeKey?: string;
+    /** Pins the header row to the top of the table's nearest scrolling ancestor, so a caller wrapping the table in a fixed-height scroll container (e.g. a dashboard panel) keeps the header visible while the body scrolls. No effect when the table isn't inside such a container. */
+    stickyHeader?: boolean;
   }>(),
   {
     rowKey: "id",
@@ -31,6 +33,7 @@ const props = withDefaults(
     mobilePrimaryKey: undefined,
     mobileSecondaryKey: undefined,
     mobileBadgeKey: undefined,
+    stickyHeader: false,
   },
 );
 
@@ -87,8 +90,12 @@ function toggleSortDir() {
             <th
               v-for="col in props.columns"
               :key="col.key"
-              class="px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted"
-              :class="[col.numeric ? 'text-right' : 'text-left', col.sortable ? 'cursor-pointer select-none hover:text-foreground' : '']"
+              class="bg-surface px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted"
+              :class="[
+                col.numeric ? 'text-right' : 'text-left',
+                col.sortable ? 'cursor-pointer select-none hover:text-foreground' : '',
+                stickyHeader ? 'sticky top-0 z-10' : '',
+              ]"
               @click="col.sortable && emit('sort', col.key)"
             >
               <span class="inline-flex items-center gap-1" :class="col.numeric ? 'flex-row-reverse' : ''">

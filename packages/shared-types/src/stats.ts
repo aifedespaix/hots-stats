@@ -60,6 +60,12 @@ export interface UnderperformingTalentStats {
   heroWinrate: number;
 }
 
+/** A talent a user picks often at a given tier (their de facto default)
+ * that *outperforms* whatever else they picked instead at the same
+ * tier/hero -- the mirror of `UnderperformingTalentStats`, surfaced as a
+ * strength rather than a habit worth reconsidering. */
+export type OverperformingTalentStats = UnderperformingTalentStats;
+
 /** A weakness only counts as a "habit" worth flagging once picked at least
  * this many times -- one bad game with a rarely-tried talent isn't a pattern. */
 export const TALENT_HABIT_MIN_PICKS = 3;

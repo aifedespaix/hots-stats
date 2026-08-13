@@ -1,9 +1,15 @@
-import type { MapWeaknessStats, MatchupWeaknessStats, UnderperformingTalentStats } from "@hots-stats/shared-types";
+import type {
+  MapWeaknessStats,
+  MatchupWeaknessStats,
+  OverperformingTalentStats,
+  UnderperformingTalentStats,
+} from "@hots-stats/shared-types";
 
-export type { MapWeaknessStats, MatchupWeaknessStats, UnderperformingTalentStats };
+export type { MapWeaknessStats, MatchupWeaknessStats, OverperformingTalentStats, UnderperformingTalentStats };
 
 export interface WeaknessesResponse {
   maps: MapWeaknessStats[];
   matchups: MatchupWeaknessStats[];
   talents: UnderperformingTalentStats[];
+  talentStrengths: OverperformingTalentStats[];
 }
