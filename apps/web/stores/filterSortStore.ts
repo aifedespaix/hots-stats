@@ -19,6 +19,14 @@ export function createFilterSortStore<F extends Record<string, unknown>, K exten
       sortKey: defaultSort.key,
       sortDir: defaultSort.dir,
     }),
+    getters: {
+      isFiltersDefault(state): boolean {
+        return (Object.keys(defaultFilters) as (keyof F)[]).every((key) => state.filters[key] === defaultFilters[key]);
+      },
+      isSortDefault(state): boolean {
+        return state.sortKey === defaultSort.key && state.sortDir === defaultSort.dir;
+      },
+    },
     actions: {
       onSort(key: K) {
         if (this.sortKey === key) {
