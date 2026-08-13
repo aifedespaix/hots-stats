@@ -86,7 +86,7 @@ const talentsByTier = computed(() => {
               :key="talent.talentId"
               class="flex items-center justify-between gap-2 text-sm"
             >
-              <span>{{ talent.talentName }}</span>
+              <span>{{ formatTalentName(talent.talentName, data.hero.heroName) }}</span>
               <span class="flex shrink-0 gap-3 font-mono text-xs text-muted">
                 <span>{{ formatPercent(talent.pickRate) }} pick</span>
                 <span :class="talent.winrate >= 0.5 ? 'text-success' : 'text-danger'">

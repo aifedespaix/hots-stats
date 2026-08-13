@@ -2,15 +2,22 @@ import type { User } from "@hots-stats/db";
 import { draftPreferenceInputSchema, draftSnapshotInputSchema } from "@hots-stats/shared-types";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
+import { z } from "zod";
 import { authSession, requireUser } from "../middleware/auth-session";
 import { authToken } from "../middleware/auth-token";
 import {
   getCurrentSnapshotForViewer,
   getPlayerDraftStats,
+  getTeamThreats,
   ingestDraftSnapshot,
   setDraftPseudoPreference,
   subscribeToDraftUpdates,
 } from "../services/draft.service";
+
+// Comma-joined battletags, same convention as `gameModeListSchema` -- one
+// query param instead of a repeated one, and cheap to build client-side
+// from the already-resolved slots of a team.
+const teamThreatsQuerySchema = z.object({ battletags: z.string().min(1) });
 
 type Env = { Variables: { user: User } };
 
@@ -75,4 +82,21 @@ export const draftRoute = new Hono<Env>()
     const user = c.get("user");
     const stats = await getPlayerDraftStats(user.id, c.req.param("battletag"));
     return c.json({ stats });
+  })
+  .get("/teams/threats", authSession, requireUser, async (c) => {
+    const user = c.get("user");
+    const parsed = teamThreatsQuerySchema.safeParse(c.req.query());
+    if (!parsed.success) {
+      return c.json({ error: parsed.error.flatten() }, 400);
+    }
+    const battletags = [
+      ...new Set(
+        parsed.data.battletags
+          .split(",")
+          .map((battletag) => battletag.trim())
+          .filter(Boolean),
+      ),
+    ].slice(0, 5);
+    const threats = await getTeamThreats(user.id, battletags);
+    return c.json({ threats });
   });

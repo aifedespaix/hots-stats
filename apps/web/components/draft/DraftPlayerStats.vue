@@ -105,6 +105,43 @@ const medals = ["🥇", "🥈", "🥉"];
           <UiStatTile label="Parties classées" :value="String(stats.rankedGamesTotal)" />
         </div>
 
+        <div class="rounded-lg border border-border p-3">
+          <div class="mb-2 flex items-center gap-2">
+            <UIcon name="i-heroicons-clock" class="h-4 w-4 text-muted" />
+            <h3 class="text-xs font-medium uppercase tracking-wide text-muted">5 dernières parties</h3>
+          </div>
+
+          <template v-if="stats.recentGames.length > 0">
+            <div class="mb-2.5 flex gap-1">
+              <span
+                v-for="game in stats.recentGames"
+                :key="game.playedAt"
+                class="h-1.5 flex-1 rounded-full"
+                :class="game.winner ? 'bg-success' : 'bg-danger'"
+              />
+            </div>
+            <ul class="space-y-1.5">
+              <li
+                v-for="game in stats.recentGames"
+                :key="game.playedAt"
+                class="flex items-start gap-2.5 rounded-md px-1.5 py-1"
+              >
+                <span
+                  class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
+                  :class="game.winner ? 'bg-success' : 'bg-danger'"
+                />
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-sm">{{ game.heroName }}</p>
+                  <p class="text-[11px] text-muted">
+                    {{ formatGameMode(game.gameMode) }} · {{ formatDate(game.playedAt) }}
+                  </p>
+                </div>
+              </li>
+            </ul>
+          </template>
+          <p v-else class="py-1 text-xs text-muted">Pas assez de données.</p>
+        </div>
+
         <div v-for="section in sections" :key="section.key" class="rounded-lg border border-border p-3">
           <div class="mb-2 flex items-center gap-2">
             <UIcon :name="section.icon" class="h-4 w-4 text-muted" />

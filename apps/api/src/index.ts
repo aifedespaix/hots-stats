@@ -14,6 +14,7 @@ import { playersRoute } from "./routes/players";
 import { publicRoute } from "./routes/public";
 import { statsRoute } from "./routes/stats";
 import { tokensRoute } from "./routes/tokens";
+import { weaknessesRoute } from "./routes/weaknesses";
 
 const app = new Hono();
 
@@ -36,6 +37,7 @@ app.route("/heroes", heroesRoute);
 app.route("/players", playersRoute);
 app.route("/friends", friendsRoute);
 app.route("/draft", draftRoute);
+app.route("/weaknesses", weaknessesRoute);
 app.route("/public", publicRoute);
 app.route("/_internal", internalRoute);
 

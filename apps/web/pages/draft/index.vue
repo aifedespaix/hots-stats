@@ -37,6 +37,18 @@ function applyOverrides(slots: DraftPlayerSlot[] | undefined): DraftPlayerSlot[]
 const teamLeft = computed(() => applyOverrides(snapshot.value?.teamLeft));
 const teamRight = computed(() => applyOverrides(snapshot.value?.teamRight));
 
+// The team that doesn't contain the viewer -- the one worth scouting for
+// bans/threats. Empty (panel hidden) when the viewer's own slot isn't
+// resolved yet, since "enemy team" is meaningless without it.
+const enemyBattletags = computed<string[]>(() => {
+  if (!ownBattletag.value) return [];
+  const ownInLeft = teamLeft.value.some((slot) => slot.effectiveBattletag === ownBattletag.value);
+  const enemyTeam = ownInLeft ? teamRight.value : teamLeft.value;
+  return enemyTeam
+    .map((slot) => slot.effectiveBattletag)
+    .filter((battletag): battletag is string => Boolean(battletag));
+});
+
 const selectedBattletag = ref<string | null>(null);
 
 function select(slot: DraftPlayerSlot) {
@@ -131,6 +143,11 @@ watch(snapshot, updateCapturedAgoLabel);
 
       <!-- Mobile: draft (both teams side by side) on top, stats below -- roughly 50/50 -->
       <div class="flex flex-col gap-3 md:hidden" style="height: calc(100dvh - 19rem)">
+        <DraftTeamThreats
+          class="shrink-0"
+          :battletags="enemyBattletags"
+          @select="selectedBattletag = $event"
+        />
         <div class="grid min-h-0 flex-1 grid-cols-2 gap-2">
           <DraftTeamColumn
             title="Équipe gauche"
@@ -155,27 +172,31 @@ watch(snapshot, updateCapturedAgoLabel);
       </div>
 
       <!-- Tablet/desktop: draft fills the height, stats centered between the two teams -->
-      <div
-        class="hidden gap-4 md:grid md:grid-cols-[minmax(200px,1fr)_minmax(340px,1.5fr)_minmax(200px,1fr)]"
-        style="height: calc(100dvh - 13rem)"
-      >
-        <DraftTeamColumn
-          title="Équipe gauche"
-          :slots="teamLeft"
-          :selected-battletag="selectedBattletag"
-          :own-battletag="ownBattletag"
-          @select="select"
-          @disambiguate="disambiguate"
+      <div class="hidden flex-col gap-3 md:flex" style="height: calc(100dvh - 13rem)">
+        <DraftTeamThreats
+          class="shrink-0"
+          :battletags="enemyBattletags"
+          @select="selectedBattletag = $event"
         />
-        <DraftPlayerStats :battletag="selectedBattletag" />
-        <DraftTeamColumn
-          title="Équipe droite"
-          :slots="teamRight"
-          :selected-battletag="selectedBattletag"
-          :own-battletag="ownBattletag"
-          @select="select"
-          @disambiguate="disambiguate"
-        />
+        <div class="grid min-h-0 flex-1 gap-4 md:grid-cols-[minmax(200px,1fr)_minmax(340px,1.5fr)_minmax(200px,1fr)]">
+          <DraftTeamColumn
+            title="Équipe gauche"
+            :slots="teamLeft"
+            :selected-battletag="selectedBattletag"
+            :own-battletag="ownBattletag"
+            @select="select"
+            @disambiguate="disambiguate"
+          />
+          <DraftPlayerStats :battletag="selectedBattletag" />
+          <DraftTeamColumn
+            title="Équipe droite"
+            :slots="teamRight"
+            :selected-battletag="selectedBattletag"
+            :own-battletag="ownBattletag"
+            @select="select"
+            @disambiguate="disambiguate"
+          />
+        </div>
       </div>
     </template>
   </div>

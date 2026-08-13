@@ -1,7 +1,18 @@
-import type { DraftHeroStat, DraftPlayerSlot, DraftPlayerStats, DraftSnapshot } from "@hots-stats/shared-types";
+import type {
+  DraftHeroStat,
+  DraftPlayerSlot,
+  DraftPlayerStats,
+  DraftRecentGame,
+  DraftSnapshot,
+  TeamThreatEntry,
+} from "@hots-stats/shared-types";
 
-export type { DraftHeroStat, DraftPlayerSlot, DraftPlayerStats, DraftSnapshot };
+export type { DraftHeroStat, DraftPlayerSlot, DraftPlayerStats, DraftRecentGame, DraftSnapshot, TeamThreatEntry };
 
 export interface DraftPlayerStatsResponse {
   stats: DraftPlayerStats;
+}
+
+export interface TeamThreatsResponse {
+  threats: TeamThreatEntry[];
 }

@@ -160,7 +160,7 @@ const columns = [
         <div v-if="player.talents.length > 0" class="mt-2 flex flex-wrap gap-2">
           <div v-for="tier in talentTiers" :key="tier" class="rounded border border-border px-2 py-1 text-xs">
             <span class="text-muted">{{ tier }}:</span>
-            {{ player.talents.find((t) => t.tier === tier)?.talentName ?? "-" }}
+            {{ formatTalentName(player.talents.find((t) => t.tier === tier)?.talentName ?? "-", player.heroName) }}
           </div>
         </div>
       </div>

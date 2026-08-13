@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { GameMode } from "./replay-payload";
 
 /**
  * Game modes counted as "classé" for the live-draft stats panel -- the same
@@ -14,6 +15,11 @@ export const DRAFT_RANKED_MODES = ["UnrankedDraft", "HeroLeague", "TeamLeague", 
  * from parading as someone's "best" hero. "Most played" has no floor: it's
  * meaningful even from a handful of games. */
 export const DRAFT_MIN_RANKED_GAMES_FOR_RANKING = 5;
+
+/** How many of a battletag's most recent games (any mode) the draft stats
+ * panel shows -- a glance-only recency signal, not a second history browser
+ * (that's `/matches`), so this is intentionally fixed rather than paginated. */
+export const DRAFT_RECENT_GAMES_LIMIT = 5;
 
 export const draftSlotStatusSchema = z.enum(["ok", "unreadable"]);
 export type DraftSlotStatus = z.infer<typeof draftSlotStatusSchema>;
@@ -83,6 +89,17 @@ export interface DraftHeroStat {
   kda: number;
 }
 
+/** One of a battletag's most recent games, regardless of mode -- shown next
+ * to a small mode tag in the UI rather than filtered to ranked, so a viewer
+ * isn't blind to "they just rage-queued three quick matches" as a signal. */
+export interface DraftRecentGame {
+  heroId: string;
+  heroName: string;
+  winner: boolean;
+  playedAt: string;
+  gameMode: GameMode;
+}
+
 export interface DraftPlayerStats {
   battletag: string;
   /** How many games the *connected viewer* has shared with this battletag (ally or opponent). */
@@ -91,4 +108,26 @@ export interface DraftPlayerStats {
   topPlayed: DraftHeroStat[];
   topWinrate: DraftHeroStat[];
   topKda: DraftHeroStat[];
+  /** Most recent `DRAFT_RECENT_GAMES_LIMIT` games, newest first. */
+  recentGames: DraftRecentGame[];
+}
+
+/**
+ * One opponent's biggest threat pick, aggregated across a whole team for the
+ * live-draft "who's dangerous" panel: their single best eligible ranked
+ * hero (by winrate, using the same `DRAFT_MIN_RANKED_GAMES_FOR_RANKING`
+ * floor as the rest of the draft stats), cross-referenced against the
+ * *viewer's own* historically losing matchups so a double threat -- their
+ * specialty and your kryptonite -- stands out.
+ */
+export interface TeamThreatEntry {
+  battletag: string;
+  heroId: string;
+  heroName: string;
+  gamesPlayed: number;
+  winrate: number;
+  /** True when `gamesPlayed` is under the ranking floor -- their best pick is shown anyway (better than an empty panel) but flagged as a thin sample. */
+  smallSample: boolean;
+  /** True when this hero is also one of the *viewer's* losing matchups (see `getMatchupWeaknesses`). */
+  isPersonalWeakness: boolean;
 }
