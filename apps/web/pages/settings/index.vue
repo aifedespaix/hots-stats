@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { SharedPlayerAnnotation } from "@hots-stats/shared-types";
+
 definePageMeta({ middleware: "auth" });
 
 interface PatSummary {
@@ -105,6 +107,19 @@ async function savePublicHandle() {
     savingPublicHandle.value = false;
   }
 }
+
+// -- "Ce que tes amis pensent de toi" ---------------------------------------
+//
+// Reuses the same friend-aware aggregation as the players list/draft/player
+// detail views (GET /players/me/ratings -> listSharedPlayerAnnotations
+// scoped to *your own* battletag), so whatever your friends marked/noted on
+// you is visible here without exposing it to non-friends.
+const { data: myRatingsData } = await useFetch<{ annotation: SharedPlayerAnnotation | null }>(
+  "/players/me/ratings",
+  { baseURL: config.public.apiBase, credentials: "include" },
+);
+const myAnnotation = computed(() => myRatingsData.value?.annotation ?? null);
+const myNotes = computed(() => myAnnotation.value?.entries.filter((entry) => !entry.isMine) ?? []);
 
 const { data: tokensData, refresh: refreshTokens } = await useFetch<{ tokens: PatSummary[] }>(
   "/tokens",
@@ -236,6 +251,44 @@ async function confirmReset() {
       >
         Voir mon profil public &rarr;
       </NuxtLink>
+    </section>
+
+    <section class="space-y-4 rounded-lg border border-border p-4 sm:p-6">
+      <h2 class="font-heading text-lg">Ce que tes amis pensent de toi</h2>
+      <p class="text-sm text-muted">
+        Le marquage FDP/sympa, la note et les commentaires que tes amis laissent sur ton BattleTag --
+        seuls tes amis y contribuent, et toi seul peux voir le détail ici.
+      </p>
+
+      <div v-if="!authData?.user?.battletag" class="text-sm text-muted">
+        Renseigne ton BattleTag ci-dessus pour que tes amis puissent te noter.
+      </div>
+      <div
+        v-else-if="!myAnnotation || (myAnnotation.fdpCount === 0 && myAnnotation.pgmCount === 0 && myAnnotation.ratingCount === 0)"
+        class="text-sm text-muted"
+      >
+        Aucun ami ne t'a encore marqué ou noté.
+      </div>
+      <template v-else>
+        <div class="flex flex-wrap items-center gap-4">
+          <div v-if="myAnnotation.ratingCount > 0" class="flex items-center gap-2">
+            <UiStarRating :model-value="Math.round(myAnnotation.ratingAverage ?? 0)" size="h-5 w-5" />
+            <span class="text-sm text-muted">{{ myAnnotation.ratingAverage }} / 5 ({{ myAnnotation.ratingCount }})</span>
+          </div>
+          <span v-if="myAnnotation.fdpCount > 0" class="text-sm text-danger">FDP · {{ myAnnotation.fdpCount }}</span>
+          <span v-if="myAnnotation.pgmCount > 0" class="text-sm text-accent">Sympa · {{ myAnnotation.pgmCount }}</span>
+        </div>
+
+        <ul v-if="myNotes.length > 0" class="space-y-3">
+          <li v-for="entry in myNotes" :key="entry.authorId" class="rounded-md border border-border bg-surface p-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <p class="text-xs font-medium uppercase tracking-wide text-muted">{{ entry.authorName }}</p>
+              <UiStarRating v-if="entry.rating" :model-value="entry.rating" size="h-3.5 w-3.5" />
+            </div>
+            <p class="mt-1 whitespace-pre-wrap text-sm text-foreground">{{ entry.note }}</p>
+          </li>
+        </ul>
+      </template>
     </section>
 
     <section class="space-y-4 rounded-lg border border-border p-4 sm:p-6">

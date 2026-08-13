@@ -1,0 +1,1 @@
+ALTER TABLE "player_annotations" ADD COLUMN "rating" integer;

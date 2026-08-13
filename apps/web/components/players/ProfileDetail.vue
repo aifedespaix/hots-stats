@@ -85,7 +85,12 @@ const sendingRequest = ref(false);
 const requestError = ref("");
 
 const annotationsStore = usePlayerAnnotationsStore();
-const managementForm = reactive({ isFdp: false, isPgm: false, note: "" });
+const managementForm = reactive<{ isFdp: boolean; isPgm: boolean; rating: number | null; note: string }>({
+  isFdp: false,
+  isPgm: false,
+  rating: null,
+  note: "",
+});
 const managementLoaded = ref(false);
 const savingManagement = ref(false);
 const managementSaved = ref(false);
@@ -94,9 +99,13 @@ watch(
   () => props.battletag,
   async (battletag) => {
     managementLoaded.value = false;
-    const annotation = await annotationsStore.fetchOne(battletag);
+    const [annotation] = await Promise.all([
+      annotationsStore.fetchMine(battletag),
+      annotationsStore.fetchMany([battletag]),
+    ]);
     managementForm.isFdp = annotation.isFdp;
     managementForm.isPgm = annotation.isPgm;
+    managementForm.rating = annotation.rating;
     managementForm.note = annotation.note;
     managementLoaded.value = true;
   },
@@ -226,9 +235,16 @@ function goToMatch(row: Record<string, unknown>) {
 
     <div class="space-y-3 rounded-lg border border-border bg-surface p-4 sm:p-6">
       <h2 class="font-heading text-lg font-medium">Gestion</h2>
+      <p class="text-xs text-muted">
+        Ton marquage et ta note sont visibles par tes amis (et inversement) sur ce joueur.
+      </p>
       <div class="flex flex-wrap gap-6">
         <UCheckbox v-model="managementForm.isFdp" label="Marquer comme FDP" />
-        <UCheckbox v-model="managementForm.isPgm" label="Marquer comme PGM" />
+        <UCheckbox v-model="managementForm.isPgm" label="Marquer comme sympa" />
+      </div>
+      <div>
+        <label class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">Évaluation (1 à 5 étoiles)</label>
+        <UiStarRating v-model="managementForm.rating" :readonly="false" size="h-5 w-5" />
       </div>
       <div>
         <label class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">Note</label>
