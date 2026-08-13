@@ -58,6 +58,26 @@ class ReplayParseError(Exception):
     """Raised when a replay can't be turned into a valid ingestion payload."""
 
 
+class ReplaySkipped(ReplayParseError):
+    """Raised for a replay that was read fine but is *intentionally* excluded
+    from ingestion -- as opposed to `ReplayParseError` proper, which means
+    something is wrong with the file or our ability to read it. A subclass
+    (not a sibling exception) so any existing `except ReplayParseError`
+    handler -- `parse_replay`'s own re-raise below, and any third-party
+    caller that hasn't been updated -- still catches it unchanged; callers
+    that care about the distinction (`ingestion.ingest_file`) match this
+    subclass first.
+
+    `reason` is a short stable code (not shown to the player), currently
+    only `"ai_player"`, so `ingestion.py`/`sync_state.py`/`gui.py` can count
+    and label skips by category without parsing `str(err)`.
+    """
+
+    def __init__(self, message: str, *, reason: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
 def _s(value: bytes | str) -> str:
     """heroprotocol decodes all string-ish fields as raw bytes."""
     return value.decode("utf-8", errors="replace") if isinstance(value, bytes) else value
@@ -300,6 +320,33 @@ def _attribute_scope_by_player_list_index(attributes_events: dict, player_count:
     return index_to_scope
 
 
+def _has_computer_player_attribute(attributes_events: dict) -> bool:
+    """True if any lobby slot's `PlayerTypeAttribute` (id 500, see
+    `_attribute_scope_by_player_list_index`) is `"comp"` -- a second,
+    independent AI-detection signal from `build_payload`'s tracker-based
+    `PlayerInit` "Computer" check.
+
+    Needed because that tracker-based check only ever sees bots that fire
+    their own `PlayerInit` tracker event -- true for a matchmade/custom
+    "vs AI" lobby, but not for every bot-populated game: replays from
+    "Bac à sable" (Sandbox/practice) have been observed where the bot
+    slot's display name comes through as a generic placeholder ("Joueur 2",
+    "Joueur\xa06") and hero/battletag resolution fails for it downstream
+    (`build_payload`'s "Could not determine hero"/"Could not resolve
+    battletag" `ReplayParseError`s below) without a `PlayerInit` "Computer"
+    event ever having been seen for it. `PlayerTypeAttribute` -- read from
+    `replay.attributes.events`, a completely different stream from the
+    tracker events the other check reads -- still flags these slots
+    correctly, since it's set for every lobby slot regardless of whether
+    that slot ever produces its own tracker events.
+    """
+    for attrs in attributes_events.get("scopes", {}).values():
+        entries = attrs.get(_PLAYER_TYPE_ATTRIBUTE_ID)
+        if entries and _s(entries[0]["value"]).strip("\x00").lower() == "comp":
+            return True
+    return False
+
+
 def _apply_score_event(tracker_events: list[dict], tracker_id_to_toon: dict[int, str], players: dict) -> None:
     for event in tracker_events:
         if event.get("_event") != "NNet.Replay.Tracker.SScoreResultEvent":
@@ -346,9 +393,12 @@ def _read_archive_file(archive: mpyq.MPQArchive, filename: str) -> bytes:
 def parse_replay(path: Path) -> dict[str, Any]:
     """Parses a `.StormReplay` file into a dict matching `replayPayloadSchema`.
 
-    Raises `ReplayParseError` for anything the ingestion API wouldn't accept
-    or that we can't confidently extract (AI players, incomplete games,
-    unrecognized hero/map codes).
+    Raises `ReplayParseError` for anything we can't confidently extract
+    (incomplete games, unrecognized hero/map codes) -- or its subclass
+    `ReplaySkipped` for a replay that parses fine but is intentionally
+    excluded (currently: it includes an AI player). `ingestion.ingest_file`
+    treats the two differently: the former is a failure worth surfacing in
+    the Debug report, the latter isn't.
     """
     try:
         archive = mpyq.MPQArchive(str(path))
@@ -407,6 +457,17 @@ def build_payload(
     """
     player_list = details["m_playerList"]
 
+    # Checked up front, before any per-player work below: cheaper to bail
+    # here than to reach hero/battletag resolution for a bot slot and fail
+    # there instead (see `_has_computer_player_attribute`'s docstring for
+    # why this needs to be a second signal, alongside the tracker-based
+    # "Computer" `PlayerInit` check further down).
+    if _has_computer_player_attribute(attributes_events):
+        raise ReplaySkipped(
+            "Replay includes a computer (AI) player; only real-player matches are ingested.",
+            reason="ai_player",
+        )
+
     # Also used below for talents/stats (`EndOfGameTalentChoices` /
     # `SScoreResultEvent`) and, as of `PARSER_VERSION` 1.2, for hero
     # resolution itself via `_first_talent_id_by_toon` -- see that function
@@ -418,7 +479,10 @@ def build_payload(
         if _s(event["m_eventName"]) != "PlayerInit":
             continue
         if _s(event["m_stringData"][0]["m_value"]) == "Computer":
-            raise ReplayParseError("Replay includes a computer (AI) player; only real-player matches are ingested.")
+            raise ReplaySkipped(
+                "Replay includes a computer (AI) player; only real-player matches are ingested.",
+                reason="ai_player",
+            )
         tracker_id = event["m_intData"][0]["m_value"]
         toon_handle = _s(event["m_stringData"][1]["m_value"])
         tracker_id_to_toon[tracker_id] = toon_handle

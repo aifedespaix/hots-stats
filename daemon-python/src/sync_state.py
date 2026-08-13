@@ -49,7 +49,15 @@ CREATE TABLE IF NOT EXISTS replays (
     last_attempt_at TEXT NOT NULL,
     error_message TEXT,
     error_log TEXT,
-    file_exists INTEGER NOT NULL DEFAULT 1
+    file_exists INTEGER NOT NULL DEFAULT 1,
+    -- Non-NULL marks a row `mark_skipped` wrote for a replay that's
+    -- intentionally excluded from ingestion (currently only "ai_player"),
+    -- stored under status='synced' (see `mark_skipped`'s docstring for why)
+    -- rather than a third CHECK'd status value, so this column can be added
+    -- with a plain `ALTER TABLE ADD COLUMN` migration (see `_open`) instead
+    -- of one that rebuilds the table to widen a CHECK constraint already
+    -- baked into every database an installed daemon has on disk.
+    skip_reason TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_replays_status ON replays(status);
 
@@ -73,6 +81,26 @@ CREATE TABLE IF NOT EXISTS file_hash_cache (
     replay_hash TEXT NOT NULL
 );
 """
+
+
+def _ensure_skip_reason_column(conn: sqlite3.Connection) -> None:
+    """Adds `replays.skip_reason` to a database created before this column
+    existed. `CREATE TABLE IF NOT EXISTS` (see `_SCHEMA`) is a no-op on a
+    table that already exists, so a fresh column needs its own migration
+    step here -- `ALTER TABLE ADD COLUMN` is safe on a live table (existing
+    rows just get NULL), unlike changing `status`'s CHECK constraint would
+    be, which is exactly why `skip_reason` is a separate nullable column
+    rather than a third allowed `status` value (see `_SCHEMA`). Guarded with
+    a try/except rather than SQLite's own `ADD COLUMN IF NOT EXISTS` (only
+    available from SQLite 3.35+, March 2021) since the daemon's bundled
+    sqlite3 isn't guaranteed to be that recent on every player's machine.
+    """
+    try:
+        conn.execute("ALTER TABLE replays ADD COLUMN skip_reason TEXT")
+        conn.commit()
+    except sqlite3.OperationalError as err:
+        if "duplicate column" not in str(err).lower():
+            raise
 
 
 def sync_state_file_path() -> Path:
@@ -101,6 +129,20 @@ class ReplayErrorRecord:
     last_attempt_at: str
     error_message: str | None
     error_log: str | None
+    file_exists: bool
+
+
+@dataclass(frozen=True)
+class ReplaySkippedRecord:
+    """One replay that was intentionally excluded from ingestion (not a
+    failure), as shown in the Debug window's separate "ignored on purpose"
+    section (gui.py)."""
+
+    replay_hash: str
+    file_path: str
+    last_attempt_at: str
+    reason: str
+    message: str | None
     file_exists: bool
 
 
@@ -136,6 +178,7 @@ class SyncState:
             conn = sqlite3.connect(str(self._path), check_same_thread=False)
             conn.execute("PRAGMA journal_mode=WAL")
             conn.executescript(_SCHEMA)
+        _ensure_skip_reason_column(conn)
         return conn
 
     # -- sync status ----------------------------------------------------
@@ -178,9 +221,56 @@ class SyncState:
                     last_attempt_at = excluded.last_attempt_at,
                     error_message = NULL,
                     error_log = NULL,
-                    file_exists = 1
+                    file_exists = 1,
+                    skip_reason = NULL
                 """,
                 (replay_hash, file_path, parser_version, api_version, match_id, now, now),
+            )
+            self._conn.commit()
+
+    def mark_skipped(
+        self,
+        replay_hash: str,
+        file_path: str,
+        reason: str,
+        message: str,
+        parser_version: str,
+    ) -> None:
+        """Records a replay that's intentionally excluded from ingestion,
+        not a failure -- currently only `reason="ai_player"`, from
+        `parser.ReplaySkipped`. Stored under `status='synced'` (with
+        `skip_reason` set, `api_version`/`match_id`/`synced_at` left NULL
+        since nothing was actually uploaded) rather than a third `status`
+        value, so it's gated by `parser_version` through `is_up_to_date` /
+        `invalidate_stale` exactly like a real synced replay -- and so it's
+        never re-parsed on every daemon restart -- while `get_error_records`
+        (which filters on `status = 'error'`) never picks it up.
+        `get_skipped_records` is the read side, for the Debug report's
+        separate "ignored on purpose" section.
+        """
+        now = _now()
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO replays
+                    (replay_hash, file_path, status, parser_version, api_version,
+                     match_id, synced_at, last_attempt_at, error_message, error_log,
+                     file_exists, skip_reason)
+                VALUES (?, ?, 'synced', ?, NULL, NULL, NULL, ?, ?, NULL, 1, ?)
+                ON CONFLICT(replay_hash) DO UPDATE SET
+                    file_path = excluded.file_path,
+                    status = 'synced',
+                    parser_version = excluded.parser_version,
+                    api_version = NULL,
+                    match_id = NULL,
+                    synced_at = NULL,
+                    last_attempt_at = excluded.last_attempt_at,
+                    error_message = excluded.error_message,
+                    error_log = NULL,
+                    file_exists = 1,
+                    skip_reason = excluded.skip_reason
+                """,
+                (replay_hash, file_path, parser_version, now, message, reason),
             )
             self._conn.commit()
 
@@ -211,7 +301,8 @@ class SyncState:
                     last_attempt_at = excluded.last_attempt_at,
                     error_message = excluded.error_message,
                     error_log = excluded.error_log,
-                    file_exists = 1
+                    file_exists = 1,
+                    skip_reason = NULL
                 """,
                 (replay_hash, file_path, now, error_message, error_log),
             )
@@ -301,6 +392,31 @@ class SyncState:
                 last_attempt_at=row[2],
                 error_message=row[3],
                 error_log=row[4],
+                file_exists=bool(row[5]),
+            )
+            for row in rows
+        ]
+
+    def get_skipped_records(self) -> list[ReplaySkippedRecord]:
+        """Every replay intentionally excluded from ingestion (not a
+        failure), most recent first -- backs the Debug window's separate
+        "ignored on purpose" section (gui.py)."""
+        with self._lock:
+            rows = self._conn.execute(
+                """
+                SELECT replay_hash, file_path, last_attempt_at, skip_reason, error_message, file_exists
+                FROM replays
+                WHERE skip_reason IS NOT NULL
+                ORDER BY last_attempt_at DESC
+                """
+            ).fetchall()
+        return [
+            ReplaySkippedRecord(
+                replay_hash=row[0],
+                file_path=row[1],
+                last_attempt_at=row[2],
+                reason=row[3],
+                message=row[4],
                 file_exists=bool(row[5]),
             )
             for row in rows

@@ -5,8 +5,10 @@ import pytest
 from src._protocol_versions import KNOWN_PROTOCOL_BUILDS
 from src.parser import (
     ReplayParseError,
+    ReplaySkipped,
     _attribute_scope_by_player_list_index,
     _build_protocol,
+    _has_computer_player_attribute,
     _hero_from_talent_prefix,
     _protocol_module,
     _read_archive_file,
@@ -317,7 +319,12 @@ def test_build_payload_rejects_computer_player():
         *_base_tracker_events()[1:],
     ]
 
-    with pytest.raises(ReplayParseError, match="computer"):
+    # ReplaySkipped is a ReplayParseError subclass, so `pytest.raises(ReplayParseError, ...)`
+    # still matches -- but this must specifically be `ReplaySkipped` (not a
+    # plain `ReplayParseError`), since `ingestion.ingest_file` treats the two
+    # very differently: a `ReplaySkipped` is recorded via `mark_skipped` and
+    # kept out of the Debug report's error count, a `ReplayParseError` isn't.
+    with pytest.raises(ReplaySkipped, match="computer") as exc_info:
         build_payload(
             header=_header(610 + 16 * 600),
             details=_details(),
@@ -327,6 +334,35 @@ def test_build_payload_rejects_computer_player():
             battletags=_battletags(),
             replay_hash="a" * 64,
         )
+    assert exc_info.value.reason == "ai_player"
+
+
+def test_build_payload_rejects_computer_player_detected_via_attribute_only():
+    """Regression test: some AI-populated replays (observed on 'Bac à
+    sable' / practice-mode games, where the bot's display name comes
+    through as a generic placeholder like 'Joueur 2') never fire a
+    'Computer'-typed `PlayerInit` tracker event for the bot slot at all --
+    only `PlayerTypeAttribute`, a completely different stream, flags it.
+    Every tracker `PlayerInit` event below says 'Human' on purpose, to
+    prove this is caught independently of that other check."""
+    attributes_events = {
+        "scopes": {
+            1: {4002: [{"value": b"Wiza"}], 500: [{"value": b"humn"}]},
+            2: {4002: [{"value": b"Malf"}], 500: [{"value": b"comp"}]},
+        }
+    }
+
+    with pytest.raises(ReplaySkipped, match="computer") as exc_info:
+        build_payload(
+            header=_header(610 + 16 * 600),
+            details=_details(),
+            initdata=_initdata(),
+            tracker_events=_base_tracker_events(),  # every PlayerInit here says "Human"
+            attributes_events=attributes_events,
+            battletags=_battletags(),
+            replay_hash="a" * 64,
+        )
+    assert exc_info.value.reason == "ai_player"
 
 
 def test_build_payload_rejects_unknown_hero():
@@ -526,3 +562,36 @@ def test_attribute_scope_by_player_list_index_falls_back_to_identity_without_pla
     attributes_events = {"scopes": {1: {4002: [{"value": b"Wiza"}]}, 2: {4002: [{"value": b"Malf"}]}}}
 
     assert _attribute_scope_by_player_list_index(attributes_events, player_count=2) == {1: 1, 2: 2}
+
+
+def test_has_computer_player_attribute_true_when_any_scope_is_comp():
+    attributes_events = {
+        "scopes": {
+            1: {500: [{"value": b"humn"}]},
+            2: {500: [{"value": b"comp"}]},
+        }
+    }
+    assert _has_computer_player_attribute(attributes_events) is True
+
+
+def test_has_computer_player_attribute_false_for_all_human_lobby():
+    attributes_events = {
+        "scopes": {
+            1: {500: [{"value": b"humn"}]},
+            2: {500: [{"value": b"humn"}]},
+        }
+    }
+    assert _has_computer_player_attribute(attributes_events) is False
+
+
+def test_has_computer_player_attribute_ignores_open_slots():
+    attributes_events = {"scopes": {1: {500: [{"value": b"humn"}]}, 2: {500: [{"value": b"open"}]}}}
+    assert _has_computer_player_attribute(attributes_events) is False
+
+
+def test_has_computer_player_attribute_false_without_player_type_data():
+    # Very old replay builds (or the synthetic fixtures elsewhere in this
+    # file, which only set HeroAttributeId) may carry no PlayerTypeAttribute
+    # at all -- must not be treated as "found a computer player".
+    attributes_events = {"scopes": {1: {4002: [{"value": b"Wiza"}]}}}
+    assert _has_computer_player_attribute(attributes_events) is False

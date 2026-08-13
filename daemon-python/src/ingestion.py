@@ -29,6 +29,11 @@ class IngestOutcome:
 
     status: str  # "uploaded" | "skipped" | "error"
     detail: str | None = None
+    # Set only when `status == "skipped"` for a reason worth breaking out in
+    # the UI as its own category (currently: "ai_player") -- as opposed to
+    # the plain "already synced" / server no-op skips, which stay `None`
+    # here since there's nothing notable to report about them.
+    skip_reason: str | None = None
 
 
 def _report_error(
@@ -92,6 +97,11 @@ def ingest_file(
     full traceback instead -- shown in the Debug window (gui.py) -- and
     retried on the next call, since fixing the underlying issue (a code
     update, a reachable API) is exactly what should make it sync next time.
+    A replay that's intentionally excluded rather than broken (currently:
+    it includes an AI player -- `replay_parser.ReplaySkipped`) is recorded
+    separately via `sync_state.mark_skipped`, gated by `parser_version` the
+    same way a synced replay is (so it's not re-parsed every startup either)
+    but kept out of the Debug report's error count.
 
     Never raises: every failure this function knows how to name (a bad
     replay file, a rejected/unreachable API call) gets a specific handler
@@ -139,6 +149,18 @@ def ingest_file(
     try:
         payload = replay_parser.parse_replay(path)
         result = client.post_replay(payload)
+    except replay_parser.ReplaySkipped as err:
+        # Not a failure -- the replay was read fine, it's just intentionally
+        # excluded (e.g. it has an AI player). Must be matched before the
+        # `ReplayParseError` branch below since it's a subclass of it. Never
+        # forwarded via `_report_error`: there's nothing to triage centrally
+        # about a deliberate skip, and `mark_skipped` (unlike `mark_error`)
+        # keeps it out of the Debug report's error count while still
+        # gating it by `parser_version` so it isn't re-parsed every startup.
+        logger.info("Skipping %s: %s", path, err)
+        if sync_state is not None and replay_hash is not None:
+            sync_state.mark_skipped(replay_hash, str(path), err.reason, str(err), constants.PARSER_VERSION)
+        return IngestOutcome("skipped", str(err), skip_reason=err.reason)
     except replay_parser.ReplayParseError as err:
         logger.warning("Skipping %s: %s", path, err)
         if sync_state is not None and replay_hash is not None:

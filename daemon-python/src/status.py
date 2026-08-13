@@ -20,6 +20,11 @@ class DaemonStatus:
     found: int = 0
     synced: int = 0
     failed: int = 0
+    # Subset of `synced` (not additional to it -- an AI-player replay is not
+    # a failure, see `ingestion.ReplaySkipped`/`skip_reason`) broken out so
+    # the settings window can tell the player *why* fewer replays than
+    # `found` show up server-side, instead of that gap looking unexplained.
+    skipped_ai_player: int = 0
     # How many ingestions have failed *in a row*, reset to 0 on the next
     # success -- unlike `failed` (a lifetime total for this run), this is
     # what `app.py` watches to notify the tray once a run of failures looks
@@ -52,13 +57,16 @@ class StatusTracker:
         with self._lock:
             self._status = replace(self._status, currently_syncing=self._status.currently_syncing | {name})
 
-    def finish_syncing(self, name: str, *, ok: bool, error: str | None = None) -> None:
+    def finish_syncing(
+        self, name: str, *, ok: bool, error: str | None = None, skip_reason: str | None = None
+    ) -> None:
         with self._lock:
             self._status = replace(
                 self._status,
                 currently_syncing=self._status.currently_syncing - {name},
                 synced=self._status.synced + (1 if ok else 0),
                 failed=self._status.failed + (0 if ok else 1),
+                skipped_ai_player=self._status.skipped_ai_player + (1 if skip_reason == "ai_player" else 0),
                 consecutive_failures=0 if ok else self._status.consecutive_failures + 1,
                 last_error=error if error is not None else self._status.last_error,
             )

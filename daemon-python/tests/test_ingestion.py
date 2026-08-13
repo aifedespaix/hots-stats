@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 from src import api_client, constants
 from src.config import Config
 from src.ingestion import IngestOutcome, ingest_file, resync
+from src.parser import ReplaySkipped
 from src.sync_state import SyncState
 
 
@@ -19,6 +20,93 @@ def test_ingest_file_parse_error_returns_error_outcome(tmp_path):
 
     assert outcome.status == "error"
     assert outcome.detail is not None
+
+
+def test_ingest_file_ai_player_without_sync_state_still_returns_skipped_outcome(tmp_path):
+    """Mirrors `test_ingest_file_parse_error_returns_error_outcome`: a bare
+    `ingest_file(client, path)` call (no `sync_state`, e.g. from a test or
+    ad-hoc script) must still behave correctly -- no `AttributeError` from
+    trying to persist a skip with nothing to persist it to."""
+    client = api_client.ApiClient(_config(tmp_path))
+    replay = tmp_path / "game.StormReplay"
+    replay.write_bytes(b"some replay bytes")
+
+    with patch(
+        "src.ingestion.replay_parser.parse_replay",
+        side_effect=ReplaySkipped("Replay includes a computer (AI) player.", reason="ai_player"),
+    ):
+        outcome = ingest_file(client, replay)
+
+    assert outcome.status == "skipped"
+    assert outcome.skip_reason == "ai_player"
+
+
+def test_ingest_file_ai_player_returns_skipped_outcome_without_reporting_error(tmp_path):
+    """`ReplaySkipped` (raised for an AI-player replay, see parser.py) is a
+    `ReplayParseError` subclass but must not be treated like one: it's not a
+    failure, so it must come back as a "skipped" outcome carrying the reason
+    code, and must never be forwarded to `POST /ingest/errors` -- there's
+    nothing to triage centrally about a deliberate skip."""
+    client = api_client.ApiClient(_config(tmp_path))
+    replay = tmp_path / "game.StormReplay"
+    replay.write_bytes(b"some replay bytes")
+    sync_state = SyncState(tmp_path / "synced.json")
+
+    with patch(
+        "src.ingestion.replay_parser.parse_replay",
+        side_effect=ReplaySkipped("Replay includes a computer (AI) player.", reason="ai_player"),
+    ):
+        with patch.object(client, "post_ingest_error") as post_ingest_error:
+            outcome = ingest_file(client, replay, sync_state)
+
+    assert outcome.status == "skipped"
+    assert outcome.skip_reason == "ai_player"
+    post_ingest_error.assert_not_called()
+
+
+def test_ingest_file_ai_player_recorded_as_skipped_not_error(tmp_path):
+    client = api_client.ApiClient(_config(tmp_path))
+    replay = tmp_path / "game.StormReplay"
+    replay.write_bytes(b"some replay bytes")
+    sync_state = SyncState(tmp_path / "synced.json")
+
+    from src.hasher import hash_replay_file
+
+    replay_hash = hash_replay_file(replay)
+
+    with patch(
+        "src.ingestion.replay_parser.parse_replay",
+        side_effect=ReplaySkipped("Replay includes a computer (AI) player.", reason="ai_player"),
+    ):
+        ingest_file(client, replay, sync_state)
+
+    assert sync_state.get_error_records() == []
+    skipped = sync_state.get_skipped_records()
+    assert len(skipped) == 1
+    assert skipped[0].replay_hash == replay_hash
+    assert skipped[0].reason == "ai_player"
+    # Gated by parser_version like a real synced replay, so it's not
+    # re-parsed (heroprotocol decode is CPU-heavy) on every daemon restart.
+    assert sync_state.is_up_to_date(replay_hash, constants.PARSER_VERSION) is True
+
+
+def test_ingest_file_ai_player_not_reparsed_on_next_call(tmp_path):
+    client = api_client.ApiClient(_config(tmp_path))
+    replay = tmp_path / "game.StormReplay"
+    replay.write_bytes(b"some replay bytes")
+    sync_state = SyncState(tmp_path / "synced.json")
+
+    with patch(
+        "src.ingestion.replay_parser.parse_replay",
+        side_effect=ReplaySkipped("Replay includes a computer (AI) player.", reason="ai_player"),
+    ):
+        ingest_file(client, replay, sync_state)
+
+    with patch("src.ingestion.replay_parser.parse_replay") as parse:
+        outcome = ingest_file(client, replay, sync_state)
+
+    parse.assert_not_called()
+    assert outcome.status == "skipped"
 
 
 def test_ingest_file_uploaded(tmp_path):
