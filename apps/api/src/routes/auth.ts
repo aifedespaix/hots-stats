@@ -84,6 +84,11 @@ function defaultDisplayNameFromBattleTag(battletag: string): string {
   return name && name.length >= 2 && name.length <= 24 ? name : generateDefaultPseudo();
 }
 
+async function isBattleTagTaken(battletag: string): Promise<boolean> {
+  const [conflicting] = await db.select({ id: users.id }).from(users).where(eq(users.battletag, battletag)).limit(1);
+  return Boolean(conflicting);
+}
+
 export const authRoute = new Hono()
   .get("/google", (c) => {
     const state = generateState();
@@ -199,11 +204,7 @@ export const authRoute = new Hono()
       // hand (see PATCH /me below, which doesn't verify Blizzard ownership)
       // -- don't let that block the real owner's signup, just skip the
       // auto-fill and let them claim it manually from Settings instead.
-      const [battletagTaken] = await db
-        .select({ id: users.id })
-        .from(users)
-        .where(eq(users.battletag, battlenetUser.battletag))
-        .limit(1);
+      const battletagTaken = await isBattleTagTaken(battlenetUser.battletag);
 
       [user] = await db
         .insert(users)
@@ -212,6 +213,16 @@ export const authRoute = new Hono()
           displayName: defaultDisplayNameFromBattleTag(battlenetUser.battletag),
           battletag: battletagTaken ? null : battlenetUser.battletag,
         })
+        .returning();
+    } else if (!user.battletag && !(await isBattleTagTaken(battlenetUser.battletag))) {
+      // Retry the auto-fill skipped at signup (see above) on every login
+      // where it's still empty, in case the conflicting account has since
+      // freed it up. Never overwrites a battletag that's already set, auto-
+      // filled or hand-edited in Settings alike.
+      [user] = await db
+        .update(users)
+        .set({ battletag: battlenetUser.battletag, updatedAt: new Date() })
+        .where(eq(users.id, user.id))
         .returning();
     }
 
