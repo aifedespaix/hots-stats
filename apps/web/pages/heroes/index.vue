@@ -100,14 +100,22 @@ function goToHero(row: Record<string, unknown>) {
     </div>
 
     <div class="flex flex-wrap gap-2">
-      <UButton size="xs" color="gray" variant="soft" icon="i-heroicons-x-mark" @click="filtersStore.resetFilters()">
+      <UButton
+        size="xs"
+        color="neutral"
+        variant="soft"
+        icon="i-heroicons-x-mark"
+        :disabled="filtersStore.isFiltersDefault"
+        @click="filtersStore.resetFilters()"
+      >
         Réinitialiser les filtres
       </UButton>
       <UButton
         size="xs"
-        color="gray"
+        color="neutral"
         variant="soft"
         icon="i-heroicons-arrows-up-down"
+        :disabled="filtersStore.isSortDefault"
         @click="filtersStore.resetSort()"
       >
         Réinitialiser le tri
