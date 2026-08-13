@@ -84,10 +84,17 @@ const rows = computed(() => {
   // derived), so sort them client-side; every other column is already
   // sorted server-side via the `query` above.
   if (sortKey.value === "winRatioAsAlly" || sortKey.value === "winRatioAsOpponent") {
+    const key = sortKey.value as "winRatioAsAlly" | "winRatioAsOpponent";
     const dir = sortDir.value === "asc" ? 1 : -1;
     return [...filtered].sort((a, b) => {
-      const av = a[sortKey.value as "winRatioAsAlly" | "winRatioAsOpponent"] ?? -1;
-      const bv = b[sortKey.value as "winRatioAsAlly" | "winRatioAsOpponent"] ?? -1;
+      const av = a[key];
+      const bv = b[key];
+      // Always push players with no games in that role (null ratio) to the
+      // end, regardless of sort direction, so they don't clutter the top
+      // when sorting ascending.
+      if (av === null && bv === null) return 0;
+      if (av === null) return 1;
+      if (bv === null) return -1;
       return (av - bv) * dir;
     });
   }
