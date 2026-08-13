@@ -50,6 +50,31 @@ const hasVsGames = computed(() => (data.value?.player.gamesAsOpponent ?? 0) > 0)
 const sendingRequest = ref(false);
 const requestError = ref("");
 
+const annotationsStore = usePlayerAnnotationsStore();
+const managementForm = reactive({ isFdp: false, isPgm: false, note: "" });
+const managementLoaded = ref(false);
+const savingManagement = ref(false);
+const managementSaved = ref(false);
+
+onMounted(async () => {
+  const annotation = await annotationsStore.fetchOne(battletag);
+  managementForm.isFdp = annotation.isFdp;
+  managementForm.isPgm = annotation.isPgm;
+  managementForm.note = annotation.note;
+  managementLoaded.value = true;
+});
+
+async function saveManagement() {
+  savingManagement.value = true;
+  managementSaved.value = false;
+  try {
+    await annotationsStore.save(battletag, { ...managementForm });
+    managementSaved.value = true;
+  } finally {
+    savingManagement.value = false;
+  }
+}
+
 async function addFriend() {
   if (!data.value?.player.accountUserId) return;
   sendingRequest.value = true;
@@ -84,6 +109,7 @@ function goToMatch(row: Record<string, unknown>) {
       <NuxtLink to="/players" class="text-sm text-brand hover:underline">&larr; Retour aux joueurs</NuxtLink>
       <div class="mt-2 flex flex-wrap items-center gap-3">
         <h1 class="break-all font-heading text-2xl font-semibold font-mono">{{ data.player.battletag }}</h1>
+        <PlayersAnnotationBadges :battletag="data.player.battletag" />
 
         <NuxtLink
           v-if="data.player.friendshipStatus === 'friends'"
@@ -117,6 +143,28 @@ function goToMatch(row: Record<string, unknown>) {
         </UButton>
       </div>
       <p v-if="requestError" class="mt-2 text-sm text-danger">{{ requestError }}</p>
+    </div>
+
+    <div class="space-y-3 rounded-lg border border-border bg-surface p-4 sm:p-6">
+      <h2 class="font-heading text-lg font-medium">Gestion</h2>
+      <div class="flex flex-wrap gap-6">
+        <UCheckbox v-model="managementForm.isFdp" label="Marquer comme FDP" />
+        <UCheckbox v-model="managementForm.isPgm" label="Marquer comme PGM" />
+      </div>
+      <div>
+        <label class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">Note</label>
+        <UTextarea
+          v-model="managementForm.note"
+          :rows="4"
+          placeholder="Notes libres sur ce joueur (comportement, contexte, etc.)"
+        />
+      </div>
+      <div class="flex items-center gap-3">
+        <UButton :disabled="!managementLoaded" :loading="savingManagement" @click="saveManagement">
+          Enregistrer
+        </UButton>
+        <span v-if="managementSaved" class="text-xs text-success">Enregistré.</span>
+      </div>
     </div>
 
     <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">

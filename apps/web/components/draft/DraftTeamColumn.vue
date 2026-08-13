@@ -52,9 +52,10 @@ function isSelf(slot: DraftPlayerSlot) {
             </p>
           </template>
           <template v-else>
-            <p class="truncate text-sm font-medium" :class="isSelected(slot) ? 'text-brand' : ''">
-              {{ slot.rawName }}
-              <span v-if="isSelf(slot)" class="ml-1 text-[10px] font-normal uppercase tracking-wide text-muted">(toi)</span>
+            <p class="flex items-center gap-1.5 truncate text-sm font-medium" :class="isSelected(slot) ? 'text-brand' : ''">
+              <span class="truncate">{{ slot.rawName }}</span>
+              <span v-if="isSelf(slot)" class="text-[10px] font-normal uppercase tracking-wide text-muted">(toi)</span>
+              <PlayersAnnotationBadges v-if="slot.effectiveBattletag" :battletag="slot.effectiveBattletag" />
             </p>
             <p v-if="slot.candidates.length === 0" class="text-[11px] text-muted">Joueur inconnu</p>
             <select

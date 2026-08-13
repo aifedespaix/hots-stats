@@ -109,6 +109,22 @@ watch([mode, search], () => {
   page.value = 1;
 });
 
+const annotationsStore = usePlayerAnnotationsStore();
+watch(
+  pagedRows,
+  (visibleRows) => {
+    if (visibleRows.length > 0) annotationsStore.fetchMany(visibleRows.map((row) => row.battletag));
+  },
+  { immediate: true },
+);
+
+function rowClass(row: Record<string, unknown>): string {
+  const annotation = annotationsStore.annotationFor(row.battletag as string);
+  if (annotation?.isFdp) return "bg-danger/5 hover:bg-danger/10";
+  if (annotation?.isPgm) return "bg-accent/5 hover:bg-accent/10";
+  return "";
+}
+
 const columns = [
   { key: "battletag", label: "Joueur", sortable: true },
   { key: "gamesTogether", label: "Rencontres", numeric: true, sortable: true },
@@ -172,11 +188,15 @@ function goToPlayer(row: Record<string, unknown>) {
       clickable
       :sort-key="sortKey"
       :sort-dir="sortDir"
+      :row-class="rowClass"
       @row-click="goToPlayer"
       @sort="onSort"
     >
       <template #cell-battletag="{ row }">
-        <span class="font-mono">{{ row.battletag }}</span>
+        <div class="flex items-center gap-2">
+          <span class="font-mono underline-offset-2 hover:underline">{{ row.battletag }}</span>
+          <PlayersAnnotationBadges :battletag="row.battletag as string" />
+        </div>
       </template>
       <template #cell-wins="{ row }">
         <span class="text-success">{{ row.wins }}</span>
