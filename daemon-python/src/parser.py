@@ -68,9 +68,9 @@ class ReplaySkipped(ReplayParseError):
     that care about the distinction (`ingestion.ingest_file`) match this
     subclass first.
 
-    `reason` is a short stable code (not shown to the player), currently
-    only `"ai_player"`, so `ingestion.py`/`sync_state.py`/`gui.py` can count
-    and label skips by category without parsing `str(err)`.
+    `reason` is a short stable code (not shown to the player) -- currently
+    `"ai_player"` or `"incomplete_game"` -- so `ingestion.py`/`sync_state.py`/
+    `gui.py` can count and label skips by category without parsing `str(err)`.
     """
 
     def __init__(self, message: str, *, reason: str) -> None:
@@ -483,6 +483,13 @@ def build_payload(
                 "Replay includes a computer (AI) player; only real-player matches are ingested.",
                 reason="ai_player",
             )
+        if len(event["m_stringData"]) < 2:
+            # An empty ("Open") lobby slot in an under-filled custom/practice
+            # lobby fires its own `PlayerInit` tracker event too, but with
+            # only a `PlayerType` entry and no `ToonHandle` -- there's no
+            # player to correlate this to, so skip it instead of indexing
+            # into a `m_stringData` that doesn't have a second entry.
+            continue
         tracker_id = event["m_intData"][0]["m_value"]
         toon_handle = _s(event["m_stringData"][1]["m_value"])
         tracker_id_to_toon[tracker_id] = toon_handle
@@ -580,7 +587,17 @@ def build_payload(
 
     for player in players.values():
         if player["winner"] is None:
-            raise ReplayParseError(f"Match result missing for player {player['battletag']!r} (game may be incomplete).")
+            # No `EndOfGameTalentChoices` for this player at all -- the game
+            # never reached a real end, which is expected (not a parse bug)
+            # for a Sandbox/practice session left running solo/unfinished:
+            # those never fire the event for anyone, since there's no actual
+            # win/loss condition to reach. Genuinely corrupt replays that
+            # *did* conclude still fail below once `winner` resolves but
+            # stats don't.
+            raise ReplaySkipped(
+                f"Match result missing for player {player['battletag']!r} (game may be incomplete).",
+                reason="incomplete_game",
+            )
         missing = [f for f in constants.REQUIRED_SCORE_FIELDS if f not in player["stats"]]
         if missing:
             raise ReplayParseError(f"Missing stats {missing} for player {player['battletag']!r}.")
