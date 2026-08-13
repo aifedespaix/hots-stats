@@ -99,10 +99,15 @@ const talentsByTier = computed(() => {
   </div>
 
   <div v-else-if="data" class="space-y-8">
-    <div>
-      <NuxtLink to="/heroes" class="text-sm text-brand hover:underline">&larr; Retour aux héros</NuxtLink>
-      <h1 class="mt-2 font-heading text-2xl font-semibold">{{ data.hero.heroName }}</h1>
-      <p class="mt-1 text-sm text-muted">{{ formatHeroRole(data.hero.heroRole) }}</p>
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <NuxtLink to="/heroes" class="text-sm text-brand hover:underline">&larr; Retour aux héros</NuxtLink>
+        <h1 class="mt-2 font-heading text-2xl font-semibold">{{ data.hero.heroName }}</h1>
+        <p class="mt-1 text-sm text-muted">{{ formatHeroRole(data.hero.heroRole) }}</p>
+      </div>
+      <UButton :to="`/talents?heroId=${heroId}`" color="gray" variant="soft" icon="i-heroicons-sparkles" size="sm">
+        Analyser les talents de ce héros
+      </UButton>
     </div>
 
     <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
