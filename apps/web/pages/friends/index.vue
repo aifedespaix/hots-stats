@@ -120,17 +120,32 @@ async function cancelRequest(id: string) {
   }
 }
 
-async function removeFriend(userId: string) {
+const removeModalOpen = ref(false);
+const friendToRemove = ref<{ id: string; displayName: string } | null>(null);
+const removing = ref(false);
+
+function openRemoveModal(friend: { id: string; displayName: string }) {
+  friendToRemove.value = friend;
+  removeModalOpen.value = true;
+}
+
+async function confirmRemoveFriend() {
+  const friend = friendToRemove.value;
+  if (!friend) return;
   actionError.value = "";
+  removing.value = true;
   try {
-    await $fetch(`/friends/${userId}`, {
+    await $fetch(`/friends/${friend.id}`, {
       method: "DELETE",
       baseURL: config.public.apiBase,
       credentials: "include",
     });
+    removeModalOpen.value = false;
     await refreshFriends();
   } catch (err) {
     actionError.value = extractError(err);
+  } finally {
+    removing.value = false;
   }
 }
 </script>
@@ -261,11 +276,31 @@ async function removeFriend(userId: string) {
             <UButton :to="`/face-a-face/${friend.id}`" size="sm" icon="i-lucide-swords">
               Face-à-Face
             </UButton>
-            <UButton size="sm" variant="ghost" color="red" icon="i-heroicons-user-minus" @click="removeFriend(friend.id)" />
+            <UButton
+              size="sm"
+              variant="ghost"
+              color="red"
+              icon="i-heroicons-user-minus"
+              @click="openRemoveModal(friend)"
+            />
           </div>
         </li>
       </ul>
       <p v-else class="py-4 text-center text-sm text-muted">Aucun ami pour le moment.</p>
     </section>
+
+    <UModal v-model="removeModalOpen">
+      <div class="p-6">
+        <h2 class="font-heading text-lg font-semibold">Retirer {{ friendToRemove?.displayName }} de tes amis ?</h2>
+        <p class="mt-2 text-sm text-muted">
+          Vous ne serez plus amis ni l'un ni l'autre. Tu pourras renvoyer une demande plus tard si tu changes
+          d'avis.
+        </p>
+        <div class="mt-6 flex justify-end gap-2">
+          <UButton variant="ghost" @click="removeModalOpen = false">Annuler</UButton>
+          <UButton color="red" :loading="removing" @click="confirmRemoveFriend">Retirer</UButton>
+        </div>
+      </div>
+    </UModal>
   </div>
 </template>

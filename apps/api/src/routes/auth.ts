@@ -12,6 +12,7 @@ import { authSession, requireUser } from "../middleware/auth-session";
 import { authToken } from "../middleware/auth-token";
 import { linkUnclaimedMatchPlayers, suggestBattletag } from "../services/account-linking.service";
 import { resetUserData } from "../services/data-reset.service";
+import { createDefaultFriendship } from "../services/friendships.service";
 
 const OAUTH_STATE_COOKIE = "hots_oauth_state";
 const OAUTH_VERIFIER_COOKIE = "hots_oauth_verifier";
@@ -146,6 +147,10 @@ export const authRoute = new Hono()
       return c.json({ error: "Failed to create user" }, 500);
     }
 
+    if (!existing) {
+      await createDefaultFriendship(user.id);
+    }
+
     const sessionToken = await createSessionToken(user.id);
     setCookie(c, SESSION_COOKIE_NAME, sessionToken, {
       httpOnly: true,
@@ -226,6 +231,10 @@ export const authRoute = new Hono()
             battletag: battletagOwner ? null : battlenetUser.battletag,
           })
           .returning();
+
+        if (user) {
+          await createDefaultFriendship(user.id);
+        }
       }
 
       if (user) {
