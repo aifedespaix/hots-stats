@@ -117,12 +117,20 @@ def _format_update_status(status: UpdateStatus) -> str:
     if status.phase is UpdatePhase.AVAILABLE:
         return f"Mise à jour v{status.version} disponible"
     if status.phase is UpdatePhase.DOWNLOADING:
-        pct = f" ({round(status.progress * 100)} %)" if status.progress is not None else ""
+        pct = (
+            f" ({round(status.progress * 100)} %)"
+            if status.progress is not None
+            else ""
+        )
         return f"Téléchargement de la v{status.version}…{pct}"
     if status.phase is UpdatePhase.INSTALLING:
         return f"Installation de la v{status.version}, redémarrage…"
     if status.phase is UpdatePhase.ERROR:
-        return f"✗ Échec de la mise à jour : {status.message}" if status.message else "✗ Échec de la mise à jour"
+        return (
+            f"✗ Échec de la mise à jour : {status.message}"
+            if status.message
+            else "✗ Échec de la mise à jour"
+        )
     return status.message or f"À jour (v{APP_VERSION})"
 
 
@@ -210,7 +218,9 @@ def run_settings_window(
     return result["saved"]
 
 
-def run_update_progress_window(update_status: UpdateStatusTracker, version: str) -> None:
+def run_update_progress_window(
+    update_status: UpdateStatusTracker, version: str
+) -> None:
     """A small, always-on-top standalone window shown while an update
     downloads/installs *without* the settings window open -- otherwise the
     only visible sign of an automatic update was the tray balloon
@@ -230,28 +240,36 @@ def run_update_progress_window(update_status: UpdateStatusTracker, version: str)
 
 
 class _UpdateProgressWindow:
-    def __init__(self, root: tk.Tk, update_status: UpdateStatusTracker, version: str) -> None:
+    def __init__(
+        self, root: tk.Tk, update_status: UpdateStatusTracker, version: str
+    ) -> None:
         self._root = root
         self._update_status = update_status
         self._poll_job: str | None = None
 
-        root.title("HotS Analytics — Mise à jour")
+        root.title("HotS Analytics - Mise à jour")
         root.configure(bg=_BG)
         root.resizable(False, False)
         root.attributes("-topmost", True)
-        root.protocol("WM_DELETE_WINDOW", lambda: None)  # closes itself once done/failed
+        root.protocol(
+            "WM_DELETE_WINDOW", lambda: None
+        )  # closes itself once done/failed
 
         outer = ttk.Frame(root, padding=20, style="TFrame")
         outer.pack(fill="both", expand=True)
         _apply_dark_style()
 
-        ttk.Label(outer, text=f"Mise à jour v{version}", style="Title.TLabel").pack(anchor="w")
+        ttk.Label(outer, text=f"Mise à jour v{version}", style="Title.TLabel").pack(
+            anchor="w"
+        )
         self._status_label = ttk.Label(
             outer, text="", style="Muted.TLabel", wraplength=340, justify="left"
         )
         self._status_label.pack(anchor="w", pady=(6, 10))
 
-        self._bar = ttk.Progressbar(outer, orient="horizontal", length=340, mode="indeterminate")
+        self._bar = ttk.Progressbar(
+            outer, orient="horizontal", length=340, mode="indeterminate"
+        )
         self._bar.pack(fill="x")
         self._bar_driver = _ProgressBarDriver(self._bar)
 
@@ -262,10 +280,15 @@ class _UpdateProgressWindow:
         # via `status.message` for the actual instructions).
         self._fallback_path: Path | None = None
         self._open_fallback_button = ttk.Button(
-            outer, text="📁 Ouvrir le dossier", style="Ghost.TButton", command=self._open_fallback_folder
+            outer,
+            text="📁 Ouvrir le dossier",
+            style="Ghost.TButton",
+            command=self._open_fallback_folder,
         )
 
-        self._close_button = ttk.Button(outer, text="Fermer", style="Ghost.TButton", command=root.destroy)
+        self._close_button = ttk.Button(
+            outer, text="Fermer", style="Ghost.TButton", command=root.destroy
+        )
         # Only shown on error -- on any other phase the process is either
         # still working or about to exit on its own (see `_poll`).
         self._close_button_visible = False
@@ -319,15 +342,33 @@ def _apply_dark_style() -> None:
     this now fixes. Rebuilding is cheap (a couple dozen `style.configure`
     calls), so there's no real cost to doing it on every window open."""
     style = ttk.Style()
-    style.theme_use("clam")  # the only built-in theme that reliably honors custom colors everywhere
+    style.theme_use(
+        "clam"
+    )  # the only built-in theme that reliably honors custom colors everywhere
     style.configure("TFrame", background=_BG)
     style.configure("Panel.TFrame", background=_PANEL)
     style.configure("TLabel", background=_BG, foreground=_TEXT, font=("Segoe UI", 10))
-    style.configure("Panel.TLabel", background=_PANEL, foreground=_TEXT, font=("Segoe UI", 10))
-    style.configure("Muted.TLabel", background=_BG, foreground=_TEXT_MUTED, font=("Segoe UI", 9))
-    style.configure("PanelMuted.TLabel", background=_PANEL, foreground=_TEXT_MUTED, font=("Segoe UI", 9))
-    style.configure("Title.TLabel", background=_BG, foreground=_TEXT, font=("Segoe UI", 15, "bold"))
-    style.configure("Link.TLabel", background=_PANEL, foreground=_ACCENT, font=("Segoe UI", 9, "underline"))
+    style.configure(
+        "Panel.TLabel", background=_PANEL, foreground=_TEXT, font=("Segoe UI", 10)
+    )
+    style.configure(
+        "Muted.TLabel", background=_BG, foreground=_TEXT_MUTED, font=("Segoe UI", 9)
+    )
+    style.configure(
+        "PanelMuted.TLabel",
+        background=_PANEL,
+        foreground=_TEXT_MUTED,
+        font=("Segoe UI", 9),
+    )
+    style.configure(
+        "Title.TLabel", background=_BG, foreground=_TEXT, font=("Segoe UI", 15, "bold")
+    )
+    style.configure(
+        "Link.TLabel",
+        background=_PANEL,
+        foreground=_ACCENT,
+        font=("Segoe UI", 9, "underline"),
+    )
     style.configure(
         "Accent.TButton",
         background=_ACCENT,
@@ -336,7 +377,9 @@ def _apply_dark_style() -> None:
         padding=(14, 8),
         borderwidth=0,
     )
-    style.map("Accent.TButton", background=[("active", "#8aa3ff"), ("disabled", "#3a4066")])
+    style.map(
+        "Accent.TButton", background=[("active", "#8aa3ff"), ("disabled", "#3a4066")]
+    )
     style.configure(
         "Ghost.TButton",
         background=_BG,
@@ -360,7 +403,13 @@ def _apply_dark_style() -> None:
         background=[("selected", _PANEL)],
         foreground=[("selected", _TEXT)],
     )
-    style.configure("TProgressbar", background=_ACCENT, troughcolor=_FIELD_BG, borderwidth=0, thickness=8)
+    style.configure(
+        "TProgressbar",
+        background=_ACCENT,
+        troughcolor=_FIELD_BG,
+        borderwidth=0,
+        thickness=8,
+    )
 
 
 class _SettingsWindow:
@@ -398,7 +447,7 @@ class _SettingsWindow:
         # watching.
         self._closed = False
 
-        root.title("HotS Analytics — Configuration")
+        root.title("HotS Analytics - Configuration")
         root.configure(bg=_BG)
         root.resizable(False, False)
         root.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -440,9 +489,14 @@ class _SettingsWindow:
 
         header = ttk.Frame(outer, style="TFrame")
         header.pack(fill="x")
-        ttk.Label(header, text="HotS Analytics", style="Title.TLabel").pack(side="left", anchor="w")
+        ttk.Label(header, text="HotS Analytics", style="Title.TLabel").pack(
+            side="left", anchor="w"
+        )
         ttk.Button(
-            header, text="📁 Dossier de données", style="Ghost.TButton", command=self._open_data_folder
+            header,
+            text="📁 Dossier de données",
+            style="Ghost.TButton",
+            command=self._open_data_folder,
         ).pack(side="right")
 
         subtitle = (
@@ -450,7 +504,9 @@ class _SettingsWindow:
             if self._is_first_run
             else f"Paramètres du daemon de synchronisation · v{APP_VERSION}"
         )
-        ttk.Label(outer, text=subtitle, style="Muted.TLabel").pack(anchor="w", pady=(2, 14))
+        ttk.Label(outer, text=subtitle, style="Muted.TLabel").pack(
+            anchor="w", pady=(2, 14)
+        )
 
         notebook = ttk.Notebook(outer)
         notebook.pack(fill="both", expand=True)
@@ -462,21 +518,31 @@ class _SettingsWindow:
             self._build_update_tab(self._build_tab(notebook, "Update"))
 
         self._error_label = ttk.Label(
-            outer, text="", style="Muted.TLabel", foreground=_ERROR, wraplength=_LABEL_WRAPLENGTH, justify="left"
+            outer,
+            text="",
+            style="Muted.TLabel",
+            foreground=_ERROR,
+            wraplength=_LABEL_WRAPLENGTH,
+            justify="left",
         )
         self._error_label.pack(anchor="w", pady=(10, 0))
 
         buttons = ttk.Frame(outer, style="TFrame")
         buttons.pack(fill="x", pady=(14, 0))
         if not self._is_first_run and self._sync_state is not None:
-            ttk.Button(buttons, text="Debug", style="Ghost.TButton", command=self._open_debug_window).pack(
-                side="left"
-            )
+            ttk.Button(
+                buttons,
+                text="Debug",
+                style="Ghost.TButton",
+                command=self._open_debug_window,
+            ).pack(side="left")
         cancel_text = "Quitter" if self._is_first_run else "Annuler"
-        ttk.Button(buttons, text=cancel_text, style="Ghost.TButton", command=self._on_close).pack(side="right")
-        ttk.Button(buttons, text="Enregistrer", style="Accent.TButton", command=self._save).pack(
-            side="right", padx=(0, 10)
-        )
+        ttk.Button(
+            buttons, text=cancel_text, style="Ghost.TButton", command=self._on_close
+        ).pack(side="right")
+        ttk.Button(
+            buttons, text="Enregistrer", style="Accent.TButton", command=self._save
+        ).pack(side="right", padx=(0, 10))
         self._root.bind("<Return>", lambda _e: self._save())
 
     def _open_data_folder(self) -> None:
@@ -529,7 +595,12 @@ class _SettingsWindow:
             on_change=self._on_api_or_token_changed,
             show="•",
         )
-        link = ttk.Label(card_inner, text="Générer / gérer mon token →", style="Link.TLabel", cursor="hand2")
+        link = ttk.Label(
+            card_inner,
+            text="Générer / gérer mon token →",
+            style="Link.TLabel",
+            cursor="hand2",
+        )
         link.grid(row=grid_row, column=0, columnspan=3, sticky="w", pady=(0, 14))
         link.bind("<Button-1>", lambda _e: self._open_token_link())
         grid_row += 1
@@ -541,7 +612,12 @@ class _SettingsWindow:
             start_row=grid_row,
             on_change=self._on_replays_changed,
         )
-        browse = ttk.Button(card_inner, text="Parcourir…", style="Ghost.TButton", command=self._browse_replays_dir)
+        browse = ttk.Button(
+            card_inner,
+            text="Parcourir…",
+            style="Ghost.TButton",
+            command=self._browse_replays_dir,
+        )
         browse.grid(row=grid_row, column=0, columnspan=3, sticky="w", pady=(0, 4))
 
         if autostart.is_supported():
@@ -552,9 +628,13 @@ class _SettingsWindow:
                 variable=self._autostart_var,
                 command=self._on_autostart_toggled,
             )
-            autostart_check.grid(row=grid_row + 1, column=0, columnspan=3, sticky="w", pady=(10, 0))
+            autostart_check.grid(
+                row=grid_row + 1, column=0, columnspan=3, sticky="w", pady=(10, 0)
+            )
 
-    def _checkbutton(self, parent, *, text: str, variable: tk.BooleanVar, command) -> tk.Checkbutton:
+    def _checkbutton(
+        self, parent, *, text: str, variable: tk.BooleanVar, command
+    ) -> tk.Checkbutton:
         """A `Checkbutton` styled to match the dark ttk theme (plain `tk`,
         not `ttk`, since ttk's checkbutton doesn't expose enough color
         knobs to blend in) -- factored out since every tab uses at least
@@ -588,7 +668,9 @@ class _SettingsWindow:
         )
 
         entry_row = start_row + 1
-        wrapper = tk.Frame(parent, bg=_FIELD_BG, highlightthickness=1, highlightbackground=_FIELD_BG)
+        wrapper = tk.Frame(
+            parent, bg=_FIELD_BG, highlightthickness=1, highlightbackground=_FIELD_BG
+        )
         wrapper.grid(row=entry_row, column=0, sticky="ew", pady=(4, 14))
 
         entry = tk.Entry(
@@ -602,8 +684,16 @@ class _SettingsWindow:
             show=show or "",
         )
         entry.pack(fill="x", padx=10, pady=8)
-        entry.bind("<FocusIn>", lambda _e: wrapper.configure(bg=_FIELD_BG_FOCUS, highlightbackground=_ACCENT))
-        entry.bind("<FocusOut>", lambda _e: wrapper.configure(bg=_FIELD_BG, highlightbackground=_FIELD_BG))
+        entry.bind(
+            "<FocusIn>",
+            lambda _e: wrapper.configure(
+                bg=_FIELD_BG_FOCUS, highlightbackground=_ACCENT
+            ),
+        )
+        entry.bind(
+            "<FocusOut>",
+            lambda _e: wrapper.configure(bg=_FIELD_BG, highlightbackground=_FIELD_BG),
+        )
         entry.bind("<KeyRelease>", lambda _e: on_change())
 
         status = ttk.Label(parent, text="", style="PanelMuted.TLabel")
@@ -637,7 +727,12 @@ class _SettingsWindow:
         hotkey_row = ttk.Frame(inner, style="Panel.TFrame")
         hotkey_row.grid(row=2, column=0, columnspan=3, sticky="w", pady=(4, 0))
 
-        display_wrapper = tk.Frame(hotkey_row, bg=_FIELD_BG, highlightthickness=1, highlightbackground=_FIELD_BG)
+        display_wrapper = tk.Frame(
+            hotkey_row,
+            bg=_FIELD_BG,
+            highlightthickness=1,
+            highlightbackground=_FIELD_BG,
+        )
         display_wrapper.pack(side="left")
         self._draft_hotkey_display = tk.Label(
             display_wrapper,
@@ -653,12 +748,17 @@ class _SettingsWindow:
         self._draft_hotkey_display.pack()
 
         self._draft_hotkey_record_btn = ttk.Button(
-            hotkey_row, text="Modifier…", style="Ghost.TButton", command=self._start_hotkey_capture
+            hotkey_row,
+            text="Modifier…",
+            style="Ghost.TButton",
+            command=self._start_hotkey_capture,
         )
         self._draft_hotkey_record_btn.pack(side="left", padx=(10, 0))
 
         self._draft_hotkey_status = ttk.Label(inner, text="", style="PanelMuted.TLabel")
-        self._draft_hotkey_status.grid(row=3, column=0, columnspan=3, sticky="w", pady=(6, 0))
+        self._draft_hotkey_status.grid(
+            row=3, column=0, columnspan=3, sticky="w", pady=(6, 0)
+        )
 
         ttk.Label(
             inner,
@@ -674,8 +774,12 @@ class _SettingsWindow:
 
         if self._draft_capture_status is not None:
             self._draft_capture_animating = False
-            self._draft_capture_status_label = ttk.Label(inner, text="", style="PanelMuted.TLabel")
-            self._draft_capture_status_label.grid(row=5, column=0, columnspan=3, sticky="w", pady=(14, 4))
+            self._draft_capture_status_label = ttk.Label(
+                inner, text="", style="PanelMuted.TLabel"
+            )
+            self._draft_capture_status_label.grid(
+                row=5, column=0, columnspan=3, sticky="w", pady=(14, 4)
+            )
             self._draft_capture_progress_bar = ttk.Progressbar(
                 inner, orient="horizontal", length=200, mode="indeterminate"
             )
@@ -693,11 +797,18 @@ class _SettingsWindow:
         test_row = ttk.Frame(inner, style="Panel.TFrame")
         test_row.grid(row=7, column=0, columnspan=3, sticky="w", pady=(18, 0))
         self._test_capture_btn = ttk.Button(
-            test_row, text="Tester la capture", style="Ghost.TButton", command=self._start_test_capture
+            test_row,
+            text="Tester la capture",
+            style="Ghost.TButton",
+            command=self._start_test_capture,
         )
         self._test_capture_btn.pack(side="left")
-        self._test_capture_status_label = ttk.Label(inner, text="", style="PanelMuted.TLabel")
-        self._test_capture_status_label.grid(row=8, column=0, columnspan=3, sticky="w", pady=(6, 0))
+        self._test_capture_status_label = ttk.Label(
+            inner, text="", style="PanelMuted.TLabel"
+        )
+        self._test_capture_status_label.grid(
+            row=8, column=0, columnspan=3, sticky="w", pady=(6, 0)
+        )
 
     def _on_draft_enabled_toggled(self) -> None:
         state = "normal" if self._draft_enabled_var.get() else "disabled"
@@ -712,7 +823,9 @@ class _SettingsWindow:
         try:
             hotkey.validate(value)
         except hotkey.InvalidHotkeyError as err:
-            self._set_status(self._draft_hotkey_status, _truncate(f"✗ {err}", 60), _ERROR)
+            self._set_status(
+                self._draft_hotkey_status, _truncate(f"✗ {err}", 60), _ERROR
+            )
             return False
         else:
             self._set_status(self._draft_hotkey_status, "✓ Raccourci valide", _OK)
@@ -733,8 +846,14 @@ class _SettingsWindow:
         self._hotkey_capturing = True
         self._draft_hotkey_record_btn.configure(state="disabled")
         self._draft_hotkey_display.configure(fg=_ACCENT)
-        self._set_status(self._draft_hotkey_status, "Appuyez sur une combinaison de touches… (Échap pour annuler)", _NEUTRAL)
-        threading.Thread(target=self._capture_hotkey_worker, daemon=True, name="hots-hotkey-capture").start()
+        self._set_status(
+            self._draft_hotkey_status,
+            "Appuyez sur une combinaison de touches… (Échap pour annuler)",
+            _NEUTRAL,
+        )
+        threading.Thread(
+            target=self._capture_hotkey_worker, daemon=True, name="hots-hotkey-capture"
+        ).start()
 
     def _capture_hotkey_worker(self) -> None:
         try:
@@ -742,7 +861,9 @@ class _SettingsWindow:
 
             combo = keyboard.read_hotkey(suppress=True)
             error: str | None = None
-        except Exception as err:  # pragma: no cover -- exercised via error branch in tests
+        except (
+            Exception
+        ) as err:  # pragma: no cover -- exercised via error branch in tests
             combo = None
             error = str(err)
         self._after_if_open(self._finish_hotkey_capture, combo, error)
@@ -753,7 +874,11 @@ class _SettingsWindow:
         self._draft_hotkey_display.configure(fg=_TEXT)
 
         if error is not None:
-            self._set_status(self._draft_hotkey_status, _truncate(f"✗ Capture impossible : {error}", 60), _ERROR)
+            self._set_status(
+                self._draft_hotkey_status,
+                _truncate(f"✗ Capture impossible : {error}", 60),
+                _ERROR,
+            )
             return
         if combo is None:
             return
@@ -792,7 +917,9 @@ class _SettingsWindow:
             self._draft_capture_progress_bar.grid_remove()
         elif busy and not self._draft_capture_animating:
             self._draft_capture_animating = True
-            self._draft_capture_progress_bar.grid(row=6, column=0, columnspan=3, sticky="ew")
+            self._draft_capture_progress_bar.grid(
+                row=6, column=0, columnspan=3, sticky="ew"
+            )
             self._draft_capture_progress_bar.start(12)
 
         if status.phase is CapturePhase.IDLE:
@@ -800,13 +927,21 @@ class _SettingsWindow:
         elif status.phase is CapturePhase.ERROR:
             message = status.message or "Échec de la capture."
             self._set_status(
-                self._draft_capture_status_label, _truncate(f"✗ {message}", _DRAFT_CAPTURE_STATUS_MAX_CHARS), _ERROR
+                self._draft_capture_status_label,
+                _truncate(f"✗ {message}", _DRAFT_CAPTURE_STATUS_MAX_CHARS),
+                _ERROR,
             )
         else:
-            text = "Capture en cours…" if status.phase is CapturePhase.CAPTURING else "Envoi de la capture…"
+            text = (
+                "Capture en cours…"
+                if status.phase is CapturePhase.CAPTURING
+                else "Envoi de la capture…"
+            )
             self._set_status(self._draft_capture_status_label, text, _NEUTRAL)
 
-        self._draft_capture_status_job = self._root.after(_LIVE_STATS_POLL_MS, self._refresh_draft_capture_status)
+        self._draft_capture_status_job = self._root.after(
+            _LIVE_STATS_POLL_MS, self._refresh_draft_capture_status
+        )
 
     # -- Draft Live tab: "Tester la capture" ---------------------------------
 
@@ -835,7 +970,9 @@ class _SettingsWindow:
             return
         self._test_capture_countdown_job = None
         self._set_status(self._test_capture_status_label, "Capture en cours…", _NEUTRAL)
-        threading.Thread(target=self._test_capture_worker, daemon=True, name="hots-test-capture").start()
+        threading.Thread(
+            target=self._test_capture_worker, daemon=True, name="hots-test-capture"
+        ).start()
 
     def _test_capture_worker(self) -> None:
         try:
@@ -853,23 +990,34 @@ class _SettingsWindow:
 
         if error is not None:
             self._set_status(
-                self._test_capture_status_label, _truncate(f"✗ {error}", _TEST_CAPTURE_STATUS_MAX_CHARS), _ERROR
+                self._test_capture_status_label,
+                _truncate(f"✗ {error}", _TEST_CAPTURE_STATUS_MAX_CHARS),
+                _ERROR,
             )
             return
         assert result is not None
-        self._set_status(self._test_capture_status_label, "✓ Capture terminée, voir la fenêtre de résultat.", _OK)
+        self._set_status(
+            self._test_capture_status_label,
+            "✓ Capture terminée, voir la fenêtre de résultat.",
+            _OK,
+        )
         self._open_test_capture_window(result)
 
     def _crop_to_photo(self, crop: Image.Image | None) -> ImageTk.PhotoImage | None:
         if crop is None or crop.width == 0 or crop.height == 0:
             return None
         scale = _TEST_CAPTURE_THUMB_WIDTH / crop.width
-        resized = crop.resize((_TEST_CAPTURE_THUMB_WIDTH, max(1, round(crop.height * scale))), Image.LANCZOS)
+        resized = crop.resize(
+            (_TEST_CAPTURE_THUMB_WIDTH, max(1, round(crop.height * scale))),
+            Image.LANCZOS,
+        )
         return ImageTk.PhotoImage(resized)
 
-    def _open_test_capture_window(self, result: draft_capture.TestCaptureResult) -> None:
+    def _open_test_capture_window(
+        self, result: draft_capture.TestCaptureResult
+    ) -> None:
         win = tk.Toplevel(self._root)
-        win.title("HotS Analytics — Test de capture")
+        win.title("HotS Analytics - Test de capture")
         win.configure(bg=_BG)
         win.transient(self._root)
 
@@ -882,10 +1030,16 @@ class _SettingsWindow:
         photos: list[ImageTk.PhotoImage] = []
         win._test_capture_photos = photos  # type: ignore[attr-defined]
 
-        def _build_team_column(title: str, team: TeamCropResult, ocr_results: list[OcrResult], column: int) -> None:
+        def _build_team_column(
+            title: str, team: TeamCropResult, ocr_results: list[OcrResult], column: int
+        ) -> None:
             padx = (0, 0) if column == 0 else (28, 0)
-            ttk.Label(body, text=title, style="Title.TLabel").grid(row=0, column=column, sticky="w", padx=padx)
-            for i, (crop, read) in enumerate(zip(team.player_crops, ocr_results), start=1):
+            ttk.Label(body, text=title, style="Title.TLabel").grid(
+                row=0, column=column, sticky="w", padx=padx
+            )
+            for i, (crop, read) in enumerate(
+                zip(team.player_crops, ocr_results), start=1
+            ):
                 cell = ttk.Frame(body, style="TFrame")
                 cell.grid(row=i, column=column, sticky="w", pady=(12, 0), padx=padx)
 
@@ -894,9 +1048,13 @@ class _SettingsWindow:
                     photos.append(photo)
                     tk.Label(cell, image=photo, bg=_BG).pack(anchor="w")
                 else:
-                    tk.Label(cell, text="(pas de crop)", bg=_BG, fg=_TEXT_MUTED, font=("Segoe UI", 9)).pack(
-                        anchor="w"
-                    )
+                    tk.Label(
+                        cell,
+                        text="(pas de crop)",
+                        bg=_BG,
+                        fg=_TEXT_MUTED,
+                        font=("Segoe UI", 9),
+                    ).pack(anchor="w")
 
                 ok = bool(read.text)
                 text = read.text if ok else "— illisible —"
@@ -910,9 +1068,9 @@ class _SettingsWindow:
         _build_team_column("Équipe gauche", result.left, result.left_results, 0)
         _build_team_column("Équipe droite", result.right, result.right_results, 1)
 
-        ttk.Button(body, text="Fermer", style="Ghost.TButton", command=win.destroy).grid(
-            row=6, column=0, columnspan=2, sticky="e", pady=(18, 0)
-        )
+        ttk.Button(
+            body, text="Fermer", style="Ghost.TButton", command=win.destroy
+        ).grid(row=6, column=0, columnspan=2, sticky="e", pady=(18, 0))
 
     # -- Synchronisation tab ------------------------------------------------
 
@@ -932,8 +1090,12 @@ class _SettingsWindow:
         inner = ttk.Frame(card, style="Panel.TFrame", padding=18)
         inner.pack(fill="x")
 
-        ttk.Label(inner, text="Version daemon", style="PanelMuted.TLabel").grid(row=0, column=0, sticky="w")
-        ttk.Label(inner, text=APP_VERSION, style="Panel.TLabel").grid(row=1, column=0, sticky="w")
+        ttk.Label(inner, text="Version daemon", style="PanelMuted.TLabel").grid(
+            row=0, column=0, sticky="w"
+        )
+        ttk.Label(inner, text=APP_VERSION, style="Panel.TLabel").grid(
+            row=1, column=0, sticky="w"
+        )
 
         ttk.Label(inner, text="Version API", style="PanelMuted.TLabel").grid(
             row=0, column=1, sticky="w", padx=(40, 0)
@@ -948,31 +1110,43 @@ class _SettingsWindow:
         self._games_count_label.grid(row=1, column=2, sticky="w", padx=(40, 0))
 
         if self._status_tracker is not None:
-            ttk.Label(inner, text="Trouvées dans le dossier", style="PanelMuted.TLabel").grid(
-                row=0, column=3, sticky="w", padx=(40, 0)
-            )
+            ttk.Label(
+                inner, text="Trouvées dans le dossier", style="PanelMuted.TLabel"
+            ).grid(row=0, column=3, sticky="w", padx=(40, 0))
             self._found_count_label = ttk.Label(inner, text="…", style="Panel.TLabel")
             self._found_count_label.grid(row=1, column=3, sticky="w", padx=(40, 0))
 
-            ttk.Label(inner, text="Progression de la synchronisation", style="PanelMuted.TLabel").grid(
-                row=2, column=0, columnspan=4, sticky="w", pady=(16, 4)
+            ttk.Label(
+                inner,
+                text="Progression de la synchronisation",
+                style="PanelMuted.TLabel",
+            ).grid(row=2, column=0, columnspan=4, sticky="w", pady=(16, 4))
+            self._sync_progress_bar = ttk.Progressbar(
+                inner, orient="horizontal", mode="determinate", maximum=100
             )
-            self._sync_progress_bar = ttk.Progressbar(inner, orient="horizontal", mode="determinate", maximum=100)
             self._sync_progress_bar.grid(row=3, column=0, columnspan=4, sticky="ew")
 
-            ttk.Label(inner, text="Synchronisées (cette session)", style="PanelMuted.TLabel").grid(
-                row=4, column=0, sticky="w", pady=(14, 0)
-            )
+            ttk.Label(
+                inner, text="Synchronisées (cette session)", style="PanelMuted.TLabel"
+            ).grid(row=4, column=0, sticky="w", pady=(14, 0))
             self._synced_count_label = ttk.Label(inner, text="…", style="Panel.TLabel")
             self._synced_count_label.grid(row=5, column=0, sticky="w")
 
-            ttk.Label(inner, text="En cours de synchronisation", style="PanelMuted.TLabel").grid(
+            ttk.Label(
+                inner, text="En cours de synchronisation", style="PanelMuted.TLabel"
+            ).grid(
                 row=4, column=1, columnspan=3, sticky="w", pady=(14, 0), padx=(40, 0)
             )
             self._currently_syncing_label = ttk.Label(
-                inner, text="—", style="Panel.TLabel", wraplength=_LABEL_WRAPLENGTH, justify="left"
+                inner,
+                text="—",
+                style="Panel.TLabel",
+                wraplength=_LABEL_WRAPLENGTH,
+                justify="left",
             )
-            self._currently_syncing_label.grid(row=5, column=1, columnspan=3, sticky="w", padx=(40, 0))
+            self._currently_syncing_label.grid(
+                row=5, column=1, columnspan=3, sticky="w", padx=(40, 0)
+            )
 
             self._skipped_count_label = ttk.Label(
                 inner,
@@ -982,7 +1156,9 @@ class _SettingsWindow:
                 wraplength=_LABEL_WRAPLENGTH,
                 justify="left",
             )
-            self._skipped_count_label.grid(row=6, column=0, columnspan=4, sticky="w", pady=(14, 0))
+            self._skipped_count_label.grid(
+                row=6, column=0, columnspan=4, sticky="w", pady=(14, 0)
+            )
 
             self._sync_error_label = ttk.Label(
                 inner,
@@ -992,7 +1168,9 @@ class _SettingsWindow:
                 wraplength=_LABEL_WRAPLENGTH,
                 justify="left",
             )
-            self._sync_error_label.grid(row=7, column=0, columnspan=4, sticky="w", pady=(6, 0))
+            self._sync_error_label.grid(
+                row=7, column=0, columnspan=4, sticky="w", pady=(6, 0)
+            )
 
     def _refresh_live_stats(self) -> None:
         assert self._status_tracker is not None
@@ -1000,7 +1178,8 @@ class _SettingsWindow:
 
         self._found_count_label.configure(text=str(status.found))
         self._synced_count_label.configure(
-            text=f"{status.synced} ok" + (f", {status.failed} échouées" if status.failed else "")
+            text=f"{status.synced} ok"
+            + (f", {status.failed} échouées" if status.failed else "")
         )
         if status.skipped_ai_player:
             # Already counted inside `synced` above (not a failure -- see
@@ -1022,21 +1201,29 @@ class _SettingsWindow:
         # "in progress" at once -- joined here rather than only ever showing
         # one of them and hiding the rest.
         if status.currently_syncing:
-            syncing_text = _truncate(", ".join(sorted(status.currently_syncing)), _SYNCING_LABEL_MAX_CHARS)
+            syncing_text = _truncate(
+                ", ".join(sorted(status.currently_syncing)), _SYNCING_LABEL_MAX_CHARS
+            )
         else:
             syncing_text = "—"
         self._currently_syncing_label.configure(text=syncing_text)
 
         done = status.synced + status.failed
-        self._sync_progress_bar["value"] = round((done / status.found) * 100) if status.found else 0
+        self._sync_progress_bar["value"] = (
+            round((done / status.found) * 100) if status.found else 0
+        )
 
         if status.last_error:
             error_text = _truncate(status.last_error, _ERROR_LABEL_MAX_CHARS)
-            self._sync_error_label.configure(text=f"✗ Dernière erreur de synchronisation : {error_text}")
+            self._sync_error_label.configure(
+                text=f"✗ Dernière erreur de synchronisation : {error_text}"
+            )
         else:
             self._sync_error_label.configure(text="")
 
-        self._live_stats_job = self._root.after(_LIVE_STATS_POLL_MS, self._refresh_live_stats)
+        self._live_stats_job = self._root.after(
+            _LIVE_STATS_POLL_MS, self._refresh_live_stats
+        )
 
     # -- Update tab -----------------------------------------------------------
 
@@ -1069,9 +1256,14 @@ class _SettingsWindow:
             self._check_update_button.pack(side="left")
 
         self._view_log_button = ttk.Button(
-            button_row, text="Voir le journal", style="Ghost.TButton", command=self._open_update_log
+            button_row,
+            text="Voir le journal",
+            style="Ghost.TButton",
+            command=self._open_update_log,
         )
-        self._view_log_button.pack(side="left", padx=(10, 0) if self._update_status is not None else (0, 0))
+        self._view_log_button.pack(
+            side="left", padx=(10, 0) if self._update_status is not None else (0, 0)
+        )
 
         if self._update_status is not None:
             # Built but left unpacked -- `_refresh_update_status` packs it in
@@ -1082,15 +1274,26 @@ class _SettingsWindow:
             # that's no longer true, e.g. after a subsequent update succeeds.
             self._fallback_path: Path | None = None
             self._open_fallback_button = ttk.Button(
-                button_row, text="📁 Ouvrir le dossier", style="Ghost.TButton", command=self._open_fallback_folder
+                button_row,
+                text="📁 Ouvrir le dossier",
+                style="Ghost.TButton",
+                command=self._open_fallback_folder,
             )
 
             self._update_status_label = ttk.Label(
-                inner, text="", style="PanelMuted.TLabel", wraplength=420, justify="left"
+                inner,
+                text="",
+                style="PanelMuted.TLabel",
+                wraplength=420,
+                justify="left",
             )
-            self._update_status_label.grid(row=2, column=0, columnspan=2, sticky="w", pady=(12, 4))
+            self._update_status_label.grid(
+                row=2, column=0, columnspan=2, sticky="w", pady=(12, 4)
+            )
 
-            self._update_progress_bar = ttk.Progressbar(inner, orient="horizontal", mode="determinate", maximum=100)
+            self._update_progress_bar = ttk.Progressbar(
+                inner, orient="horizontal", mode="determinate", maximum=100
+            )
             self._update_progress_bar.grid(row=3, column=0, columnspan=2, sticky="ew")
             self._update_progress_driver = _ProgressBarDriver(self._update_progress_bar)
 
@@ -1123,10 +1326,16 @@ class _SettingsWindow:
     def _refresh_update_status(self) -> None:
         assert self._update_status is not None
         status = self._update_status.snapshot()
-        self._update_status_label.configure(text=_truncate(_format_update_status(status), _UPDATE_STATUS_MAX_CHARS))
+        self._update_status_label.configure(
+            text=_truncate(_format_update_status(status), _UPDATE_STATUS_MAX_CHARS)
+        )
         self._update_progress_driver.apply(status)
 
-        busy = status.phase in (UpdatePhase.CHECKING, UpdatePhase.DOWNLOADING, UpdatePhase.INSTALLING)
+        busy = status.phase in (
+            UpdatePhase.CHECKING,
+            UpdatePhase.DOWNLOADING,
+            UpdatePhase.INSTALLING,
+        )
         self._check_update_button.configure(state="disabled" if busy else "normal")
 
         if status.manual_fallback_path is not None:
@@ -1136,7 +1345,9 @@ class _SettingsWindow:
         elif self._open_fallback_button.winfo_ismapped():
             self._open_fallback_button.pack_forget()
 
-        self._update_status_job = self._root.after(_LIVE_STATS_POLL_MS, self._refresh_update_status)
+        self._update_status_job = self._root.after(
+            _LIVE_STATS_POLL_MS, self._refresh_update_status
+        )
 
     # -- prefill ----------------------------------------------------------
 
@@ -1185,7 +1396,9 @@ class _SettingsWindow:
             self._set_status(self._replays_status, "✗ Introuvable", _ERROR)
 
     def _browse_replays_dir(self) -> None:
-        chosen = filedialog.askdirectory(title="Dossier des replays Heroes of the Storm")
+        chosen = filedialog.askdirectory(
+            title="Dossier des replays Heroes of the Storm"
+        )
         if chosen:
             self._replays_var.set(chosen)
         self._check_replays_dir()
@@ -1208,7 +1421,9 @@ class _SettingsWindow:
             self._set_status(self._token_status, "", _NEUTRAL)
             return
 
-        threading.Thread(target=self._check_connection_worker, args=(base_url, token), daemon=True).start()
+        threading.Thread(
+            target=self._check_connection_worker, args=(base_url, token), daemon=True
+        ).start()
 
     def _check_connection_worker(self, base_url: str, token: str) -> None:
         reachable = api_client.ping_health(base_url)
@@ -1224,14 +1439,18 @@ class _SettingsWindow:
             return
 
         summary = api_client.fetch_summary(base_url, token)
-        self._after_if_open(self._apply_token_status, summary if summary is not None else "invalid")
+        self._after_if_open(
+            self._apply_token_status, summary if summary is not None else "invalid"
+        )
 
         version_info = api_client.fetch_version(base_url, token)
         self._after_if_open(self._apply_api_version, version_info)
 
     def _apply_api_version(self, info: dict | None) -> None:
         if hasattr(self, "_api_version_label"):
-            self._api_version_label.configure(text=str(info.get("apiVersion", "—")) if info else "—")
+            self._api_version_label.configure(
+                text=str(info.get("apiVersion", "—")) if info else "—"
+            )
 
     def _apply_api_status(self, reachable: bool) -> None:
         if reachable:
@@ -1247,7 +1466,9 @@ class _SettingsWindow:
         else:
             self._set_status(self._token_status, "✓ Token valide", _OK)
             if hasattr(self, "_games_count_label"):
-                self._games_count_label.configure(text=str(state.get("gamesPlayed", "—")))
+                self._games_count_label.configure(
+                    text=str(state.get("gamesPlayed", "—"))
+                )
 
     # -- stats (reopen only) ------------------------------------------------
 
@@ -1256,7 +1477,9 @@ class _SettingsWindow:
         base_url = existing.get("apiBaseUrl")
         token = existing.get("accessToken")
         if base_url and token:
-            threading.Thread(target=self._load_stats_worker, args=(base_url, token), daemon=True).start()
+            threading.Thread(
+                target=self._load_stats_worker, args=(base_url, token), daemon=True
+            ).start()
 
     def _load_stats_worker(self, base_url: str, token: str) -> None:
         summary = api_client.fetch_summary(base_url, token)
@@ -1276,7 +1499,7 @@ class _SettingsWindow:
         report = self._format_debug_report(records, skipped)
 
         win = tk.Toplevel(self._root)
-        title = f"HotS Analytics — Debug ({len(records)} erreur(s)"
+        title = f"HotS Analytics - Debug ({len(records)} erreur(s)"
         title += f", {len(skipped)} ignorée(s))" if skipped else ")"
         win.title(title)
         win.configure(bg=_BG)
@@ -1286,7 +1509,9 @@ class _SettingsWindow:
         body = ttk.Frame(win, padding=16)
         body.pack(fill="both", expand=True)
 
-        text_frame = tk.Frame(body, bg=_FIELD_BG, highlightthickness=1, highlightbackground=_FIELD_BG)
+        text_frame = tk.Frame(
+            body, bg=_FIELD_BG, highlightthickness=1, highlightbackground=_FIELD_BG
+        )
         text_frame.pack(fill="both", expand=True)
 
         scrollbar = ttk.Scrollbar(text_frame, orient="vertical")
@@ -1318,13 +1543,18 @@ class _SettingsWindow:
             copy_status.configure(text="✓ Copié dans le presse-papiers")
             win.after(2000, lambda: copy_status.configure(text=""))
 
-        ttk.Button(button_row, text="Fermer", style="Ghost.TButton", command=win.destroy).pack(side="right")
-        ttk.Button(button_row, text="Copier", style="Accent.TButton", command=_copy).pack(
-            side="right", padx=(0, 10)
-        )
+        ttk.Button(
+            button_row, text="Fermer", style="Ghost.TButton", command=win.destroy
+        ).pack(side="right")
+        ttk.Button(
+            button_row, text="Copier", style="Accent.TButton", command=_copy
+        ).pack(side="right", padx=(0, 10))
 
     def _format_debug_report(self, records: list, skipped: list) -> str:
-        header = [f"HotS Analytics — rapport de debug — daemon v{APP_VERSION}", f"{len(records)} partie(s) en erreur"]
+        header = [
+            f"HotS Analytics - rapport de debug — daemon v{APP_VERSION}",
+            f"{len(records)} partie(s) en erreur",
+        ]
         if skipped:
             header.append(
                 f"{len(skipped)} partie(s) ignorée(s) volontairement (pas des erreurs — détail plus bas)"
@@ -1338,9 +1568,13 @@ class _SettingsWindow:
                 lines.append("-" * 70)
                 lines.append(f"Fichier         : {record.file_path}")
                 lines.append(f"Hash            : {record.replay_hash}")
-                lines.append(f"Fichier présent : {'oui' if record.file_exists else 'non (déplacé ou supprimé)'}")
+                lines.append(
+                    f"Fichier présent : {'oui' if record.file_exists else 'non (déplacé ou supprimé)'}"
+                )
                 lines.append(f"Dernière tentative : {record.last_attempt_at}")
-                lines.append(f"Erreur          : {record.error_message or '(inconnue)'}")
+                lines.append(
+                    f"Erreur          : {record.error_message or '(inconnue)'}"
+                )
                 if record.error_log:
                     lines.append("Log complet :")
                     lines.append(record.error_log)
@@ -1348,15 +1582,21 @@ class _SettingsWindow:
 
         if skipped:
             lines.append("=" * 70)
-            lines.append(f"Parties ignorées volontairement ({len(skipped)}) — ce ne sont pas des erreurs :")
+            lines.append(
+                f"Parties ignorées volontairement ({len(skipped)}) — ce ne sont pas des erreurs :"
+            )
             lines.append("")
             for record in skipped:
                 lines.append("-" * 70)
                 lines.append(f"Fichier         : {record.file_path}")
                 lines.append(f"Hash            : {record.replay_hash}")
-                lines.append(f"Fichier présent : {'oui' if record.file_exists else 'non (déplacé ou supprimé)'}")
+                lines.append(
+                    f"Fichier présent : {'oui' if record.file_exists else 'non (déplacé ou supprimé)'}"
+                )
                 lines.append(f"Dernière tentative : {record.last_attempt_at}")
-                lines.append(f"Raison          : {_SKIP_REASON_LABELS.get(record.reason, record.reason)}")
+                lines.append(
+                    f"Raison          : {_SKIP_REASON_LABELS.get(record.reason, record.reason)}"
+                )
                 lines.append("")
 
         return "\n".join(lines)
@@ -1397,22 +1637,41 @@ class _SettingsWindow:
         max-length placeholder text, measures the window's required size
         with that worst case in place, then restores the real text.
         """
-        placeholders: list[tuple[ttk.Label, str]] = [(self._error_label, "x" * _ERROR_LABEL_MAX_CHARS)]
+        placeholders: list[tuple[ttk.Label, str]] = [
+            (self._error_label, "x" * _ERROR_LABEL_MAX_CHARS)
+        ]
         if self._status_tracker is not None:
-            placeholders.append((self._currently_syncing_label, "x" * _SYNCING_LABEL_MAX_CHARS))
-            placeholders.append((self._skipped_count_label, "x" * _SKIPPED_LABEL_MAX_CHARS))
             placeholders.append(
-                (self._sync_error_label, "✗ Dernière erreur de synchronisation : " + "x" * _ERROR_LABEL_MAX_CHARS)
+                (self._currently_syncing_label, "x" * _SYNCING_LABEL_MAX_CHARS)
+            )
+            placeholders.append(
+                (self._skipped_count_label, "x" * _SKIPPED_LABEL_MAX_CHARS)
+            )
+            placeholders.append(
+                (
+                    self._sync_error_label,
+                    "✗ Dernière erreur de synchronisation : "
+                    + "x" * _ERROR_LABEL_MAX_CHARS,
+                )
             )
         if hasattr(self, "_update_status_label"):
-            placeholders.append((self._update_status_label, "x" * _UPDATE_STATUS_MAX_CHARS))
+            placeholders.append(
+                (self._update_status_label, "x" * _UPDATE_STATUS_MAX_CHARS)
+            )
         if self._draft_capture_status is not None:
             # Can show an ERROR message up to _DRAFT_CAPTURE_STATUS_MAX_CHARS
             # long (see `_refresh_draft_capture_status`), not just the two
             # short fixed in-progress phrases -- same "x"*N filler pattern
             # as the other unbounded-text labels above.
-            placeholders.append((self._draft_capture_status_label, "x" * _DRAFT_CAPTURE_STATUS_MAX_CHARS))
-        placeholders.append((self._test_capture_status_label, "x" * _TEST_CAPTURE_STATUS_MAX_CHARS))
+            placeholders.append(
+                (
+                    self._draft_capture_status_label,
+                    "x" * _DRAFT_CAPTURE_STATUS_MAX_CHARS,
+                )
+            )
+        placeholders.append(
+            (self._test_capture_status_label, "x" * _TEST_CAPTURE_STATUS_MAX_CHARS)
+        )
 
         originals = [(label, label.cget("text")) for label, _ in placeholders]
         for label, placeholder in placeholders:
@@ -1423,7 +1682,9 @@ class _SettingsWindow:
         # already accounted for in the locked window size, so the window
         # doesn't need to grow the first time a real capture actually shows it.
         if self._draft_capture_status is not None:
-            self._draft_capture_progress_bar.grid(row=6, column=0, columnspan=3, sticky="ew")
+            self._draft_capture_progress_bar.grid(
+                row=6, column=0, columnspan=3, sticky="ew"
+            )
 
         # Same idea for the "Ouvrir le dossier" button: normally unpacked
         # until `_refresh_update_status` sees a `manual_fallback_path` (this
@@ -1481,7 +1742,9 @@ class _SettingsWindow:
             # run): keep a sane default around in case it's re-enabled later.
             draft_hotkey = DEFAULT_DRAFT_HOTKEY
 
-        auto_update_enabled = self._auto_update_var.get() if hasattr(self, "_auto_update_var") else True
+        auto_update_enabled = (
+            self._auto_update_var.get() if hasattr(self, "_auto_update_var") else True
+        )
 
         save_config(
             api_base_url,
@@ -1539,7 +1802,9 @@ class _SettingsWindow:
             return
         if self._is_first_run:
             if not messagebox.askyesno(
-                "Quitter", "Aucune configuration n'a été enregistrée. Quitter quand même ?", parent=self._root
+                "Quitter",
+                "Aucune configuration n'a été enregistrée. Quitter quand même ?",
+                parent=self._root,
             ):
                 return
         self._stop_background_jobs()
