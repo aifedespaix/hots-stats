@@ -1,7 +1,7 @@
 export default defineNuxtConfig({
   compatibilityDate: "2025-01-01",
   devtools: { enabled: true },
-  modules: ["@nuxt/ui", "@nuxt/fonts"],
+  modules: ["@nuxt/ui", "@nuxt/fonts", "@pinia/nuxt"],
   css: ["~/assets/css/globals.css"],
   ssr: true,
   app: {

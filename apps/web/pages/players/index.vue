@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { PlayerListResponse } from "~/types/analytics";
+import type { PlayersSortableColumn } from "~/stores/usePlayersFiltersStore";
 
 definePageMeta({ middleware: "auth" });
 
@@ -16,15 +17,28 @@ useSeoMeta({
   robots: "noindex, follow",
 });
 
-type SortableColumn = "battletag" | "gamesTogether" | "gamesAsAlly" | "gamesAsOpponent" | "wins" | "losses";
-const { sortKey, sortDir, onSort } = useSortState<SortableColumn>("gamesTogether", "desc");
+// Sort/filter keys the backend can sort by directly; the two win-ratio
+// columns aren't stored columns, so they're sorted client-side below.
+const backendSortableColumns = ["battletag", "gamesTogether", "gamesAsAlly", "gamesAsOpponent", "wins", "losses"];
 
-const mode = ref("");
-const search = ref("");
+const filtersStore = usePlayersFiltersStore();
+const { filters, sortKey, sortDir } = storeToRefs(filtersStore);
+const mode = computed({
+  get: () => filters.value.mode,
+  set: (value: string) => (filters.value.mode = value),
+});
+const search = computed({
+  get: () => filters.value.search,
+  set: (value: string) => (filters.value.search = value),
+});
+function onSort(key: string) {
+  filtersStore.onSort(key as PlayersSortableColumn);
+}
+
 const config = useRuntimeConfig();
 
 const query = computed(() => ({
-  sortBy: sortKey.value,
+  sortBy: backendSortableColumns.includes(sortKey.value) ? sortKey.value : "gamesTogether",
   sortDir: sortDir.value,
   ...(mode.value ? { mode: mode.value } : {}),
 }));
@@ -50,15 +64,34 @@ async function addFriend(accountUserId: string) {
 
 const modeOptions = [{ value: "" as const, label: "Tous les modes" }, ...gameModeFilterOptions()];
 
+function winRatio(wins: number, games: number): number | null {
+  return games > 0 ? wins / games : null;
+}
+
 const rows = computed(() => {
   const searchTerm = search.value.trim().toLowerCase();
-  return (data.value?.players ?? [])
+  const filtered = (data.value?.players ?? [])
     .filter((player) => (searchTerm ? player.battletag.toLowerCase().includes(searchTerm) : true))
     .map((player) => ({
       ...player,
       wins: player.winsAsAlly + player.winsAsOpponent,
       losses: player.gamesTogether - (player.winsAsAlly + player.winsAsOpponent),
+      winRatioAsAlly: winRatio(player.winsAsAlly, player.gamesAsAlly),
+      winRatioAsOpponent: winRatio(player.winsAsOpponent, player.gamesAsOpponent),
     }));
+
+  // The two win-ratio columns aren't backend-sortable columns (they're
+  // derived), so sort them client-side; every other column is already
+  // sorted server-side via the `query` above.
+  if (sortKey.value === "winRatioAsAlly" || sortKey.value === "winRatioAsOpponent") {
+    const dir = sortDir.value === "asc" ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      const av = a[sortKey.value as "winRatioAsAlly" | "winRatioAsOpponent"] ?? -1;
+      const bv = b[sortKey.value as "winRatioAsAlly" | "winRatioAsOpponent"] ?? -1;
+      return (av - bv) * dir;
+    });
+  }
+  return filtered;
 });
 
 // Pagination slices `rows`, which is already filtered by `search` - the
@@ -76,6 +109,8 @@ const columns = [
   { key: "gamesAsOpponent", label: "Adversaire", numeric: true, sortable: true },
   { key: "wins", label: "Victoires", numeric: true, sortable: true },
   { key: "losses", label: "Défaites", numeric: true, sortable: true },
+  { key: "winRatioAsAlly", label: "% victoires alliés", numeric: true, sortable: true },
+  { key: "winRatioAsOpponent", label: "% victoires adversaire", numeric: true, sortable: true },
   { key: "account", label: "Compte" },
 ];
 
@@ -100,6 +135,21 @@ function goToPlayer(row: Record<string, unknown>) {
       <UInput v-model="search" placeholder="Rechercher un joueur (Pseudo#12345)" icon="i-lucide-search" />
     </div>
 
+    <div class="flex flex-wrap gap-2">
+      <UButton size="xs" color="gray" variant="soft" icon="i-heroicons-x-mark" @click="filtersStore.resetFilters()">
+        Réinitialiser les filtres
+      </UButton>
+      <UButton
+        size="xs"
+        color="gray"
+        variant="soft"
+        icon="i-heroicons-arrows-up-down"
+        @click="filtersStore.resetSort()"
+      >
+        Réinitialiser le tri
+      </UButton>
+    </div>
+
     <UiDataTable
       :columns="columns"
       :rows="pagedRows"
@@ -118,6 +168,24 @@ function goToPlayer(row: Record<string, unknown>) {
       </template>
       <template #cell-losses="{ row }">
         <span class="text-danger">{{ row.losses }}</span>
+      </template>
+      <template #cell-winRatioAsAlly="{ row }">
+        <span
+          v-if="row.winRatioAsAlly !== null"
+          :title="`Victoires dans les parties où ce joueur était dans ton équipe (${row.gamesAsAlly} parties)`"
+        >
+          {{ Math.round((row.winRatioAsAlly as number) * 100) }}%
+        </span>
+        <span v-else class="text-muted">-</span>
+      </template>
+      <template #cell-winRatioAsOpponent="{ row }">
+        <span
+          v-if="row.winRatioAsOpponent !== null"
+          :title="`Victoires dans les parties où ce joueur était dans l'équipe adverse (${row.gamesAsOpponent} parties)`"
+        >
+          {{ Math.round((row.winRatioAsOpponent as number) * 100) }}%
+        </span>
+        <span v-else class="text-muted">-</span>
       </template>
       <template #cell-account="{ row }">
         <NuxtLink
