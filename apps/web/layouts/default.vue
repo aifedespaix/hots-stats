@@ -87,7 +87,7 @@ async function handleLogout() {
 
     <div class="flex flex-1">
       <aside
-        class="hidden shrink-0 flex-col justify-between border-r border-border bg-surface py-4 transition-[width] duration-200 md:flex"
+        class="sticky top-[65px] hidden h-[calc(100vh-65px)] shrink-0 flex-col justify-between overflow-y-auto border-r border-border bg-surface py-4 transition-[width] duration-200 md:flex"
         :class="sidebarExpanded ? 'w-64 px-3' : 'w-[76px] px-2 lg:w-64 lg:px-3'"
       >
         <nav class="flex flex-col gap-1">
