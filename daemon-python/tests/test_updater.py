@@ -762,6 +762,27 @@ def test_powershell_diagnostics_reports_probe_output(monkeypatch):
     assert "SmartAppControl" in output
 
 
+def test_powershell_diagnostics_redirects_stdin(monkeypatch):
+    """Regression test: this process has no console (frozen, windowed
+    build), so its own stdin is not a valid inheritable handle. Leaving
+    `stdin` on the default "inherit from parent" makes `subprocess.run`
+    raise `OSError: [WinError 6] The handle is invalid` on exactly that kind
+    of build -- which is what turned this probe into dead weight (a
+    "probe failed" line instead of real diagnostics) until this was fixed."""
+    monkeypatch.setattr("src.updater.shutil.which", lambda _name: "powershell.exe")
+    calls: list[dict] = []
+
+    def _fake_run(*_args, **kwargs):
+        calls.append(kwargs)
+        return MagicMock(returncode=0, stdout="ok", stderr="")
+
+    monkeypatch.setattr("src.updater.subprocess.run", _fake_run)
+
+    _powershell_diagnostics()
+
+    assert calls[0]["stdin"] == subprocess.DEVNULL
+
+
 def test_powershell_diagnostics_falls_back_to_stderr_when_stdout_empty(monkeypatch):
     monkeypatch.setattr("src.updater.shutil.which", lambda _name: "powershell.exe")
     fake_result = MagicMock(returncode=1, stdout="", stderr="Access is denied.")
