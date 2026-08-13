@@ -20,9 +20,14 @@ useSeoMeta({
 interface FiltersResponse {
   heroes: { id: string; name: string }[];
   maps: { id: string; name: string }[];
-  players: { battletag: string }[];
 }
 
+interface PlayerSearchResponse {
+  players: string[];
+  hasMore: boolean;
+}
+
+const config = useRuntimeConfig();
 const { data: filterOptions } = await useApiFetch<FiltersResponse>("/matches/filters");
 
 const filtersStore = useMatchesFiltersStore();
@@ -90,10 +95,29 @@ watch([sortKey, sortDir], () => {
 });
 
 const modeOptions = [{ value: "" as const, label: "Tous les modes" }, ...gameModeFilterOptions()];
-const opponentOptions = computed(() => [
-  { battletag: "", label: "Tous les joueurs" },
-  ...(filterOptions.value?.players ?? []).map((player) => ({ battletag: player.battletag, label: player.battletag })),
-]);
+
+// Backs the "joueur croisé" combobox: querying the full opponent list
+// upfront used to ship every battletag the user has ever crossed paths
+// with and render it all in one dropdown, which could hang or crash the
+// tab once that list got large. Search server-side instead, past 3 chars,
+// capped at 5 matches (see GET /matches/filters/players).
+async function searchOpponents(rawQuery: string) {
+  const term = rawQuery.trim();
+  if (term.length < 3) return [];
+  const res = await $fetch<PlayerSearchResponse>("/matches/filters/players", {
+    baseURL: config.public.apiBase,
+    credentials: "include",
+    query: { q: term },
+  });
+  const options: { battletag: string; label: string; disabled?: boolean }[] = res.players.map((battletag) => ({
+    battletag,
+    label: battletag,
+  }));
+  if (res.hasMore) {
+    options.push({ battletag: "", label: "Plus de 5 résultats, précise ton pseudo…", disabled: true });
+  }
+  return options;
+}
 
 const columns = [
   { key: "playedAt", label: "Date", sortable: true },
@@ -144,13 +168,33 @@ function goToMatch(row: Record<string, unknown>) {
       <UInput v-model="dateTo" type="date" placeholder="Au" />
       <USelectMenu
         v-model="opponentBattletag"
-        :options="opponentOptions"
+        :searchable="searchOpponents"
+        searchable-lazy
         value-attribute="battletag"
         option-attribute="label"
-        searchable
-        searchable-placeholder="Rechercher un pseudo..."
+        searchable-placeholder="Pseudo (3 caractères min.)..."
         placeholder="Joueur croisé"
-      />
+      >
+        <template #label>
+          <span v-if="opponentBattletag" class="truncate">{{ opponentBattletag }}</span>
+          <span v-else class="text-muted">Joueur croisé</span>
+        </template>
+        <template #trailing>
+          <UButton
+            v-if="opponentBattletag"
+            icon="i-heroicons-x-mark"
+            size="2xs"
+            color="gray"
+            variant="link"
+            :padded="false"
+            @click.stop="opponentBattletag = ''"
+          />
+          <UIcon v-else name="i-heroicons-chevron-up-down" class="h-4 w-4 text-muted" />
+        </template>
+        <template #option-empty="{ query }">
+          {{ query.trim().length < 3 ? "Tape au moins 3 caractères" : "Aucun joueur trouvé" }}
+        </template>
+      </USelectMenu>
     </div>
 
     <div class="flex flex-wrap gap-2">

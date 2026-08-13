@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { boolean, index, integer, pgTable, smallint, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { heroes } from "./heroes";
 import { matches } from "./matches";
@@ -38,6 +39,14 @@ export const matchPlayers = pgTable(
     // matches, friends, face-a-face) filters on userId; Postgres doesn't
     // auto-index FK columns, so without this every one of them is a seq scan.
     userIdIdx: index("match_players_user_id_idx").on(table.userId),
+    // Trigram GIN index so the "joueur croisé" typeahead (`ILIKE '%term%'`
+    // on a partial battletag) can use an index scan instead of a seq scan --
+    // a plain btree index can't serve a leading-wildcard match. Requires the
+    // pg_trgm extension, enabled in this same migration.
+    battletagTrgmIdx: index("match_players_battletag_trgm_idx").using(
+      "gin",
+      sql`${table.battletag} gin_trgm_ops`,
+    ),
   }),
 );
 
