@@ -43,6 +43,9 @@ const columns = [
 ];
 
 const topHeroes = computed(() => data.value?.heroBreakdown ?? []);
+const opponentTopHeroes = computed(() => data.value?.opponentHeroBreakdown ?? []);
+const mapBreakdown = computed(() => data.value?.mapBreakdown ?? []);
+const hasVsGames = computed(() => (data.value?.player.gamesAsOpponent ?? 0) > 0);
 
 const sendingRequest = ref(false);
 const requestError = ref("");
@@ -135,10 +138,26 @@ function goToMatch(row: Record<string, unknown>) {
       />
     </div>
 
-    <div v-if="topHeroes.length > 0">
-      <h2 class="mb-3 font-heading text-lg font-medium">Top héros face à ce joueur</h2>
-      <UiTopHeroesTop3 :heroes="topHeroes" />
+    <div v-if="!hasVsGames" class="rounded-lg border border-border bg-surface p-4 text-sm text-muted">
+      Aucune partie en tant qu'adversaire avec ce joueur — impossible de calculer une confrontation directe.
     </div>
+
+    <template v-else>
+      <div v-if="topHeroes.length > 0">
+        <h2 class="mb-3 font-heading text-lg font-medium">Tes héros face à ce joueur</h2>
+        <UiTopHeroesTop3 :heroes="topHeroes" />
+      </div>
+
+      <div v-if="opponentTopHeroes.length > 0">
+        <h2 class="mb-3 font-heading text-lg font-medium">Ses héros face à toi</h2>
+        <UiTopHeroesTop3 :heroes="opponentTopHeroes" />
+      </div>
+
+      <div v-if="mapBreakdown.length > 0">
+        <h2 class="mb-3 font-heading text-lg font-medium">Cartes jouées contre lui</h2>
+        <UiMapWinrateList :maps="mapBreakdown" />
+      </div>
+    </template>
 
     <div>
       <h2 class="mb-3 font-heading text-lg font-medium">Historique des parties partagées</h2>

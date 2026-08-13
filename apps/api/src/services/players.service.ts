@@ -1,4 +1,4 @@
-import { db, heroes, matches, matchPlayers, users } from "@hots-stats/db";
+import { db, heroes, maps, matches, matchPlayers, users } from "@hots-stats/db";
 import type { GameMode, PlayerEncounterStats, PlayerFriendshipStatus } from "@hots-stats/shared-types";
 import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -10,6 +10,15 @@ export interface PlayerHeroBreakdown {
   gamesPlayed: number;
   wins: number;
   losses: number;
+}
+
+export interface PlayerMapBreakdown {
+  mapId: string;
+  mapName: string;
+  gamesPlayed: number;
+  wins: number;
+  losses: number;
+  winrate: number;
 }
 
 export type PlayerSortBy =
@@ -172,7 +181,11 @@ export async function getPlayerEncounter(
   };
 }
 
-/** Breakdown, per hero, of the connected user's games shared with `battletag`. */
+/**
+ * Breakdown, per hero, of the connected user's games *against* `battletag` --
+ * team must differ, otherwise shared-ally games would inflate the count and
+ * misrepresent a matchup that never happened.
+ */
 export async function getPlayerHeroBreakdown(
   userId: string,
   battletag: string,
@@ -188,10 +201,92 @@ export async function getPlayerHeroBreakdown(
     })
     .from(matchPlayers)
     .innerJoin(heroes, eq(heroes.id, matchPlayers.heroId))
-    .innerJoin(other, and(eq(other.matchId, matchPlayers.matchId), ne(other.id, matchPlayers.id)))
+    .innerJoin(
+      other,
+      and(
+        eq(other.matchId, matchPlayers.matchId),
+        ne(other.id, matchPlayers.id),
+        ne(matchPlayers.team, other.team),
+      ),
+    )
     .where(and(eq(matchPlayers.userId, userId), eq(other.battletag, battletag)))
     .groupBy(matchPlayers.heroId, heroes.name)
     .orderBy(desc(sql`count(*)`));
 
   return rows.map((row) => ({ ...row, losses: row.gamesPlayed - row.wins }));
+}
+
+/**
+ * Breakdown, per hero, of what `battletag` themselves played *against* the
+ * connected user -- their pool, their wins/losses, VS games only. `wins`
+ * here means `battletag` won (i.e. `other.winner`), not the connected user.
+ */
+export async function getOpponentHeroBreakdown(
+  userId: string,
+  battletag: string,
+): Promise<PlayerHeroBreakdown[]> {
+  const other = alias(matchPlayers, "other");
+
+  const rows = await db
+    .select({
+      heroId: other.heroId,
+      heroName: heroes.name,
+      gamesPlayed: sql<number>`count(*)::int`,
+      wins: sql<number>`count(*) filter (where ${other.winner})::int`,
+    })
+    .from(matchPlayers)
+    .innerJoin(
+      other,
+      and(
+        eq(other.matchId, matchPlayers.matchId),
+        ne(other.id, matchPlayers.id),
+        ne(matchPlayers.team, other.team),
+      ),
+    )
+    .innerJoin(heroes, eq(heroes.id, other.heroId))
+    .where(and(eq(matchPlayers.userId, userId), eq(other.battletag, battletag)))
+    .groupBy(other.heroId, heroes.name)
+    .orderBy(desc(sql`count(*)`));
+
+  return rows.map((row) => ({ ...row, losses: row.gamesPlayed - row.wins }));
+}
+
+/**
+ * Win rate per map for the connected user's games *against* `battletag`
+ * (VS only), worst first -- surfaces which maps are worth avoiding/forcing
+ * against this specific opponent.
+ */
+export async function getPlayerMapBreakdown(
+  userId: string,
+  battletag: string,
+): Promise<PlayerMapBreakdown[]> {
+  const other = alias(matchPlayers, "other");
+
+  const rows = await db
+    .select({
+      mapId: matches.mapId,
+      mapName: maps.name,
+      gamesPlayed: sql<number>`count(*)::int`,
+      wins: sql<number>`count(*) filter (where ${matchPlayers.winner})::int`,
+    })
+    .from(matchPlayers)
+    .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
+    .innerJoin(maps, eq(maps.id, matches.mapId))
+    .innerJoin(
+      other,
+      and(
+        eq(other.matchId, matchPlayers.matchId),
+        ne(other.id, matchPlayers.id),
+        ne(matchPlayers.team, other.team),
+      ),
+    )
+    .where(and(eq(matchPlayers.userId, userId), eq(other.battletag, battletag)))
+    .groupBy(matches.mapId, maps.name)
+    .orderBy(desc(sql`count(*)`));
+
+  return rows.map((row) => ({
+    ...row,
+    losses: row.gamesPlayed - row.wins,
+    winrate: row.gamesPlayed > 0 ? row.wins / row.gamesPlayed : 0,
+  }));
 }
