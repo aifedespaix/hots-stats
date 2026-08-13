@@ -1,5 +1,5 @@
 import { type User, db, heroes, matchPlayers, matches, maps, talentPicks } from "@hots-stats/db";
-import { and, asc, desc, eq, exists, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, exists, gte, ilike, inArray, lte, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -35,6 +35,11 @@ const listQuerySchema = filtersQuerySchema.extend({
   pageSize: z.coerce.number().int().positive().max(50).default(20),
 });
 
+/** Escapes ILIKE wildcards so a battletag search term is matched literally. */
+function likeTerm(value: string): string {
+  return `%${value.trim().replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
+}
+
 /**
  * Builds the same set of match filter conditions used by `GET /matches`,
  * shared with `GET /matches/trend` (win-rate evolution chart) so both
@@ -57,7 +62,9 @@ function buildMatchConditions(userId: string, filters: z.infer<typeof filtersQue
         db
           .select({ one: sql`1` })
           .from(opponent)
-          .where(and(eq(opponent.matchId, matches.id), eq(opponent.battletag, opponentBattletag))),
+          .where(
+            and(eq(opponent.matchId, matches.id), ilike(opponent.battletag, likeTerm(opponentBattletag))),
+          ),
       ),
     );
   }
@@ -122,11 +129,12 @@ export const matchesRoute = new Hono<Env>()
 
     return c.json({ matches: rows, page, pageSize, total: countRows[0]?.count ?? 0 });
   })
-  // Distinct heroes/maps the connected user has actually played, to populate filter dropdowns.
+  // Distinct heroes/maps/crossed-players the connected user has actually played with, to populate filter dropdowns.
   .get("/filters", async (c) => {
     const user = c.get("user");
+    const other = alias(matchPlayers, "other");
 
-    const [heroRows, mapRows] = await Promise.all([
+    const [heroRows, mapRows, playerRows] = await Promise.all([
       db
         .selectDistinct({ id: heroes.id, name: heroes.name })
         .from(matchPlayers)
@@ -140,9 +148,15 @@ export const matchesRoute = new Hono<Env>()
         .innerJoin(maps, eq(maps.id, matches.mapId))
         .where(eq(matchPlayers.userId, user.id))
         .orderBy(asc(maps.name)),
+      db
+        .selectDistinct({ battletag: other.battletag })
+        .from(matchPlayers)
+        .innerJoin(other, and(eq(other.matchId, matchPlayers.matchId), ne(other.battletag, matchPlayers.battletag)))
+        .where(eq(matchPlayers.userId, user.id))
+        .orderBy(asc(other.battletag)),
     ]);
 
-    return c.json({ heroes: heroRows, maps: mapRows });
+    return c.json({ heroes: heroRows, maps: mapRows, players: playerRows });
   })
   // Every match matching the given filters (no pagination), ordered
   // chronologically, for the "win rate evolution" chart on the matches

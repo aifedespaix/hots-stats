@@ -42,6 +42,8 @@ const columns = [
   { key: "result", label: "Résultat" },
 ];
 
+const isNotFoundError = computed(() => error.value?.statusCode === 404);
+
 const topHeroes = computed(() => data.value?.heroBreakdown ?? []);
 const opponentTopHeroes = computed(() => data.value?.opponentHeroBreakdown ?? []);
 const mapBreakdown = computed(() => data.value?.mapBreakdown ?? []);
@@ -100,8 +102,13 @@ function goToMatch(row: Record<string, unknown>) {
 </script>
 
 <template>
-  <div v-if="error" class="rounded-lg border border-border bg-surface p-8 text-center text-muted">
+  <div v-if="error && isNotFoundError" class="rounded-lg border border-border bg-surface p-8 text-center text-muted">
     Aucune partie en commun avec ce joueur.
+  </div>
+
+  <div v-else-if="error" class="space-y-3 rounded-lg border border-border bg-surface p-8 text-center text-muted">
+    <p>Erreur lors du chargement des données de ce joueur. Réessaie dans un instant.</p>
+    <UButton size="xs" variant="soft" icon="i-heroicons-arrow-path" @click="refresh()">Réessayer</UButton>
   </div>
 
   <div v-else-if="data" class="space-y-8">
