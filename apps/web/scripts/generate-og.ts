@@ -9,6 +9,7 @@ const routesMap: Record<string, string> = {
   "login.vue": "Connexion",
   "heroes/index.vue": "Liste des Héros",
   "heroes/[slug].vue": "Détails du Héros",
+  "analysis/index.vue": "Diagnostic",
   "matches/index.vue": "Historique des Matchs",
   "matches/[id].vue": "Détails du Match",
   "players/index.vue": "Classement des Joueurs",
