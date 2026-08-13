@@ -255,6 +255,16 @@ class _UpdateProgressWindow:
         self._bar.pack(fill="x")
         self._bar_driver = _ProgressBarDriver(self._bar)
 
+        # Only shown when the error carries a `manual_fallback_path` (see
+        # `updater.stage_manual_fallback`) -- a downloaded build the
+        # automatic install couldn't apply, staged next to the installed
+        # .exe for the player to finish by hand (see `_format_update_status`
+        # via `status.message` for the actual instructions).
+        self._fallback_path: Path | None = None
+        self._open_fallback_button = ttk.Button(
+            outer, text="📁 Ouvrir le dossier", style="Ghost.TButton", command=self._open_fallback_folder
+        )
+
         self._close_button = ttk.Button(outer, text="Fermer", style="Ghost.TButton", command=root.destroy)
         # Only shown on error -- on any other phase the process is either
         # still working or about to exit on its own (see `_poll`).
@@ -267,6 +277,10 @@ class _UpdateProgressWindow:
 
         self._poll()
 
+    def _open_fallback_folder(self) -> None:
+        if self._fallback_path is not None:
+            open_path(self._fallback_path.parent)
+
     def _poll(self) -> None:
         status = self._update_status.snapshot()
         self._status_label.configure(text=_format_update_status(status))
@@ -275,25 +289,37 @@ class _UpdateProgressWindow:
         if status.phase is UpdatePhase.ERROR:
             if not self._close_button_visible:
                 self._close_button_visible = True
-                self._close_button.pack(anchor="e", pady=(12, 0))
+                if status.manual_fallback_path is not None:
+                    self._fallback_path = status.manual_fallback_path
+                    self._open_fallback_button.pack(anchor="e", pady=(12, 4))
+                    self._close_button.pack(anchor="e")
+                else:
+                    self._close_button.pack(anchor="e", pady=(12, 0))
             return  # stop polling -- wait for the user to dismiss it
 
         self._poll_job = self._root.after(300, self._poll)
 
 
-_style_built = False
-
-
 def _apply_dark_style() -> None:
-    """Builds the shared dark ttk theme once per process (both the main
-    settings window and the standalone update-progress popup use it, and
-    ttk styles are process-global -- rebuilding is harmless but wasteful)."""
-    global _style_built
+    """Builds the shared dark ttk theme -- called every time a window is
+    created (the settings window and the standalone update-progress popup
+    both use it, and each is its own `tk.Tk()`).
+
+    This used to skip rebuilding after the first call, on the assumption
+    that ttk styles are process-global. They aren't: each `tk.Tk()` spins up
+    its own independent Tcl interpreter with its own, freshly-defaulted ttk
+    style database, so a style configured on the first window's interpreter
+    has no effect on a later window's -- only `style.theme_use("clam")`
+    (selecting a *built-in* theme, resolved by name against every
+    interpreter) carried over. In practice this meant only the very first
+    window opened in a run ever got the dark palette; every window after
+    that (closing and reopening Settings from the tray, for instance) fell
+    back to plain ttk "clam" defaults -- a much lighter look than the rest
+    of the UI -- which is exactly the "reopens light instead of dark" bug
+    this now fixes. Rebuilding is cheap (a couple dozen `style.configure`
+    calls), so there's no real cost to doing it on every window open."""
     style = ttk.Style()
     style.theme_use("clam")  # the only built-in theme that reliably honors custom colors everywhere
-    if _style_built:
-        return
-    _style_built = True
     style.configure("TFrame", background=_BG)
     style.configure("Panel.TFrame", background=_PANEL)
     style.configure("TLabel", background=_BG, foreground=_TEXT, font=("Segoe UI", 10))
@@ -1048,6 +1074,17 @@ class _SettingsWindow:
         self._view_log_button.pack(side="left", padx=(10, 0) if self._update_status is not None else (0, 0))
 
         if self._update_status is not None:
+            # Built but left unpacked -- `_refresh_update_status` packs it in
+            # only while the current status carries a `manual_fallback_path`
+            # (a downloaded build the automatic install couldn't apply,
+            # staged next to the installed .exe -- see
+            # `updater.stage_manual_fallback`) and unpacks it again once
+            # that's no longer true, e.g. after a subsequent update succeeds.
+            self._fallback_path: Path | None = None
+            self._open_fallback_button = ttk.Button(
+                button_row, text="📁 Ouvrir le dossier", style="Ghost.TButton", command=self._open_fallback_folder
+            )
+
             self._update_status_label = ttk.Label(
                 inner, text="", style="PanelMuted.TLabel", wraplength=420, justify="left"
             )
@@ -1079,6 +1116,10 @@ class _SettingsWindow:
     def _open_update_log(self) -> None:
         open_path(updater.update_log_file_path())
 
+    def _open_fallback_folder(self) -> None:
+        if self._fallback_path is not None:
+            open_path(self._fallback_path.parent)
+
     def _refresh_update_status(self) -> None:
         assert self._update_status is not None
         status = self._update_status.snapshot()
@@ -1087,6 +1128,13 @@ class _SettingsWindow:
 
         busy = status.phase in (UpdatePhase.CHECKING, UpdatePhase.DOWNLOADING, UpdatePhase.INSTALLING)
         self._check_update_button.configure(state="disabled" if busy else "normal")
+
+        if status.manual_fallback_path is not None:
+            self._fallback_path = status.manual_fallback_path
+            if not self._open_fallback_button.winfo_ismapped():
+                self._open_fallback_button.pack(side="left", padx=(10, 0))
+        elif self._open_fallback_button.winfo_ismapped():
+            self._open_fallback_button.pack_forget()
 
         self._update_status_job = self._root.after(_LIVE_STATS_POLL_MS, self._refresh_update_status)
 
@@ -1377,6 +1425,16 @@ class _SettingsWindow:
         if self._draft_capture_status is not None:
             self._draft_capture_progress_bar.grid(row=6, column=0, columnspan=3, sticky="ew")
 
+        # Same idea for the "Ouvrir le dossier" button: normally unpacked
+        # until `_refresh_update_status` sees a `manual_fallback_path` (this
+        # runs before that ever gets a chance to, see `__init__`'s call
+        # order), briefly packed here so `button_row`'s worst-case width --
+        # one more button wider than the common case -- is already accounted
+        # for instead of growing the window the first time an update
+        # actually fails this way.
+        if hasattr(self, "_open_fallback_button"):
+            self._open_fallback_button.pack(side="left", padx=(10, 0))
+
         self._root.update_idletasks()
         width, height = self._root.winfo_reqwidth(), self._root.winfo_reqheight()
 
@@ -1384,6 +1442,8 @@ class _SettingsWindow:
             label.configure(text=original)
         if self._draft_capture_status is not None:
             self._draft_capture_progress_bar.grid_remove()
+        if hasattr(self, "_open_fallback_button"):
+            self._open_fallback_button.pack_forget()
 
         return width, height
 

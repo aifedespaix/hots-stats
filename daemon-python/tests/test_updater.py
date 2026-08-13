@@ -19,9 +19,12 @@ from src.updater import (
     downloads_dir,
     find_update,
     installed_exe_path,
+    manual_fallback_exe_path,
+    manual_fallback_message,
     parse_version,
     perform_update,
     read_last_update_log_lines,
+    stage_manual_fallback,
     trigger_manual_update,
     update_log_file_path,
     watch_for_updates,
@@ -201,6 +204,53 @@ def test_installed_exe_path_falls_back_to_sys_executable(monkeypatch):
     assert installed_exe_path() == Path("/tmp/fake-python").resolve()
 
 
+# -- manual fallback (stage_manual_fallback / manual_fallback_exe_path) --
+
+
+def test_manual_fallback_exe_path_prefixes_the_installed_name(monkeypatch, tmp_path):
+    monkeypatch.setattr("src.updater.installed_exe_path", lambda: tmp_path / "hots-analytics-daemon.exe")
+
+    assert manual_fallback_exe_path() == tmp_path / "new-hots-analytics-daemon.exe"
+
+
+def test_stage_manual_fallback_copies_next_to_the_installed_exe(monkeypatch, tmp_path):
+    installed = tmp_path / "hots-analytics-daemon.exe"
+    installed.write_bytes(b"old build")
+    downloaded = tmp_path / "downloaded.exe"
+    downloaded.write_bytes(b"new build")
+    monkeypatch.setattr("src.updater.installed_exe_path", lambda: installed)
+
+    result = stage_manual_fallback(downloaded)
+
+    assert result == tmp_path / "new-hots-analytics-daemon.exe"
+    assert result.read_bytes() == b"new build"
+    # The installed .exe itself must be left completely untouched -- the
+    # whole point is offering a manual alternative, not silently mutating
+    # the build that's still the one actually running.
+    assert installed.read_bytes() == b"old build"
+
+
+def test_stage_manual_fallback_returns_none_without_raising_on_failure(monkeypatch, tmp_path):
+    monkeypatch.setattr("src.updater.installed_exe_path", lambda: tmp_path / "hots-analytics-daemon.exe")
+
+    assert stage_manual_fallback(tmp_path / "does-not-exist.exe") is None
+
+
+def test_manual_fallback_message_names_the_real_files_and_version(monkeypatch, tmp_path):
+    monkeypatch.setattr("src.updater.installed_exe_path", lambda: tmp_path / "hots-analytics-daemon.exe")
+    fallback_path = tmp_path / "new-hots-analytics-daemon.exe"
+
+    message = manual_fallback_message("2.0.0", fallback_path)
+
+    assert "v2.0.0" in message
+    assert "hots-analytics-daemon.exe" in message
+    assert "new-hots-analytics-daemon.exe" in message
+    # The concrete 3-step recovery: close the app, delete the old build,
+    # launch the new one -- not just "something went wrong".
+    assert "fermez" in message.lower()
+    assert "supprimez" in message.lower()
+
+
 # -- apply_update_and_exit -----------------------------------------------
 
 
@@ -324,6 +374,29 @@ def test_try_begin_fails_while_installing():
     assert status.try_begin("2.0.0") is False
 
 
+def test_set_can_set_manual_fallback_path_explicitly():
+    status = UpdateStatusTracker()
+    path = Path("/tmp/new-hots-analytics-daemon.exe")
+
+    status.set(phase=UpdatePhase.ERROR, message="failed", manual_fallback_path=path)
+
+    assert status.snapshot().manual_fallback_path == path
+
+
+def test_set_resets_manual_fallback_path_by_default():
+    """`manual_fallback_path` must never silently survive (via `replace`'s
+    "keep the current value" behavior) into a status update that never
+    meant to carry it -- otherwise a stale path from one failed update could
+    still show an "Ouvrir le dossier" button pointing at it during a later,
+    unrelated check or download."""
+    status = UpdateStatusTracker()
+    status.set(phase=UpdatePhase.ERROR, message="failed", manual_fallback_path=Path("/tmp/new-app.exe"))
+
+    status.set(phase=UpdatePhase.CHECKING, message=None)
+
+    assert status.snapshot().manual_fallback_path is None
+
+
 # -- perform_update ---------------------------------------------------------
 
 
@@ -345,23 +418,58 @@ def test_perform_update_downloads_and_applies(monkeypatch):
     assert status.snapshot().phase is UpdatePhase.INSTALLING
 
 
-def test_perform_update_reports_error_when_relaunch_handoff_fails(monkeypatch):
+def test_perform_update_reports_error_when_relaunch_handoff_fails(monkeypatch, tmp_path):
     """`apply_update_and_exit` returning False means it aborted instead of
     exiting (see its docstring: e.g. antivirus killed the relaunch script
     within its first moment of life) -- the status must flip to ERROR
     instead of staying stuck on INSTALLING forever, which is what the
     settings window's Update tab would otherwise show indefinitely with no
-    indication anything went wrong."""
+    indication anything went wrong. Since this process is still alive in
+    this failure mode (nothing has exited), it also stages the
+    already-downloaded build next to the installed .exe -- see
+    `stage_manual_fallback` -- so the status carries a `manual_fallback_path`
+    the GUI can point an "Ouvrir le dossier" button at."""
     update = AvailableUpdate(version="2.0.0", download_url="https://example.com/a.exe", asset_name="a.exe")
     status = UpdateStatusTracker()
 
-    monkeypatch.setattr("src.updater.download_update", lambda *_a, **_k: Path("/tmp/fake.exe"))
+    installed = tmp_path / "hots-analytics-daemon.exe"
+    installed.write_bytes(b"old")
+    downloaded = tmp_path / "downloaded.exe"
+    downloaded.write_bytes(b"new")
+    monkeypatch.setattr("src.updater.installed_exe_path", lambda: installed)
+    monkeypatch.setattr("src.updater.download_update", lambda *_a, **_k: downloaded)
     monkeypatch.setattr("src.updater.apply_update_and_exit", lambda p, version=None: False)
 
     assert perform_update(update, status) is True
     snapshot = status.snapshot()
     assert snapshot.phase is UpdatePhase.ERROR
     assert snapshot.message
+    assert snapshot.manual_fallback_path == tmp_path / "new-hots-analytics-daemon.exe"
+    assert snapshot.manual_fallback_path.read_bytes() == b"new"
+    assert "hots-analytics-daemon.exe" in snapshot.message
+    assert "new-hots-analytics-daemon.exe" in snapshot.message
+    assert "v2.0.0" in snapshot.message
+
+
+def test_perform_update_falls_back_to_generic_message_when_staging_also_fails(monkeypatch, tmp_path):
+    """If the handoff couldn't even start *and* staging the manual fallback
+    also fails (e.g. the install folder itself is now unwritable), the
+    status must still carry a useful message -- the original "retry next
+    cycle" text -- rather than one referencing a file that was never
+    actually written to disk."""
+    update = AvailableUpdate(version="2.0.0", download_url="https://example.com/a.exe", asset_name="a.exe")
+    status = UpdateStatusTracker()
+
+    monkeypatch.setattr("src.updater.installed_exe_path", lambda: tmp_path / "missing-dir" / "current.exe")
+    monkeypatch.setattr("src.updater.download_update", lambda *_a, **_k: tmp_path / "does-not-exist.exe")
+    monkeypatch.setattr("src.updater.apply_update_and_exit", lambda p, version=None: False)
+
+    assert perform_update(update, status) is True
+    snapshot = status.snapshot()
+    assert snapshot.phase is UpdatePhase.ERROR
+    assert snapshot.manual_fallback_path is None
+    assert "antivirus" in snapshot.message
+    assert "nouvel essai au prochain cycle" in snapshot.message
 
 
 def test_perform_update_records_error_on_download_failure(monkeypatch):
@@ -736,6 +844,116 @@ def test_render_relaunch_script_path_arguments_are_single_quoted(tmp_path):
     assert f'"{current_exe}"' not in script
     assert f"'{new_exe}'" in script
     assert f'"{new_exe}"' not in script
+
+
+# -- _render_relaunch_script: manual fallback on copy failure -------------
+
+
+def test_render_relaunch_script_stages_manual_fallback_next_to_current_exe(tmp_path):
+    """The bug this guards against: when `Copy-Item` never succeeds, the
+    already-downloaded, perfectly valid build used to just sit in a temp
+    folder nobody has a reason to look in. The copy-failure branch must now
+    also stage it right next to the .exe that's still running, under a
+    "new-" prefixed name, so a player who goes looking finds it in the one
+    place they'd already know to check."""
+    current_exe = tmp_path / "hots-analytics-daemon.exe"
+    new_exe = tmp_path / "new.exe"
+    script = _render_relaunch_script(
+        pid=1234,
+        new_exe=new_exe,
+        current_exe=current_exe,
+        script_path=tmp_path / "script.ps1",
+        log_path=tmp_path / "update.log",
+        version="2.0.0",
+    )
+
+    fallback_exe = tmp_path / "new-hots-analytics-daemon.exe"
+    assert f"Copy-Item -LiteralPath '{new_exe}' -Destination '{fallback_exe}' -Force" in script
+    # Only in the copy-failed ("could not replace the running executable")
+    # branch -- the successful-copy branch must not also stage a fallback,
+    # there's nothing left to offer a manual alternative to.
+    assert script.index("could not replace the running executable") < script.index(str(fallback_exe))
+
+
+def test_render_relaunch_script_manual_fallback_dialog_guarded_by_test_path(tmp_path):
+    """Without this guard, a machine with a persistent block (antivirus,
+    Smart App Control) would re-pop the manual-install dialog on every
+    single 6-hour retry, forever -- `Test-Path` on the destination before
+    staging is what keeps a player from being nagged about the same
+    already-staged file over and over."""
+    script = _render_relaunch_script(
+        pid=1234,
+        new_exe=tmp_path / "new.exe",
+        current_exe=tmp_path / "current.exe",
+        script_path=tmp_path / "script.ps1",
+        log_path=tmp_path / "update.log",
+        version="2.0.0",
+    )
+
+    assert "$fallbackAlreadyStaged = Test-Path -LiteralPath" in script
+    assert "if (-not $fallbackAlreadyStaged) {" in script
+
+
+def test_render_relaunch_script_shows_a_message_box_offering_to_open_explorer(tmp_path):
+    current_exe = tmp_path / "current.exe"
+    script = _render_relaunch_script(
+        pid=1234,
+        new_exe=tmp_path / "new.exe",
+        current_exe=current_exe,
+        script_path=tmp_path / "script.ps1",
+        log_path=tmp_path / "update.log",
+        version="2.0.0",
+    )
+
+    assert "Add-Type -AssemblyName System.Windows.Forms" in script
+    assert "[System.Windows.Forms.MessageBox]::Show(" in script
+    assert "[System.Windows.Forms.MessageBoxButtons]::YesNo" in script
+    assert f"Start-Process -FilePath 'explorer.exe' -ArgumentList '{current_exe.parent}'" in script
+    # Showing the dialog itself is best-effort -- a machine missing the
+    # WinForms assembly (unlikely, but see this module's general "never let
+    # a diagnostic/notification nicety break the core recovery flow"
+    # philosophy) must not stop the copy/relaunch logic above it.
+    assert 'Log "Could not show the manual-install dialog:' in script
+
+
+def test_render_relaunch_script_manual_fallback_message_names_the_real_files(tmp_path):
+    current_exe = tmp_path / "hots-analytics-daemon.exe"
+    script = _render_relaunch_script(
+        pid=1234,
+        new_exe=tmp_path / "new.exe",
+        current_exe=current_exe,
+        script_path=tmp_path / "script.ps1",
+        log_path=tmp_path / "update.log",
+        version="2.0.0",
+    )
+
+    assert "v2.0.0" in script
+    assert "« hots-analytics-daemon.exe »" in script
+    assert "« new-hots-analytics-daemon.exe »" in script
+    assert "fermez HotS Analytics" in script
+
+
+def test_render_relaunch_script_manual_fallback_message_escapes_apostrophes(tmp_path):
+    """The message is single-quoted PowerShell (see the "path arguments are
+    single-quoted" test above for why single- over double-quoted), and it's
+    natural French prose full of apostrophes ("n'a pas pu", "l'application")
+    -- each one must be doubled or it would prematurely close the string
+    literal and corrupt the script."""
+    script = _render_relaunch_script(
+        pid=1234,
+        new_exe=tmp_path / "new.exe",
+        current_exe=tmp_path / "current.exe",
+        script_path=tmp_path / "script.ps1",
+        log_path=tmp_path / "update.log",
+        version="2.0.0",
+    )
+
+    assert "n''a pas pu s''installer automatiquement" in script
+    assert "l''application précédente a été relancée" in script
+    # A raw, unescaped apostrophe from the message text would break the
+    # literal it lives in -- none of the message's own contractions should
+    # ever appear un-doubled.
+    assert "n'a pas pu s'installer" not in script
 
 
 def test_powershell_diagnostics_reports_missing_when_not_on_path(monkeypatch):

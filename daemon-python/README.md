@@ -331,6 +331,23 @@ means the installed `.exe` was never actually replaced, that's also what
 stops a persistent failure from repeating the exact same "found this
 update, downloaded it, then vanished" cycle on every subsequent launch.
 
+**When even that can't complete automatically** (the copy keeps failing
+every retry, or this process never managed to hand off to the relaunch
+script at all — e.g. `powershell.exe` itself is blocked), the
+already-downloaded build is still put to use: it's copied next to the
+installed `.exe` under a `new-`-prefixed name (`updater.stage_manual_fallback`
+/ `manual_fallback_exe_path`, or the relaunch script's own copy-failure
+branch when this process has already exited) instead of being left in
+`%TEMP%` where nobody has a reason to look. Either side shows a dialog
+naming the exact files involved and the three steps to finish by hand
+(close the app, delete the old `.exe`, launch the new one) — the settings
+window's Update tab and the standalone progress popup both grow an
+**Ouvrir le dossier** button once the current status carries a
+`manual_fallback_path`; the relaunch script (already running with nothing
+left in Python to show a Tk dialog) shows a native message box with the
+same instructions and an equivalent button, guarded by a `Test-Path` check
+so a persistently-blocked machine isn't re-prompted on every 6-hour retry.
+
 Every step of that handoff is logged, with a timestamp, to
 `%APPDATA%\hots-analytics\update.log` (`updater.update_log_file_path`) —
 since the script runs after this process has already exited, that log is
