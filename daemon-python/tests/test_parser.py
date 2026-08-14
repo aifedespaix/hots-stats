@@ -9,7 +9,10 @@ from src.parser import (
     _attribute_scope_by_player_list_index,
     _build_protocol,
     _has_computer_player_attribute,
+    _hero_from_any_talent,
     _hero_from_talent_prefix,
+    _hero_from_unit_spawn_by_toon,
+    _hero_from_unit_type_name,
     _protocol_module,
     _read_archive_file,
     _slugify,
@@ -133,6 +136,14 @@ def _attributes_events(hero_by_tracker_id: dict[int, bytes]) -> dict:
         "scopes": {
             tracker_id: {4002: [{"value": hero_code}]} for tracker_id, hero_code in hero_by_tracker_id.items()
         }
+    }
+
+
+def _unit_born_event(control_player_id: int, unit_type_name: str) -> dict:
+    return {
+        "_event": "NNet.Replay.Tracker.SUnitBornEvent",
+        "m_controlPlayerId": control_player_id,
+        "m_unitTypeName": unit_type_name.encode(),
     }
 
 
@@ -440,18 +451,78 @@ def test_build_payload_rejects_missing_battletag():
 
 def test_build_payload_resolves_aram_game_mode():
     # Regression test: ARAM's ammId (50101) was missing from
-    # GAME_MODE_BY_AMM_ID and silently fell back to "Custom".
+    # GAME_MODE_BY_AMM_ID and silently fell back to "Custom". `_base_tracker_events`'s
+    # placeholder talent ids ("TalentA"/"TalentB"/"TalentC") don't match any real
+    # hero-name prefix, so hero resolution needs the `SUnitBornEvent`s added
+    # here to succeed at all -- ARAM never falls back to `HeroAttributeId`
+    # (see `test_build_payload_aram_never_falls_back_to_hero_attribute`).
+    events = [
+        *_base_tracker_events(),
+        _unit_born_event(1, "HeroLiMing"),
+        _unit_born_event(2, "HeroMalfurion"),
+    ]
+
     payload = build_payload(
         header=_header(610 + 16 * 600),
         details=_details(),
         initdata=_initdata(amm_id=50101),
-        tracker_events=_base_tracker_events(),
+        tracker_events=events,
         attributes_events=_base_attributes_events(),
         battletags=_battletags(),
         replay_hash="a" * 64,
     )
 
     assert payload["gameMode"] == "ARAM"
+    players_by_tag = {p["battletag"]: p for p in payload["players"]}
+    assert players_by_tag["Foo#1111"]["heroId"] == "li-ming"
+    assert players_by_tag["Bar#2222"]["heroId"] == "malfurion"
+
+
+def test_build_payload_aram_never_falls_back_to_hero_attribute():
+    """Regression test for the "Arthas" bug: ARAM's shuffle/reroll pick can
+    leave `HeroAttributeId` pointing at a player's discarded first
+    assignment, so ARAM must never trust it, even as a last resort -- a
+    replay with neither a matching talent nor a `SUnitBornEvent` must fail
+    loudly instead of silently recording whatever `HeroAttributeId` says
+    (here, "Arth"/Arthas, though nobody in the match played it)."""
+    events = [e for e in _base_tracker_events() if e.get("_event") != "NNet.Replay.Tracker.SUnitBornEvent"]
+
+    with pytest.raises(ReplayParseError, match="Could not determine hero"):
+        build_payload(
+            header=_header(610 + 16 * 600),
+            details=_details(),
+            initdata=_initdata(amm_id=50101),
+            tracker_events=events,
+            attributes_events=_attributes_events({1: b"Arth", 2: b"Arth"}),
+            battletags=_battletags(),
+            replay_hash="a" * 64,
+        )
+
+
+def test_build_payload_aram_resolves_hero_from_unit_spawn_over_stale_attribute():
+    """The positive counterpart of the test above: with a `SUnitBornEvent`
+    available, ARAM resolves the *actually played* hero even when
+    `HeroAttributeId` disagrees for every player (simulating the post-reroll
+    staleness that causes the real "Arthas" bug)."""
+    events = [
+        *(e for e in _base_tracker_events() if e.get("_event") != "NNet.Replay.Tracker.SUnitBornEvent"),
+        _unit_born_event(1, "HeroLiMing"),
+        _unit_born_event(2, "HeroMalfurion"),
+    ]
+
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(amm_id=50101),
+        tracker_events=events,
+        attributes_events=_attributes_events({1: b"Arth", 2: b"Arth"}),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+    )
+
+    players_by_tag = {p["battletag"]: p for p in payload["players"]}
+    assert players_by_tag["Foo#1111"]["heroId"] == "li-ming"
+    assert players_by_tag["Bar#2222"]["heroId"] == "malfurion"
 
 
 def test_build_payload_resolves_hero_by_player_list_position_not_tracker_id():
@@ -561,6 +632,35 @@ def test_build_payload_falls_back_to_hero_attribute_without_a_matching_talent_pr
     assert players_by_tag["Bar#2222"]["heroId"] == "malfurion"
 
 
+def test_build_payload_resolves_hero_from_a_later_talent_tier():
+    """Regression test for the "fragile" single-tier talent matching this
+    replaces: a player's *first* talent tier not matching any known hero
+    prefix (e.g. a decode quirk, or a hero-name-normalization gap) must not
+    sink hero resolution when a *later* tier's pick still matches fine."""
+    events = [
+        _player_init_event(1, "1-Hero-1-1001"),
+        _player_init_event(2, "1-Hero-1-1002"),
+        _gates_open_event(610),
+        _score_event(REQUIRED_STATS),
+        _end_of_game_event(1, b"Win", b"CursedHollow", {1: "NotAKnownHeroPrefix", 2: "DiabloSoulShield"}),
+        _end_of_game_event(2, b"Loss", b"CursedHollow", {1: "ThrallMaelstromWeapon"}),
+    ]
+
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=events,
+        attributes_events=_attributes_events({1: b"Wiza", 2: b"Malf"}),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+    )
+
+    players_by_tag = {p["battletag"]: p for p in payload["players"]}
+    assert players_by_tag["Foo#1111"]["heroId"] == "diablo"
+    assert players_by_tag["Bar#2222"]["heroId"] == "thrall"
+
+
 def test_hero_from_talent_prefix_matches_known_heroes():
     assert _hero_from_talent_prefix("DiabloSoulShield") == "Diablo"
     assert _hero_from_talent_prefix("KaelthasManaAddict") == "Kael'thas"
@@ -568,8 +668,65 @@ def test_hero_from_talent_prefix_matches_known_heroes():
     assert _hero_from_talent_prefix("LiLiSecondWind") == "Li Li"
 
 
+def test_hero_from_talent_prefix_matches_case_insensitively():
+    # D.Va's unit type name is "HeroDva" (lowercase "v"/"a") while
+    # `HERO_DISPLAY_NAMES`' "D.Va" normalizes to "DVa" -- an exact-case
+    # match would miss this.
+    assert _hero_from_talent_prefix("DvaBoosters") == "D.Va"
+
+
+def test_hero_from_talent_prefix_matches_the_butcher_without_its_article():
+    # Blizzard's internal name drops "The" entirely (confirmed via
+    # `HeroButcher`'s `SUnitBornEvent` unit type name).
+    assert _hero_from_talent_prefix("ButcherFreshMeat") == "The Butcher"
+
+
 def test_hero_from_talent_prefix_returns_none_for_unrecognized_talent():
     assert _hero_from_talent_prefix("SomeBrandNewHeroAbility") is None
+
+
+def test_hero_from_any_talent_tries_every_tier_in_order():
+    assert _hero_from_any_talent(["NotAKnownHeroPrefix", "DiabloSoulShield"]) == "Diablo"
+    assert _hero_from_any_talent(["NotAKnownHeroPrefix"]) is None
+    assert _hero_from_any_talent([]) is None
+
+
+def test_hero_from_unit_type_name_matches_directly():
+    assert _hero_from_unit_type_name("HeroLiMing") == "Li-Ming"
+    assert _hero_from_unit_type_name("HeroMalfurion") == "Malfurion"
+
+
+def test_hero_from_unit_type_name_uses_overrides_for_pre_rename_internal_names():
+    # Several early-roster heroes kept their original class name as their
+    # internal unit type (see `constants.UNIT_TYPE_HERO_OVERRIDES`).
+    assert _hero_from_unit_type_name("HeroBarbarian") == "Sonya"
+    assert _hero_from_unit_type_name("HeroWizard") == "Li-Ming"
+    assert _hero_from_unit_type_name("HeroL90ETC") == "E.T.C."
+    assert _hero_from_unit_type_name("HeroBaleog") == "The Lost Vikings"
+    assert _hero_from_unit_type_name("HeroErik") == "The Lost Vikings"
+    assert _hero_from_unit_type_name("HeroOlaf") == "The Lost Vikings"
+
+
+def test_hero_from_unit_type_name_requires_the_hero_prefix():
+    assert _hero_from_unit_type_name("LiMing") is None
+    assert _hero_from_unit_type_name("SomeOtherUnit") is None
+
+
+def test_hero_from_unit_spawn_by_toon_keys_by_tracker_player_id():
+    tracker_id_to_toon = {1: "1-Hero-1-1001", 2: "1-Hero-1-1002"}
+    events = [
+        _unit_born_event(1, "HeroLiMing"),
+        _unit_born_event(2, "HeroMalfurion"),
+        # A respawn after death fires another SUnitBornEvent with the same
+        # unit type name -- must not override the first (harmless either
+        # way here, but proves the "first occurrence wins" dedup works).
+        _unit_born_event(1, "HeroLiMing"),
+    ]
+
+    assert _hero_from_unit_spawn_by_toon(events, tracker_id_to_toon) == {
+        "1-Hero-1-1001": "Li-Ming",
+        "1-Hero-1-1002": "Malfurion",
+    }
 
 
 def test_attribute_scope_by_player_list_index_skips_open_slots():

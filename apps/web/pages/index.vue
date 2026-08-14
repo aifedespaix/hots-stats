@@ -19,7 +19,12 @@ useSeoMeta({
 
 const { data: authData } = await useAuthUser();
 
-const { data: summary } = await useApiFetch<StatsSummary>("/stats/summary");
+// Always personal: this page has no scope toggle, so it must never inherit
+// `heroStatsScope` (the account-wide personal/global preference set on the
+// Heroes/Talents/Friends pages) -- otherwise "Parties jouées" here silently
+// switches to counting every match ever recorded by the app, across every
+// player, the moment the user has toggled "Toute l'app" anywhere else.
+const { data: summary } = await useApiFetch<StatsSummary>("/stats/summary", { query: { scope: "personal" } });
 
 const { data: recentMatches } = await useApiFetch<MatchListResponse>("/matches", {
   query: { page: 1, pageSize: 8 },
