@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { HeroDetailResponse, HeroTalentsResponse } from "~/types/analytics";
+import type { HeroDetailResponse, HeroListResponse, HeroMatchupsResponse, HeroTalentsResponse } from "~/types/analytics";
 
 definePageMeta({ middleware: "auth" });
 
@@ -8,6 +8,22 @@ const heroId = route.params.slug as string;
 
 const { data, error } = await useApiFetch<HeroDetailResponse>(`/heroes/${heroId}`);
 const { data: talentsData } = await useApiFetch<HeroTalentsResponse>(`/heroes/${heroId}/talents`);
+
+const { scope: matchupScope, saving: matchupScopeSaving, setScope: setMatchupScope } = useHeroStatsScope();
+const { data: matchupsData, pending: matchupsPending } = await useApiFetch<HeroMatchupsResponse>(
+  `/heroes/${heroId}/matchups`,
+  { query: computed(() => ({ scope: matchupScope.value })) },
+);
+// Search options need every hero ever recorded app-wide, not just the ones
+// the connected account has played -- independent of `matchupScope`, which
+// only controls how the best/worst matchup numbers are computed.
+const { data: allHeroesData } = await useApiFetch<HeroListResponse>("/heroes", { query: { scope: "global" } });
+const opponentHeroOptions = computed(() =>
+  (allHeroesData.value?.heroes ?? [])
+    .filter((hero) => hero.heroId !== heroId)
+    .map((hero) => ({ id: hero.heroId, name: hero.heroName }))
+    .sort((a, b) => a.name.localeCompare(b.name)),
+);
 
 const heroName = computed(() => data.value?.hero.heroName ?? "Héros");
 const heroSeoDescription = computed(
@@ -71,6 +87,8 @@ const kdaVerdict = computed<Verdict | null>(() => {
     : { tone: "danger", text: "Moins bon KDA que la moyenne des autres joueurs." };
 });
 
+const roleColors = computed(() => heroRoleColorClasses(data.value?.hero.heroRole ?? null));
+
 const verdictClass: Record<Verdict["tone"], string> = {
   success: "text-success",
   danger: "text-danger",
@@ -94,80 +112,150 @@ const talentsByTier = computed(() => {
 </script>
 
 <template>
-  <div v-if="error" class="rounded-lg border border-border bg-surface p-8 text-center text-muted">
-    Héros introuvable - tu n'as pas encore de partie enregistrée avec ce héros.
-  </div>
+  <UiErrorState
+    v-if="error"
+    :status-code="404"
+    message="Héros introuvable - tu n'as pas encore de partie enregistrée avec ce héros."
+    back-to="/heroes"
+    back-label="← Retour aux héros"
+  />
 
   <div v-else-if="data" class="space-y-8">
-    <div>
+    <div class="space-y-3">
       <NuxtLink to="/heroes" class="text-sm text-brand hover:underline">&larr; Retour aux héros</NuxtLink>
-      <h1 class="mt-2 font-heading text-2xl font-semibold">{{ data.hero.heroName }}</h1>
-      <p class="mt-1 text-sm text-muted">{{ formatHeroRole(data.hero.heroRole) }}</p>
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-4">
+          <HeroesHeroAvatar :hero-id="heroId" :name="data.hero.heroName" :role="data.hero.heroRole" :size="80" ring />
+          <div>
+            <p
+              v-if="data.hero.heroRole"
+              class="mb-1.5 inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide"
+              :class="[roleColors.tint, roleColors.text]"
+            >
+              {{ formatHeroRole(data.hero.heroRole) }}
+            </p>
+            <h1 class="font-heading text-2xl font-semibold">{{ data.hero.heroName }}</h1>
+          </div>
+        </div>
+        <UButton :to="`/talents?heroId=${heroId}`" color="gray" variant="soft" icon="i-heroicons-sparkles" size="sm">
+          Analyser les talents de ce héros
+        </UButton>
+      </div>
     </div>
 
-    <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
-      <UiStatTile
-        label="Winrate"
-        :value="formatPercent(data.hero.winrate)"
-        :tone="data.hero.winrate >= 0.5 ? 'success' : 'danger'"
-      >
-        <template v-if="personalStats && globalStats" #tooltip>
-          <p class="flex items-center justify-between gap-3">
-            <span class="text-muted">Toi</span>
-            <span class="font-mono font-medium text-foreground">{{ formatPercent(personalStats.winrate) }}</span>
-          </p>
-          <p class="flex items-center justify-between gap-3">
-            <span class="text-muted">Communauté</span>
-            <span class="font-mono font-medium text-foreground">{{ formatPercent(globalStats.winrate) }}</span>
-          </p>
-          <p v-if="winrateVerdict" class="font-medium" :class="verdictClass[winrateVerdict.tone]">
-            {{ winrateVerdict.text }}
-          </p>
-        </template>
-      </UiStatTile>
-      <UiStatTile label="Parties jouées" :value="String(data.hero.gamesPlayed)" />
-      <UiStatTile
-        label="KDA moyen"
-        :value="`${formatAvg(data.hero.avgKills)} / ${formatAvg(data.hero.avgDeaths)} / ${formatAvg(data.hero.avgAssists)}`"
-      >
-        <template v-if="personalStats && globalStats" #tooltip>
-          <p class="flex items-center justify-between gap-3">
-            <span class="text-muted">Toi</span>
-            <span class="font-mono font-medium text-foreground">{{ formatKda(personalKda) }}</span>
-          </p>
-          <p class="flex items-center justify-between gap-3">
-            <span class="text-muted">Communauté</span>
-            <span class="font-mono font-medium text-foreground">{{ formatKda(globalKda) }}</span>
-          </p>
-          <p v-if="kdaVerdict" class="font-medium" :class="verdictClass[kdaVerdict.tone]">
-            {{ kdaVerdict.text }}
-          </p>
-        </template>
-        <div class="flex flex-wrap items-center gap-1.5">
-          <span
-            class="inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-success"
-            title="Éliminations"
-          >
-            <UIcon name="i-lucide-sword" class="h-3.5 w-3.5" />
-            <span class="font-mono text-sm font-semibold sm:text-base">{{ formatAvg(data.hero.avgKills) }}</span>
-          </span>
-          <span
-            class="inline-flex items-center gap-1 rounded-full bg-danger/15 px-2 py-0.5 text-danger"
-            title="Morts"
-          >
-            <UIcon name="i-lucide-skull" class="h-3.5 w-3.5" />
-            <span class="font-mono text-sm font-semibold sm:text-base">{{ formatAvg(data.hero.avgDeaths) }}</span>
-          </span>
-          <span
-            class="inline-flex items-center gap-1 rounded-full bg-blue-500/15 px-2 py-0.5 text-blue-400"
-            title="Assistances"
-          >
-            <UIcon name="i-lucide-hand-helping" class="h-3.5 w-3.5" />
-            <span class="font-mono text-sm font-semibold sm:text-base">{{ formatAvg(data.hero.avgAssists) }}</span>
-          </span>
+    <StatsFormTrackerWidget
+      :context="{ heroId }"
+      title="Forme récente sur ce héros"
+      :modal-description="`Winrate sur ${data.hero.heroName}, selon la fenêtre choisie ci-dessous.`"
+    />
+
+    <UiGlobalScopeBadge :scope="data.scope" label="Stats calculées sur toute la communauté">
+      <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <UiStatTile
+          label="Winrate"
+          :value="formatPercent(data.hero.winrate)"
+          :tone="winrateTone(data.hero.winrate)"
+        >
+          <template v-if="personalStats && globalStats" #tooltip>
+            <p class="flex items-center justify-between gap-3">
+              <span class="text-muted">Toi</span>
+              <span class="font-mono font-medium text-foreground">{{ formatPercent(personalStats.winrate) }}</span>
+            </p>
+            <p class="flex items-center justify-between gap-3">
+              <span class="text-muted">Communauté</span>
+              <span class="font-mono font-medium text-foreground">{{ formatPercent(globalStats.winrate) }}</span>
+            </p>
+            <p v-if="winrateVerdict" class="font-medium" :class="verdictClass[winrateVerdict.tone]">
+              {{ winrateVerdict.text }}
+            </p>
+          </template>
+        </UiStatTile>
+        <UiStatTile label="Parties jouées" :value="String(data.hero.gamesPlayed)" />
+        <UiStatTile
+          label="KDA moyen"
+          :value="`${formatAvg(data.hero.avgKills)} / ${formatAvg(data.hero.avgDeaths)} / ${formatAvg(data.hero.avgAssists)}`"
+        >
+          <template v-if="personalStats && globalStats" #tooltip>
+            <p class="flex items-center justify-between gap-3">
+              <span class="text-muted">Toi</span>
+              <span class="font-mono font-medium text-foreground">{{ formatKda(personalKda) }}</span>
+            </p>
+            <p class="flex items-center justify-between gap-3">
+              <span class="text-muted">Communauté</span>
+              <span class="font-mono font-medium text-foreground">{{ formatKda(globalKda) }}</span>
+            </p>
+            <p v-if="kdaVerdict" class="font-medium" :class="verdictClass[kdaVerdict.tone]">
+              {{ kdaVerdict.text }}
+            </p>
+          </template>
+          <div class="flex flex-wrap items-center gap-1.5">
+            <span
+              class="inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-success"
+              title="Éliminations"
+            >
+              <UIcon name="i-lucide-sword" class="h-3.5 w-3.5" />
+              <span class="font-mono text-sm font-semibold sm:text-base">{{ formatAvg(data.hero.avgKills) }}</span>
+            </span>
+            <span
+              class="inline-flex items-center gap-1 rounded-full bg-danger/15 px-2 py-0.5 text-danger"
+              title="Morts"
+            >
+              <UIcon name="i-lucide-skull" class="h-3.5 w-3.5" />
+              <span class="font-mono text-sm font-semibold sm:text-base">{{ formatAvg(data.hero.avgDeaths) }}</span>
+            </span>
+            <span
+              class="inline-flex items-center gap-1 rounded-full bg-blue-500/15 px-2 py-0.5 text-blue-400"
+              title="Assistances"
+            >
+              <UIcon name="i-lucide-hand-helping" class="h-3.5 w-3.5" />
+              <span class="font-mono text-sm font-semibold sm:text-base">{{ formatAvg(data.hero.avgAssists) }}</span>
+            </span>
+          </div>
+        </UiStatTile>
+        <UiStatTile label="Participation aux kills" :value="formatPercent(data.hero.avgKillParticipation)" />
+      </div>
+    </UiGlobalScopeBadge>
+
+    <div>
+      <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h2 class="font-heading text-lg font-medium">Matchups</h2>
+      </div>
+      <UiStatsScopeToggle
+        :model-value="matchupScope"
+        :loading="matchupScopeSaving"
+        personal-description="Uniquement tes propres parties"
+        class="mb-4"
+        @update:model-value="setMatchupScope"
+      />
+
+      <div class="mb-4">
+        <HeroesHeroMatchupSearch
+          :hero-id="heroId"
+          :hero-name="data.hero.heroName"
+          :scope="matchupScope"
+          :hero-options="opponentHeroOptions"
+        />
+      </div>
+
+      <div v-if="matchupsPending" class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div v-for="i in 2" :key="i" class="h-40 animate-pulse rounded-lg border border-border bg-surface" />
+      </div>
+      <UiGlobalScopeBadge v-else-if="matchupsData" :scope="matchupScope">
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <HeroesHeroMatchupList
+            title="Meilleurs contres"
+            tone="success"
+            :entries="matchupsData.bestMatchups"
+            empty-message="Pas encore assez de parties pour dégager un contre fiable."
+          />
+          <HeroesHeroMatchupList
+            title="Pires matchups"
+            tone="danger"
+            :entries="matchupsData.worstMatchups"
+            empty-message="Pas encore assez de parties pour dégager une faiblesse fiable."
+          />
         </div>
-      </UiStatTile>
-      <UiStatTile label="Participation aux kills" :value="formatPercent(data.hero.avgKillParticipation)" />
+      </UiGlobalScopeBadge>
     </div>
 
     <div>
@@ -191,7 +279,7 @@ const talentsByTier = computed(() => {
               <span>{{ formatTalentName(talent.talentName, data.hero.heroName) }}</span>
               <span class="flex shrink-0 gap-3 font-mono text-xs text-muted">
                 <span>{{ formatPercent(talent.pickRate) }} pick</span>
-                <span :class="talent.winrate >= 0.5 ? 'text-success' : 'text-danger'">
+                <span :class="TONE_TEXT_CLASS[winrateTone(talent.winrate)]">
                   {{ formatPercent(talent.winrate) }} win
                 </span>
               </span>

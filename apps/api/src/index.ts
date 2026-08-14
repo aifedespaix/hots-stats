@@ -11,10 +11,12 @@ import { healthRoute } from "./routes/health";
 import { heroesRoute } from "./routes/heroes";
 import { ingestRoute } from "./routes/ingest";
 import { internalRoute } from "./routes/internal";
+import { mapsRoute } from "./routes/maps";
 import { matchesRoute } from "./routes/matches";
 import { playersRoute } from "./routes/players";
 import { publicRoute } from "./routes/public";
 import { statsRoute } from "./routes/stats";
+import { talentAnalyzerRoute } from "./routes/talent-analyzer";
 import { tokensRoute } from "./routes/tokens";
 import { weaknessesRoute } from "./routes/weaknesses";
 
@@ -41,6 +43,8 @@ app.route("/friends", friendsRoute);
 app.route("/compare", compareRoute);
 app.route("/draft", draftRoute);
 app.route("/weaknesses", weaknessesRoute);
+app.route("/maps", mapsRoute);
+app.route("/talent-analyzer", talentAnalyzerRoute);
 app.route("/public", publicRoute);
 app.route("/_internal", internalRoute);
 

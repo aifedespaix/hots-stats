@@ -5,6 +5,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { gameModeListSchema } from "../lib/query";
 import { authSession, requireUser } from "../middleware/auth-session";
+import { getHeroMatchup, getHeroMatchups } from "../services/hero-matchups.service";
 import { getHeroSummaries, getHeroSummary, getTalentTierStats } from "../services/talents.service";
 
 type Env = { Variables: { user: User } };
@@ -45,4 +46,21 @@ export const heroesRoute = new Hono<Env>()
     const user = c.get("user");
     const talents = await getTalentTierStats(user.id, c.req.param("heroId"));
     return c.json({ talents });
+  })
+  .get("/:heroId/matchups", async (c) => {
+    const user = c.get("user");
+    const parsed = z.object({ scope: heroStatsScopeSchema.optional() }).safeParse(c.req.query());
+    if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+    const scope = parsed.data.scope ?? user.heroStatsScope;
+    const matchups = await getHeroMatchups(user.id, c.req.param("heroId"), scope);
+    return c.json({ ...matchups, scope });
+  })
+  .get("/:heroId/matchups/:opponentHeroId", async (c) => {
+    const user = c.get("user");
+    const parsed = z.object({ scope: heroStatsScopeSchema.optional() }).safeParse(c.req.query());
+    if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+    const scope = parsed.data.scope ?? user.heroStatsScope;
+    const matchup = await getHeroMatchup(user.id, c.req.param("heroId"), c.req.param("opponentHeroId"), scope);
+    if (!matchup) return c.json({ error: "Hero not found" }, 404);
+    return c.json({ ...matchup, scope });
   });

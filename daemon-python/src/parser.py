@@ -24,7 +24,7 @@ import re
 import sys
 import types
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 import mpyq
 
@@ -204,9 +204,12 @@ def _hero_attribute_code(attributes_events: dict, scope: int) -> str | None:
     than the stable short code `HERO_DISPLAY_NAMES` is keyed by, so using it
     directly makes every non-English replay fail hero resolution.
 
-    As of `PARSER_VERSION` 1.2, only used as a *fallback* -- see
-    `_hero_from_talent_prefix`, the primary source now, and that constant's
-    changelog for why `HeroAttributeId` itself stopped being trustworthy.
+    As of `PARSER_VERSION` 1.2, only used as a last-resort *fallback* -- see
+    `_hero_from_any_talent`/`_hero_from_unit_spawn_by_toon`, tried first, and
+    `PARSER_VERSION`'s changelog for why `HeroAttributeId` itself stopped
+    being trustworthy. As of 1.3, not used *at all* for ARAM, where it's
+    been narrowed down to specifically that mode's shuffle/reroll pick
+    leaving this attribute stale.
     """
     entries = attributes_events.get("scopes", {}).get(scope, {}).get(_HERO_ATTRIBUTE_ID)
     if not entries:
@@ -218,44 +221,74 @@ def _normalize_hero_name(name: str) -> str:
     """Strips everything but letters/digits, e.g. "Kael'thas" -> "Kaelthas",
     "E.T.C." -> "ETC" -- talent ids are the hero's name immediately followed
     by the ability name, both PascalCase with no separator (see
-    `_hero_from_talent_prefix`)."""
+    `_hero_from_name_prefix`)."""
     return re.sub(r"[^A-Za-z0-9]", "", name)
+
+
+# A couple of `HERO_DISPLAY_NAMES` values carry an English article Blizzard's
+# own internal name drops entirely -- The Butcher's talent ids and spawned
+# unit type name (`HeroButcher`, cross-checked against `Heroes.ReplayParser`'s
+# `Unit.cs`, MIT) start with "Butcher", not "TheButcher". Added as an extra
+# candidate below, alongside (not instead of) the primary `HERO_DISPLAY_NAMES`
+# entry, so either convention matches.
+_EXTRA_NAME_CANDIDATES: dict[str, str] = {
+    "Butcher": "The Butcher",
+}
+
+
+def _name_candidates() -> Iterator[tuple[str, str]]:
+    for display in constants.HERO_DISPLAY_NAMES.values():
+        yield _normalize_hero_name(display), display
+    yield from _EXTRA_NAME_CANDIDATES.items()
 
 
 # Longest-normalized-name first, so e.g. a hero whose name is a prefix of
 # another's never wins by accident -- checked empirically against the
-# current roster (no `HERO_DISPLAY_NAMES` value's normalized form is a
-# prefix of another's), not something this sort order can silently break if
-# a future hero *does* introduce one, since the longer/more specific name is
-# always tried first either way.
+# current roster (no candidate's normalized form is a prefix of another's),
+# not something this sort order can silently break if a future hero *does*
+# introduce one, since the longer/more specific name is always tried first
+# either way. Compared case-insensitively (`.lower()`): talent ids and
+# `SUnitBornEvent` unit type names don't always agree on internal
+# capitalization for the same hero -- e.g. D.Va's unit type name is
+# "HeroDva" while `HERO_DISPLAY_NAMES`' "D.Va" normalizes to "DVa" -- so an
+# exact-case comparison would silently fail to match one of the two sources.
 _HERO_NAME_CANDIDATES: tuple[tuple[str, str], ...] = tuple(
     sorted(
-        ((_normalize_hero_name(display), display) for display in constants.HERO_DISPLAY_NAMES.values()),
+        ((normalized.lower(), display) for normalized, display in _name_candidates()),
         key=lambda pair: len(pair[0]),
         reverse=True,
     )
 )
 
 
-def _hero_from_talent_prefix(talent_id: str) -> str | None:
-    """Matches a talent id's leading hero-name (e.g. "DiabloSoulShield" ->
-    "Diablo") against every known hero's normalized display name. `None` if
-    no candidate matches (an unrecognized/very new hero not yet in
-    `HERO_DISPLAY_NAMES`, or a talent id that doesn't fit the convention)."""
+def _hero_from_name_prefix(candidate: str) -> str | None:
+    """Matches a PascalCase, no-separator name -- a talent id's leading
+    hero-name (e.g. "DiabloSoulShield" -> "Diablo"), or a `SUnitBornEvent`
+    unit type name with its "Hero" prefix already stripped -- against every
+    known hero's normalized display name. `None` if no candidate matches (an
+    unrecognized/very new hero not yet in `HERO_DISPLAY_NAMES`, or a name
+    that doesn't fit the convention)."""
+    lowered = candidate.lower()
     for normalized, display in _HERO_NAME_CANDIDATES:
-        if talent_id.startswith(normalized):
+        if lowered.startswith(normalized):
             return display
     return None
 
 
-def _first_talent_id_by_toon(tracker_events: list[dict], tracker_id_to_toon: dict[int, str]) -> dict[str, str]:
-    """One talent id per toon handle (any tier -- the hero-name prefix is the
-    same at every tier), for `_hero_from_talent_prefix`. Reads
-    `EndOfGameTalentChoices` (tracker events, scoped by tracker player id via
-    `tracker_id_to_toon`), the same event `build_payload` reads talents from
-    below -- a separate, independent pass here only because hero resolution
-    now needs one talent id *before* `players` is built."""
-    first_talent: dict[str, str] = {}
+def _hero_from_talent_prefix(talent_id: str) -> str | None:
+    """Matches a talent id's leading hero-name against every known hero's
+    normalized display name -- see `_hero_from_name_prefix`."""
+    return _hero_from_name_prefix(talent_id)
+
+
+def _talent_ids_by_toon(tracker_events: list[dict], tracker_id_to_toon: dict[int, str]) -> dict[str, list[str]]:
+    """Every tier's talent id per toon handle, in pick order, for
+    `_hero_from_any_talent`. Reads `EndOfGameTalentChoices` (tracker events,
+    scoped by tracker player id via `tracker_id_to_toon`), the same event
+    `build_payload` reads talents from below -- a separate, independent pass
+    here only because hero resolution now needs these *before* `players` is
+    built."""
+    talents_by_toon: dict[str, list[str]] = {}
     for event in tracker_events:
         if event.get("_event") != "NNet.Replay.Tracker.SStatGameEvent":
             continue
@@ -263,13 +296,76 @@ def _first_talent_id_by_toon(tracker_events: list[dict], tracker_id_to_toon: dic
             continue
         tracker_id = event["m_intData"][0]["m_value"]
         toon_handle = tracker_id_to_toon.get(tracker_id)
-        if toon_handle is None or toon_handle in first_talent:
+        if toon_handle is None or toon_handle in talents_by_toon:
             continue
-        for entry in event["m_stringData"]:
-            if _s(entry["m_key"]).startswith("Tier"):
-                first_talent[toon_handle] = _s(entry["m_value"])
-                break
-    return first_talent
+        talents_by_toon[toon_handle] = [
+            _s(entry["m_value"]) for entry in event["m_stringData"] if _s(entry["m_key"]).startswith("Tier")
+        ]
+    return talents_by_toon
+
+
+def _hero_from_any_talent(talent_ids: list[str]) -> str | None:
+    """Tries every one of a player's talent ids (see `_talent_ids_by_toon`)
+    against `_hero_from_name_prefix` in pick order, returning the first
+    match. More resilient than trusting a single tier alone (the previous
+    behavior, which only ever looked at the first pick): a fringe
+    hero-name-normalization gap or decode quirk on one tier's talent id no
+    longer sinks hero resolution for that player as long as *any other*
+    tier's pick matches."""
+    for talent_id in talent_ids:
+        hero_name = _hero_from_name_prefix(talent_id)
+        if hero_name is not None:
+            return hero_name
+    return None
+
+
+_HERO_UNIT_TYPE_PREFIX = "Hero"
+_UNIT_BORN_EVENT = "NNet.Replay.Tracker.SUnitBornEvent"
+
+
+def _hero_from_unit_type_name(unit_type_name: str) -> str | None:
+    """Resolves a hero from `SUnitBornEvent.m_unitTypeName` (e.g.
+    "HeroLiMing"): strips the "Hero" prefix every playable hero's spawned
+    unit carries, checks `constants.UNIT_TYPE_HERO_OVERRIDES` first (heroes
+    whose internal unit name has no textual relationship to their current
+    display name at all), then falls through to the same prefix matcher
+    talent ids use."""
+    if not unit_type_name.startswith(_HERO_UNIT_TYPE_PREFIX):
+        return None
+    stripped = unit_type_name[len(_HERO_UNIT_TYPE_PREFIX) :]
+    override = constants.UNIT_TYPE_HERO_OVERRIDES.get(stripped)
+    if override is not None:
+        return override
+    return _hero_from_name_prefix(stripped)
+
+
+def _hero_from_unit_spawn_by_toon(tracker_events: list[dict], tracker_id_to_toon: dict[int, str]) -> dict[str, str]:
+    """Ground-truth hero per toon handle, from the actual in-game hero unit
+    that spawned under each player's control (`SUnitBornEvent`,
+    `m_unitTypeName` + `m_controlPlayerId` -- confirmed against
+    `heroprotocol`'s own struct layout and against `hots-parser`'s
+    `playerIDMap[event.m_controlPlayerId]` lookup, which keys it by the
+    *same* tracker player id space as `PlayerInit`/`EndOfGameTalentChoices`,
+    i.e. `tracker_id_to_toon` applies unchanged, no offset needed).
+
+    Used ahead of `HeroAttributeId` in the hero-resolution order (see
+    `build_payload`): unlike that attribute -- written once at lobby time
+    and never updated -- this reflects whichever hero the player actually
+    loaded into the match with. That makes it immune to ARAM's shuffle-pick
+    reroll leaving `HeroAttributeId` pointing at the player's earlier,
+    discarded random assignment (very commonly surfacing as "Arthas").
+    """
+    hero_by_toon: dict[str, str] = {}
+    for event in tracker_events:
+        if event.get("_event") != _UNIT_BORN_EVENT:
+            continue
+        toon_handle = tracker_id_to_toon.get(event.get("m_controlPlayerId"))
+        if toon_handle is None or toon_handle in hero_by_toon:
+            continue
+        hero_name = _hero_from_unit_type_name(_s(event["m_unitTypeName"]))
+        if hero_name is not None:
+            hero_by_toon[toon_handle] = hero_name
+    return hero_by_toon
 
 
 def _attribute_scope_by_player_list_index(attributes_events: dict, player_count: int) -> dict[int, int]:
@@ -468,10 +564,18 @@ def build_payload(
             reason="ai_player",
         )
 
+    # Resolved up front (not just at payload-assembly time below): hero
+    # resolution itself now needs to know whether this is ARAM, where
+    # `HeroAttributeId` is confirmed unreliable (see the hero-resolution
+    # loop below and `PARSER_VERSION`'s 1.3 changelog entry).
+    game_options = initdata.get("m_syncLobbyState", {}).get("m_gameDescription", {}).get("m_gameOptions", {})
+    amm_id = game_options.get("m_ammId")
+    game_mode = constants.GAME_MODE_BY_AMM_ID.get(amm_id, constants.DEFAULT_GAME_MODE)
+
     # Also used below for talents/stats (`EndOfGameTalentChoices` /
     # `SScoreResultEvent`) and, as of `PARSER_VERSION` 1.2, for hero
-    # resolution itself via `_first_talent_id_by_toon` -- see that function
-    # and `_hero_from_talent_prefix`.
+    # resolution itself via `_talent_ids_by_toon`/`_hero_from_unit_spawn_by_toon`
+    # -- see those functions and `_hero_from_any_talent`.
     tracker_id_to_toon: dict[int, str] = {}
     for event in tracker_events:
         if event.get("_event") != "NNet.Replay.Tracker.SStatGameEvent":
@@ -494,32 +598,41 @@ def build_payload(
         toon_handle = _s(event["m_stringData"][1]["m_value"])
         tracker_id_to_toon[tracker_id] = toon_handle
 
-    first_talent_by_toon = _first_talent_id_by_toon(tracker_events, tracker_id_to_toon)
+    talent_ids_by_toon = _talent_ids_by_toon(tracker_events, tracker_id_to_toon)
+    unit_spawn_hero_by_toon = _hero_from_unit_spawn_by_toon(tracker_events, tracker_id_to_toon)
     scope_by_player_list_index = _attribute_scope_by_player_list_index(attributes_events, len(player_list))
+    is_aram = game_mode == "ARAM"
 
     players: dict[str, dict[str, Any]] = {}
     for index, player in enumerate(player_list, start=1):
         toon_handle = _toon_handle(player["m_toon"])
 
-        # Primary source: the hero-name prefix of this player's own talent
-        # picks (`EndOfGameTalentChoices`, tracker-events based -- the same
-        # mechanism that already resolves talents/stats/win result further
-        # below, and unaffected by the bug described next). Falls back to
-        # `replay.attributes.events`' `HeroAttributeId` (the sole source
-        # before PARSER_VERSION 1.2) only when no talent is available to
-        # match against -- e.g. a very new hero not yet in
-        # `HERO_DISPLAY_NAMES`. `HeroAttributeId` stopped being reliable on
-        # its own at some point: real replays have been observed where every
-        # player's `HeroAttributeId` names a hero nobody in the match
-        # actually played (talents/stats/win result staying correct
-        # regardless, since those never read this attribute) -- see
-        # `daemon-python/scripts/diagnose_hero_mapping.py`.
-        hero_name = None
-        first_talent = first_talent_by_toon.get(toon_handle)
-        if first_talent is not None:
-            hero_name = _hero_from_talent_prefix(first_talent)
+        # 1) Primary source: the hero-name prefix of any of this player's own
+        # talent picks (`EndOfGameTalentChoices`, tracker-events based -- the
+        # same mechanism that already resolves talents/stats/win result
+        # further below, and unaffected by the bug described next). Trying
+        # every tier (not just the first) makes this resilient to a single
+        # tier's talent id not matching any known hero prefix.
+        hero_name = _hero_from_any_talent(talent_ids_by_toon.get(toon_handle, []))
 
+        # 2) Ground-truth cross-check: the hero unit that actually spawned
+        # for this player (`SUnitBornEvent`) -- tried before the unreliable
+        # `HeroAttributeId` fallback below. This matters most for ARAM: its
+        # shuffle/reroll pick phase can leave `HeroAttributeId` pointing at
+        # the player's *first*, discarded random assignment (very commonly
+        # "Arthas"), while the spawned unit always reflects the hero they
+        # actually loaded into the match with.
         if hero_name is None:
+            hero_name = unit_spawn_hero_by_toon.get(toon_handle)
+
+        # 3) Last resort: `replay.attributes.events`' `HeroAttributeId` (the
+        # sole source before PARSER_VERSION 1.2) -- except for ARAM, where
+        # it's confirmed unreliable (see PARSER_VERSION's 1.2/1.3 changelog
+        # entries and `daemon-python/scripts/diagnose_hero_mapping.py`): an
+        # ARAM replay that reaches this point with `hero_name` still unset
+        # falls straight through to the `ReplayParseError` below instead of
+        # silently recording a wrong hero.
+        if hero_name is None and not is_aram:
             scope = scope_by_player_list_index.get(index)
             hero_code = _hero_attribute_code(attributes_events, scope) if scope is not None else None
             hero_name = constants.HERO_DISPLAY_NAMES.get(hero_code) if hero_code else None
@@ -613,12 +726,6 @@ def build_payload(
             map_internal_name,
             map_display_name,
         )
-
-    game_options = (
-        initdata.get("m_syncLobbyState", {}).get("m_gameDescription", {}).get("m_gameOptions", {})
-    )
-    amm_id = game_options.get("m_ammId")
-    game_mode = constants.GAME_MODE_BY_AMM_ID.get(amm_id, constants.DEFAULT_GAME_MODE)
 
     region = str(player_list[0]["m_toon"]["m_region"])
 

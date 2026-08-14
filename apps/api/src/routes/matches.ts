@@ -34,6 +34,7 @@ const filtersQuerySchema = z.object({
   dateTo: z.string().datetime().optional(),
   opponentBattletag: z.string().optional(),
   allyBattletag: z.string().optional(),
+  opponentHeroId: z.string().optional(),
 });
 
 const listQuerySchema = filtersQuerySchema.extend({
@@ -41,6 +42,17 @@ const listQuerySchema = filtersQuerySchema.extend({
   sortDir: z.enum(["asc", "desc"]).default("desc"),
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(50).default(20),
+});
+
+/**
+ * `GET /matches/trend` filters, plus an optional `limit` -- the "form
+ * tracker" widget's "Volume" mode ("les X dernières parties") caps the
+ * window to the last N matches instead of a date range, unlike the plain
+ * trend chart on the matches page which always wants the full filtered
+ * history.
+ */
+const trendQuerySchema = filtersQuerySchema.extend({
+  limit: z.coerce.number().int().positive().max(500).optional(),
 });
 
 /** Escapes ILIKE wildcards so a battletag search term is matched literally. */
@@ -54,7 +66,7 @@ function likeTerm(value: string): string {
  * always agree on what a given set of filters matches.
  */
 function buildMatchConditions(userId: string, filters: z.infer<typeof filtersQuerySchema>) {
-  const { mode, heroId, mapId, dateFrom, dateTo, opponentBattletag, allyBattletag } = filters;
+  const { mode, heroId, mapId, dateFrom, dateTo, opponentBattletag, allyBattletag, opponentHeroId } = filters;
   const opponent = alias(matchPlayers, "opponent");
   const ally = alias(matchPlayers, "ally");
 
@@ -87,6 +99,23 @@ function buildMatchConditions(userId: string, filters: z.infer<typeof filtersQue
               eq(ally.matchId, matches.id),
               eq(ally.battletag, allyBattletag),
               eq(ally.team, matchPlayers.team),
+            ),
+          ),
+      ),
+    );
+  }
+  if (opponentHeroId) {
+    const opponentHero = alias(matchPlayers, "opponent_hero");
+    conditions.push(
+      exists(
+        db
+          .select({ one: sql`1` })
+          .from(opponentHero)
+          .where(
+            and(
+              eq(opponentHero.matchId, matches.id),
+              eq(opponentHero.heroId, opponentHeroId),
+              ne(opponentHero.team, matchPlayers.team),
             ),
           ),
       ),
@@ -191,15 +220,31 @@ export const matchesRoute = new Hono<Env>()
     });
   })
   // Every match matching the given filters (no pagination), ordered
-  // chronologically, for the "win rate evolution" chart on the matches
-  // page -- it needs the full filtered history, not just one page of it.
+  // chronologically, for the "win rate evolution" chart on the matches page
+  // and the "form tracker" widget (heroes/maps/matches pages) -- it needs
+  // the full filtered history, not just one page of it. With `limit`, only
+  // the last N matches are returned (still chronological ascending) for the
+  // form tracker's "Volume" mode.
   .get("/trend", async (c) => {
     const user = c.get("user");
-    const parsed = filtersQuerySchema.safeParse(c.req.query());
+    const parsed = trendQuerySchema.safeParse(c.req.query());
     if (!parsed.success) {
       return c.json({ error: parsed.error.flatten() }, 400);
     }
-    const where = buildMatchConditions(user.id, parsed.data);
+    const { limit, ...filters } = parsed.data;
+    const where = buildMatchConditions(user.id, filters);
+
+    if (limit) {
+      const lastN = await db
+        .select({ playedAt: matches.playedAt, winner: matchPlayers.winner })
+        .from(matchPlayers)
+        .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
+        .where(where)
+        .orderBy(desc(matches.playedAt))
+        .limit(limit);
+
+      return c.json({ points: lastN.reverse() });
+    }
 
     const rows = await db
       .select({ playedAt: matches.playedAt, winner: matchPlayers.winner })

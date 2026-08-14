@@ -48,6 +48,16 @@
   --color-success: 0.72 0.17 150;
   --color-danger: 0.63 0.21 25;
 
+  /* Hero role tints (Data-Grid / Hero ID Card / avatar fallback rings) --
+     same L/C band as the palette above, spread across the remaining hues
+     so no role collides with brand/accent/success/danger. */
+  --color-role-tank: 0.68 0.16 219;
+  --color-role-bruiser: 0.68 0.16 48;
+  --color-role-ranged: 0.68 0.16 320;
+  --color-role-melee: 0.68 0.16 353;
+  --color-role-healer: 0.68 0.16 184;
+  --color-role-support: 0.68 0.16 254;
+
   --font-heading: "BW Modelica", "Space Grotesk", "Bricolage Grotesque", sans-serif;
   --font-body: "Outfit", "Geist", sans-serif;
   --font-mono: "JetBrains Mono", monospace;
@@ -67,6 +77,13 @@
   --color-accent: 0.62 0.16 60;
   --color-success: 0.55 0.15 150;
   --color-danger: 0.55 0.2 25;
+
+  --color-role-tank: 0.56 0.15 219;
+  --color-role-bruiser: 0.56 0.15 48;
+  --color-role-ranged: 0.56 0.15 320;
+  --color-role-melee: 0.56 0.15 353;
+  --color-role-healer: 0.56 0.15 184;
+  --color-role-support: 0.56 0.15 254;
 }
 
 [data-theme="contrasted"] {
@@ -79,6 +96,13 @@
   --color-accent: 0.85 0.18 70;
   --color-success: 0.8 0.19 150;
   --color-danger: 0.7 0.22 25;
+
+  --color-role-tank: 0.78 0.19 219;
+  --color-role-bruiser: 0.78 0.19 48;
+  --color-role-ranged: 0.78 0.19 320;
+  --color-role-melee: 0.78 0.19 353;
+  --color-role-healer: 0.78 0.19 184;
+  --color-role-support: 0.78 0.19 254;
 }
 
 body {

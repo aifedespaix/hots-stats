@@ -55,33 +55,6 @@ const topStrengths = computed(() =>
   weaknesses.value ? getTopStrengths(weaknesses.value, { trend: trend.value }) : [],
 );
 
-function sortRows<T, K extends keyof T>(rows: T[], key: K, dir: "asc" | "desc"): T[] {
-  const sign = dir === "asc" ? 1 : -1;
-  return [...rows].sort((a, b) => {
-    const av = a[key];
-    const bv = b[key];
-    if (typeof av === "string" && typeof bv === "string") return av.localeCompare(bv) * sign;
-    return ((av as number) - (bv as number)) * sign;
-  });
-}
-
-// --- Winrate par carte: searchable + sortable, worst winrate first by default ---
-type MapSortKey = "mapName" | "gamesPlayed" | "winrate";
-const mapsSearch = ref("");
-const { sortKey: mapsSortKey, sortDir: mapsSortDir, onSort: onMapsSort } = useSortState<MapSortKey>("winrate", "asc");
-
-const filteredMaps = computed(() => {
-  const term = mapsSearch.value.trim().toLowerCase();
-  const rows = (weaknesses.value?.maps ?? []).filter((m) => (term ? m.mapName.toLowerCase().includes(term) : true));
-  return sortRows(rows, mapsSortKey.value, mapsSortDir.value);
-});
-
-const mapColumns = [
-  { key: "mapName", label: "Carte", sortable: true },
-  { key: "gamesPlayed", label: "Parties", numeric: true, sortable: true },
-  { key: "winrate", label: "Winrate", numeric: true, sortable: true },
-];
-
 // --- Matchups: searchable + sortable, worst winrate first by default ---
 type MatchupSortKey = "heroName" | "gamesPlayed" | "winrate";
 const matchupsSearch = ref("");
@@ -96,7 +69,7 @@ const filteredMatchups = computed(() => {
   const rows = (weaknesses.value?.matchups ?? []).filter((m) =>
     term ? m.heroName.toLowerCase().includes(term) : true,
   );
-  return sortRows(rows, matchupsSortKey.value, matchupsSortDir.value);
+  return sortByKey(rows, matchupsSortKey.value, matchupsSortDir.value);
 });
 
 const matchupColumns = [
@@ -121,7 +94,7 @@ const filteredTalents = computed(() => {
     return t.heroName.toLowerCase().includes(term) || formatTalentName(t.talentName, t.heroName).toLowerCase().includes(term);
   });
   const key = talentsSortKey.value;
-  return key === "default" ? rows : sortRows(rows, key, talentsSortDir.value);
+  return key === "default" ? rows : sortByKey(rows, key, talentsSortDir.value);
 });
 
 const talentColumns = [
@@ -206,55 +179,46 @@ const talentColumns = [
       </div>
     </div>
 
-    <!-- Browsable tables: never collapsed, each panel scrolls its own content (header pinned)
-    from lg up so the grid fills the width instead of stacking long accordions. -->
-    <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <UiPanel
-        v-model:search="mapsSearch"
-        title="Winrate par carte"
-        :count="filteredMaps.length"
-        search-placeholder="Rechercher une carte"
-      >
-        <UiDataTable
-          :columns="mapColumns"
-          :rows="filteredMaps"
-          row-key="mapId"
-          sticky-header
-          :sort-key="mapsSortKey"
-          :sort-dir="mapsSortDir"
-          @sort="onMapsSort"
-        >
-          <template #cell-winrate="{ row }">
-            <span :class="(row.winrate as number) >= 0.5 ? 'text-success' : 'text-danger'">
-              {{ formatPercent(row.winrate as number) }}
-            </span>
-          </template>
-        </UiDataTable>
-      </UiPanel>
+    <!-- Winrate par carte now lives on its own page (Hub des cartes), with the meta,
+    l'historique et l'impact d'équipe qui n'ont pas leur place dans ce diagnostic compact. -->
+    <NuxtLink
+      to="/maps"
+      class="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface p-4 transition-colors hover:border-brand/40"
+    >
+      <div class="flex items-center gap-2">
+        <UIcon name="i-heroicons-map" class="h-5 w-5 text-brand" />
+        <div>
+          <p class="text-sm font-medium">Winrate par carte</p>
+          <p class="text-xs text-muted">Déplacé vers le Hub des cartes -- méta, ton historique et l'impact d'équipe</p>
+        </div>
+      </div>
+      <UIcon name="i-heroicons-arrow-right" class="h-4 w-4 shrink-0 text-muted" />
+    </NuxtLink>
 
-      <UiPanel
-        v-model:search="matchupsSearch"
-        title="Matchups"
-        :count="filteredMatchups.length"
-        search-placeholder="Rechercher un héros"
+    <!-- Browsable table: never collapsed, panel scrolls its own content (header pinned)
+    from lg up so it doesn't stretch the whole page. -->
+    <UiPanel
+      v-model:search="matchupsSearch"
+      title="Matchups"
+      :count="filteredMatchups.length"
+      search-placeholder="Rechercher un héros"
+    >
+      <UiDataTable
+        :columns="matchupColumns"
+        :rows="filteredMatchups"
+        row-key="heroId"
+        sticky-header
+        :sort-key="matchupsSortKey"
+        :sort-dir="matchupsSortDir"
+        @sort="onMatchupsSort"
       >
-        <UiDataTable
-          :columns="matchupColumns"
-          :rows="filteredMatchups"
-          row-key="heroId"
-          sticky-header
-          :sort-key="matchupsSortKey"
-          :sort-dir="matchupsSortDir"
-          @sort="onMatchupsSort"
-        >
-          <template #cell-winrate="{ row }">
-            <span :class="(row.winrate as number) >= 0.5 ? 'text-success' : 'text-danger'">
-              {{ formatPercent(row.winrate as number) }}
-            </span>
-          </template>
-        </UiDataTable>
-      </UiPanel>
-    </div>
+        <template #cell-winrate="{ row }">
+          <span :class="TONE_TEXT_CLASS[winrateTone(row.winrate as number)]">
+            {{ formatPercent(row.winrate as number) }}
+          </span>
+        </template>
+      </UiDataTable>
+    </UiPanel>
 
     <UiPanel
       v-model:search="talentsSearch"

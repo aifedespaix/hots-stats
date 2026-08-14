@@ -30,6 +30,14 @@ export default <Partial<Config>>{
         accent: "oklch(var(--color-accent) / <alpha-value>)",
         success: "oklch(var(--color-success) / <alpha-value>)",
         danger: "oklch(var(--color-danger) / <alpha-value>)",
+        role: {
+          tank: "oklch(var(--color-role-tank) / <alpha-value>)",
+          bruiser: "oklch(var(--color-role-bruiser) / <alpha-value>)",
+          ranged: "oklch(var(--color-role-ranged) / <alpha-value>)",
+          melee: "oklch(var(--color-role-melee) / <alpha-value>)",
+          healer: "oklch(var(--color-role-healer) / <alpha-value>)",
+          support: "oklch(var(--color-role-support) / <alpha-value>)",
+        },
       },
       fontFamily: {
         heading: ["var(--font-heading)", "sans-serif"],

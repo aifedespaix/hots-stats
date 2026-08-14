@@ -27,6 +27,8 @@ const navItems: NavItem[] = [
   { to: "/draft", label: "Live Draft", icon: "i-heroicons-bolt" },
   { to: "/matches", label: "Historique", icon: "i-heroicons-clock" },
   { to: "/heroes", label: "Héros", icon: "i-heroicons-fire" },
+  { to: "/maps", label: "Cartes", icon: "i-heroicons-map" },
+  { to: "/talents", label: "Talents", icon: "i-heroicons-sparkles" },
   { to: "/players", label: "Joueurs", icon: "i-heroicons-user-group" },
   { to: "/analysis", label: "Diagnostic", icon: "i-heroicons-chart-bar" },
   { to: "/friends", label: "Amis", icon: "i-heroicons-users" },

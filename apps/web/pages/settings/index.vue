@@ -28,56 +28,36 @@ const config = useRuntimeConfig();
 const { data: authData, refresh: refreshAuth } = await useAuthUser();
 
 const pseudo = ref(authData.value?.user?.displayName ?? "");
-const savingPseudo = ref(false);
-const pseudoError = ref("");
-
-async function savePseudo() {
-  savingPseudo.value = true;
-  pseudoError.value = "";
-  try {
-    await $fetch("/auth/me", {
-      method: "PATCH",
-      baseURL: config.public.apiBase,
-      credentials: "include",
-      body: { displayName: pseudo.value },
-    });
-    await refreshAuth();
-  } catch (err) {
-    pseudoError.value =
-      (err as { data?: { error?: string } })?.data?.error ?? "Erreur lors de la mise à jour";
-  } finally {
-    savingPseudo.value = false;
-  }
-}
+const pseudoField = useSavableField(async (value) => {
+  await $fetch("/auth/me", {
+    method: "PATCH",
+    baseURL: config.public.apiBase,
+    credentials: "include",
+    body: { displayName: value },
+  });
+  await refreshAuth();
+});
+const savingPseudo = pseudoField.loading;
+const pseudoError = pseudoField.error;
+const savePseudo = () => pseudoField.submit(pseudo.value);
 
 const battletag = ref(authData.value?.user?.battletag ?? "");
-const savingBattletag = ref(false);
-const battletagError = ref("");
-
-async function saveBattletag() {
-  savingBattletag.value = true;
-  battletagError.value = "";
-  try {
-    await $fetch("/auth/me", {
-      method: "PATCH",
-      baseURL: config.public.apiBase,
-      credentials: "include",
-      body: { battletag: battletag.value },
-    });
-    await refreshAuth();
-  } catch (err) {
-    battletagError.value =
-      (err as { data?: { error?: string } })?.data?.error ?? "Erreur lors de la mise à jour";
-  } finally {
-    savingBattletag.value = false;
-  }
-}
+const battletagField = useSavableField(async (value) => {
+  await $fetch("/auth/me", {
+    method: "PATCH",
+    baseURL: config.public.apiBase,
+    credentials: "include",
+    body: { battletag: value },
+  });
+  await refreshAuth();
+});
+const savingBattletag = battletagField.loading;
+const battletagError = battletagField.error;
+const saveBattletag = () => battletagField.submit(battletag.value);
 
 const publicHandle = ref(
   authData.value?.user?.publicHandle || (pseudo.value ? slugify(pseudo.value) : ""),
 );
-const savingPublicHandle = ref(false);
-const publicHandleError = ref("");
 // Once the user types their own handle, stop overwriting it from the pseudo.
 const publicHandleTouched = ref(Boolean(authData.value?.user?.publicHandle));
 
@@ -89,24 +69,18 @@ watch(pseudo, (value) => {
   if (!publicHandleTouched.value) publicHandle.value = value ? slugify(value) : "";
 });
 
-async function savePublicHandle() {
-  savingPublicHandle.value = true;
-  publicHandleError.value = "";
-  try {
-    await $fetch("/auth/me", {
-      method: "PATCH",
-      baseURL: config.public.apiBase,
-      credentials: "include",
-      body: { publicHandle: publicHandle.value },
-    });
-    await refreshAuth();
-  } catch (err) {
-    publicHandleError.value =
-      (err as { data?: { error?: string } })?.data?.error ?? "Erreur lors de la mise à jour";
-  } finally {
-    savingPublicHandle.value = false;
-  }
-}
+const publicHandleField = useSavableField(async (value) => {
+  await $fetch("/auth/me", {
+    method: "PATCH",
+    baseURL: config.public.apiBase,
+    credentials: "include",
+    body: { publicHandle: value },
+  });
+  await refreshAuth();
+});
+const savingPublicHandle = publicHandleField.loading;
+const publicHandleError = publicHandleField.error;
+const savePublicHandle = () => publicHandleField.submit(publicHandle.value);
 
 // -- "Ce que tes amis pensent de toi" ---------------------------------------
 //

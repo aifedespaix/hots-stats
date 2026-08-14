@@ -26,7 +26,6 @@ withDefaults(
   { tone: "default", dense: false, emptyText: "-" },
 );
 
-const medals = ["🥇", "🥈", "🥉"];
 </script>
 
 <template>
@@ -37,7 +36,7 @@ const medals = ["🥇", "🥈", "🥉"];
       class="flex items-center gap-2 rounded-lg px-1.5 transition-colors hover:bg-background/60"
       :class="dense ? 'py-1' : 'py-1.5'"
     >
-      <span class="w-4 shrink-0 text-center text-xs leading-none">{{ medals[index] ?? index + 1 }}</span>
+      <span class="w-4 shrink-0 text-center text-xs leading-none">{{ rankMedal(index) }}</span>
 
       <span
         v-if="item.icon"
@@ -59,14 +58,7 @@ const medals = ["🥇", "🥈", "🥉"];
       </span>
 
       <span class="shrink-0 text-right">
-        <span
-          class="block font-mono text-xs font-semibold leading-tight"
-          :class="{
-            'text-success': tone === 'success',
-            'text-danger': tone === 'danger',
-            'text-foreground': tone === 'default',
-          }"
-        >
+        <span class="block font-mono text-xs font-semibold leading-tight" :class="TONE_TEXT_CLASS[tone]">
           {{ item.value }}
         </span>
         <span v-if="item.valueSub" class="block text-[10px] leading-tight text-muted">{{ item.valueSub }}</span>

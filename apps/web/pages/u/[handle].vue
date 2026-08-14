@@ -45,16 +45,7 @@ useSeoMeta({
       </div>
     </div>
 
-    <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
-      <UiStatTile
-        label="Winrate"
-        :value="formatPercent(summary.winrate)"
-        :tone="summary.winrate >= 0.5 ? 'success' : 'danger'"
-      />
-      <UiStatTile label="Parties jouées" :value="String(summary.gamesPlayed)" />
-      <UiStatTile label="Victoires" :value="String(summary.wins)" />
-      <UiStatTile label="Durée moyenne" :value="formatDuration(summary.avgDurationSeconds)" />
-    </div>
+    <StatsAccountSummaryStats :summary="summary" />
 
     <div v-if="data.topHeroes.length > 0">
       <h2 class="mb-3 font-heading text-lg font-medium">Héros les plus joués</h2>
@@ -68,7 +59,7 @@ useSeoMeta({
             <p class="font-medium">{{ hero.heroName }}</p>
             <p class="text-xs text-muted">{{ hero.gamesPlayed }} parties</p>
           </div>
-          <span class="font-mono text-sm" :class="hero.winrate >= 0.5 ? 'text-success' : 'text-danger'">
+          <span class="font-mono text-sm" :class="TONE_TEXT_CLASS[winrateTone(hero.winrate)]">
             {{ formatPercent(hero.winrate) }}
           </span>
         </div>
