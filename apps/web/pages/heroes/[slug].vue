@@ -87,6 +87,8 @@ const kdaVerdict = computed<Verdict | null>(() => {
     : { tone: "danger", text: "Moins bon KDA que la moyenne des autres joueurs." };
 });
 
+const roleColors = computed(() => heroRoleColorClasses(data.value?.hero.heroRole ?? null));
+
 const verdictClass: Record<Verdict["tone"], string> = {
   success: "text-success",
   danger: "text-danger",
@@ -115,15 +117,26 @@ const talentsByTier = computed(() => {
   </div>
 
   <div v-else-if="data" class="space-y-8">
-    <div class="flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <NuxtLink to="/heroes" class="text-sm text-brand hover:underline">&larr; Retour aux héros</NuxtLink>
-        <h1 class="mt-2 font-heading text-2xl font-semibold">{{ data.hero.heroName }}</h1>
-        <p class="mt-1 text-sm text-muted">{{ formatHeroRole(data.hero.heroRole) }}</p>
+    <div class="space-y-3">
+      <NuxtLink to="/heroes" class="text-sm text-brand hover:underline">&larr; Retour aux héros</NuxtLink>
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-4">
+          <HeroesHeroAvatar :hero-id="heroId" :name="data.hero.heroName" :role="data.hero.heroRole" :size="80" ring />
+          <div>
+            <p
+              v-if="data.hero.heroRole"
+              class="mb-1.5 inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide"
+              :class="[roleColors.tint, roleColors.text]"
+            >
+              {{ formatHeroRole(data.hero.heroRole) }}
+            </p>
+            <h1 class="font-heading text-2xl font-semibold">{{ data.hero.heroName }}</h1>
+          </div>
+        </div>
+        <UButton :to="`/talents?heroId=${heroId}`" color="gray" variant="soft" icon="i-heroicons-sparkles" size="sm">
+          Analyser les talents de ce héros
+        </UButton>
       </div>
-      <UButton :to="`/talents?heroId=${heroId}`" color="gray" variant="soft" icon="i-heroicons-sparkles" size="sm">
-        Analyser les talents de ce héros
-      </UButton>
     </div>
 
     <StatsFormTrackerWidget

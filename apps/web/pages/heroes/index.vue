@@ -134,6 +134,12 @@ function goToHero(row: Record<string, unknown>) {
       @row-click="goToHero"
       @sort="onSort"
     >
+      <template #cell-heroName="{ row }">
+        <div class="flex items-center gap-2.5">
+          <HeroesHeroAvatar :hero-id="row.heroId as string" :name="row.heroName as string" :role="row.heroRole as string | null" :size="28" />
+          <span class="truncate">{{ row.heroName }}</span>
+        </div>
+      </template>
       <template #cell-heroRole="{ row }">{{ formatHeroRole(row.heroRole as string | null) }}</template>
       <template #cell-winrate="{ row }">
         <span :class="(row.winrate as number) >= 0.5 ? 'text-success' : 'text-danger'">

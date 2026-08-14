@@ -24,6 +24,7 @@ const medals = ["🥇", "🥈", "🥉"];
         :class="{ 'opacity-70': entry.smallSample }"
       >
         <span class="w-5 shrink-0 text-center text-sm">{{ medals[index] }}</span>
+        <HeroesHeroAvatar :hero-id="entry.heroId" :name="entry.heroName" :role="entry.heroRole" :size="28" />
         <span class="min-w-0 flex-1">
           <span class="block truncate text-sm font-medium">{{ entry.heroName }}</span>
           <span class="block text-xs text-muted">{{ formatHeroRole(entry.heroRole) }}</span>
