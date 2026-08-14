@@ -19426,6 +19426,17 @@
       "id": "daemon_python_tests_test_draft_capture_rationale_268"
     },
     {
+      "label": "analyse-frontend.md",
+      "file_type": "document",
+      "source_file": "tasks/analyse-frontend.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "tasks_analyse_frontend",
+      "community": 90,
+      "community_name": "analyse-frontend.md",
+      "norm_label": "analyse-frontend.md"
+    },
+    {
       "label": "shared-types/tsconfig.json",
       "file_type": "code",
       "source_file": "packages/shared-types/tsconfig.json",
@@ -59638,5 +59649,5 @@
       "source_file": "tasks/daemon-audit-2026-08-12.md"
     }
   ],
-  "built_at_commit": "503b2fe70900d2204934554b68f9ae1c81a30a5c"
+  "built_at_commit": "97560e7714bea17c7c4896f952a5be3a64049c1f"
 }
