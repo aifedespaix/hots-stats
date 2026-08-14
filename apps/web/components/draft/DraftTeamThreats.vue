@@ -63,6 +63,7 @@ const hasPersonalWeakness = computed(() => threats.value.some((threat) => threat
           name="i-heroicons-exclamation-triangle"
           class="h-4 w-4 shrink-0 text-danger"
         />
+        <HeroesHeroAvatar :hero-id="threat.heroId" :name="threat.heroName" :size="28" />
         <div class="min-w-0 flex-1">
           <p class="truncate text-sm font-medium">{{ threat.heroName }}</p>
           <p class="truncate font-mono text-[11px] text-muted">{{ threat.battletag }}</p>

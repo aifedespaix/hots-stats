@@ -8,7 +8,8 @@
     "build": "nuxt build",
     "start": "bun .output/server/index.mjs",
     "typecheck": "nuxt typecheck",
-    "generate:og": "bun run scripts/generate-og.ts"
+    "generate:og": "bun run scripts/generate-og.ts",
+    "mirror:hero-images": "bun run scripts/mirror-hero-images.ts"
   },
   "dependencies": {
     "@hots-stats/shared-types": "workspace:*",
