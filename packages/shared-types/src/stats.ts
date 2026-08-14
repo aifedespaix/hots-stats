@@ -76,6 +76,51 @@ export const TALENT_HABIT_MIN_PICK_RATE = 0.5;
  * overall win rate before an underperforming talent is worth surfacing. */
 export const TALENT_HABIT_MIN_WINRATE_GAP = 0.15;
 
+/** One *enemy* hero's aggregate performance against a given hero, across
+ * every match where they were on opposing teams (scoped `personal`/`global`
+ * like the rest of `heroes.ts` -- see `HeroStatsScope`). All `delta*` fields
+ * compare this matchup's numbers to that hero's own overall baseline in the
+ * same scope, isolating the matchup's specific effect (see
+ * `HERO_MATCHUP_MIN_GAMES` doc and `tasks/epic-9-hero-matchups.md` for the
+ * formula). `deltaHeroDamage`/`deltaDamageTaken`/`deltaExperienceContribution`
+ * are *relative* deltas (ratio of the baseline, e.g. 0.08 = +8%) rather than
+ * absolute differences -- unlike `deltaWinrate`/`deltaKillParticipation`,
+ * those three underlying stats are raw counts, not 0-1 ratios, and their
+ * scale varies wildly hero to hero, so only a relative delta reads
+ * consistently. */
+export interface HeroMatchupEntry {
+  heroId: string;
+  heroName: string;
+  heroRole: string | null;
+  gamesPlayed: number;
+  wins: number;
+  winrate: number;
+  /** winrate - baseline winrate, in ratio form (0.05 = +5 percentage points). */
+  deltaWinrate: number;
+  kda: number;
+  deltaKda: number;
+  avgKillParticipation: number;
+  deltaKillParticipation: number;
+  avgHeroDamage: number;
+  deltaHeroDamage: number;
+  avgDamageTaken: number;
+  deltaDamageTaken: number;
+  avgExperienceContribution: number;
+  /** Relative to baseline (ratio, e.g. 0.08 = +8%) -- raw XP contribution, not a 0-1 share. */
+  deltaExperienceContribution: number;
+  /** True when `gamesPlayed` is below `HERO_MATCHUP_MIN_GAMES` -- still a
+   * real (if noisy) data point, never dropped, but never used to rank
+   * best/worst either. */
+  smallSample: boolean;
+}
+
+/** Minimum games a hero-matchup entry needs before its delta is trusted for
+ * the best/worst ranking -- entries below this still appear (flagged
+ * `smallSample`), same backfill philosophy as `FaceAFaceHeroCombo`. Ranking
+ * itself uses a Wilson score bound (see `apps/api/src/lib/wilson.ts`) rather
+ * than raw winrate, so a 2-0 matchup can't out-rank a 40-game 58% one. */
+export const HERO_MATCHUP_MIN_GAMES = 8;
+
 export type PlayerFriendshipStatus = "none" | "friends" | "pending_outgoing" | "pending_incoming" | "self";
 
 export interface PlayerEncounterStats {

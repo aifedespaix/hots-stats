@@ -159,17 +159,63 @@ rappelle donc le contexte nécessaire plutôt que de supposer une continuité.
   `main` touchant `daemon-python/**`, donc rien à faire à la main pour
   publier une nouvelle release une fois mergé.
 
+- **Epic 9 — Matchups Héros sur la Page Détail Héros** : section "Matchups"
+  ajoutée à `pages/heroes/[slug].vue` (entre les stat tiles et les talents),
+  d'après le brief `tasks/epic-9-hero-matchups.md`. Côté API,
+  `apps/api/src/services/hero-matchups.service.ts` (nouveau) calcule, pour
+  un héros et un `scope` (`personal`/`global`, même bascule que le reste de
+  `heroes.ts`), le Delta Winrate de chaque héros adverse affronté (winrate
+  du matchup moins la baseline globale du héros) plus les deltas
+  KDA/participation aux kills/dégâts infligés-subis/contribution XP -- ces
+  trois derniers en delta *relatif* (ratio de la baseline) puisque ce sont
+  des valeurs brutes dont l'échelle varie énormément d'un héros à l'autre,
+  contrairement au winrate/à la participation aux kills qui sont déjà des
+  ratios 0-1. Réutilise le pattern self-join de `face-a-face.service.ts`
+  (`ne(b.team, a.team)`) mais keyé par `heroId` des deux côtés plutôt que
+  par `userId`/`battletag`. Le classement meilleurs/pires contres utilise
+  une borne de Wilson (`apps/api/src/lib/wilson.ts`, nouvelle
+  `wilsonUpperBound` ajoutée à côté de `wilsonLowerBound` existante) plutôt
+  que le delta brut, pour qu'un matchup à 2 parties ne batte pas un
+  matchup à 40 parties dans le classement -- avec exclusion croisée entre
+  les deux listes (un héros classé dans les meilleurs contres ne peut plus
+  apparaître dans les pires, bug repéré en testant avec peu d'adversaires
+  distincts). Nouvelles routes `GET /heroes/:heroId/matchups` et
+  `GET /heroes/:heroId/matchups/:opponentHeroId` (recherche Head-to-Head,
+  retourne une entrée à zéro -- jamais une erreur -- quand les deux héros
+  ne se sont jamais affrontés). `GET /matches` accepte désormais aussi
+  `opponentHeroId` pour le lien "Voir nos parties l'un contre l'autre" de
+  la carte Face à Face. Côté web : `components/heroes/HeroMatchupList.vue`
+  (colonnes meilleurs/pires contres) et `HeroMatchupSearch.vue` (recherche
+  `USelectMenu` + carte Face à Face animée, réutilise `GET /heroes?scope=global`
+  comme source pour la liste des héros cherchables). Testé de bout en bout
+  en local (Postgres réel + données fixture, API vérifiée via curl, page
+  vérifiée dans un vrai navigateur via Playwright) : ce test a permis de
+  corriger deux bugs avant merge (chevauchement meilleurs/pires contres
+  décrit plus haut, et le delta de contribution XP calculé en absolu mais
+  affiché comme un pourcentage -- corrigé en delta relatif comme les
+  dégâts). Écart avec le brief initial : pas d'avatars héros dans les
+  listes (le reste de l'app n'affiche encore aucune icône héros nulle
+  part, `heroes.iconUrl` n'est pas peuplé -- gardé cohérent avec l'existant
+  plutôt que d'introduire un nouveau pattern visuel isolé) ; le toggle de
+  portée réutilise le composable `useHeroStatsScope()` partagé par le
+  reste de l'app (persisté sur le compte) plutôt qu'un état local à la
+  section.
+
 ## À faire
 
-Tous les epics du roadmap initial (1 à 6) sont marqués comme faits
-ci-dessus. Prochaines pistes possibles, à transformer en brief si besoin :
-stats communautaires globales, timeline temporelle de partie (nécessite
-d'étendre le parser de l'Epic 3), vérification end-to-end du CI/CD daemon
-sur un vrai runner Windows (cf. note Epic 4). Aussi identifié pendant
-l'Epic 8 : pas de bouton/CLI équivalent pour la quarantaine côté admin
-(actuellement `bun run check-build` seulement, en ligne de commande) --
-utile si un nouveau build HotS pose problème avant qu'on ait le temps
-d'écrire un adaptateur sur-mesure.
+Tous les epics du roadmap initial (1 à 6), plus les Epics 7 à 9, sont
+marqués comme faits ci-dessus. Prochaines pistes possibles, à transformer
+en brief si besoin : stats communautaires globales, timeline temporelle de
+partie (nécessite d'étendre le parser de l'Epic 3), vérification
+end-to-end du CI/CD daemon sur un vrai runner Windows (cf. note Epic 4).
+Aussi identifié pendant l'Epic 8 : pas de bouton/CLI équivalent pour la
+quarantaine côté admin (actuellement `bun run check-build` seulement, en
+ligne de commande) -- utile si un nouveau build HotS pose problème avant
+qu'on ait le temps d'écrire un adaptateur sur-mesure. Identifié pendant
+l'Epic 9 : pas d'avatars héros nulle part dans l'app (`heroes.iconUrl`
+n'est jamais peuplé, aucune source Blizzard-hosted branchée) -- un vrai
+gain de lisibilité pour les listes de héros (matchups, top heroes, radar
+des joueurs...) si quelqu'un branche une source d'icônes un jour.
 
 Une fois un Epic terminé dans sa session, mettre à jour ce README (cocher
 dans "Déjà fait") avant de lancer le suivant.

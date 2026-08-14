@@ -69,6 +69,20 @@ export function formatPercent(ratio: number): string {
   return `${Math.round(ratio * 100)}%`;
 }
 
+/** Signed percentage-point delta (e.g. hero-matchup deltas vs. a baseline
+ * winrate) -- always shows a sign so "+0%" (rounds to zero but still
+ * slightly positive) reads differently from a true 0. */
+export function formatSignedPercent(ratio: number): string {
+  const points = Math.round(ratio * 100);
+  return `${points > 0 ? "+" : ""}${points}%`;
+}
+
+/** Signed KDA delta, same sign convention as `formatSignedPercent` but on
+ * the KDA ratio's own scale rather than percentage points. */
+export function formatSignedKda(delta: number): string {
+  return `${delta > 0 ? "+" : ""}${delta.toFixed(2)}`;
+}
+
 const heroRoleLabels: Record<string, string> = {
   Tank: "Tank",
   Bruiser: "Bagarreur",
