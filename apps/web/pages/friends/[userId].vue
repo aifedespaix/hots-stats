@@ -60,13 +60,13 @@ function onScopeChange(value: HeroStatsScope) {
 </script>
 
 <template>
-  <div v-if="error" class="rounded-lg border border-border bg-surface p-8 text-center text-muted">
-    <p v-if="error.statusCode === 403">Vous n'êtes pas ami avec ce joueur.</p>
-    <p v-else>Impossible de charger les statistiques de ce joueur.</p>
-    <NuxtLink to="/friends" class="mt-3 inline-block text-sm text-brand hover:underline">
-      &larr; Retour à mes amis
-    </NuxtLink>
-  </div>
+  <UiErrorState
+    v-if="error"
+    :status-code="error.statusCode"
+    :message="error.statusCode === 403 ? 'Vous n\'êtes pas ami avec ce joueur.' : 'Impossible de charger les statistiques de ce joueur.'"
+    back-to="/friends"
+    back-label="← Retour à mes amis"
+  />
 
   <div v-else-if="data" class="space-y-8">
     <div class="flex flex-wrap items-start justify-between gap-3">
@@ -93,16 +93,7 @@ function onScopeChange(value: HeroStatsScope) {
     />
 
     <UiGlobalScopeBadge :scope="scope" label="Toute la communauté">
-      <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <UiStatTile
-          label="Winrate"
-          :value="formatPercent(data.summary.winrate)"
-          :tone="data.summary.winrate >= 0.5 ? 'success' : 'danger'"
-        />
-        <UiStatTile label="Parties jouées" :value="String(data.summary.gamesPlayed)" />
-        <UiStatTile label="Victoires" :value="String(data.summary.wins)" />
-        <UiStatTile label="Durée moyenne" :value="formatDuration(data.summary.avgDurationSeconds)" />
-      </div>
+      <StatsAccountSummaryStats :summary="data.summary" />
 
       <div class="mt-6">
         <h2 class="mb-3 font-heading text-lg font-medium">Top héros</h2>
@@ -125,7 +116,7 @@ function onScopeChange(value: HeroStatsScope) {
         <template #cell-gameMode="{ row }">{{ formatGameMode(row.gameMode as never) }}</template>
         <template #cell-durationSeconds="{ row }">{{ formatDuration(row.durationSeconds as number) }}</template>
         <template #cell-result="{ row }">
-          <span :class="row.winner ? 'text-success' : 'text-danger'">
+          <span :class="row.winner ? TONE_TEXT_CLASS.success : TONE_TEXT_CLASS.danger">
             {{ row.winner ? "Victoire" : "Défaite" }}
           </span>
         </template>

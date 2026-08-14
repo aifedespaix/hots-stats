@@ -44,15 +44,7 @@ const sortedHeroes = computed(() => {
   const heroes = (data.value?.heroes ?? []).filter((hero) =>
     searchTerm ? hero.heroName.toLowerCase().includes(searchTerm) : true,
   );
-  const dir = sortDir.value === "asc" ? 1 : -1;
-  return heroes.sort((a, b) => {
-    const av = a[sortKey.value as keyof HeroStats];
-    const bv = b[sortKey.value as keyof HeroStats];
-    if (typeof av === "string" && typeof bv === "string") {
-      return av.localeCompare(bv) * dir;
-    }
-    return ((av as number) - (bv as number)) * dir;
-  });
+  return sortByKey(heroes, sortKey.value as keyof HeroStats, sortDir.value);
 });
 
 // Pagination slices sortedHeroes, which is already filtered by `search` -
@@ -88,7 +80,7 @@ function goToHero(row: Record<string, unknown>) {
       @update:model-value="setScope"
     />
 
-    <div class="grid grid-cols-1 gap-3 rounded-lg border border-border bg-surface p-4 sm:grid-cols-2">
+    <UiFilterBar :columns="2">
       <USelectMenu
         v-model="mode"
         :options="modeOptions"
@@ -97,30 +89,14 @@ function goToHero(row: Record<string, unknown>) {
         placeholder="Mode"
       />
       <UInput v-model="search" placeholder="Rechercher un héros" icon="i-lucide-search" />
-    </div>
+    </UiFilterBar>
 
-    <div class="flex flex-wrap gap-2">
-      <UButton
-        size="xs"
-        color="gray"
-        variant="soft"
-        icon="i-heroicons-x-mark"
-        :disabled="filtersStore.isFiltersDefault"
-        @click="filtersStore.resetFilters()"
-      >
-        Réinitialiser les filtres
-      </UButton>
-      <UButton
-        size="xs"
-        color="gray"
-        variant="soft"
-        icon="i-heroicons-arrows-up-down"
-        :disabled="filtersStore.isSortDefault"
-        @click="filtersStore.resetSort()"
-      >
-        Réinitialiser le tri
-      </UButton>
-    </div>
+    <UiFilterResetActions
+      :filters-default="filtersStore.isFiltersDefault"
+      :sort-default="filtersStore.isSortDefault"
+      @reset-filters="filtersStore.resetFilters()"
+      @reset-sort="filtersStore.resetSort()"
+    />
 
     <UiGlobalScopeBadge :scope="scope" label="Toute la communauté">
       <UiDataTable
@@ -143,7 +119,7 @@ function goToHero(row: Record<string, unknown>) {
         </template>
         <template #cell-heroRole="{ row }">{{ formatHeroRole(row.heroRole as string | null) }}</template>
         <template #cell-winrate="{ row }">
-          <span :class="(row.winrate as number) >= 0.5 ? 'text-success' : 'text-danger'">
+          <span :class="TONE_TEXT_CLASS[winrateTone(row.winrate as number)]">
             {{ formatPercent(row.winrate as number) }}
           </span>
         </template>

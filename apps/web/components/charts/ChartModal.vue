@@ -36,6 +36,8 @@ defineEmits<{ (e: "update:modelValue", value: boolean): void }>();
       <h2 class="font-heading text-lg font-semibold">{{ title }}</h2>
       <p v-if="description" class="mt-1 text-sm text-muted">{{ description }}</p>
 
+      <slot name="extra" />
+
       <div class="mt-4 h-72">
         <p v-if="pending" class="flex h-full items-center justify-center text-sm text-muted">Chargement…</p>
         <p v-else-if="errored" class="flex h-full items-center justify-center text-sm text-danger">

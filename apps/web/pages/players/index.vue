@@ -147,7 +147,7 @@ function goToPlayer(row: Record<string, unknown>) {
     <h1 class="font-heading text-2xl font-semibold">Radar des joueurs</h1>
     <p class="text-sm text-muted">Tous les joueurs croisés (alliés ou adversaires) dans tes parties.</p>
 
-    <div class="grid grid-cols-1 gap-3 rounded-lg border border-border bg-surface p-4 sm:grid-cols-2">
+    <UiFilterBar :columns="2">
       <USelectMenu
         v-model="mode"
         :options="modeOptions"
@@ -156,30 +156,14 @@ function goToPlayer(row: Record<string, unknown>) {
         placeholder="Mode"
       />
       <UInput v-model="search" placeholder="Rechercher un joueur (Pseudo#12345)" icon="i-lucide-search" />
-    </div>
+    </UiFilterBar>
 
-    <div class="flex flex-wrap gap-2">
-      <UButton
-        size="xs"
-        color="gray"
-        variant="soft"
-        icon="i-heroicons-x-mark"
-        :disabled="filtersStore.isFiltersDefault"
-        @click="filtersStore.resetFilters()"
-      >
-        Réinitialiser les filtres
-      </UButton>
-      <UButton
-        size="xs"
-        color="gray"
-        variant="soft"
-        icon="i-heroicons-arrows-up-down"
-        :disabled="filtersStore.isSortDefault"
-        @click="filtersStore.resetSort()"
-      >
-        Réinitialiser le tri
-      </UButton>
-    </div>
+    <UiFilterResetActions
+      :filters-default="filtersStore.isFiltersDefault"
+      :sort-default="filtersStore.isSortDefault"
+      @reset-filters="filtersStore.resetFilters()"
+      @reset-sort="filtersStore.resetSort()"
+    />
 
     <UiDataTable
       :columns="columns"

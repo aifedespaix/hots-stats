@@ -19,6 +19,10 @@ const formTracker = useFormTrackerStore();
 
 type Mode = "volume" | "period";
 const mode = ref<Mode>("volume");
+const modeOptions: { value: Mode; label: string }[] = [
+  { value: "volume", label: "Volume" },
+  { value: "period", label: "Période" },
+];
 
 const lastNInput = ref(String(formTracker.lastN));
 watch(
@@ -58,30 +62,19 @@ const losses = computed(() => gamesPlayed.value - wins.value);
 </script>
 
 <template>
-  <UModal :model-value="open" @update:model-value="(value) => emit('update:open', value as boolean)">
-    <div class="p-6">
-      <h2 class="font-heading text-lg font-semibold">{{ title ?? "Suivi de la forme" }}</h2>
-      <p v-if="description" class="mt-1 text-sm text-muted">{{ description }}</p>
-
+  <ChartsChartModal
+    :model-value="open"
+    :title="title ?? 'Suivi de la forme'"
+    :description="description"
+    :pending="pending"
+    :errored="errored"
+    :empty="!pending && !errored && gamesPlayed === 0"
+    empty-text="Aucune partie pour cette fenêtre."
+    @update:model-value="(value) => emit('update:open', value)"
+  >
+    <template #extra>
       <div class="mt-4 flex flex-wrap items-center gap-3">
-        <div class="flex items-center gap-1 rounded-full border border-border bg-surface p-1">
-          <button
-            type="button"
-            class="rounded-full px-3 py-1 text-xs font-medium transition-colors"
-            :class="mode === 'volume' ? 'bg-brand text-white' : 'text-muted hover:text-foreground'"
-            @click="mode = 'volume'"
-          >
-            Volume
-          </button>
-          <button
-            type="button"
-            class="rounded-full px-3 py-1 text-xs font-medium transition-colors"
-            :class="mode === 'period' ? 'bg-brand text-white' : 'text-muted hover:text-foreground'"
-            @click="mode = 'period'"
-          >
-            Période
-          </button>
-        </div>
+        <UiPillTabs v-model="mode" :options="modeOptions" />
 
         <div v-if="mode === 'volume'" class="flex items-center gap-2 text-sm">
           <span class="text-muted">Les</span>
@@ -107,22 +100,13 @@ const losses = computed(() => gamesPlayed.value - wins.value);
         <UiStatTile
           label="Winrate"
           :value="winrate === null ? '-' : formatPercent(winrate)"
-          :tone="winrate === null ? 'default' : winrate >= 0.5 ? 'success' : 'danger'"
+          :tone="winrateTone(winrate)"
         />
         <UiStatTile label="Victoires" :value="String(wins)" />
         <UiStatTile label="Défaites" :value="String(losses)" />
       </div>
+    </template>
 
-      <div class="mt-4 h-72">
-        <p v-if="pending" class="flex h-full items-center justify-center text-sm text-muted">Chargement…</p>
-        <p v-else-if="errored" class="flex h-full items-center justify-center text-sm text-danger">
-          Impossible de charger le graphique.
-        </p>
-        <p v-else-if="gamesPlayed === 0" class="flex h-full items-center justify-center text-sm text-muted">
-          Aucune partie pour cette fenêtre.
-        </p>
-        <ChartsLineChart v-else :data="chartData" :options="chartOptions" />
-      </div>
-    </div>
-  </UModal>
+    <ChartsLineChart :data="chartData" :options="chartOptions" />
+  </ChartsChartModal>
 </template>

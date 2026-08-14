@@ -5,9 +5,6 @@ import { DRAFT_MIN_RANKED_GAMES_FOR_RANKING } from "@hots-stats/shared-types";
 const props = defineProps<{ battletag: string | null }>();
 
 const config = useRuntimeConfig();
-const stats = ref<DraftPlayerStats | null>(null);
-const pending = ref(false);
-const errored = ref(false);
 const showProfileModal = ref(false);
 
 // The battletag panel is showing may change (another slot picked) while the
@@ -20,28 +17,21 @@ watch(
   },
 );
 
-watch(
-  () => props.battletag,
-  async (battletag) => {
-    stats.value = null;
-    errored.value = false;
-    if (!battletag) return;
-
-    pending.value = true;
-    try {
-      const res = await $fetch<{ stats: DraftPlayerStats }>(`/draft/players/${encodeURIComponent(battletag)}`, {
-        baseURL: config.public.apiBase,
-        credentials: "include",
-      });
-      stats.value = res.stats;
-    } catch {
-      errored.value = true;
-    } finally {
-      pending.value = false;
-    }
+const {
+  data: stats,
+  pending,
+  errored,
+} = useAsyncResource<DraftPlayerStats | null>({
+  fetcher: async () => {
+    if (!props.battletag) return null;
+    const res = await $fetch<{ stats: DraftPlayerStats }>(`/draft/players/${encodeURIComponent(props.battletag)}`, {
+      baseURL: config.public.apiBase,
+      credentials: "include",
+    });
+    return res.stats;
   },
-  { immediate: true },
-);
+  watch: () => props.battletag,
+});
 
 interface Section {
   key: "played" | "winrate" | "kda";
@@ -82,7 +72,6 @@ const sections = computed<Section[]>(() => {
   ];
 });
 
-const medals = ["🥇", "🥈", "🥉"];
 </script>
 
 <template>
@@ -174,7 +163,7 @@ const medals = ["🥇", "🥈", "🥉"];
               :key="hero.heroId"
               class="flex items-center gap-2.5 rounded-md px-1.5 py-1"
             >
-              <span class="w-5 shrink-0 text-center text-sm">{{ medals[index] }}</span>
+              <span class="w-5 shrink-0 text-center text-sm">{{ rankMedal(index) }}</span>
               <span class="min-w-0 flex-1 truncate text-sm">{{ hero.heroName }}</span>
               <span class="shrink-0 font-mono text-xs text-muted">{{ section.metricLabel(hero) }}</span>
             </li>

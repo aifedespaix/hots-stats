@@ -17,14 +17,7 @@ withDefaults(
       <UIcon :name="icon" class="h-3.5 w-3.5 shrink-0" />
       <span class="truncate">{{ label }}</span>
     </span>
-    <span
-      class="shrink-0 font-mono text-sm font-semibold"
-      :class="{
-        'text-success': tone === 'success',
-        'text-danger': tone === 'danger',
-        'text-foreground': tone === 'default',
-      }"
-    >
+    <span class="shrink-0 font-mono text-sm font-semibold" :class="TONE_TEXT_CLASS[tone]">
       {{ value }}
     </span>
   </div>

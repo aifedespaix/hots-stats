@@ -27,23 +27,19 @@ const buttons: { key: ChartKey; icon: string; label: string }[] = [
 function setOpen(key: ChartKey, value: boolean) {
   openChart.value = value ? key : null;
 }
+
+const tabOptions = buttons.map((btn) => ({ value: btn.key, label: btn.label, icon: btn.icon }));
 </script>
 
 <template>
   <div class="flex flex-wrap items-center gap-2">
     <span class="text-xs font-medium uppercase tracking-wide text-muted">Graphiques</span>
-    <div class="flex items-center gap-1 rounded-full border border-border bg-surface p-1 shadow-sm">
-      <UTooltip v-for="btn in buttons" :key="btn.key" :text="btn.label" :popper="{ placement: 'top' }">
-        <button
-          type="button"
-          class="flex h-8 w-8 items-center justify-center rounded-full text-muted transition-all duration-150 hover:scale-110 hover:bg-brand/15 hover:text-brand active:scale-95"
-          :aria-label="btn.label"
-          @click="openChart = btn.key"
-        >
-          <UIcon :name="btn.icon" class="h-4 w-4" />
-        </button>
-      </UTooltip>
-    </div>
+    <UiPillTabs
+      :model-value="openChart ?? ''"
+      :options="tabOptions"
+      icon-only
+      @update:model-value="(value) => (openChart = (value || null) as ChartKey | null)"
+    />
 
     <ChartsWinrateTrendModal
       :open="openChart === 'trend'"

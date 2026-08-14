@@ -23,13 +23,7 @@ const sorted = computed(() => [...props.maps].sort((a, b) => b.gamesPlayed - a.g
             {{ map.wins }}V / {{ map.losses }}D · {{ map.gamesPlayed }} partie{{ map.gamesPlayed > 1 ? "s" : "" }}
           </span>
         </div>
-        <div class="h-2 w-full overflow-hidden rounded-full bg-background">
-          <div
-            class="h-full rounded-full"
-            :class="map.winrate >= 0.5 ? 'bg-success' : 'bg-danger'"
-            :style="{ width: `${Math.round(map.winrate * 100)}%` }"
-          />
-        </div>
+        <UiWinrateBar :winrate="map.winrate" />
       </li>
     </ol>
     <p v-else class="py-2 text-sm text-muted">-</p>

@@ -112,9 +112,13 @@ const talentsByTier = computed(() => {
 </script>
 
 <template>
-  <div v-if="error" class="rounded-lg border border-border bg-surface p-8 text-center text-muted">
-    Héros introuvable - tu n'as pas encore de partie enregistrée avec ce héros.
-  </div>
+  <UiErrorState
+    v-if="error"
+    :status-code="404"
+    message="Héros introuvable - tu n'as pas encore de partie enregistrée avec ce héros."
+    back-to="/heroes"
+    back-label="← Retour aux héros"
+  />
 
   <div v-else-if="data" class="space-y-8">
     <div class="space-y-3">
@@ -150,7 +154,7 @@ const talentsByTier = computed(() => {
         <UiStatTile
           label="Winrate"
           :value="formatPercent(data.hero.winrate)"
-          :tone="data.hero.winrate >= 0.5 ? 'success' : 'danger'"
+          :tone="winrateTone(data.hero.winrate)"
         >
           <template v-if="personalStats && globalStats" #tooltip>
             <p class="flex items-center justify-between gap-3">
@@ -275,7 +279,7 @@ const talentsByTier = computed(() => {
               <span>{{ formatTalentName(talent.talentName, data.hero.heroName) }}</span>
               <span class="flex shrink-0 gap-3 font-mono text-xs text-muted">
                 <span>{{ formatPercent(talent.pickRate) }} pick</span>
-                <span :class="talent.winrate >= 0.5 ? 'text-success' : 'text-danger'">
+                <span :class="TONE_TEXT_CLASS[winrateTone(talent.winrate)]">
                   {{ formatPercent(talent.winrate) }} win
                 </span>
               </span>

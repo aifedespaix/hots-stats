@@ -74,19 +74,11 @@ const { sortKey, sortDir, onSort } = useSortState<SortableColumn | "default">("d
 
 const sortedPlayers = computed(() => {
   const players = [...allPlayers.value];
-  if (sortKey.value === "default") {
+  const key = sortKey.value;
+  if (key === "default") {
     return players.sort((a, b) => rank(a) - rank(b));
   }
-  const key = sortKey.value;
-  const dir = sortDir.value === "asc" ? 1 : -1;
-  return players.sort((a, b) => {
-    const av = a[key];
-    const bv = b[key];
-    if (typeof av === "string" && typeof bv === "string") {
-      return av.localeCompare(bv) * dir;
-    }
-    return ((av as number) - (bv as number)) * dir;
-  });
+  return sortByKey(players, key, sortDir.value);
 });
 
 function rowClass(row: Record<string, unknown>): string {
@@ -113,9 +105,7 @@ const columns = [
 </script>
 
 <template>
-  <div v-if="error" class="rounded-lg border border-border bg-surface p-8 text-center text-muted">
-    Partie introuvable.
-  </div>
+  <UiErrorState v-if="error" :status-code="404" message="Partie introuvable." back-to="/matches" back-label="← Retour à l'historique" />
 
   <div v-else-if="data" class="space-y-8">
     <div>

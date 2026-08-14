@@ -200,22 +200,20 @@ function applyBuild(row: (typeof buildRows.value)[number]) {
       @update:model-value="setScope"
     />
 
-    <div class="rounded-lg border border-border bg-surface p-4">
-      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div>
-          <label class="mb-1 block text-xs uppercase tracking-wide text-muted">Héros</label>
-          <USelectMenu v-model="heroId" :options="heroOptions" value-attribute="value" option-attribute="label" searchable />
-        </div>
-        <div>
-          <label class="mb-1 block text-xs uppercase tracking-wide text-muted">Carte</label>
-          <USelectMenu v-model="mapId" :options="mapOptions" value-attribute="value" option-attribute="label" searchable />
-        </div>
+    <UiFilterBar :columns="2">
+      <div>
+        <label class="mb-1 block text-xs uppercase tracking-wide text-muted">Héros</label>
+        <USelectMenu v-model="heroId" :options="heroOptions" value-attribute="value" option-attribute="label" searchable />
       </div>
-      <p class="mt-3 text-xs text-muted">
-        <UIcon name="i-heroicons-adjustments-horizontal" class="mr-1 inline h-3.5 w-3.5" />{{ modeLabel[mode] }}
-        <span v-if="analyzerData && heroId"> -- {{ analyzerData.gamesPlayed }} parties correspondantes</span>
-      </p>
-    </div>
+      <div>
+        <label class="mb-1 block text-xs uppercase tracking-wide text-muted">Carte</label>
+        <USelectMenu v-model="mapId" :options="mapOptions" value-attribute="value" option-attribute="label" searchable />
+      </div>
+    </UiFilterBar>
+    <p class="text-xs text-muted">
+      <UIcon name="i-heroicons-adjustments-horizontal" class="mr-1 inline h-3.5 w-3.5" />{{ modeLabel[mode] }}
+      <span v-if="analyzerData && heroId"> -- {{ analyzerData.gamesPlayed }} parties correspondantes</span>
+    </p>
 
     <!-- Carte seule: pas de héros choisi -> table méta, chaque héros ouvre son board -->
     <div v-if="mode === 'map'">
@@ -243,7 +241,7 @@ function applyBuild(row: (typeof buildRows.value)[number]) {
         >
           <template #cell-heroRole="{ row }">{{ formatHeroRole(row.heroRole as string | null) }}</template>
           <template #cell-winrate="{ row }">
-            <span :class="(row.winrate as number) >= 0.5 ? 'text-success' : 'text-danger'">
+            <span :class="TONE_TEXT_CLASS[winrateTone(row.winrate as number)]">
               {{ formatPercent(row.winrate as number) }}
             </span>
           </template>
@@ -327,26 +325,16 @@ function applyBuild(row: (typeof buildRows.value)[number]) {
                     <UIcon name="i-heroicons-lock-closed" class="h-3.5 w-3.5" />
                   </button>
                 </div>
-                <div class="relative mt-1.5 h-1.5 w-full">
-                  <div class="h-full w-full overflow-hidden rounded-full bg-background">
-                    <div
-                      class="h-full rounded-full"
-                      :class="option.winrate >= 0.5 ? 'bg-success' : 'bg-danger'"
-                      :style="{ width: `${Math.round(option.winrate * 100)}%` }"
-                    />
+                <UTooltip
+                  :text="`Borne basse de Wilson (95%) : ${formatPercent(option.wilsonLowerBound)} -- winrate garanti au-delà de ce trait avec ${option.picks} parties observées`"
+                  :popper="{ placement: 'top' }"
+                >
+                  <div class="mt-1.5">
+                    <UiWinrateBar :winrate="option.winrate" :marker="option.wilsonLowerBound" size="sm" />
                   </div>
-                  <UTooltip
-                    :text="`Borne basse de Wilson (95%) : ${formatPercent(option.wilsonLowerBound)} -- winrate garanti au-delà de ce trait avec ${option.picks} parties observées`"
-                    :popper="{ placement: 'top' }"
-                  >
-                    <span
-                      class="absolute -top-0.5 h-2 w-px -translate-x-1/2 bg-foreground/70"
-                      :style="{ left: `${Math.min(100, Math.max(0, Math.round(option.wilsonLowerBound * 100)))}%` }"
-                    />
-                  </UTooltip>
-                </div>
+                </UTooltip>
                 <div class="mt-1 flex items-center justify-between font-mono text-[11px] text-muted">
-                  <span :class="option.winrate >= 0.5 ? 'text-success' : 'text-danger'">{{ formatPercent(option.winrate) }} win</span>
+                  <span :class="TONE_TEXT_CLASS[winrateTone(option.winrate)]">{{ formatPercent(option.winrate) }} win</span>
                   <span>{{ formatPercent(option.pickRate) }} pick · {{ option.picks }}</span>
                 </div>
                 <p v-if="!option.reliable" class="mt-1 flex items-center gap-1 text-[10px] text-accent">
@@ -369,7 +357,7 @@ function applyBuild(row: (typeof buildRows.value)[number]) {
         <UiPanel title="Top builds complets" :count="buildRows.length">
           <UiDataTable :columns="buildColumns" :rows="buildRows" row-key="id" clickable @row-click="(row) => applyBuild(row as (typeof buildRows.value)[number])">
             <template #cell-winrate="{ row }">
-              <span :class="(row.winrate as number) >= 0.5 ? 'text-success' : 'text-danger'">
+              <span :class="TONE_TEXT_CLASS[winrateTone(row.winrate as number)]">
                 {{ formatPercent(row.winrate as number) }}
               </span>
             </template>

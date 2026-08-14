@@ -11,41 +11,26 @@ const props = defineProps<{
 
 const config = useRuntimeConfig();
 const selectedOpponentId = ref<string | undefined>(undefined);
-const result = ref<HeroMatchupResponse | null>(null);
-const pending = ref(false);
 
-async function loadMatchup(opponentId: string) {
-  pending.value = true;
-  result.value = null;
-  try {
-    result.value = await $fetch<HeroMatchupResponse>(`/heroes/${props.heroId}/matchups/${opponentId}`, {
+// Watches both the selected opponent and the page-level scope toggle -- a
+// scope change re-runs the currently open duel under the new scope instead
+// of leaving it showing stale numbers.
+const { data: result, pending } = useAsyncResource<HeroMatchupResponse | null>({
+  fetcher: async () => {
+    if (!selectedOpponentId.value) return null;
+    return $fetch<HeroMatchupResponse>(`/heroes/${props.heroId}/matchups/${selectedOpponentId.value}`, {
       baseURL: config.public.apiBase,
       credentials: "include",
       query: { scope: props.scope },
     });
-  } finally {
-    pending.value = false;
-  }
-}
+  },
+  watch: [selectedOpponentId, () => props.scope],
+  immediate: false,
+});
 
 function onSelect(opponentId: string | undefined) {
   selectedOpponentId.value = opponentId;
-  if (opponentId) {
-    void loadMatchup(opponentId);
-  } else {
-    result.value = null;
-  }
 }
-
-// The scope toggle above this search lives on the page, not this component
-// -- re-run the currently open duel under the new scope instead of leaving
-// it showing stale numbers.
-watch(
-  () => props.scope,
-  () => {
-    if (selectedOpponentId.value) void loadMatchup(selectedOpponentId.value);
-  },
-);
 
 const opponentHeroName = computed(
   () => props.heroOptions.find((hero) => hero.id === selectedOpponentId.value)?.name ?? "",
@@ -54,7 +39,6 @@ const losses = computed(() => (result.value ? result.value.opponent.gamesPlayed 
 
 function closeCard() {
   selectedOpponentId.value = undefined;
-  result.value = null;
 }
 </script>
 
@@ -116,14 +100,14 @@ function closeCard() {
           <div class="text-center">
             <p
               class="font-mono text-3xl font-bold"
-              :class="result.opponent.winrate >= 0.5 ? 'text-success' : 'text-danger'"
+              :class="TONE_TEXT_CLASS[winrateTone(result.opponent.winrate)]"
             >
               {{ formatPercent(result.opponent.winrate) }}
             </p>
             <p class="text-xs text-muted">de victoires face à {{ result.opponent.heroName }}</p>
             <p
               class="mt-1 font-mono text-xs font-medium"
-              :class="result.opponent.deltaWinrate >= 0 ? 'text-success' : 'text-danger'"
+              :class="TONE_TEXT_CLASS[winrateTone(result.opponent.deltaWinrate, 0)]"
             >
               {{ formatSignedPercent(result.opponent.deltaWinrate) }} vs sa moyenne ({{
                 formatPercent(result.baselineWinrate)
@@ -144,7 +128,7 @@ function closeCard() {
               <dt class="text-muted">KDA dans ce duel</dt>
               <dd class="font-mono">
                 {{ formatKda(result.opponent.kda) }}
-                <span :class="result.opponent.deltaKda >= 0 ? 'text-success' : 'text-danger'">
+                <span :class="TONE_TEXT_CLASS[winrateTone(result.opponent.deltaKda, 0)]">
                   ({{ formatSignedKda(result.opponent.deltaKda) }})
                 </span>
               </dd>
@@ -153,14 +137,14 @@ function closeCard() {
               <dt class="text-muted">Participation aux kills</dt>
               <dd class="font-mono">
                 {{ formatPercent(result.opponent.avgKillParticipation) }}
-                <span :class="result.opponent.deltaKillParticipation >= 0 ? 'text-success' : 'text-danger'">
+                <span :class="TONE_TEXT_CLASS[winrateTone(result.opponent.deltaKillParticipation, 0)]">
                   ({{ formatSignedPercent(result.opponent.deltaKillParticipation) }})
                 </span>
               </dd>
             </div>
             <div class="flex items-center justify-between gap-3">
               <dt class="text-muted">Dégâts aux héros</dt>
-              <dd class="font-mono" :class="result.opponent.deltaHeroDamage >= 0 ? 'text-success' : 'text-danger'">
+              <dd class="font-mono" :class="TONE_TEXT_CLASS[winrateTone(result.opponent.deltaHeroDamage, 0)]">
                 {{ formatSignedPercent(result.opponent.deltaHeroDamage) }}
               </dd>
             </div>
@@ -172,7 +156,7 @@ function closeCard() {
             </div>
             <div class="flex items-center justify-between gap-3">
               <dt class="text-muted">Contribution XP</dt>
-              <dd class="font-mono" :class="result.opponent.deltaExperienceContribution >= 0 ? 'text-success' : 'text-danger'">
+              <dd class="font-mono" :class="TONE_TEXT_CLASS[winrateTone(result.opponent.deltaExperienceContribution, 0)]">
                 {{ formatSignedPercent(result.opponent.deltaExperienceContribution) }}
               </dd>
             </div>

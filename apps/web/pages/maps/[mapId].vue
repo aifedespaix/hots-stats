@@ -27,13 +27,7 @@ const { sortKey: metaSortKey, sortDir: metaSortDir, onSort: onMetaSort } = useSo
 const filteredMeta = computed(() => {
   const term = metaSearch.value.trim().toLowerCase();
   const rows = (data.value?.metaHeroes ?? []).filter((h) => (term ? h.heroName.toLowerCase().includes(term) : true));
-  const dir = metaSortDir.value === "asc" ? 1 : -1;
-  return [...rows].sort((a, b) => {
-    const av = a[metaSortKey.value as keyof typeof a];
-    const bv = b[metaSortKey.value as keyof typeof b];
-    if (typeof av === "string" && typeof bv === "string") return av.localeCompare(bv) * dir;
-    return ((av as number) - (bv as number)) * dir;
-  });
+  return sortByKey(rows, metaSortKey.value as keyof (typeof rows)[number], metaSortDir.value);
 });
 const metaColumns = [
   { key: "heroName", label: "Héros", sortable: true },
@@ -86,15 +80,10 @@ const teamImpactChartOptions = computed(() => ({
   plugins: { legend: { display: false } },
 }));
 
-function soakBarWidth(winrate: number): string {
-  return `${Math.round(winrate * 100)}%`;
-}
 </script>
 
 <template>
-  <div v-if="error" class="rounded-lg border border-border bg-surface p-8 text-center text-muted">
-    Carte introuvable.
-  </div>
+  <UiErrorState v-if="error" :status-code="404" message="Carte introuvable." back-to="/maps" back-label="← Retour aux cartes" />
 
   <div v-else-if="data" class="space-y-8">
     <div class="flex flex-wrap items-start justify-between gap-3">
@@ -134,7 +123,7 @@ function soakBarWidth(winrate: number): string {
       >
         <template #cell-heroRole="{ row }">{{ formatHeroRole(row.heroRole as string | null) }}</template>
         <template #cell-winrate="{ row }">
-          <span :class="(row.winrate as number) >= 0.5 ? 'text-success' : 'text-danger'">
+          <span :class="TONE_TEXT_CLASS[winrateTone(row.winrate as number)]">
             {{ formatPercent(row.winrate as number) }}
           </span>
         </template>
@@ -158,7 +147,7 @@ function soakBarWidth(winrate: number): string {
             <UiStatTile
               label="Winrate ici"
               :value="formatPercent(data.personalRanking.winrate)"
-              :tone="data.personalRanking.winrate >= 0.5 ? 'success' : 'danger'"
+              :tone="winrateTone(data.personalRanking.winrate)"
               :sublabel="`${data.personalRanking.gamesPlayed} parties`"
             />
             <UiStatTile
@@ -189,7 +178,7 @@ function soakBarWidth(winrate: number): string {
         <h2 class="mb-3 font-heading text-sm font-medium">Mes héros sur cette carte</h2>
         <UiDataTable :columns="personalColumns" :rows="data.personalHeroes" row-key="heroId" mobile-badge-key="winrate">
           <template #cell-winrate="{ row }">
-            <span :class="(row.winrate as number) >= 0.5 ? 'text-success' : 'text-danger'">
+            <span :class="TONE_TEXT_CLASS[winrateTone(row.winrate as number)]">
               {{ formatPercent(row.winrate as number) }}
             </span>
           </template>
@@ -226,7 +215,7 @@ function soakBarWidth(winrate: number): string {
         <UiStatTile
           label="Score d'impact"
           :value="`${data.teamImpact.score} / 100`"
-          :tone="data.teamImpact.score >= 50 ? 'success' : 'danger'"
+          :tone="winrateTone(data.teamImpact.score, 50)"
           :sublabel="`Rôle ${formatHeroRole(data.teamImpact.role)} · ${data.teamImpact.gamesPlayed} parties`"
         />
         <div class="h-56">
@@ -264,13 +253,7 @@ function soakBarWidth(winrate: number): string {
               {{ formatPercent(bucket.winrate) }} · {{ bucket.gamesPlayed }} partie{{ bucket.gamesPlayed > 1 ? "s" : "" }}
             </span>
           </div>
-          <div class="h-2 w-full overflow-hidden rounded-full bg-background">
-            <div
-              class="h-full rounded-full"
-              :class="bucket.winrate >= 0.5 ? 'bg-success' : 'bg-danger'"
-              :style="{ width: soakBarWidth(bucket.winrate) }"
-            />
-          </div>
+          <UiWinrateBar :winrate="bucket.winrate" />
         </li>
       </ol>
     </div>
