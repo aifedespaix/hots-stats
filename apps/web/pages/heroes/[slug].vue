@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { HeroDetailResponse, HeroTalentsResponse } from "~/types/analytics";
+import type { HeroDetailResponse, HeroListResponse, HeroMatchupsResponse, HeroTalentsResponse } from "~/types/analytics";
 
 definePageMeta({ middleware: "auth" });
 
@@ -8,6 +8,22 @@ const heroId = route.params.slug as string;
 
 const { data, error } = await useApiFetch<HeroDetailResponse>(`/heroes/${heroId}`);
 const { data: talentsData } = await useApiFetch<HeroTalentsResponse>(`/heroes/${heroId}/talents`);
+
+const { scope: matchupScope, saving: matchupScopeSaving, setScope: setMatchupScope } = useHeroStatsScope();
+const { data: matchupsData, pending: matchupsPending } = await useApiFetch<HeroMatchupsResponse>(
+  `/heroes/${heroId}/matchups`,
+  { query: computed(() => ({ scope: matchupScope.value })) },
+);
+// Search options need every hero ever recorded app-wide, not just the ones
+// the connected account has played -- independent of `matchupScope`, which
+// only controls how the best/worst matchup numbers are computed.
+const { data: allHeroesData } = await useApiFetch<HeroListResponse>("/heroes", { query: { scope: "global" } });
+const opponentHeroOptions = computed(() =>
+  (allHeroesData.value?.heroes ?? [])
+    .filter((hero) => hero.heroId !== heroId)
+    .map((hero) => ({ id: hero.heroId, name: hero.heroName }))
+    .sort((a, b) => a.name.localeCompare(b.name)),
+);
 
 const heroName = computed(() => data.value?.hero.heroName ?? "Héros");
 const heroSeoDescription = computed(
@@ -173,6 +189,46 @@ const talentsByTier = computed(() => {
         </div>
       </UiStatTile>
       <UiStatTile label="Participation aux kills" :value="formatPercent(data.hero.avgKillParticipation)" />
+    </div>
+
+    <div>
+      <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h2 class="font-heading text-lg font-medium">Matchups</h2>
+      </div>
+      <UiStatsScopeToggle
+        :model-value="matchupScope"
+        :loading="matchupScopeSaving"
+        personal-description="Uniquement tes propres parties"
+        class="mb-4"
+        @update:model-value="setMatchupScope"
+      />
+
+      <div class="mb-4">
+        <HeroesHeroMatchupSearch
+          :hero-id="heroId"
+          :hero-name="data.hero.heroName"
+          :scope="matchupScope"
+          :hero-options="opponentHeroOptions"
+        />
+      </div>
+
+      <div v-if="matchupsPending" class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div v-for="i in 2" :key="i" class="h-40 animate-pulse rounded-lg border border-border bg-surface" />
+      </div>
+      <div v-else-if="matchupsData" class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <HeroesHeroMatchupList
+          title="Meilleurs contres"
+          tone="success"
+          :entries="matchupsData.bestMatchups"
+          empty-message="Pas encore assez de parties pour dégager un contre fiable."
+        />
+        <HeroesHeroMatchupList
+          title="Pires matchups"
+          tone="danger"
+          :entries="matchupsData.worstMatchups"
+          empty-message="Pas encore assez de parties pour dégager une faiblesse fiable."
+        />
+      </div>
     </div>
 
     <div>

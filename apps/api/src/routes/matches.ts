@@ -34,6 +34,7 @@ const filtersQuerySchema = z.object({
   dateTo: z.string().datetime().optional(),
   opponentBattletag: z.string().optional(),
   allyBattletag: z.string().optional(),
+  opponentHeroId: z.string().optional(),
 });
 
 const listQuerySchema = filtersQuerySchema.extend({
@@ -54,7 +55,7 @@ function likeTerm(value: string): string {
  * always agree on what a given set of filters matches.
  */
 function buildMatchConditions(userId: string, filters: z.infer<typeof filtersQuerySchema>) {
-  const { mode, heroId, mapId, dateFrom, dateTo, opponentBattletag, allyBattletag } = filters;
+  const { mode, heroId, mapId, dateFrom, dateTo, opponentBattletag, allyBattletag, opponentHeroId } = filters;
   const opponent = alias(matchPlayers, "opponent");
   const ally = alias(matchPlayers, "ally");
 
@@ -87,6 +88,23 @@ function buildMatchConditions(userId: string, filters: z.infer<typeof filtersQue
               eq(ally.matchId, matches.id),
               eq(ally.battletag, allyBattletag),
               eq(ally.team, matchPlayers.team),
+            ),
+          ),
+      ),
+    );
+  }
+  if (opponentHeroId) {
+    const opponentHero = alias(matchPlayers, "opponent_hero");
+    conditions.push(
+      exists(
+        db
+          .select({ one: sql`1` })
+          .from(opponentHero)
+          .where(
+            and(
+              eq(opponentHero.matchId, matches.id),
+              eq(opponentHero.heroId, opponentHeroId),
+              ne(opponentHero.team, matchPlayers.team),
             ),
           ),
       ),

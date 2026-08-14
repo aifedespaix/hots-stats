@@ -1,4 +1,4 @@
-import type { HeroStatsScope, PlayerEncounterStats, TalentTierStats } from "@hots-stats/shared-types";
+import type { HeroMatchupEntry, HeroStatsScope, PlayerEncounterStats, TalentTierStats } from "@hots-stats/shared-types";
 import type { StatsSummary } from "./matches";
 
 export interface HeroStats {
@@ -27,6 +27,21 @@ export interface HeroDetailResponse {
 
 export interface HeroTalentsResponse {
   talents: TalentTierStats[];
+}
+
+export interface HeroMatchupsResponse {
+  scope: HeroStatsScope;
+  baselineWinrate: number;
+  baselineGamesPlayed: number;
+  bestMatchups: HeroMatchupEntry[];
+  worstMatchups: HeroMatchupEntry[];
+}
+
+export interface HeroMatchupResponse {
+  scope: HeroStatsScope;
+  baselineWinrate: number;
+  baselineGamesPlayed: number;
+  opponent: HeroMatchupEntry;
 }
 
 export interface PlayerListResponse {

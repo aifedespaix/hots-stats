@@ -15,3 +15,12 @@ export function wilsonLowerBound(wins: number, n: number, z = 1.96): number {
   const margin = z * Math.sqrt((phat * (1 - phat) + z2 / (4 * n)) / n);
   return (center - margin) / denominator;
 }
+
+/** Mirror of `wilsonLowerBound` for ranking "confidently bad" samples (e.g.
+ * worst hero matchups): the upper bound of a proportion is the complement of
+ * the lower bound of its complement, so a 1-loss 0% sample doesn't outrank a
+ * 40-game 38% one. */
+export function wilsonUpperBound(wins: number, n: number, z = 1.96): number {
+  if (n <= 0) return 0;
+  return 1 - wilsonLowerBound(n - wins, n, z);
+}
