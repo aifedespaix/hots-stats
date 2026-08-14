@@ -20,3 +20,22 @@ export function useChartThemeColor(): (cssVar: string, alpha?: number) => string
     return `oklch(${getComputedStyle(document.documentElement).getPropertyValue(cssVar)} / ${alpha})`;
   };
 }
+
+/**
+ * Same theme-reactivity as `useChartThemeColor`, but returns the raw "L C H"
+ * oklch components instead of a finished color string -- lets a caller
+ * interpolate between two tokens (e.g. danger -> success, keyed by a
+ * winrate) while still following the active theme/color-mode. See
+ * `ChartsBuildFlowDiagram.vue`.
+ */
+export function useChartThemeColorRaw(): (cssVar: string) => [number, number, number] {
+  const colorMode = useColorMode();
+
+  return (cssVar: string) => {
+    void colorMode.value;
+    if (import.meta.server) return [0, 0, 0];
+    const raw = getComputedStyle(document.documentElement).getPropertyValue(cssVar).trim();
+    const [l, c, h] = raw.split(/\s+/).map(Number);
+    return [l ?? 0, c ?? 0, h ?? 0];
+  };
+}
