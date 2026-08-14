@@ -145,70 +145,72 @@ const talentsByTier = computed(() => {
       :modal-description="`Winrate sur ${data.hero.heroName}, selon la fenêtre choisie ci-dessous.`"
     />
 
-    <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
-      <UiStatTile
-        label="Winrate"
-        :value="formatPercent(data.hero.winrate)"
-        :tone="data.hero.winrate >= 0.5 ? 'success' : 'danger'"
-      >
-        <template v-if="personalStats && globalStats" #tooltip>
-          <p class="flex items-center justify-between gap-3">
-            <span class="text-muted">Toi</span>
-            <span class="font-mono font-medium text-foreground">{{ formatPercent(personalStats.winrate) }}</span>
-          </p>
-          <p class="flex items-center justify-between gap-3">
-            <span class="text-muted">Communauté</span>
-            <span class="font-mono font-medium text-foreground">{{ formatPercent(globalStats.winrate) }}</span>
-          </p>
-          <p v-if="winrateVerdict" class="font-medium" :class="verdictClass[winrateVerdict.tone]">
-            {{ winrateVerdict.text }}
-          </p>
-        </template>
-      </UiStatTile>
-      <UiStatTile label="Parties jouées" :value="String(data.hero.gamesPlayed)" />
-      <UiStatTile
-        label="KDA moyen"
-        :value="`${formatAvg(data.hero.avgKills)} / ${formatAvg(data.hero.avgDeaths)} / ${formatAvg(data.hero.avgAssists)}`"
-      >
-        <template v-if="personalStats && globalStats" #tooltip>
-          <p class="flex items-center justify-between gap-3">
-            <span class="text-muted">Toi</span>
-            <span class="font-mono font-medium text-foreground">{{ formatKda(personalKda) }}</span>
-          </p>
-          <p class="flex items-center justify-between gap-3">
-            <span class="text-muted">Communauté</span>
-            <span class="font-mono font-medium text-foreground">{{ formatKda(globalKda) }}</span>
-          </p>
-          <p v-if="kdaVerdict" class="font-medium" :class="verdictClass[kdaVerdict.tone]">
-            {{ kdaVerdict.text }}
-          </p>
-        </template>
-        <div class="flex flex-wrap items-center gap-1.5">
-          <span
-            class="inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-success"
-            title="Éliminations"
-          >
-            <UIcon name="i-lucide-sword" class="h-3.5 w-3.5" />
-            <span class="font-mono text-sm font-semibold sm:text-base">{{ formatAvg(data.hero.avgKills) }}</span>
-          </span>
-          <span
-            class="inline-flex items-center gap-1 rounded-full bg-danger/15 px-2 py-0.5 text-danger"
-            title="Morts"
-          >
-            <UIcon name="i-lucide-skull" class="h-3.5 w-3.5" />
-            <span class="font-mono text-sm font-semibold sm:text-base">{{ formatAvg(data.hero.avgDeaths) }}</span>
-          </span>
-          <span
-            class="inline-flex items-center gap-1 rounded-full bg-blue-500/15 px-2 py-0.5 text-blue-400"
-            title="Assistances"
-          >
-            <UIcon name="i-lucide-hand-helping" class="h-3.5 w-3.5" />
-            <span class="font-mono text-sm font-semibold sm:text-base">{{ formatAvg(data.hero.avgAssists) }}</span>
-          </span>
-        </div>
-      </UiStatTile>
-      <UiStatTile label="Participation aux kills" :value="formatPercent(data.hero.avgKillParticipation)" />
-    </div>
+    <UiGlobalScopeBadge :scope="data.scope" label="Stats calculées sur toute la communauté">
+      <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <UiStatTile
+          label="Winrate"
+          :value="formatPercent(data.hero.winrate)"
+          :tone="data.hero.winrate >= 0.5 ? 'success' : 'danger'"
+        >
+          <template v-if="personalStats && globalStats" #tooltip>
+            <p class="flex items-center justify-between gap-3">
+              <span class="text-muted">Toi</span>
+              <span class="font-mono font-medium text-foreground">{{ formatPercent(personalStats.winrate) }}</span>
+            </p>
+            <p class="flex items-center justify-between gap-3">
+              <span class="text-muted">Communauté</span>
+              <span class="font-mono font-medium text-foreground">{{ formatPercent(globalStats.winrate) }}</span>
+            </p>
+            <p v-if="winrateVerdict" class="font-medium" :class="verdictClass[winrateVerdict.tone]">
+              {{ winrateVerdict.text }}
+            </p>
+          </template>
+        </UiStatTile>
+        <UiStatTile label="Parties jouées" :value="String(data.hero.gamesPlayed)" />
+        <UiStatTile
+          label="KDA moyen"
+          :value="`${formatAvg(data.hero.avgKills)} / ${formatAvg(data.hero.avgDeaths)} / ${formatAvg(data.hero.avgAssists)}`"
+        >
+          <template v-if="personalStats && globalStats" #tooltip>
+            <p class="flex items-center justify-between gap-3">
+              <span class="text-muted">Toi</span>
+              <span class="font-mono font-medium text-foreground">{{ formatKda(personalKda) }}</span>
+            </p>
+            <p class="flex items-center justify-between gap-3">
+              <span class="text-muted">Communauté</span>
+              <span class="font-mono font-medium text-foreground">{{ formatKda(globalKda) }}</span>
+            </p>
+            <p v-if="kdaVerdict" class="font-medium" :class="verdictClass[kdaVerdict.tone]">
+              {{ kdaVerdict.text }}
+            </p>
+          </template>
+          <div class="flex flex-wrap items-center gap-1.5">
+            <span
+              class="inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-success"
+              title="Éliminations"
+            >
+              <UIcon name="i-lucide-sword" class="h-3.5 w-3.5" />
+              <span class="font-mono text-sm font-semibold sm:text-base">{{ formatAvg(data.hero.avgKills) }}</span>
+            </span>
+            <span
+              class="inline-flex items-center gap-1 rounded-full bg-danger/15 px-2 py-0.5 text-danger"
+              title="Morts"
+            >
+              <UIcon name="i-lucide-skull" class="h-3.5 w-3.5" />
+              <span class="font-mono text-sm font-semibold sm:text-base">{{ formatAvg(data.hero.avgDeaths) }}</span>
+            </span>
+            <span
+              class="inline-flex items-center gap-1 rounded-full bg-blue-500/15 px-2 py-0.5 text-blue-400"
+              title="Assistances"
+            >
+              <UIcon name="i-lucide-hand-helping" class="h-3.5 w-3.5" />
+              <span class="font-mono text-sm font-semibold sm:text-base">{{ formatAvg(data.hero.avgAssists) }}</span>
+            </span>
+          </div>
+        </UiStatTile>
+        <UiStatTile label="Participation aux kills" :value="formatPercent(data.hero.avgKillParticipation)" />
+      </div>
+    </UiGlobalScopeBadge>
 
     <div>
       <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -234,20 +236,22 @@ const talentsByTier = computed(() => {
       <div v-if="matchupsPending" class="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div v-for="i in 2" :key="i" class="h-40 animate-pulse rounded-lg border border-border bg-surface" />
       </div>
-      <div v-else-if="matchupsData" class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <HeroesHeroMatchupList
-          title="Meilleurs contres"
-          tone="success"
-          :entries="matchupsData.bestMatchups"
-          empty-message="Pas encore assez de parties pour dégager un contre fiable."
-        />
-        <HeroesHeroMatchupList
-          title="Pires matchups"
-          tone="danger"
-          :entries="matchupsData.worstMatchups"
-          empty-message="Pas encore assez de parties pour dégager une faiblesse fiable."
-        />
-      </div>
+      <UiGlobalScopeBadge v-else-if="matchupsData" :scope="matchupScope">
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <HeroesHeroMatchupList
+            title="Meilleurs contres"
+            tone="success"
+            :entries="matchupsData.bestMatchups"
+            empty-message="Pas encore assez de parties pour dégager un contre fiable."
+          />
+          <HeroesHeroMatchupList
+            title="Pires matchups"
+            tone="danger"
+            :entries="matchupsData.worstMatchups"
+            empty-message="Pas encore assez de parties pour dégager une faiblesse fiable."
+          />
+        </div>
+      </UiGlobalScopeBadge>
     </div>
 
     <div>

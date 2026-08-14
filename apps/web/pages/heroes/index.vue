@@ -122,41 +122,43 @@ function goToHero(row: Record<string, unknown>) {
       </UButton>
     </div>
 
-    <UiDataTable
-      :columns="columns"
-      :rows="pagedHeroes"
-      row-key="heroId"
-      clickable
-      :sort-key="sortKey"
-      :sort-dir="sortDir"
-      mobile-secondary-key="heroRole"
-      mobile-badge-key="winrate"
-      @row-click="goToHero"
-      @sort="onSort"
-    >
-      <template #cell-heroName="{ row }">
-        <div class="flex items-center gap-2.5">
-          <HeroesHeroAvatar :hero-id="row.heroId as string" :name="row.heroName as string" :role="row.heroRole as string | null" :size="28" />
-          <span class="truncate">{{ row.heroName }}</span>
-        </div>
-      </template>
-      <template #cell-heroRole="{ row }">{{ formatHeroRole(row.heroRole as string | null) }}</template>
-      <template #cell-winrate="{ row }">
-        <span :class="(row.winrate as number) >= 0.5 ? 'text-success' : 'text-danger'">
-          {{ formatPercent(row.winrate as number) }}
-        </span>
-      </template>
-      <template #cell-kda="{ row }">
-        {{ formatAvg(row.avgKills as number) }} / {{ formatAvg(row.avgDeaths as number) }} /
-        {{ formatAvg(row.avgAssists as number) }}
-      </template>
-      <template #cell-avgKillParticipation="{ row }">
-        {{ formatPercent(row.avgKillParticipation as number) }}
-      </template>
-    </UiDataTable>
+    <UiGlobalScopeBadge :scope="scope" label="Toute la communauté">
+      <UiDataTable
+        :columns="columns"
+        :rows="pagedHeroes"
+        row-key="heroId"
+        clickable
+        :sort-key="sortKey"
+        :sort-dir="sortDir"
+        mobile-secondary-key="heroRole"
+        mobile-badge-key="winrate"
+        @row-click="goToHero"
+        @sort="onSort"
+      >
+        <template #cell-heroName="{ row }">
+          <div class="flex items-center gap-2.5">
+            <HeroesHeroAvatar :hero-id="row.heroId as string" :name="row.heroName as string" :role="row.heroRole as string | null" :size="28" />
+            <span class="truncate">{{ row.heroName }}</span>
+          </div>
+        </template>
+        <template #cell-heroRole="{ row }">{{ formatHeroRole(row.heroRole as string | null) }}</template>
+        <template #cell-winrate="{ row }">
+          <span :class="(row.winrate as number) >= 0.5 ? 'text-success' : 'text-danger'">
+            {{ formatPercent(row.winrate as number) }}
+          </span>
+        </template>
+        <template #cell-kda="{ row }">
+          {{ formatAvg(row.avgKills as number) }} / {{ formatAvg(row.avgDeaths as number) }} /
+          {{ formatAvg(row.avgAssists as number) }}
+        </template>
+        <template #cell-avgKillParticipation="{ row }">
+          {{ formatPercent(row.avgKillParticipation as number) }}
+        </template>
+      </UiDataTable>
 
-    <div v-if="total > pageSize" class="flex justify-center">
-      <UPagination v-model="page" :page-count="pageSize" :total="total" />
-    </div>
+      <div v-if="total > pageSize" class="mt-4 flex justify-center">
+        <UPagination v-model="page" :page-count="pageSize" :total="total" />
+      </div>
+    </UiGlobalScopeBadge>
   </div>
 </template>

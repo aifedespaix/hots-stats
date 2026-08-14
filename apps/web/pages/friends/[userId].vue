@@ -92,21 +92,23 @@ function onScopeChange(value: HeroStatsScope) {
       @update:model-value="onScopeChange"
     />
 
-    <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
-      <UiStatTile
-        label="Winrate"
-        :value="formatPercent(data.summary.winrate)"
-        :tone="data.summary.winrate >= 0.5 ? 'success' : 'danger'"
-      />
-      <UiStatTile label="Parties jouées" :value="String(data.summary.gamesPlayed)" />
-      <UiStatTile label="Victoires" :value="String(data.summary.wins)" />
-      <UiStatTile label="Durée moyenne" :value="formatDuration(data.summary.avgDurationSeconds)" />
-    </div>
+    <UiGlobalScopeBadge :scope="scope" label="Toute la communauté">
+      <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <UiStatTile
+          label="Winrate"
+          :value="formatPercent(data.summary.winrate)"
+          :tone="data.summary.winrate >= 0.5 ? 'success' : 'danger'"
+        />
+        <UiStatTile label="Parties jouées" :value="String(data.summary.gamesPlayed)" />
+        <UiStatTile label="Victoires" :value="String(data.summary.wins)" />
+        <UiStatTile label="Durée moyenne" :value="formatDuration(data.summary.avgDurationSeconds)" />
+      </div>
 
-    <div>
-      <h2 class="mb-3 font-heading text-lg font-medium">Top héros</h2>
-      <UiTopHeroesTop3 :heroes="topHeroes" />
-    </div>
+      <div class="mt-6">
+        <h2 class="mb-3 font-heading text-lg font-medium">Top héros</h2>
+        <UiTopHeroesTop3 :heroes="topHeroes" />
+      </div>
+    </UiGlobalScopeBadge>
 
     <div>
       <h2 class="mb-3 font-heading text-lg font-medium">Historique des parties</h2>

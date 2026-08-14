@@ -112,8 +112,15 @@ def main(path_arg: str) -> None:
         toon_handle = parser._s(event["m_stringData"][1]["m_value"])
         tracker_id_to_toon[tracker_id] = toon_handle
     talent_guess_by_toon = _talent_hero_guess(tracker_events, tracker_id_to_toon)
+    talent_ids_by_toon = parser._talent_ids_by_toon(tracker_events, tracker_id_to_toon)
+    unit_spawn_hero_by_toon = parser._hero_from_unit_spawn_by_toon(tracker_events, tracker_id_to_toon)
 
-    print("\n=== cross-check: attribute-resolved hero vs talent-prefix hero, per player ===")
+    print(
+        "\n=== cross-check: attribute-resolved hero vs talent-prefix hero vs unit-spawn hero, per player ===\n"
+        "  (the daemon's actual resolution order, as of PARSER_VERSION 1.3, is:\n"
+        "   1. any talent tier's hero-name prefix, 2. the unit-spawn hero, 3. the\n"
+        "   attribute-resolved hero -- skipped entirely for ARAM)"
+    )
     mismatches = 0
     for index, player in enumerate(player_list, start=1):
         toon_handle = parser._toon_handle(player["m_toon"])
@@ -121,6 +128,8 @@ def main(path_arg: str) -> None:
         hero_code = parser._hero_attribute_code(attributes_events, scope) if scope is not None else None
         hero_name = constants.HERO_DISPLAY_NAMES.get(hero_code) if hero_code else None
         talent_sample = talent_guess_by_toon.get(toon_handle, "(no talents found)")
+        talent_hero = parser._hero_from_any_talent(talent_ids_by_toon.get(toon_handle, []))
+        unit_spawn_hero = unit_spawn_hero_by_toon.get(toon_handle)
         flag = ""
         if hero_name and talent_sample != "(no talents found)" and not talent_sample.lower().startswith(
             hero_name.replace(" ", "").replace("-", "").replace(".", "").lower()[:4]
@@ -129,7 +138,8 @@ def main(path_arg: str) -> None:
             mismatches += 1
         print(
             f"  index={index} battletag={battletags.get(toon_handle)!r:30} scope={scope} "
-            f"attribute_hero={hero_name!r:20} first_talent={talent_sample!r}{flag}"
+            f"attribute_hero={hero_name!r:20} talent_hero={talent_hero!r:20} "
+            f"unit_spawn_hero={unit_spawn_hero!r:20} first_talent={talent_sample!r}{flag}"
         )
 
     print(f"\n{mismatches} likely mismatch(es) found." if mismatches else "\nNo mismatches detected by this heuristic.")

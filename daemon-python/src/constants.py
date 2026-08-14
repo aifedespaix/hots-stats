@@ -25,10 +25,28 @@ from __future__ import annotations
 # talent picks (`EndOfGameTalentChoices`, tracker-events based -- see
 # `_hero_from_talent_prefix` in parser.py), falling back to
 # `HeroAttributeId` only when no talent is available to match against.
+# 1.3: users kept seeing a wrong hero specifically on ARAM matches even after
+# 1.2 (frequently "Arth" / Arthas) -- `HeroAttributeId` is written once at
+# lobby time and never updated, and ARAM's shuffle/reroll pick phase is a
+# strong suspect: a player who rerolls ends up on a hero different from
+# whatever was true when that attribute was captured, in a mode where every
+# player goes through that pick flow. Whether or not that's the *only*
+# mechanism behind the 1.2 changelog's "no longer reliable" finding, the fix
+# holds regardless: the 1.2 talent-prefix resolution only ever tried a
+# player's *first* talent tier, so a single tier not matching any known hero
+# prefix (see `UNIT_TYPE_HERO_OVERRIDES` below for cases that previously
+# didn't) still fell all the way through to that unreliable attribute. Hero
+# resolution now (a) tries every talent tier, not just the first, before
+# giving up, (b) cross-checks the actual hero unit spawned in-game
+# (`SUnitBornEvent`, see `_hero_from_unit_spawn_by_toon` in parser.py) ahead
+# of `HeroAttributeId`, and (c) never falls back to `HeroAttributeId` at all
+# for ARAM -- a replay that still can't resolve a hero after (a) and (b) now
+# fails loudly (`ReplayParseError`) instead of silently recording a wrong
+# one.
 # Bumping this flags every previously-ingested match as stale so the
 # daemon's API-driven resync (see sync_state.py's `invalidate_stale`)
 # reparses and re-uploads it.
-PARSER_VERSION = "1.2"
+PARSER_VERSION = "1.3"
 
 # Shown in the settings window. Bump alongside `[project].version` in pyproject.toml.
 APP_VERSION = "1.0.29"
@@ -175,6 +193,36 @@ HERO_DISPLAY_NAMES: dict[str, str] = {
     "Zary": "Zarya",
     "Zera": "Zeratul",
     "ZULJ": "Zul'jin",
+}
+
+# `replay.tracker.events`' `SUnitBornEvent.m_unitTypeName` (e.g. "HeroLiMing")
+# for the actual hero unit spawned under a player's control -- the "Hero"
+# prefix is stripped before this table is consulted (see
+# `_hero_from_unit_type_name` in parser.py), and most heroes then match a
+# `HERO_DISPLAY_NAMES` value directly via `_hero_from_name_prefix`. This
+# table covers the ones that don't match *at all*: several early-roster
+# heroes shipped with (and kept) their original pre-rename class name as
+# their internal unit type -- Sonya as "Barbarian", Johanna as "Crusader",
+# Valla as "Demon Hunter", Kharazim as "Monk", Xul as "Necromancer", Nazeebo
+# as "Witch Doctor", Li-Ming as "Wizard", E.T.C. as "L90ETC" (matching its
+# own `HeroAttributeId` code "L90E") -- and The Lost Vikings control three
+# individually-named units (Baleog/Erik/Olaf), never a "LostVikings" unit at
+# all. Cross-checked against `Heroes.ReplayParser`'s `Unit.cs` (MIT,
+# https://github.com/Heroes-Profile/Heroes.ReplayParser) -- extend this
+# table (via `scripts/diagnose_hero_mapping.py` against a real replay) if a
+# newer hero turns out to need it too.
+UNIT_TYPE_HERO_OVERRIDES: dict[str, str] = {
+    "Barbarian": "Sonya",
+    "Crusader": "Johanna",
+    "DemonHunter": "Valla",
+    "Monk": "Kharazim",
+    "Necromancer": "Xul",
+    "WitchDoctor": "Nazeebo",
+    "Wizard": "Li-Ming",
+    "L90ETC": "E.T.C.",
+    "Baleog": "The Lost Vikings",
+    "Erik": "The Lost Vikings",
+    "Olaf": "The Lost Vikings",
 }
 
 # NNet.Replay.Tracker.SScoreResultEvent m_instanceList[i].m_name values whose
