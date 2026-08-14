@@ -56,19 +56,7 @@ function goToMatch(row: Record<string, unknown>) {
       </p>
     </div>
 
-    <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
-      <UiStatTile
-        label="Winrate"
-        :value="summary ? formatPercent(summary.winrate) : '-'"
-        :tone="summary && summary.winrate >= 0.5 ? 'success' : 'danger'"
-      />
-      <UiStatTile label="Parties jouées" :value="summary ? String(summary.gamesPlayed) : '-'" />
-      <UiStatTile label="Victoires" :value="summary ? String(summary.wins) : '-'" />
-      <UiStatTile
-        label="Durée moyenne"
-        :value="summary ? formatDuration(summary.avgDurationSeconds) : '-'"
-      />
-    </div>
+    <StatsAccountSummaryStats :summary="summary" />
 
     <NuxtLink
       v-if="topLeak"
@@ -104,7 +92,7 @@ function goToMatch(row: Record<string, unknown>) {
         <template #cell-gameMode="{ row }">{{ formatGameMode(row.gameMode as never) }}</template>
         <template #cell-durationSeconds="{ row }">{{ formatDuration(row.durationSeconds as number) }}</template>
         <template #cell-result="{ row }">
-          <span :class="row.winner ? 'text-success' : 'text-danger'">
+          <span :class="row.winner ? TONE_TEXT_CLASS.success : TONE_TEXT_CLASS.danger">
             {{ row.winner ? "Victoire" : "Défaite" }}
           </span>
         </template>

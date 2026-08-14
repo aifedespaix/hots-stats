@@ -5,33 +5,25 @@ const props = defineProps<{ battletags: string[] }>();
 const emit = defineEmits<{ (e: "select", battletag: string): void }>();
 
 const config = useRuntimeConfig();
-const threats = ref<TeamThreatEntry[]>([]);
-const pending = ref(false);
-const errored = ref(false);
 
-watch(
-  () => props.battletags,
-  async (battletags) => {
-    threats.value = [];
-    errored.value = false;
-    if (battletags.length === 0) return;
-
-    pending.value = true;
-    try {
-      const res = await $fetch<{ threats: TeamThreatEntry[] }>("/draft/teams/threats", {
-        baseURL: config.public.apiBase,
-        credentials: "include",
-        query: { battletags: battletags.join(",") },
-      });
-      threats.value = res.threats;
-    } catch {
-      errored.value = true;
-    } finally {
-      pending.value = false;
-    }
+const {
+  data: threatsData,
+  pending,
+  errored,
+} = useAsyncResource<TeamThreatEntry[]>({
+  fetcher: async () => {
+    if (props.battletags.length === 0) return [];
+    const res = await $fetch<{ threats: TeamThreatEntry[] }>("/draft/teams/threats", {
+      baseURL: config.public.apiBase,
+      credentials: "include",
+      query: { battletags: props.battletags.join(",") },
+    });
+    return res.threats;
   },
-  { immediate: true },
-);
+  watch: () => props.battletags,
+});
+
+const threats = computed(() => threatsData.value ?? []);
 
 const hasPersonalWeakness = computed(() => threats.value.some((threat) => threat.isPersonalWeakness));
 </script>
@@ -69,7 +61,7 @@ const hasPersonalWeakness = computed(() => threats.value.some((threat) => threat
           <p class="truncate font-mono text-[11px] text-muted">{{ threat.battletag }}</p>
         </div>
         <div class="shrink-0 text-right">
-          <p class="font-mono text-xs" :class="threat.winrate >= 0.5 ? 'text-success' : 'text-danger'">
+          <p class="font-mono text-xs" :class="TONE_TEXT_CLASS[winrateTone(threat.winrate)]">
             {{ formatPercent(threat.winrate) }}
           </p>
           <p class="text-[10px] text-muted">

@@ -22,14 +22,19 @@ const hasMatchupGames = computed(() => (data.value?.matchups.gamesPlayed ?? 0) >
 </script>
 
 <template>
-  <div v-if="error" class="rounded-lg border border-border bg-surface p-8 text-center text-muted">
-    <p v-if="error.statusCode === 404">Aucune partie trouvée pour ce joueur.</p>
-    <p v-else-if="error.statusCode === 400">Impossible de te comparer à toi-même.</p>
-    <p v-else>Impossible de charger le Face-à-Face.</p>
-    <NuxtLink to="/players" class="mt-3 inline-block text-sm text-brand hover:underline">
-      &larr; Retour aux joueurs
-    </NuxtLink>
-  </div>
+  <UiErrorState
+    v-if="error"
+    :status-code="error.statusCode"
+    :message="
+      error.statusCode === 404
+        ? 'Aucune partie trouvée pour ce joueur.'
+        : error.statusCode === 400
+          ? 'Impossible de te comparer à toi-même.'
+          : 'Impossible de charger le Face-à-Face.'
+    "
+    back-to="/players"
+    back-label="← Retour aux joueurs"
+  />
 
   <div v-else-if="data" class="space-y-8">
     <div>

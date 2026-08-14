@@ -28,11 +28,7 @@ withDefaults(
     </div>
     <div
       class="mt-2 break-words font-mono text-lg font-semibold sm:text-2xl"
-      :class="{
-        'text-success': tone === 'success',
-        'text-danger': tone === 'danger',
-        'text-foreground': tone === 'default',
-      }"
+      :class="TONE_TEXT_CLASS[tone]"
     >
       <slot>{{ value }}</slot>
     </div>

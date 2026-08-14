@@ -35,13 +35,6 @@ const filteredMaps = computed(() => {
   return sorted;
 });
 
-function barSegment(winrate: number) {
-  const pct = winrate * 100;
-  const left = Math.min(50, pct);
-  const width = Math.abs(pct - 50);
-  return { left: `${left}%`, width: `${width}%` };
-}
-
 /** Accessible summary of the recent-form dot strip, since the dots
  * themselves only carry color -- oldest game first, same order as rendered. */
 function formLabel(recentForm: boolean[]): string {
@@ -62,7 +55,7 @@ function formLabel(recentForm: boolean[]): string {
       </p>
     </div>
 
-    <div class="grid grid-cols-1 gap-3 rounded-lg border border-border bg-surface p-4 sm:grid-cols-2">
+    <UiFilterBar :columns="2">
       <UInput v-model="search" placeholder="Rechercher une carte" icon="i-lucide-search" />
       <USelectMenu
         v-model="sortMode"
@@ -71,7 +64,7 @@ function formLabel(recentForm: boolean[]): string {
         option-attribute="label"
         placeholder="Trier par"
       />
-    </div>
+    </UiFilterBar>
 
     <div v-if="filteredMaps.length === 0" class="rounded-lg border border-dashed border-border p-8 text-center text-muted">
       Aucune carte ne correspond à ta recherche.
@@ -104,15 +97,8 @@ function formLabel(recentForm: boolean[]): string {
         </p>
 
         <div v-if="map.gamesPlayed > 0" class="mt-3">
-          <div class="relative h-2 w-full overflow-hidden rounded-full bg-background">
-            <span class="absolute inset-y-0 w-px bg-border" style="left: 50%" />
-            <span
-              class="absolute inset-y-0 rounded-full"
-              :class="map.winrate >= 0.5 ? 'bg-success' : 'bg-danger'"
-              :style="barSegment(map.winrate)"
-            />
-          </div>
-          <p class="mt-1.5 text-right font-mono text-sm font-semibold" :class="map.winrate >= 0.5 ? 'text-success' : 'text-danger'">
+          <UiWinrateBar :winrate="map.winrate" centered />
+          <p class="mt-1.5 text-right font-mono text-sm font-semibold" :class="TONE_TEXT_CLASS[winrateTone(map.winrate)]">
             {{ formatPercent(map.winrate) }}
           </p>
 

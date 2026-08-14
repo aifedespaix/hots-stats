@@ -45,8 +45,6 @@ const categories: Category[] = [
   },
 ];
 
-const medals = ["🥇", "🥈", "🥉"];
-
 const rankings = computed(() =>
   categories.map((category) => ({
     ...category,
@@ -81,7 +79,7 @@ const rankings = computed(() =>
           class="flex items-center gap-3 rounded-md px-2 py-1.5"
           :class="index === 0 ? 'bg-background' : ''"
         >
-          <span class="w-5 shrink-0 text-center text-sm">{{ medals[index] }}</span>
+          <span class="w-5 shrink-0 text-center text-sm">{{ rankMedal(index) }}</span>
           <span class="min-w-0 flex-1 truncate text-sm font-medium">{{ hero.heroName }}</span>
           <span
             class="shrink-0 font-mono text-xs"

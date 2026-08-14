@@ -55,16 +55,6 @@ const topStrengths = computed(() =>
   weaknesses.value ? getTopStrengths(weaknesses.value, { trend: trend.value }) : [],
 );
 
-function sortRows<T, K extends keyof T>(rows: T[], key: K, dir: "asc" | "desc"): T[] {
-  const sign = dir === "asc" ? 1 : -1;
-  return [...rows].sort((a, b) => {
-    const av = a[key];
-    const bv = b[key];
-    if (typeof av === "string" && typeof bv === "string") return av.localeCompare(bv) * sign;
-    return ((av as number) - (bv as number)) * sign;
-  });
-}
-
 // --- Matchups: searchable + sortable, worst winrate first by default ---
 type MatchupSortKey = "heroName" | "gamesPlayed" | "winrate";
 const matchupsSearch = ref("");
@@ -79,7 +69,7 @@ const filteredMatchups = computed(() => {
   const rows = (weaknesses.value?.matchups ?? []).filter((m) =>
     term ? m.heroName.toLowerCase().includes(term) : true,
   );
-  return sortRows(rows, matchupsSortKey.value, matchupsSortDir.value);
+  return sortByKey(rows, matchupsSortKey.value, matchupsSortDir.value);
 });
 
 const matchupColumns = [
@@ -104,7 +94,7 @@ const filteredTalents = computed(() => {
     return t.heroName.toLowerCase().includes(term) || formatTalentName(t.talentName, t.heroName).toLowerCase().includes(term);
   });
   const key = talentsSortKey.value;
-  return key === "default" ? rows : sortRows(rows, key, talentsSortDir.value);
+  return key === "default" ? rows : sortByKey(rows, key, talentsSortDir.value);
 });
 
 const talentColumns = [
@@ -223,7 +213,7 @@ const talentColumns = [
         @sort="onMatchupsSort"
       >
         <template #cell-winrate="{ row }">
-          <span :class="(row.winrate as number) >= 0.5 ? 'text-success' : 'text-danger'">
+          <span :class="TONE_TEXT_CLASS[winrateTone(row.winrate as number)]">
             {{ formatPercent(row.winrate as number) }}
           </span>
         </template>

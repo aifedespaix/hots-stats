@@ -16,45 +16,36 @@ const { data: authData } = await useAuthUser();
 const ownBattletag = computed(() => authData.value?.user?.battletag ?? null);
 const isSelf = computed(() => Boolean(ownBattletag.value) && ownBattletag.value === props.battletag);
 
-const data = ref<PlayerDetailResponse | null>(null);
-const pending = ref(true);
-const notFound = ref(false);
-const errored = ref(false);
-
-async function loadProfile() {
-  pending.value = true;
-  notFound.value = false;
-  errored.value = false;
-  try {
-    data.value = await $fetch<PlayerDetailResponse>(`/players/${encodeURIComponent(props.battletag)}`, {
+const {
+  data,
+  pending,
+  errored,
+  notFound,
+  refresh: loadProfile,
+} = useAsyncResource<PlayerDetailResponse>({
+  fetcher: () =>
+    $fetch<PlayerDetailResponse>(`/players/${encodeURIComponent(props.battletag)}`, {
       baseURL: config.public.apiBase,
       credentials: "include",
-    });
-  } catch (err) {
-    if ((err as { statusCode?: number })?.statusCode === 404) notFound.value = true;
-    else errored.value = true;
-  } finally {
-    pending.value = false;
-  }
-}
+    }),
+  immediate: false,
+});
 
 const page = ref(1);
 const pageSize = 20;
-const matchesData = ref<MatchListResponse | null>(null);
-const matchesPending = ref(false);
-
-async function loadMatches() {
-  matchesPending.value = true;
-  try {
-    matchesData.value = await $fetch<MatchListResponse>("/matches", {
+const {
+  data: matchesData,
+  pending: matchesPending,
+  refresh: loadMatches,
+} = useAsyncResource<MatchListResponse>({
+  fetcher: () =>
+    $fetch<MatchListResponse>("/matches", {
       baseURL: config.public.apiBase,
       credentials: "include",
       query: { opponentBattletag: props.battletag, page: page.value, pageSize },
-    });
-  } finally {
-    matchesPending.value = false;
-  }
-}
+    }),
+  immediate: false,
+});
 
 watch(
   () => props.battletag,
@@ -152,9 +143,7 @@ function goToMatch(row: Record<string, unknown>) {
     <UIcon name="i-heroicons-arrow-path" class="h-6 w-6 animate-spin" />
   </div>
 
-  <div v-else-if="notFound" class="rounded-lg border border-border bg-surface p-8 text-center text-muted">
-    Aucune partie en commun avec ce joueur.
-  </div>
+  <UiErrorState v-else-if="notFound" :status-code="404" message="Aucune partie en commun avec ce joueur." />
 
   <div v-else-if="errored" class="space-y-3 rounded-lg border border-border bg-surface p-8 text-center text-muted">
     <p>Erreur lors du chargement des données de ce joueur. Réessaie dans un instant.</p>
@@ -212,16 +201,7 @@ function goToMatch(row: Record<string, unknown>) {
 
     <div v-if="ownStats" class="space-y-3">
       <h2 class="font-heading text-lg font-medium">Ses statistiques</h2>
-      <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <UiStatTile
-          label="Winrate"
-          :value="formatPercent(ownStats.summary.winrate)"
-          :tone="ownStats.summary.winrate >= 0.5 ? 'success' : 'danger'"
-        />
-        <UiStatTile label="Parties jouées" :value="String(ownStats.summary.gamesPlayed)" />
-        <UiStatTile label="Victoires" :value="String(ownStats.summary.wins)" />
-        <UiStatTile label="Durée moyenne" :value="formatDuration(ownStats.summary.avgDurationSeconds)" />
-      </div>
+      <StatsAccountSummaryStats :summary="ownStats.summary" />
       <div v-if="ownStats.topHeroes.length > 0">
         <h3 class="mb-2 text-sm font-medium text-muted">Ses héros les plus joués</h3>
         <UiTopHeroesTop3
@@ -320,7 +300,7 @@ function goToMatch(row: Record<string, unknown>) {
         <template #cell-playedAt="{ row }">{{ formatDate(row.playedAt as string) }}</template>
         <template #cell-gameMode="{ row }">{{ formatGameMode(row.gameMode as never) }}</template>
         <template #cell-result="{ row }">
-          <span :class="row.winner ? 'text-success' : 'text-danger'">
+          <span :class="row.winner ? TONE_TEXT_CLASS.success : TONE_TEXT_CLASS.danger">
             {{ row.winner ? "Victoire" : "Défaite" }}
           </span>
         </template>

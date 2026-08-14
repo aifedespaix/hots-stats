@@ -149,7 +149,7 @@ function goToMatch(row: Record<string, unknown>) {
       <StatsDashboard :filters="activeFilters" />
     </div>
 
-    <div class="grid grid-cols-1 gap-3 rounded-lg border border-border bg-surface p-4 sm:grid-cols-3 lg:grid-cols-6">
+    <UiFilterBar :columns="6">
       <USelectMenu
         v-model="mode"
         :options="modeOptions"
@@ -202,30 +202,14 @@ function goToMatch(row: Record<string, unknown>) {
           {{ query.trim().length < 3 ? "Tape au moins 3 caractères" : "Aucun joueur trouvé" }}
         </template>
       </USelectMenu>
-    </div>
+    </UiFilterBar>
 
-    <div class="flex flex-wrap gap-2">
-      <UButton
-        size="xs"
-        color="gray"
-        variant="soft"
-        icon="i-heroicons-x-mark"
-        :disabled="filtersStore.isFiltersDefault"
-        @click="filtersStore.resetFilters()"
-      >
-        Réinitialiser les filtres
-      </UButton>
-      <UButton
-        size="xs"
-        color="gray"
-        variant="soft"
-        icon="i-heroicons-arrows-up-down"
-        :disabled="filtersStore.isSortDefault"
-        @click="filtersStore.resetSort()"
-      >
-        Réinitialiser le tri
-      </UButton>
-    </div>
+    <UiFilterResetActions
+      :filters-default="filtersStore.isFiltersDefault"
+      :sort-default="filtersStore.isSortDefault"
+      @reset-filters="filtersStore.resetFilters()"
+      @reset-sort="filtersStore.resetSort()"
+    />
 
     <UiDataTable
       :columns="columns"
@@ -243,7 +227,7 @@ function goToMatch(row: Record<string, unknown>) {
       <template #cell-gameMode="{ row }">{{ formatGameMode(row.gameMode as never) }}</template>
       <template #cell-durationSeconds="{ row }">{{ formatDuration(row.durationSeconds as number) }}</template>
       <template #cell-result="{ row }">
-        <span :class="row.winner ? 'text-success' : 'text-danger'">
+        <span :class="row.winner ? TONE_TEXT_CLASS.success : TONE_TEXT_CLASS.danger">
           {{ row.winner ? "Victoire" : "Défaite" }}
         </span>
       </template>
