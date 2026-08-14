@@ -285,6 +285,11 @@ function applyBuild(row: (typeof buildRows.value)[number]) {
           </div>
           <input v-model.number="minGames" type="range" min="5" max="50" step="5" class="w-full accent-brand sm:w-48" />
         </div>
+        <p class="flex items-center gap-1.5 text-[11px] text-muted">
+          <span class="inline-block h-2 w-px shrink-0 bg-foreground/70" />
+          le trait vertical sur chaque barre marque la borne basse de Wilson (95%) -- le classement se fie à ce
+          trait, pas au winrate affiché, pour ne jamais laisser un talent joué une fois passer devant un build éprouvé.
+        </p>
 
         <div v-if="analyzerPending && !analyzerData" class="rounded-lg border border-border bg-surface p-8 text-center text-muted">
           Chargement...
@@ -322,12 +327,23 @@ function applyBuild(row: (typeof buildRows.value)[number]) {
                     <UIcon name="i-heroicons-lock-closed" class="h-3.5 w-3.5" />
                   </button>
                 </div>
-                <div class="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-background">
-                  <div
-                    class="h-full rounded-full"
-                    :class="option.winrate >= 0.5 ? 'bg-success' : 'bg-danger'"
-                    :style="{ width: `${Math.round(option.winrate * 100)}%` }"
-                  />
+                <div class="relative mt-1.5 h-1.5 w-full">
+                  <div class="h-full w-full overflow-hidden rounded-full bg-background">
+                    <div
+                      class="h-full rounded-full"
+                      :class="option.winrate >= 0.5 ? 'bg-success' : 'bg-danger'"
+                      :style="{ width: `${Math.round(option.winrate * 100)}%` }"
+                    />
+                  </div>
+                  <UTooltip
+                    :text="`Borne basse de Wilson (95%) : ${formatPercent(option.wilsonLowerBound)} -- winrate garanti au-delà de ce trait avec ${option.picks} parties observées`"
+                    :popper="{ placement: 'top' }"
+                  >
+                    <span
+                      class="absolute -top-0.5 h-2 w-px -translate-x-1/2 bg-foreground/70"
+                      :style="{ left: `${Math.min(100, Math.max(0, Math.round(option.wilsonLowerBound * 100)))}%` }"
+                    />
+                  </UTooltip>
                 </div>
                 <div class="mt-1 flex items-center justify-between font-mono text-[11px] text-muted">
                   <span :class="option.winrate >= 0.5 ? 'text-success' : 'text-danger'">{{ formatPercent(option.winrate) }} win</span>
@@ -339,6 +355,15 @@ function applyBuild(row: (typeof buildRows.value)[number]) {
               </li>
             </ul>
           </div>
+        </div>
+
+        <div v-if="buildRows.length > 1" class="rounded-lg border border-border bg-surface p-4">
+          <h2 class="mb-1 font-heading text-sm font-medium">Carte des builds</h2>
+          <p class="mb-3 text-xs text-muted">
+            Les {{ Math.min(buildRows.length, 8) }} builds les mieux classés, superposés palier par palier -- suis le
+            trait le plus opaque pour voir le build recommandé se détacher des variantes.
+          </p>
+          <ChartsBuildFlowDiagram :builds="analyzerData?.topBuilds ?? []" :hero-name="selectedHeroName" />
         </div>
 
         <UiPanel title="Top builds complets" :count="buildRows.length">

@@ -251,7 +251,18 @@ export interface MapHubEntry {
   gamesPlayed: number;
   wins: number;
   winrate: number;
+  /** The user's last `MAP_HUB_RECENT_FORM_WINDOW` ranked games on this map,
+   * chronological oldest-first (so a "form strip" reads left-to-right like a
+   * timeline, most recent game on the right) -- true = win. Capped well
+   * below `gamesPlayed` on purpose: this powers a compact glance indicator
+   * on the Hub tile, not a full history (that's what the map detail page
+   * and the "Suivi de la forme" widget are for). */
+  recentForm: boolean[];
 }
+
+/** How many of the user's most recent ranked games (per map) feed the Hub
+ * tile's form strip. */
+export const MAP_HUB_RECENT_FORM_WINDOW = 10;
 
 /** A hero's community-wide performance on one map (every recorded match,
  * not just the connected user's) -- the map detail page's "meta" table. */

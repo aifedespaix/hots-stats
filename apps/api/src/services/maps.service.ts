@@ -1,6 +1,7 @@
 import { db, heroRoleEnum, heroes, maps, matchPlayers, matches } from "@hots-stats/db";
 import {
   DRAFT_RANKED_MODES,
+  MAP_HUB_RECENT_FORM_WINDOW,
   MAP_META_MIN_GAMES,
   SOAK_MIN_GAMES,
   TEAM_IMPACT_MIN_GAMES,
@@ -29,6 +30,43 @@ function rankedModeCondition() {
 }
 
 /**
+ * The user's last `MAP_HUB_RECENT_FORM_WINDOW` ranked games per map,
+ * chronological oldest-first -- powers the Hub tile's form strip. One
+ * `row_number() over (partition by map)` query rather than N per-map
+ * queries, so the Hub stays a single round trip regardless of how many maps
+ * the app knows about.
+ */
+async function getRecentFormByMap(userId: string): Promise<Map<string, boolean[]>> {
+  const ranked = db.$with("ranked_map_games").as(
+    db
+      .select({
+        mapId: matches.mapId,
+        winner: matchPlayers.winner,
+        playedAt: matches.playedAt,
+        rn: sql<number>`row_number() over (partition by ${matches.mapId} order by ${matches.playedAt} desc)`.as("rn"),
+      })
+      .from(matchPlayers)
+      .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
+      .where(and(eq(matchPlayers.userId, userId), rankedModeCondition())),
+  );
+
+  const rows = await db
+    .with(ranked)
+    .select({ mapId: ranked.mapId, winner: ranked.winner })
+    .from(ranked)
+    .where(sql`${ranked.rn} <= ${MAP_HUB_RECENT_FORM_WINDOW}`)
+    .orderBy(ranked.mapId, ranked.playedAt);
+
+  const byMap = new Map<string, boolean[]>();
+  for (const row of rows) {
+    const list = byMap.get(row.mapId) ?? [];
+    list.push(row.winner);
+    byMap.set(row.mapId, list);
+  }
+  return byMap;
+}
+
+/**
  * All maps the app knows about, each with the connected user's own ranked
  * record -- the Hub's tile grid. A left join (via a personal-stats CTE)
  * keeps maps the user has never played in the list at 0 games, since the
@@ -48,19 +86,26 @@ export async function getMapHub(userId: string): Promise<MapHubEntry[]> {
       .groupBy(matches.mapId),
   );
 
-  const rows = await db
-    .with(personal)
-    .select({
-      mapId: maps.id,
-      mapName: maps.name,
-      gamesPlayed: sql<number>`coalesce(${personal.gamesPlayed}, 0)::int`,
-      wins: sql<number>`coalesce(${personal.wins}, 0)::int`,
-    })
-    .from(maps)
-    .leftJoin(personal, eq(personal.mapId, maps.id));
+  const [rows, recentFormByMap] = await Promise.all([
+    db
+      .with(personal)
+      .select({
+        mapId: maps.id,
+        mapName: maps.name,
+        gamesPlayed: sql<number>`coalesce(${personal.gamesPlayed}, 0)::int`,
+        wins: sql<number>`coalesce(${personal.wins}, 0)::int`,
+      })
+      .from(maps)
+      .leftJoin(personal, eq(personal.mapId, maps.id)),
+    getRecentFormByMap(userId),
+  ]);
 
   return rows
-    .map((row) => ({ ...row, winrate: row.gamesPlayed > 0 ? row.wins / row.gamesPlayed : 0 }))
+    .map((row) => ({
+      ...row,
+      winrate: row.gamesPlayed > 0 ? row.wins / row.gamesPlayed : 0,
+      recentForm: recentFormByMap.get(row.mapId) ?? [],
+    }))
     .sort((a, b) => a.mapName.localeCompare(b.mapName));
 }
 

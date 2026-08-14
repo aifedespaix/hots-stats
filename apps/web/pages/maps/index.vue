@@ -41,6 +41,15 @@ function barSegment(winrate: number) {
   const width = Math.abs(pct - 50);
   return { left: `${left}%`, width: `${width}%` };
 }
+
+/** Accessible summary of the recent-form dot strip, since the dots
+ * themselves only carry color -- oldest game first, same order as rendered. */
+function formLabel(recentForm: boolean[]): string {
+  const wins = recentForm.filter(Boolean).length;
+  return `Forme sur les ${recentForm.length} dernières parties classées : ${wins} victoire${wins > 1 ? "s" : ""}, ${
+    recentForm.length - wins
+  } défaite${recentForm.length - wins > 1 ? "s" : ""} -- de la plus ancienne à la plus récente.`;
+}
 </script>
 
 <template>
@@ -106,6 +115,19 @@ function barSegment(winrate: number) {
           <p class="mt-1.5 text-right font-mono text-sm font-semibold" :class="map.winrate >= 0.5 ? 'text-success' : 'text-danger'">
             {{ formatPercent(map.winrate) }}
           </p>
+
+          <div v-if="map.recentForm.length > 0" class="mt-2.5 flex items-center gap-1.5">
+            <span class="text-[10px] uppercase tracking-wide text-muted">Forme</span>
+            <div class="flex items-center gap-[3px]" :aria-label="formLabel(map.recentForm)">
+              <span
+                v-for="(win, index) in map.recentForm"
+                :key="index"
+                class="h-2 w-2 rounded-[2px]"
+                :class="win ? 'bg-success' : 'bg-danger'"
+                :title="win ? 'Victoire' : 'Défaite'"
+              />
+            </div>
+          </div>
         </div>
         <p v-else class="mt-3 text-sm text-muted">Pas encore de partie</p>
       </NuxtLink>
