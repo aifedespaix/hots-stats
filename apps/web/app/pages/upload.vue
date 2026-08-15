@@ -20,7 +20,8 @@ useSeoMeta({
     <div>
       <h1 class="font-heading text-2xl font-semibold">Upload &amp; Synchronisation</h1>
       <p class="mt-1 text-sm text-muted">
-        Deux façons d'envoyer tes parties : glisse-les ici à la main, ou laisse le daemon s'en charger tout seul.
+        Le glisser-déposer envoie une partie ponctuelle, mais sans le daemon installé et lancé, tes
+        nouvelles parties ne remonteront jamais toutes seules dans tes stats.
       </p>
     </div>
 

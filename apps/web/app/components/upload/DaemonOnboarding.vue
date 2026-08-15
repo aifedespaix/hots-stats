@@ -32,8 +32,9 @@ const features = [
       <h2 class="font-heading text-lg font-medium">Synchronisation automatique</h2>
     </div>
     <p class="text-sm text-muted">
-      Le daemon Windows tourne en fond et envoie tes parties tout seul dès la fin de chaque game.
-      Installe-le une fois, oublie-le ensuite.
+      Indispensable pour voir tes stats se remplir : sans le daemon lancé, aucune partie ne remonte
+      automatiquement. Le daemon Windows tourne en fond et envoie tes parties tout seul dès la fin de
+      chaque game. Installe-le une fois, laisse-le tourner.
     </p>
 
     <ul class="grid grid-cols-1 gap-3 sm:grid-cols-2">

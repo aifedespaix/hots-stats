@@ -49,7 +49,7 @@ from __future__ import annotations
 PARSER_VERSION = "1.3"
 
 # Shown in the settings window. Bump alongside `[project].version` in pyproject.toml.
-APP_VERSION = "1.0.30"
+APP_VERSION = "1.0.31"
 
 # HotS talent tiers are always at these character levels, in pick order.
 TALENT_TIER_LEVELS = (1, 4, 7, 10, 13, 16, 20)
@@ -78,6 +78,14 @@ DEFAULT_GAME_MODE = "Custom"
 
 # Internal map identifier (as reported by the EndOfGameTalentChoices tracker
 # event) -> display name. Slugified at parse time to match `maps.id`.
+#
+# NOTE: Braxis Outpost, Industrial District, Lost Cavern, and Silver City
+# (ARAM maps) now exist as `maps` rows -- see packages/db/src/seed.ts's
+# MAP_NAMES -- but are NOT yet listed here. Their real Blizzard internal
+# map codes are unknown; guessing would silently corrupt replay parsing
+# for other maps if wrong. Add their correct internal code -> display name
+# entries here once confirmed (e.g. from an actual ARAM replay on one of
+# these maps) before ARAM replays for them can ingest.
 MAP_DISPLAY_NAMES: dict[str, str] = {
     "ControlPoints": "Sky Temple",
     "TowersOfDoom": "Towers of Doom",
