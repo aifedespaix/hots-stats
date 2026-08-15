@@ -4,8 +4,11 @@ export default defineNuxtConfig({
   modules: ["@nuxt/ui", "@nuxt/fonts", "@pinia/nuxt"],
   css: ["~/assets/css/globals.css"],
   ssr: true,
+  // Type safety is enforced by the separate `bun run typecheck` (nuxt typecheck)
+  // command, not in-process here: `typeCheck: true` spawns vue-tsc as a live
+  // build-time checker, which is memory-hungry enough to abort the build on
+  // resource-constrained targets (e.g. the arm64/Raspberry Pi Docker build).
   typescript: {
-    typeCheck: true,
     strict: true,
   },
   app: {
