@@ -15,6 +15,7 @@ const routesMap: Record<string, string> = {
   "players/index.vue": "Classement des Joueurs",
   "players/[battletag].vue": "Profil Joueur",
   "settings/index.vue": "Paramètres du compte",
+  "upload.vue": "Upload & Synchronisation",
   "u/[handle].vue": "Profil Utilisateur"
 };
 

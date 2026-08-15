@@ -56,6 +56,21 @@ function goToMatch(row: Record<string, unknown>) {
       </p>
     </div>
 
+    <NuxtLink
+      to="/upload"
+      class="flex items-center gap-3 rounded-lg border border-brand/30 bg-brand/5 p-4 transition-colors hover:bg-brand/10"
+    >
+      <UIcon name="i-heroicons-cloud-arrow-up" class="h-5 w-5 shrink-0 text-brand" />
+      <div class="min-w-0 flex-1">
+        <p class="text-xs uppercase tracking-wide text-muted">Tes parties uploadées</p>
+        <p class="truncate text-sm font-medium">
+          {{ summary ? summary.gamesPlayed : "…" }} partie{{ (summary?.gamesPlayed ?? 0) > 1 ? "s" : "" }} sur ton
+          compte — envoie les prochaines
+        </p>
+      </div>
+      <UIcon name="i-heroicons-chevron-right" class="h-4 w-4 shrink-0 text-muted" />
+    </NuxtLink>
+
     <StatsAccountSummaryStats :summary="summary" />
 
     <NuxtLink
@@ -97,23 +112,6 @@ function goToMatch(row: Record<string, unknown>) {
           </span>
         </template>
       </UiDataTable>
-    </div>
-
-    <div class="rounded-lg border border-border bg-surface p-6">
-      <h2 class="font-heading text-lg font-medium">Télécharger le daemon</h2>
-      <p class="mt-1 text-sm text-muted">
-        Le daemon Windows détecte automatiquement tes replays Heroes of the Storm et les envoie
-        vers ton compte.
-      </p>
-      <UButton
-        class="mt-4"
-        to="https://github.com/aifedespaix/hots-stats/releases/latest"
-        external
-        target="_blank"
-        icon="i-heroicons-arrow-down-tray"
-      >
-        Télécharger la dernière version
-      </UButton>
     </div>
   </div>
 </template>

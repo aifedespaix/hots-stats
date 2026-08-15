@@ -21,6 +21,10 @@ daemon-python/dist/
 daemon-python/**/*.egg-info/
 daemon-python/.pytest_cache/
 
+# Python (replay-parser)
+**/__pycache__/
+apps/replay-parser/.venv/
+
 graphify-out/cache/
 
 prompts

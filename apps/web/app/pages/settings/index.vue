@@ -3,14 +3,6 @@ import type { SharedPlayerAnnotation } from "@hots-stats/shared-types";
 
 definePageMeta({ middleware: "auth" });
 
-interface PatSummary {
-  id: string;
-  name: string;
-  lastUsedAt: string | null;
-  createdAt: string;
-  revokedAt: string | null;
-}
-
 useSeoMeta({
   title: "Paramètres",
   description:
@@ -94,39 +86,6 @@ const { data: myRatingsData } = await useFetch<{ annotation: SharedPlayerAnnotat
 );
 const myAnnotation = computed(() => myRatingsData.value?.annotation ?? null);
 const myNotes = computed(() => myAnnotation.value?.entries.filter((entry) => !entry.isMine) ?? []);
-
-const { data: tokensData, refresh: refreshTokens } = await useFetch<{ tokens: PatSummary[] }>(
-  "/tokens",
-  {
-    baseURL: config.public.apiBase,
-    credentials: "include",
-  },
-);
-
-const newTokenName = ref("");
-const createdToken = ref<string | null>(null);
-
-async function createToken() {
-  if (!newTokenName.value) return;
-  const res = await $fetch<{ token: string }>("/tokens", {
-    method: "POST",
-    baseURL: config.public.apiBase,
-    credentials: "include",
-    body: { name: newTokenName.value },
-  });
-  createdToken.value = res.token;
-  newTokenName.value = "";
-  await refreshTokens();
-}
-
-async function revokeToken(id: string) {
-  await $fetch(`/tokens/${id}`, {
-    method: "DELETE",
-    baseURL: config.public.apiBase,
-    credentials: "include",
-  });
-  await refreshTokens();
-}
 
 // -- "Zone dangereuse" : réinitialisation des données -----------------------
 //
@@ -265,48 +224,17 @@ async function confirmReset() {
       </template>
     </section>
 
-    <section class="space-y-4 rounded-lg border border-border p-4 sm:p-6">
-      <h2 class="font-heading text-lg">Personal Access Tokens</h2>
-      <p class="text-sm text-muted">
-        Utilisé par le daemon Windows pour envoyer tes statistiques de partie.
-      </p>
-
-      <div v-if="createdToken" class="rounded-md border border-brand bg-surface p-4">
-        <p class="mb-2 text-sm">Copie ce token maintenant, il ne sera plus jamais affiché :</p>
-        <code class="break-all font-mono text-sm">{{ createdToken }}</code>
+    <NuxtLink
+      to="/upload"
+      class="flex items-center gap-3 rounded-lg border border-brand/30 bg-brand/5 p-4 transition-colors hover:bg-brand/10"
+    >
+      <UIcon name="i-heroicons-key" class="h-5 w-5 shrink-0 text-brand" />
+      <div class="min-w-0 flex-1">
+        <p class="text-xs uppercase tracking-wide text-muted">Tokens d'accès &amp; daemon</p>
+        <p class="truncate text-sm font-medium">Gère tes tokens et connecte le daemon depuis la page Upload</p>
       </div>
-
-      <ul class="divide-y divide-border">
-        <li
-          v-for="token in tokensData?.tokens ?? []"
-          :key="token.id"
-          class="flex items-center justify-between gap-3 py-3"
-        >
-          <div class="min-w-0">
-            <p class="truncate font-medium">{{ token.name }}</p>
-            <p class="text-xs text-muted font-mono">
-              {{ token.revokedAt ? "Révoqué" : "Actif" }} · créé le
-              {{ new Date(token.createdAt).toLocaleDateString() }}
-            </p>
-          </div>
-          <UButton
-            v-if="!token.revokedAt"
-            color="error"
-            variant="ghost"
-            size="sm"
-            class="shrink-0"
-            @click="revokeToken(token.id)"
-          >
-            Révoquer
-          </UButton>
-        </li>
-      </ul>
-
-      <div class="flex flex-col gap-2 sm:flex-row">
-        <UInput v-model="newTokenName" placeholder="Nom du token (ex: PC principal)" class="flex-1" />
-        <UButton block class="sm:w-auto" @click="createToken">Générer</UButton>
-      </div>
-    </section>
+      <UIcon name="i-heroicons-chevron-right" class="h-4 w-4 shrink-0 text-muted" />
+    </NuxtLink>
 
     <section class="space-y-4 rounded-lg border border-danger p-4 sm:p-6">
       <h2 class="font-heading text-lg text-danger">Zone dangereuse</h2>

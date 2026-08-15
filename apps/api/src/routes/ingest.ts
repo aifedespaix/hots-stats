@@ -1,22 +1,13 @@
 import type { User } from "@hots-stats/db";
 import { daemonErrorReportInputSchema } from "@hots-stats/shared-types";
 import { Hono } from "hono";
-import { DefaultAdapter, ReplayValidationError, resolveAdapter } from "../adapters";
-import type { ReplayAdapter } from "../adapters";
 import { API_VERSION, MIN_PARSER_VERSION } from "../constants";
 import { authToken } from "../middleware/auth-token";
 import { recordDaemonError } from "../services/daemon-errors.service";
-import { quarantineRawReplay } from "../services/quarantine.service";
-import { upsertReplay } from "../services/replay-upsert.service";
+import { ingestReplayPayload } from "../services/replay-ingest.service";
 import { getStatsSummary } from "../services/stats.service";
 
 type Env = { Variables: { user: User } };
-
-/** `m_baseBuild` is Blizzard's own replay header field name -- kept as-is at the top level of the payload rather than camelCased, so adapters can read it the same way regardless of what else changed in a given build's structure. */
-function extractBaseBuild(body: Record<string, unknown>): number | null {
-  const value = body.m_baseBuild;
-  return typeof value === "number" && Number.isInteger(value) ? value : null;
-}
 
 /**
  * POST /ingest, GET /ingest/summary, GET /ingest/version — called by the
@@ -58,41 +49,22 @@ export const ingestRoute = new Hono<Env>()
     }
 
     const record = body as Record<string, unknown>;
-    const hasBaseBuild = "m_baseBuild" in record;
-    const baseBuild = extractBaseBuild(record);
-    if (hasBaseBuild && baseBuild === null) {
-      return c.json({ error: "m_baseBuild must be an integer" }, 400);
-    }
-
     const user = c.get("user");
+    const result = await ingestReplayPayload(record, user.id);
 
-    // No `m_baseBuild` at all: a daemon version predating this feature --
-    // always the default (and, until now, only) structure. A build number
-    // *is* present goes through adapter resolution/quarantine below.
-    let adapter: ReplayAdapter;
-    if (baseBuild === null) {
-      adapter = DefaultAdapter;
-    } else {
-      const resolved = await resolveAdapter(baseBuild);
-      if (!resolved) {
-        await quarantineRawReplay({ baseBuild, rawPayload: record, uploadedByUserId: user.id });
-        return c.json({ quarantined: true, baseBuild }, 202);
-      }
-      adapter = resolved;
+    switch (result.status) {
+      case "invalid":
+        return c.json({ error: result.detail }, 400);
+      case "quarantined":
+        return c.json({ quarantined: true, baseBuild: result.baseBuild }, 202);
+      case "processed":
+        return c.json(
+          result.upserted
+            ? { upserted: true, matchId: result.matchId }
+            : { upserted: false, matchId: result.matchId, reason: result.reason },
+          result.upserted ? 201 : 200,
+        );
     }
-
-    let parsed: ReturnType<ReplayAdapter["parse"]>;
-    try {
-      parsed = adapter.parse(record);
-    } catch (err) {
-      if (err instanceof ReplayValidationError) {
-        return c.json({ error: err.zodError.flatten() }, 400);
-      }
-      throw err;
-    }
-
-    const result = await upsertReplay(parsed, user.id);
-    return c.json(result, result.upserted ? 201 : 200);
   })
   .post("/errors", async (c) => {
     // Best-effort report of a *local* ingestion failure the daemon already
