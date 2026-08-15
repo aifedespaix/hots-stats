@@ -140,6 +140,12 @@ async function confirmReset() {
     <h1 class="font-heading text-2xl font-semibold">Paramètres</h1>
 
     <section class="space-y-4 rounded-lg border border-border p-4 sm:p-6">
+      <h2 class="font-heading text-lg">Apparence</h2>
+      <p class="text-sm text-muted">Choisis le thème de l'interface.</p>
+      <UiThemeSwitcher />
+    </section>
+
+    <section class="space-y-4 rounded-lg border border-border p-4 sm:p-6">
       <h2 class="font-heading text-lg">Pseudo</h2>
       <p class="text-sm text-muted">
         Le nom affiché sur le site. Choisis ce que tu veux, indépendamment de ton compte de connexion.

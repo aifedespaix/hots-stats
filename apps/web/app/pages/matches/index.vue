@@ -30,6 +30,10 @@ interface PlayerSearchResponse {
 const config = useRuntimeConfig();
 const { data: filterOptions } = await useApiFetch<FiltersResponse>("/matches/filters");
 
+// Visiting the page is what clears the "new games" nav chip -- the sync
+// toast watermark (which games we've *notified* about) is tracked separately.
+useEngagementStore().markMatchesVisited();
+
 const filtersStore = useMatchesFiltersStore();
 const { filters, sortKey, sortDir } = storeToRefs(filtersStore);
 const gameModeStore = useGameModeStore();
