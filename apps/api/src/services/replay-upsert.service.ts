@@ -1,4 +1,4 @@
-import { db, heroes, matchPlayers, matches, maps, talentPicks, users } from "@hots-stats/db";
+import { db, heroes, matchDeaths, matchLevelSnapshots, matchPlayers, matches, maps, talentPicks, users } from "@hots-stats/db";
 import type { ReplayPayload } from "@hots-stats/shared-types";
 import { eq, inArray } from "drizzle-orm";
 
@@ -81,6 +81,22 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
     return { upserted: false, reason: "stale_version", matchId: existing.id };
   }
 
+  // Grouped by battletag up front so the per-player loop below can look each
+  // player's slice up in O(1) instead of re-filtering the whole match's
+  // timeline once per player.
+  const deathsByBattletag = new Map<string, { atSeconds: number }[]>();
+  for (const death of payload.timeline?.deaths ?? []) {
+    const list = deathsByBattletag.get(death.battletag) ?? [];
+    list.push({ atSeconds: death.atSeconds });
+    deathsByBattletag.set(death.battletag, list);
+  }
+  const levelSnapshotsByBattletag = new Map<string, { atSeconds: number; level: number }[]>();
+  for (const snapshot of payload.timeline?.levelSnapshots ?? []) {
+    const list = levelSnapshotsByBattletag.get(snapshot.battletag) ?? [];
+    list.push({ atSeconds: snapshot.atSeconds, level: snapshot.level });
+    levelSnapshotsByBattletag.set(snapshot.battletag, list);
+  }
+
   return db.transaction(async (tx) => {
     let matchId: string;
 
@@ -93,12 +109,14 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
           mapId: payload.map,
           gameMode: payload.gameMode,
           region: payload.region,
+          gameVersion: payload.gameVersion,
           playedAt: new Date(payload.playedAt),
           durationSeconds: payload.durationSeconds,
           updatedAt: new Date(),
         })
         .where(eq(matches.id, matchId));
-      // Replacing match_players cascades the delete to talent_picks.
+      // Replacing match_players cascades the delete to talent_picks,
+      // match_deaths and match_level_snapshots.
       await tx.delete(matchPlayers).where(eq(matchPlayers.matchId, matchId));
     } else {
       const [created] = await tx
@@ -109,6 +127,7 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
           mapId: payload.map,
           gameMode: payload.gameMode,
           region: payload.region,
+          gameVersion: payload.gameVersion,
           playedAt: new Date(payload.playedAt),
           durationSeconds: payload.durationSeconds,
           uploadedByUserId,
@@ -152,6 +171,24 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
             tier: talent.tier,
             talentId: talent.talentId,
             talentName: talent.talentName,
+          })),
+        );
+      }
+
+      const deaths = deathsByBattletag.get(player.battletag) ?? [];
+      if (deaths.length > 0) {
+        await tx.insert(matchDeaths).values(
+          deaths.map((death) => ({ matchPlayerId: createdPlayer.id, atSeconds: death.atSeconds })),
+        );
+      }
+
+      const levelSnapshots = levelSnapshotsByBattletag.get(player.battletag) ?? [];
+      if (levelSnapshots.length > 0) {
+        await tx.insert(matchLevelSnapshots).values(
+          levelSnapshots.map((snapshot) => ({
+            matchPlayerId: createdPlayer.id,
+            atSeconds: snapshot.atSeconds,
+            level: snapshot.level,
           })),
         );
       }

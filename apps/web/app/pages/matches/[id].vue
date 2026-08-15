@@ -41,7 +41,6 @@ watch(
 
 const tabItems = [
   { label: "Statistiques & Scoreboard", icon: "i-heroicons-table-cells", slot: "scoreboard" as const },
-  { label: "Le Coach", icon: "i-heroicons-light-bulb", slot: "coach" as const },
   { label: "Heatmaps & Placement", icon: "i-heroicons-viewfinder-circle", slot: "heatmaps" as const },
 ];
 
@@ -81,17 +80,15 @@ const sortedRows = computed(() => {
   return sortByKey(rows, key, sortDir.value);
 });
 
-// --- Tab 2: Coach insights, for whichever of the 10 players is selected ---
+// --- Coach insights modal, opened by clicking a hero row in the scoreboard ---
 
 const selectedBattletag = ref<string | null>(null);
-watch(
-  scoreboardRows,
-  (rows) => {
-    if (selectedBattletag.value && rows.some((r) => r.battletag === selectedBattletag.value)) return;
-    selectedBattletag.value = rows.find((r) => r.isMe)?.battletag ?? rows[0]?.battletag ?? null;
-  },
-  { immediate: true },
-);
+const coachModalOpen = ref(false);
+
+function openCoachModal(battletag: string) {
+  selectedBattletag.value = battletag;
+  coachModalOpen.value = true;
+}
 
 const selectedRow = computed(() => scoreboardRows.value.find((r) => r.battletag === selectedBattletag.value) ?? null);
 const subjectTeamRows = computed(() =>
@@ -111,9 +108,10 @@ const coachInsights = computed(() => {
   });
 });
 
-// Ready verdicts first: today every timeline-dependent pillar shows
-// "unavailable" (see coachAnalysis.ts), so leading with what's actually
-// actionable avoids burying the two real insights at the bottom of the grid.
+// Ready verdicts first: a match ingested before the daemon started sending
+// `timeline` data has every timeline-dependent pillar as "unavailable" (see
+// coachAnalysis.ts), so leading with what's actually actionable avoids
+// burying the ready insights at the bottom of the grid.
 const displayedInsights = computed(() =>
   [...coachInsights.value].sort((a, b) => Number(a.status !== "ready") - Number(b.status !== "ready")),
 );
@@ -145,24 +143,10 @@ const displayedInsights = computed(() =>
             :sort-key="sortKey"
             :sort-dir="sortDir"
             @sort="onSort"
+            @select-player="openCoachModal"
           />
 
           <CoachPlayerTalents :players="sortedRows" />
-        </div>
-      </template>
-
-      <template #coach>
-        <div class="mt-4 space-y-4">
-          <CoachPlayerSwitcher
-            v-if="selectedBattletag"
-            :players="scoreboardRows"
-            :model-value="selectedBattletag"
-            @update:model-value="selectedBattletag = $event"
-          />
-
-          <div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            <CoachInsightCard v-for="insight in displayedInsights" :key="insight.pillar" :insight="insight" />
-          </div>
         </div>
       </template>
 
@@ -172,5 +156,13 @@ const displayedInsights = computed(() =>
         </div>
       </template>
     </UTabs>
+
+    <CoachInsightsModal
+      v-model="coachModalOpen"
+      :players="scoreboardRows"
+      :selected-battletag="selectedBattletag"
+      :insights="displayedInsights"
+      @update:selected-battletag="selectedBattletag = $event"
+    />
   </div>
 </template>

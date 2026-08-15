@@ -1,9 +1,10 @@
-import { type User, db, heroes, matchPlayers, matches, maps, talentPicks } from "@hots-stats/db";
-import { and, asc, desc, eq, exists, gte, ilike, inArray, lte, ne, sql } from "drizzle-orm";
+import { type User, db, heroes, matchDeaths, matchLevelSnapshots, matchPlayers, matches, maps, talentPicks } from "@hots-stats/db";
+import { UNKNOWN_GAME_VERSION } from "@hots-stats/shared-types";
+import { and, asc, desc, eq, exists, gte, ilike, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { Hono } from "hono";
 import { z } from "zod";
-import { gameModeListSchema } from "../lib/query";
+import { gameModeListSchema, gameVersionListSchema } from "../lib/query";
 import { authSession, requireUser } from "../middleware/auth-session";
 import { getFriendshipStatuses } from "../services/friendships.service";
 
@@ -35,6 +36,7 @@ const filtersQuerySchema = z.object({
   opponentBattletag: z.string().optional(),
   allyBattletag: z.string().optional(),
   opponentHeroId: z.string().optional(),
+  gameVersion: gameVersionListSchema.optional(),
 });
 
 const listQuerySchema = filtersQuerySchema.extend({
@@ -60,13 +62,27 @@ function likeTerm(value: string): string {
   return `%${value.trim().replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
 }
 
+/** Newest-first comparator for "major.minor.revision.baseBuild" strings
+ * (see daemon-python/src/parser.py's `_game_version`) -- a plain string
+ * sort would put "2.55.15..." before "2.55.9..." since "1" < "9". */
+function compareGameVersionsDesc(a: string, b: string): number {
+  const partsA = a.split(".").map((n) => Number.parseInt(n, 10) || 0);
+  const partsB = b.split(".").map((n) => Number.parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
+    const diff = (partsB[i] ?? 0) - (partsA[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
 /**
  * Builds the same set of match filter conditions used by `GET /matches`,
  * shared with `GET /matches/trend` (win-rate evolution chart) so both
  * always agree on what a given set of filters matches.
  */
 function buildMatchConditions(userId: string, filters: z.infer<typeof filtersQuerySchema>) {
-  const { mode, heroId, mapId, dateFrom, dateTo, opponentBattletag, allyBattletag, opponentHeroId } = filters;
+  const { mode, heroId, mapId, dateFrom, dateTo, opponentBattletag, allyBattletag, opponentHeroId, gameVersion } =
+    filters;
   const opponent = alias(matchPlayers, "opponent");
   const ally = alias(matchPlayers, "ally");
 
@@ -74,6 +90,17 @@ function buildMatchConditions(userId: string, filters: z.infer<typeof filtersQue
   if (mode && mode.length > 0) conditions.push(inArray(matches.gameMode, mode));
   if (heroId) conditions.push(eq(matchPlayers.heroId, heroId));
   if (mapId) conditions.push(eq(matches.mapId, mapId));
+  if (gameVersion && gameVersion.length > 0) {
+    const knownVersions = gameVersion.filter((v) => v !== UNKNOWN_GAME_VERSION);
+    const versionConditions = [
+      ...(knownVersions.length > 0 ? [inArray(matches.gameVersion, knownVersions)] : []),
+      ...(gameVersion.includes(UNKNOWN_GAME_VERSION) ? [isNull(matches.gameVersion)] : []),
+    ];
+    // `versionConditions` is never empty here: `gameVersion` (validated
+    // non-empty by `gameVersionListSchema`) is split into exactly these two
+    // buckets above, so every entry lands in one or the other.
+    conditions.push(or(...versionConditions)!);
+  }
   if (dateFrom) conditions.push(gte(matches.playedAt, new Date(dateFrom)));
   if (dateTo) conditions.push(lte(matches.playedAt, new Date(dateTo)));
   if (opponentBattletag) {
@@ -143,6 +170,7 @@ export const matchesRoute = new Hono<Env>()
           playedAt: matches.playedAt,
           durationSeconds: matches.durationSeconds,
           gameMode: matches.gameMode,
+          gameVersion: matches.gameVersion,
           mapId: matches.mapId,
           mapName: maps.name,
           winner: matchPlayers.winner,
@@ -174,7 +202,7 @@ export const matchesRoute = new Hono<Env>()
   .get("/filters", async (c) => {
     const user = c.get("user");
 
-    const [heroRows, mapRows] = await Promise.all([
+    const [heroRows, mapRows, versionRows] = await Promise.all([
       db
         .selectDistinct({ id: heroes.id, name: heroes.name })
         .from(matchPlayers)
@@ -188,9 +216,25 @@ export const matchesRoute = new Hono<Env>()
         .innerJoin(maps, eq(maps.id, matches.mapId))
         .where(eq(matchPlayers.userId, user.id))
         .orderBy(asc(maps.name)),
+      db
+        .selectDistinct({ gameVersion: matches.gameVersion })
+        .from(matchPlayers)
+        .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
+        .where(eq(matchPlayers.userId, user.id)),
     ]);
 
-    return c.json({ heroes: heroRows, maps: mapRows });
+    // Sorted newest-first, with the `UNKNOWN_GAME_VERSION` sentinel
+    // appended (never sorted alongside real versions) only when at least
+    // one of this user's matches actually has no recorded version yet.
+    const knownVersions = versionRows
+      .map((row) => row.gameVersion)
+      .filter((v): v is string => v !== null)
+      .sort(compareGameVersionsDesc);
+    const gameVersions = versionRows.some((row) => row.gameVersion === null)
+      ? [...knownVersions, UNKNOWN_GAME_VERSION]
+      : knownVersions;
+
+    return c.json({ heroes: heroRows, maps: mapRows, gameVersions });
   })
   // Typeahead search for the "joueur croisé" filter: battletags of players
   // who've shared a match with the connected user, matching `q` (min 3
@@ -500,11 +544,49 @@ export const matchesRoute = new Hono<Env>()
       })),
     }));
 
+    // Only matches ingested with PARSER_VERSION >= 1.4 have any rows here --
+    // `timeline` is omitted entirely (not sent as empty arrays) for older
+    // matches, so the Coach tab correctly shows "unavailable" for them
+    // instead of misreading "no rows yet" as "no deaths this match".
+    const [deathRows, levelSnapshotRows] =
+      playerIds.length > 0
+        ? await Promise.all([
+            db
+              .select({ matchPlayerId: matchDeaths.matchPlayerId, atSeconds: matchDeaths.atSeconds })
+              .from(matchDeaths)
+              .where(inArray(matchDeaths.matchPlayerId, playerIds)),
+            db
+              .select({
+                matchPlayerId: matchLevelSnapshots.matchPlayerId,
+                atSeconds: matchLevelSnapshots.atSeconds,
+                level: matchLevelSnapshots.level,
+              })
+              .from(matchLevelSnapshots)
+              .where(inArray(matchLevelSnapshots.matchPlayerId, playerIds)),
+          ])
+        : [[], []];
+
+    const playerById = new Map(players.map((p) => [p.id, p]));
+    const timeline =
+      deathRows.length > 0 || levelSnapshotRows.length > 0
+        ? {
+            deaths: deathRows.flatMap((d) => {
+              const player = playerById.get(d.matchPlayerId);
+              return player ? [{ battletag: player.battletag, team: player.team, atSeconds: d.atSeconds }] : [];
+            }),
+            levelSnapshots: levelSnapshotRows.flatMap((s) => {
+              const player = playerById.get(s.matchPlayerId);
+              return player ? [{ battletag: player.battletag, atSeconds: s.atSeconds, level: s.level }] : [];
+            }),
+          }
+        : undefined;
+
     return c.json({
       match,
       teams: [0, 1].map((team) => ({
         team,
         players: playersWithTalents.filter((p) => p.team === team),
       })),
+      ...(timeline ? { timeline } : {}),
     });
   });

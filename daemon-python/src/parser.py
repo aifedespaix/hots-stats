@@ -121,6 +121,20 @@ def _windows_filetime_to_iso8601(filetime: int) -> str:
     )
 
 
+def _game_version(header: dict) -> str:
+    """"major.minor.revision.baseBuild" (e.g. "2.55.15.96477") -- the same
+    4-part convention this project already uses to identify a build
+    everywhere else (the `heroprotocol` git tag pinned in pyproject.toml,
+    `KNOWN_PROTOCOL_BUILDS`), keyed by `m_baseBuild` rather than the
+    sibling `m_build` for that same consistency: `m_baseBuild` is what
+    `_build_protocol` actually selects a decoder by, so it's the one that
+    unambiguously identifies "which wire format/patch this replay is on",
+    whereas `m_build` can bump on a data-only hotfix that doesn't change it.
+    """
+    version = header["m_version"]
+    return f"{version['m_major']}.{version['m_minor']}.{version['m_revision']}.{version['m_baseBuild']}"
+
+
 def _extract_battletags(archive: mpyq.MPQArchive, player_list: list[dict]) -> dict[str, str]:
     """Maps a player's toon handle -> full "Name#1234" battletag.
 
@@ -321,6 +335,7 @@ def _hero_from_any_talent(talent_ids: list[str]) -> str | None:
 
 _HERO_UNIT_TYPE_PREFIX = "Hero"
 _UNIT_BORN_EVENT = "NNet.Replay.Tracker.SUnitBornEvent"
+_UNIT_DIED_EVENT = "NNet.Replay.Tracker.SUnitDiedEvent"
 
 
 def _hero_from_unit_type_name(unit_type_name: str) -> str | None:
@@ -366,6 +381,111 @@ def _hero_from_unit_spawn_by_toon(tracker_events: list[dict], tracker_id_to_toon
         if hero_name is not None:
             hero_by_toon[toon_handle] = hero_name
     return hero_by_toon
+
+
+def _hero_unit_tags_by_toon(
+    tracker_events: list[dict], tracker_id_to_toon: dict[int, str]
+) -> dict[tuple[int, int], str]:
+    """Every hero unit's `(m_unitTagIndex, m_unitTagRecycle)` tag -> owning
+    toon handle, from every `SUnitBornEvent` for a hero-type unit -- *not*
+    deduped to the first occurrence per toon like `_hero_from_unit_spawn_by_toon`
+    above, since The Lost Vikings control three independently-tagged hero
+    units at once (Baleog/Erik/Olaf), each needing its own tag entry. A
+    respawned hero keeps its original tag (HotS fires `SUnitRevivedEvent` on
+    respawn, not a fresh `SUnitBornEvent` -- confirmed against the actual
+    `heroprotocol` protocol typeinfo for the pinned build, which has no other
+    unit-level event that would reallocate a hero's tag mid-game), so one
+    entry per hero unit for the whole match is enough.
+
+    Used by `_extract_deaths` to identify which player's hero died on a
+    `SUnitDiedEvent`, which only carries the dying unit's tag -- never a
+    player id directly.
+    """
+    tags: dict[tuple[int, int], str] = {}
+    for event in tracker_events:
+        if event.get("_event") != _UNIT_BORN_EVENT:
+            continue
+        if _hero_from_unit_type_name(_s(event["m_unitTypeName"])) is None:
+            continue
+        toon_handle = tracker_id_to_toon.get(event.get("m_controlPlayerId"))
+        if toon_handle is None:
+            continue
+        tags[(event["m_unitTagIndex"], event["m_unitTagRecycle"])] = toon_handle
+    return tags
+
+
+def _extract_deaths(
+    tracker_events: list[dict],
+    hero_unit_tags: dict[tuple[int, int], str],
+    players: dict[str, dict[str, Any]],
+    gates_open_loop: int,
+) -> list[dict[str, Any]]:
+    """Every hero death (`SUnitDiedEvent`), as `{battletag, team, atSeconds}`
+    -- the timeline data the Coach tab's `outnumberedFights`/`staggeredDeaths`/
+    `firstDeath` pillars need (see apps/web/app/types/coach.ts's
+    `MatchTimelineDeath`). Non-hero unit deaths (minions, mercs, structures --
+    these fire the same event) are silently skipped: their tag never appears
+    in `hero_unit_tags`. `atSeconds` is measured from `gates_open_loop`, the
+    same reference point `durationSeconds` below uses, so it lines up with
+    the match clock the UI already shows.
+    """
+    deaths: list[dict[str, Any]] = []
+    for event in tracker_events:
+        if event.get("_event") != _UNIT_DIED_EVENT:
+            continue
+        toon_handle = hero_unit_tags.get((event["m_unitTagIndex"], event["m_unitTagRecycle"]))
+        player = players.get(toon_handle) if toon_handle else None
+        if player is None:
+            continue
+        deaths.append(
+            {
+                "battletag": player["battletag"],
+                "team": player["team"],
+                "atSeconds": max(0, round((event["_gameloop"] - gates_open_loop) / _GAMELOOPS_PER_SECOND)),
+            }
+        )
+    return deaths
+
+
+def _extract_level_snapshots(
+    tracker_events: list[dict],
+    tracker_id_to_toon: dict[int, str],
+    players: dict[str, dict[str, Any]],
+    gates_open_loop: int,
+) -> list[dict[str, Any]]:
+    """Every level-up, as `{battletag, atSeconds, level}` -- the Coach tab's
+    `talentDelay` pillar needs this to compare each side's talent tier over
+    time (see `MatchTimelineLevelSnapshot`).
+
+    Sourced from the `SStatGameEvent` named `"LevelUp"` (the same
+    `m_eventName`-dispatched mechanism as `GatesOpen`/`EndOfGameTalentChoices`
+    above): `m_intData[0]` is the tracker PlayerID, `m_intData[1]` the new
+    level. HotS levels are shared team-wide, so a single team level-up fires
+    one of these per player on that team (5 events, not 1) -- cross-checked
+    against the `ebshimizu/stats-of-the-storm` replay format reference, the
+    same style of community documentation `hots-parser` draws from elsewhere
+    in this file.
+    """
+    snapshots: list[dict[str, Any]] = []
+    for event in tracker_events:
+        if event.get("_event") != "NNet.Replay.Tracker.SStatGameEvent":
+            continue
+        if _s(event["m_eventName"]) != "LevelUp":
+            continue
+        tracker_id = event["m_intData"][0]["m_value"]
+        level = event["m_intData"][1]["m_value"]
+        toon_handle = tracker_id_to_toon.get(tracker_id)
+        player = players.get(toon_handle) if toon_handle else None
+        if player is None:
+            continue
+        snapshots.append(
+            {
+                "battletag": player["battletag"],
+                "atSeconds": max(0, round((event["_gameloop"] - gates_open_loop) / _GAMELOOPS_PER_SECOND)),
+                "level": level,
+            }
+        )
+    return snapshots
 
 
 def _attribute_scope_by_player_list_index(attributes_events: dict, player_count: int) -> dict[int, int]:
@@ -731,6 +851,10 @@ def build_payload(
 
     duration_seconds = max(0, round((header["m_elapsedGameLoops"] - gates_open_loop) / _GAMELOOPS_PER_SECOND))
 
+    hero_unit_tags = _hero_unit_tags_by_toon(tracker_events, tracker_id_to_toon)
+    deaths = _extract_deaths(tracker_events, hero_unit_tags, players, gates_open_loop)
+    level_snapshots = _extract_level_snapshots(tracker_events, tracker_id_to_toon, players, gates_open_loop)
+
     return {
         # Blizzard's own field name, kept as-is (not camelCased) since
         # that's what `POST /ingest` reads at the payload root to route
@@ -742,11 +866,13 @@ def build_payload(
         "m_baseBuild": header["m_version"]["m_baseBuild"],
         "replayHash": replay_hash,
         "parserVersion": constants.PARSER_VERSION,
+        "gameVersion": _game_version(header),
         "map": _slugify(map_display_name),
         "gameMode": game_mode,
         "region": region,
         "playedAt": _windows_filetime_to_iso8601(details["m_timeUTC"]),
         "durationSeconds": duration_seconds,
+        "timeline": {"deaths": deaths, "levelSnapshots": level_snapshots},
         "players": [
             {
                 "battletag": p["battletag"],

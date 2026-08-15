@@ -23,6 +23,9 @@ export const matches = pgTable("matches", {
     .references(() => maps.id),
   gameMode: gameModeEnum("game_mode").notNull(),
   region: text("region").notNull(),
+  // "major.minor.revision.baseBuild" (e.g. "2.55.15.96477"). Nullable:
+  // matches ingested before PARSER_VERSION 1.5 don't have it until resynced.
+  gameVersion: text("game_version"),
   playedAt: timestamp("played_at", { withTimezone: true }).notNull(),
   durationSeconds: integer("duration_seconds").notNull(),
   uploadedByUserId: uuid("uploaded_by_user_id").references(() => users.id, {

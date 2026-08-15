@@ -15,3 +15,15 @@ export const gameModeListSchema = z
   .string()
   .transform((value) => value.split(","))
   .pipe(z.array(gameModeSchema).min(1));
+
+/**
+ * Query param for a game-version filter: a comma-separated list of
+ * `matches.gameVersion` values (e.g. "2.55.15.96477,2.55.9.90670"), plus
+ * the `UNKNOWN_GAME_VERSION` sentinel standing in for `gameVersion IS NULL`
+ * (matches ingested before PARSER_VERSION 1.5). See `buildMatchConditions`
+ * in `routes/matches.ts` for how the sentinel is turned into an `IS NULL`.
+ */
+export const gameVersionListSchema = z
+  .string()
+  .transform((value) => value.split(","))
+  .pipe(z.array(z.string().min(1)).min(1));
