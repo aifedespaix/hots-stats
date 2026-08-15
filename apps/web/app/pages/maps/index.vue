@@ -71,13 +71,14 @@ function formLabel(recentForm: boolean[]): string {
       </p>
     </div>
 
-    <UiFilterBar :columns="2">
+    <div class="space-y-3">
       <UInput
         v-model="search"
         placeholder="Rechercher une carte"
         icon="i-lucide-search"
         size="xl"
-        :ui="{ base: 'h-14 rounded-full px-5 text-base', leadingIcon: 'size-5' }"
+        class="w-full"
+        :ui="{ base: 'h-14 w-full rounded-full px-5 text-base', leadingIcon: 'size-5' }"
       />
       <USelectMenu
         v-model="sortMode"
@@ -86,9 +87,10 @@ function formLabel(recentForm: boolean[]): string {
         label-key="label"
         placeholder="Trier par"
         size="xl"
-        :ui="{ base: 'h-14 rounded-full px-5 text-base', trailingIcon: 'size-5' }"
+        class="w-full"
+        :ui="{ base: 'h-14 w-full rounded-full px-5 text-base', trailingIcon: 'size-5' }"
       />
-    </UiFilterBar>
+    </div>
 
     <div v-if="filteredMaps.length === 0" class="rounded-lg border border-dashed border-border p-8 text-center text-muted">
       Aucune carte ne correspond à ta recherche.
