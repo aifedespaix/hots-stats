@@ -105,7 +105,7 @@ const columns = [
 </script>
 
 <template>
-  <UiErrorState v-if="error" :status-code="404" message="Partie introuvable." back-to="/matches" back-label="← Retour à l'historique" />
+  <UiErrorState v-if="error" :status-code="404" message="Partie introuvable." back-to="/matches" back-label="Retour à l'historique" />
 
   <div v-else-if="data" class="space-y-8">
     <div>

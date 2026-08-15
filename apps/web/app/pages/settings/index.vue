@@ -146,7 +146,9 @@ async function confirmReset() {
       </p>
       <div class="flex flex-col gap-2 sm:flex-row">
         <UInput v-model="pseudo" placeholder="Mon pseudo" class="flex-1" />
-        <UButton :loading="savingPseudo" block class="sm:w-auto" @click="savePseudo">Enregistrer</UButton>
+        <UButton :loading="savingPseudo" icon="i-heroicons-check" block class="sm:w-auto" @click="savePseudo">
+          Enregistrer
+        </UButton>
       </div>
       <p v-if="pseudoError" class="text-sm text-danger">{{ pseudoError }}</p>
     </section>
@@ -155,7 +157,7 @@ async function confirmReset() {
       <h2 class="font-heading text-lg">BattleTag</h2>
       <div class="flex flex-col gap-2 sm:flex-row">
         <UInput v-model="battletag" placeholder="Pseudo#12345" class="flex-1 font-mono" />
-        <UButton :loading="savingBattletag" block class="sm:w-auto" @click="saveBattletag">
+        <UButton :loading="savingBattletag" icon="i-heroicons-check" block class="sm:w-auto" @click="saveBattletag">
           Enregistrer
         </UButton>
       </div>
@@ -171,7 +173,13 @@ async function confirmReset() {
       </p>
       <div class="flex flex-col gap-2 sm:flex-row">
         <UInput v-model="publicHandle" placeholder="mon-pseudo" class="flex-1 font-mono" />
-        <UButton :loading="savingPublicHandle" block class="sm:w-auto" @click="savePublicHandle">
+        <UButton
+          :loading="savingPublicHandle"
+          icon="i-heroicons-check"
+          block
+          class="sm:w-auto"
+          @click="savePublicHandle"
+        >
           Enregistrer
         </UButton>
       </div>
@@ -258,7 +266,9 @@ async function confirmReset() {
       </div>
       <p v-if="resetError" class="text-sm text-danger">{{ resetError }}</p>
 
-      <UButton color="error" variant="outline" @click="openResetModal">Réinitialiser mes données</UButton>
+      <UButton color="error" variant="outline" icon="i-heroicons-arrow-path" @click="openResetModal">
+        Réinitialiser mes données
+      </UButton>
     </section>
 
     <UModal v-model:open="resetModalOpen" title="Réinitialiser mes données">
@@ -273,8 +283,14 @@ async function confirmReset() {
         </p>
         <UInput v-model="resetConfirmText" class="mt-2" placeholder="SUPPRIMER" />
         <div class="mt-6 flex justify-end gap-2">
-          <UButton variant="ghost" @click="resetModalOpen = false">Annuler</UButton>
-          <UButton color="error" :disabled="!canConfirmReset" :loading="resetting" @click="confirmReset">
+          <UButton variant="ghost" icon="i-heroicons-x-mark" @click="resetModalOpen = false">Annuler</UButton>
+          <UButton
+            color="error"
+            icon="i-heroicons-trash"
+            :disabled="!canConfirmReset"
+            :loading="resetting"
+            @click="confirmReset"
+          >
             Confirmer la suppression
           </UButton>
         </div>

@@ -65,7 +65,7 @@ function onScopeChange(value: HeroStatsScope) {
     :status-code="error.statusCode"
     :message="error.statusCode === 403 ? 'Vous n\'êtes pas ami avec ce joueur.' : 'Impossible de charger les statistiques de ce joueur.'"
     back-to="/friends"
-    back-label="← Retour à mes amis"
+    back-label="Retour à mes amis"
   />
 
   <div v-else-if="data" class="space-y-8">

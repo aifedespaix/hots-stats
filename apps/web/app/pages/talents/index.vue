@@ -269,10 +269,23 @@ function applyBuild(row: (typeof buildRows.value)[number]) {
             <UIcon name="i-heroicons-x-mark" class="h-3 w-3" />
           </button>
         </template>
-        <UButton size="xs" color="neutral" variant="soft" class="ml-auto" @click="resetPins">Réinitialiser</UButton>
+        <UButton
+          size="xs"
+          color="neutral"
+          variant="soft"
+          icon="i-heroicons-arrow-path"
+          class="ml-auto"
+          @click="resetPins"
+        >
+          Réinitialiser
+        </UButton>
       </div>
 
-      <div v-if="!heroId" class="rounded-lg border border-dashed border-border p-8 text-center text-muted">
+      <div
+        v-if="!heroId"
+        class="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border p-8 text-center text-muted"
+      >
+        <UIcon name="i-heroicons-cursor-arrow-rays" class="h-6 w-6 text-muted/70" />
         Choisis un héros pour démarrer une analyse.
       </div>
 
@@ -291,7 +304,11 @@ function applyBuild(row: (typeof buildRows.value)[number]) {
           trait, pas au winrate affiché, pour ne jamais laisser un talent joué une fois passer devant un build éprouvé.
         </p>
 
-        <div v-if="analyzerPending && !analyzerData" class="rounded-lg border border-border bg-surface p-8 text-center text-muted">
+        <div
+          v-if="analyzerPending && !analyzerData"
+          class="flex flex-col items-center gap-2 rounded-lg border border-border bg-surface p-8 text-center text-muted"
+        >
+          <UIcon name="i-heroicons-arrow-path" class="h-6 w-6 animate-spin" />
           Chargement...
         </div>
 
@@ -304,7 +321,16 @@ function applyBuild(row: (typeof buildRows.value)[number]) {
               <p class="mt-1 font-mono text-xs text-muted">
                 {{ formatPercent(pinnedOption(tier)!.winrate) }} win -- {{ pinnedOption(tier)!.picks }} parties (100% du palier)
               </p>
-              <UButton size="xs" color="neutral" variant="soft" class="mt-2" @click="unpinTier(tier)">Déverrouiller</UButton>
+              <UButton
+                size="xs"
+                color="neutral"
+                variant="soft"
+                icon="i-heroicons-lock-open"
+                class="mt-2"
+                @click="unpinTier(tier)"
+              >
+                Déverrouiller
+              </UButton>
             </div>
 
             <div v-else-if="(tierData(tier)?.options.length ?? 0) === 0" class="text-xs text-muted">Aucune donnée.</div>

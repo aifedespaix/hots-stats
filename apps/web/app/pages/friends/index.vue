@@ -252,7 +252,9 @@ async function confirmRemoveFriend() {
               {{ request.user.battletag }}
             </p>
           </div>
-          <UButton size="sm" variant="ghost" color="error" @click="cancelRequest(request.id)">Annuler</UButton>
+          <UButton size="sm" variant="ghost" color="error" icon="i-heroicons-x-mark" @click="cancelRequest(request.id)">
+            Annuler
+          </UButton>
         </li>
       </ul>
     </section>
@@ -309,8 +311,10 @@ async function confirmRemoveFriend() {
           d'avis.
         </p>
         <div class="mt-6 flex justify-end gap-2">
-          <UButton variant="ghost" @click="removeModalOpen = false">Annuler</UButton>
-          <UButton color="error" :loading="removing" @click="confirmRemoveFriend">Retirer</UButton>
+          <UButton variant="ghost" icon="i-heroicons-x-mark" @click="removeModalOpen = false">Annuler</UButton>
+          <UButton color="error" icon="i-heroicons-user-minus" :loading="removing" @click="confirmRemoveFriend">
+            Retirer
+          </UButton>
         </div>
       </template>
     </UModal>

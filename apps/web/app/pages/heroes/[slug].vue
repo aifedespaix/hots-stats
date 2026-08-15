@@ -117,7 +117,7 @@ const talentsByTier = computed(() => {
     :status-code="404"
     message="Héros introuvable - tu n'as pas encore de partie enregistrée avec ce héros."
     back-to="/heroes"
-    back-label="← Retour aux héros"
+    back-label="Retour aux héros"
   />
 
   <div v-else-if="data" class="space-y-8">

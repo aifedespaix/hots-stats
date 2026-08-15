@@ -83,7 +83,7 @@ const teamImpactChartOptions = computed(() => ({
 </script>
 
 <template>
-  <UiErrorState v-if="error" :status-code="404" message="Carte introuvable." back-to="/maps" back-label="← Retour aux cartes" />
+  <UiErrorState v-if="error" :status-code="404" message="Carte introuvable." back-to="/maps" back-label="Retour aux cartes" />
 
   <div v-else-if="data" class="space-y-8">
     <div
