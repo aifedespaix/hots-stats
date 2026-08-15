@@ -99,6 +99,13 @@
       "when": 1786818475516,
       "tag": "0013_thankful_squirrel_girl",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1786825523179,
+      "tag": "0014_add_game_fingerprint",
+      "breakpoints": true
     }
   ]
 }

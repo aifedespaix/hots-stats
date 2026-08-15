@@ -1,6 +1,7 @@
 import { db, heroes, matchDeaths, matchLevelSnapshots, matchPlayers, matches, maps, talentPicks, users } from "@hots-stats/db";
 import type { ReplayPayload } from "@hots-stats/shared-types";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, or } from "drizzle-orm";
+import { computeGameFingerprint } from "../lib/game-fingerprint";
 
 export type UpsertResult =
   | { upserted: true; matchId: string }
@@ -71,10 +72,18 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
     linkedUsers.filter((u): u is { id: string; battletag: string } => u.battletag !== null).map((u) => [u.battletag, u.id]),
   );
 
+  // `replayHash` alone doesn't catch a duplicate: it's a hash of the raw
+  // replay file's bytes, and each participant's game client writes its own
+  // (non-byte-identical) copy of the same game's replay. `gameFingerprint`
+  // is the actual game identity, stable across who uploaded it -- matched
+  // in addition to `replayHash` so a resync of the exact same file (whose
+  // recomputed fingerprint could in principle drift after a parser fix)
+  // still finds its existing row too. See lib/game-fingerprint.ts.
+  const gameFingerprint = computeGameFingerprint(payload);
   const [existing] = await db
     .select({ id: matches.id, parserVersion: matches.parserVersion })
     .from(matches)
-    .where(eq(matches.replayHash, payload.replayHash))
+    .where(or(eq(matches.replayHash, payload.replayHash), eq(matches.gameFingerprint, gameFingerprint)))
     .limit(1);
 
   if (existing && !isVersionGreater(payload.parserVersion, existing.parserVersion)) {
@@ -106,6 +115,7 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
         .update(matches)
         .set({
           parserVersion: payload.parserVersion,
+          gameFingerprint,
           mapId: payload.map,
           gameMode: payload.gameMode,
           region: payload.region,
@@ -123,6 +133,7 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
         .insert(matches)
         .values({
           replayHash: payload.replayHash,
+          gameFingerprint,
           parserVersion: payload.parserVersion,
           mapId: payload.map,
           gameMode: payload.gameMode,
