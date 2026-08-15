@@ -25,6 +25,28 @@ const props = withDefaults(defineProps<{ builds: FlowBuild[]; heroName: string; 
   maxBuilds: 8,
 });
 
+const BUILD_COUNT_OPTIONS = [4, 8, 12] as const;
+const visibleBuildCount = ref(Math.min(props.maxBuilds, props.builds.length) || BUILD_COUNT_OPTIONS[1]);
+
+// Reset to a sane default whenever the underlying build list changes (new
+// hero/map/pins) so a leftover "12" from a previous, richer population
+// doesn't silently clip against a much smaller one.
+watch(
+  () => props.builds,
+  () => {
+    visibleBuildCount.value = Math.min(props.maxBuilds, props.builds.length) || BUILD_COUNT_OPTIONS[1];
+  },
+);
+
+// Only offer counts the current build list can actually satisfy, so a
+// disabled-but-clickable pill (a past source of "buggy" filter state) can't
+// exist in the first place.
+const buildCountOptions = computed(() =>
+  BUILD_COUNT_OPTIONS.filter((count) => count <= props.builds.length || count === visibleBuildCount.value).map(
+    (count) => ({ value: String(count), label: `Top ${count}` }),
+  ),
+);
+
 const themeColor = useChartThemeColor();
 const themeColorRaw = useChartThemeColorRaw();
 
@@ -37,7 +59,7 @@ const ROW_GAP = 10;
 const TOP_PAD = 30;
 const BOTTOM_PAD = 14;
 
-const usedBuilds = computed(() => props.builds.slice(0, props.maxBuilds));
+const usedBuilds = computed(() => props.builds.slice(0, visibleBuildCount.value));
 
 interface FlowNode {
   key: string;
@@ -190,14 +212,23 @@ const legendGradient = computed(() => `linear-gradient(to right, ${themeColor("-
 </script>
 
 <template>
-  <div v-if="usedBuilds.length > 0 && tiers.length > 1">
-    <div class="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted">
-      <span class="flex items-center gap-1.5">
-        <span class="inline-block h-2 w-5 rounded-full" :style="{ background: legendGradient }" />
-        Winrate de la transition
-      </span>
-      <span class="flex items-center gap-1.5"><span class="inline-block h-2 w-2 rounded-full bg-foreground/60" />Épaisseur = parties jouées</span>
-      <span class="flex items-center gap-1.5"><span class="inline-block h-2 w-5 rounded-full bg-foreground/90" />Trait plein = build le mieux classé</span>
+  <div v-if="builds.length > 0 && tiers.length > 1">
+    <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted">
+        <span class="flex items-center gap-1.5">
+          <span class="inline-block h-2 w-5 rounded-full" :style="{ background: legendGradient }" />
+          Winrate de la transition
+        </span>
+        <span class="flex items-center gap-1.5"><span class="inline-block h-2 w-2 rounded-full bg-foreground/60" />Épaisseur = parties jouées</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block h-2 w-5 rounded-full bg-foreground/90" />Trait plein = build le mieux classé</span>
+      </div>
+
+      <UiPillTabs
+        :model-value="String(visibleBuildCount)"
+        :options="buildCountOptions"
+        shape="pill"
+        @update:model-value="visibleBuildCount = Number($event)"
+      />
     </div>
 
     <div class="overflow-x-auto">

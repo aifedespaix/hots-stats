@@ -18,6 +18,7 @@ export function useWinrateTrend(
   const points = ref<WinrateTrendPoint[]>([]);
   const pending = ref(false);
   const errored = ref(false);
+  const gameModeStore = useGameModeStore();
 
   async function load() {
     pending.value = true;
@@ -27,7 +28,7 @@ export function useWinrateTrend(
       const res = await $fetch<{ points: WinrateTrendPoint[] }>("/matches/trend", {
         baseURL: config.public.apiBase,
         credentials: "include",
-        query: query.value,
+        query: { mode: gameModeStore.modeQueryParam, ...query.value },
       });
       points.value = res.points;
     } catch {
@@ -38,7 +39,7 @@ export function useWinrateTrend(
   }
 
   watch(
-    [query, enabled],
+    [query, enabled, () => gameModeStore.modeQueryParam],
     ([, isEnabled]) => {
       if (isEnabled) load();
     },

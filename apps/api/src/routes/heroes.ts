@@ -10,7 +10,13 @@ import { getHeroSummaries, getHeroSummary, getTalentTierStats } from "../service
 
 type Env = { Variables: { user: User } };
 
-const listQuerySchema = z.object({ mode: gameModeListSchema.optional(), scope: heroStatsScopeSchema.optional() });
+const listQuerySchema = z.object({
+  mode: gameModeListSchema.optional(),
+  scope: heroStatsScopeSchema.optional(),
+  // Cross-filter for the Talent Analyzer's Hero select: when set, only
+  // heroes actually played on this map are returned.
+  mapId: z.string().min(1).optional(),
+});
 
 export const heroesRoute = new Hono<Env>()
   .use("*", authSession, requireUser)
@@ -21,12 +27,14 @@ export const heroesRoute = new Hono<Env>()
       return c.json({ error: parsed.error.flatten() }, 400);
     }
     const scope = parsed.data.scope ?? user.heroStatsScope;
-    const heroes = await getHeroSummaries(user.id, parsed.data.mode, scope);
+    const heroes = await getHeroSummaries(user.id, parsed.data.mode, scope, parsed.data.mapId);
     return c.json({ heroes, scope });
   })
   .get("/:heroId", async (c) => {
     const user = c.get("user");
-    const parsed = z.object({ scope: heroStatsScopeSchema.optional() }).safeParse(c.req.query());
+    const parsed = z
+      .object({ scope: heroStatsScopeSchema.optional(), mode: gameModeListSchema.optional() })
+      .safeParse(c.req.query());
     if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
     const scope = parsed.data.scope ?? user.heroStatsScope;
     const otherScope: HeroStatsScope = scope === "personal" ? "global" : "personal";
@@ -34,8 +42,8 @@ export const heroesRoute = new Hono<Env>()
     // `other` carries the opposite scope's numbers so the frontend can show a
     // personal-vs-global comparison (tooltip) without a second round trip.
     const [hero, other] = await Promise.all([
-      getHeroSummary(user.id, heroId, scope),
-      getHeroSummary(user.id, heroId, otherScope),
+      getHeroSummary(user.id, heroId, scope, parsed.data.mode),
+      getHeroSummary(user.id, heroId, otherScope, parsed.data.mode),
     ]);
     if (!hero) {
       return c.json({ error: "Hero not found" }, 404);

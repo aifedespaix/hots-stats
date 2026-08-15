@@ -18,6 +18,7 @@ useSeoMeta({
 
 const route = useRoute();
 const config = useRuntimeConfig();
+const gameModeStore = useGameModeStore();
 
 const { scope, saving: scopeSaving, setScope } = useHeroStatsScope();
 
@@ -25,8 +26,16 @@ const heroId = ref((route.query.heroId as string) ?? "");
 const mapId = ref((route.query.mapId as string) ?? "");
 const minGames = ref(TALENT_ANALYZER_MIN_GAMES_DEFAULT);
 
-const { data: heroesData } = await useApiFetch<HeroListResponse>("/heroes", { query: { scope: "global" } });
-const { data: mapsData } = await useApiFetch<MapHubResponse>("/maps");
+// Cross-filtering: picking a hero narrows the Map list to maps that hero has
+// actually been played on, and picking a map narrows the Hero list to heroes
+// played on that map -- both on top of the global game-mode filter, which
+// `useApiFetch` already injects as `mode` for every request below.
+const { data: heroesData } = await useApiFetch<HeroListResponse>("/heroes", {
+  query: computed(() => ({ scope: "global", ...(mapId.value ? { mapId: mapId.value } : {}) })),
+});
+const { data: mapsData } = await useApiFetch<MapHubResponse>("/maps", {
+  query: computed(() => (heroId.value ? { heroId: heroId.value } : {})),
+});
 
 // Enriched selector items: games/winrate/KDA (or recent form for maps) shown
 // directly in the dropdown so a player can pick without leaving the menu.
@@ -150,6 +159,7 @@ async function loadAnalyzer() {
         heroId: heroId.value,
         ...(mapId.value ? { mapId: mapId.value } : {}),
         scope: scope.value,
+        mode: gameModeStore.modeQueryParam,
         ...(pinsQueryString.value ? { pins: pinsQueryString.value } : {}),
         minGames: minGames.value,
       },
@@ -180,7 +190,11 @@ async function loadMapMeta() {
 }
 
 if (import.meta.client) {
-  watch([heroId, mapId, scope, pinsQueryString, minGames], loadAnalyzer, { immediate: true });
+  watch(
+    [heroId, mapId, scope, pinsQueryString, minGames, () => gameModeStore.modeQueryParam],
+    loadAnalyzer,
+    { immediate: true },
+  );
   watch([heroId, mapId], loadMapMeta, { immediate: true });
 }
 

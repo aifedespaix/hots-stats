@@ -39,7 +39,10 @@ function rankedModeCondition(mode?: GameMode[]) {
  * queries, so the Hub stays a single round trip regardless of how many maps
  * the app knows about.
  */
-async function getRecentFormByMap(userId: string, mode?: GameMode[]): Promise<Map<string, boolean[]>> {
+async function getRecentFormByMap(userId: string, mode?: GameMode[], heroId?: string): Promise<Map<string, boolean[]>> {
+  const conditions = [eq(matchPlayers.userId, userId), rankedModeCondition(mode)];
+  if (heroId) conditions.push(eq(matchPlayers.heroId, heroId));
+
   const ranked = db.$with("ranked_map_games").as(
     db
       .select({
@@ -50,7 +53,7 @@ async function getRecentFormByMap(userId: string, mode?: GameMode[]): Promise<Ma
       })
       .from(matchPlayers)
       .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
-      .where(and(eq(matchPlayers.userId, userId), rankedModeCondition(mode))),
+      .where(and(...conditions)),
   );
 
   const rows = await db
@@ -75,7 +78,10 @@ async function getRecentFormByMap(userId: string, mode?: GameMode[]): Promise<Ma
  * keeps maps the user has never played in the list at 0 games, since the
  * Hub is a menu to browse, not a leaderboard of maps already played.
  */
-export async function getMapHub(userId: string, mode?: GameMode[]): Promise<MapHubEntry[]> {
+export async function getMapHub(userId: string, mode?: GameMode[], heroId?: string): Promise<MapHubEntry[]> {
+  const personalConditions = [eq(matchPlayers.userId, userId), rankedModeCondition(mode)];
+  if (heroId) personalConditions.push(eq(matchPlayers.heroId, heroId));
+
   const personal = db.$with("personal_map_stats").as(
     db
       .select({
@@ -85,7 +91,7 @@ export async function getMapHub(userId: string, mode?: GameMode[]): Promise<MapH
       })
       .from(matchPlayers)
       .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
-      .where(and(eq(matchPlayers.userId, userId), rankedModeCondition(mode)))
+      .where(and(...personalConditions))
       .groupBy(matches.mapId),
   );
 
@@ -100,7 +106,7 @@ export async function getMapHub(userId: string, mode?: GameMode[]): Promise<MapH
       })
       .from(maps)
       .leftJoin(personal, eq(personal.mapId, maps.id)),
-    getRecentFormByMap(userId, mode),
+    getRecentFormByMap(userId, mode, heroId),
   ]);
 
   return rows
