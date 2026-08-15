@@ -246,29 +246,36 @@ function applyBuild(row: (typeof buildRows.value)[number]) {
 
     <UiFilterBar :columns="2">
       <div>
-        <label class="mb-1 block text-xs uppercase tracking-wide text-muted">Héros</label>
-        <USelectMenu v-model="heroId" :items="heroOptions" value-key="value" label-key="label" :ui="{ itemLabel: 'w-full' }">
+        <label class="mb-1.5 block text-xs uppercase tracking-wide text-muted">Héros</label>
+        <USelectMenu
+          v-model="heroId"
+          :items="heroOptions"
+          value-key="value"
+          label-key="label"
+          size="xl"
+          :ui="{ base: 'h-14 rounded-full px-5 text-base', leadingIcon: 'size-5', trailingIcon: 'size-5', itemLabel: 'w-full', item: 'py-2.5' }"
+        >
           <template #item-label="{ item }">
-            <span v-if="item.special" class="text-sm">{{ item.label }}</span>
+            <span v-if="item.special" class="text-base">{{ item.label }}</span>
             <div
               v-else
-              class="flex w-full min-w-0 items-center gap-2.5 py-0.5"
+              class="flex w-full min-w-0 items-center gap-3"
               :class="item.gamesPlayed > 0 && !item.reliable ? 'opacity-60' : ''"
             >
-              <HeroesHeroAvatar :hero-id="item.value" :name="item.label" :role="item.heroRole" :size="22" />
+              <HeroesHeroAvatar :hero-id="item.value" :name="item.label" :role="item.heroRole" :size="34" />
               <div class="min-w-0 flex-1">
-                <p class="truncate text-sm">{{ item.label }}</p>
-                <p v-if="item.gamesPlayed > 0" class="flex items-center gap-2 font-mono text-[10.5px] text-muted">
+                <p class="truncate text-base font-medium">{{ item.label }}</p>
+                <p v-if="item.gamesPlayed > 0" class="mt-0.5 flex items-center gap-2.5 font-mono text-xs text-muted">
                   <span>{{ item.gamesPlayed }} partie{{ item.gamesPlayed > 1 ? "s" : "" }}</span>
                   <span :class="TONE_TEXT_CLASS[winrateTone(item.winrate)]">{{ formatPercent(item.winrate) }} win</span>
                   <span>KDA {{ formatKda(item.kda) }}</span>
                 </p>
-                <p v-else class="text-[10.5px] text-muted">Aucune partie</p>
+                <p v-else class="mt-0.5 text-xs text-muted">Aucune partie</p>
               </div>
               <UIcon
                 v-if="item.gamesPlayed > 0 && !item.reliable"
                 name="i-heroicons-exclamation-triangle"
-                class="h-3 w-3 shrink-0 text-accent"
+                class="h-4 w-4 shrink-0 text-accent"
                 title="Échantillon faible"
               />
             </div>
@@ -276,38 +283,45 @@ function applyBuild(row: (typeof buildRows.value)[number]) {
         </USelectMenu>
       </div>
       <div>
-        <label class="mb-1 block text-xs uppercase tracking-wide text-muted">Carte</label>
-        <USelectMenu v-model="mapId" :items="mapOptions" value-key="value" label-key="label" :ui="{ itemLabel: 'w-full' }">
+        <label class="mb-1.5 block text-xs uppercase tracking-wide text-muted">Carte</label>
+        <USelectMenu
+          v-model="mapId"
+          :items="mapOptions"
+          value-key="value"
+          label-key="label"
+          size="xl"
+          :ui="{ base: 'h-14 rounded-full px-5 text-base', leadingIcon: 'size-5', trailingIcon: 'size-5', itemLabel: 'w-full', item: 'py-2.5' }"
+        >
           <template #item-label="{ item }">
-            <span v-if="item.special" class="text-sm">{{ item.label }}</span>
+            <span v-if="item.special" class="text-base">{{ item.label }}</span>
             <div
               v-else
-              class="flex w-full min-w-0 items-center gap-2.5 py-0.5"
+              class="flex w-full min-w-0 items-center gap-3"
               :class="item.gamesPlayed > 0 && !item.reliable ? 'opacity-60' : ''"
             >
-              <span class="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md bg-border/60 text-muted">
-                <UIcon name="i-heroicons-map" class="h-3.5 w-3.5" />
+              <span class="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full bg-border/60 text-muted">
+                <UIcon name="i-heroicons-map" class="h-5 w-5" />
               </span>
               <div class="min-w-0 flex-1">
-                <p class="truncate text-sm">{{ item.label }}</p>
-                <div v-if="item.gamesPlayed > 0" class="flex items-center gap-2 font-mono text-[10.5px] text-muted">
+                <p class="truncate text-base font-medium">{{ item.label }}</p>
+                <div v-if="item.gamesPlayed > 0" class="mt-0.5 flex items-center gap-2.5 font-mono text-xs text-muted">
                   <span>{{ item.gamesPlayed }} partie{{ item.gamesPlayed > 1 ? "s" : "" }}</span>
                   <span :class="TONE_TEXT_CLASS[winrateTone(item.winrate)]">{{ formatPercent(item.winrate) }} win</span>
-                  <span v-if="item.recentForm.length > 0" class="flex items-center gap-[2px]">
+                  <span v-if="item.recentForm.length > 0" class="flex items-center gap-[3px]">
                     <span
                       v-for="(win, formIndex) in item.recentForm.slice(-5)"
                       :key="formIndex"
-                      class="h-1.5 w-1.5 rounded-[1.5px]"
+                      class="h-2 w-2 rounded-[2px]"
                       :class="win ? 'bg-success' : 'bg-danger'"
                     />
                   </span>
                 </div>
-                <p v-else class="text-[10.5px] text-muted">Aucune partie</p>
+                <p v-else class="mt-0.5 text-xs text-muted">Aucune partie</p>
               </div>
               <UIcon
                 v-if="item.gamesPlayed > 0 && !item.reliable"
                 name="i-heroicons-exclamation-triangle"
-                class="h-3 w-3 shrink-0 text-accent"
+                class="h-4 w-4 shrink-0 text-accent"
                 title="Échantillon faible"
               />
             </div>
