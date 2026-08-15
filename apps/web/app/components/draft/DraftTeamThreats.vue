@@ -46,7 +46,7 @@ const hasPersonalWeakness = computed(() => threats.value.some((threat) => threat
         v-for="threat in threats"
         :key="threat.battletag"
         type="button"
-        class="flex min-w-[9.5rem] flex-1 items-center gap-2.5 rounded-md border px-2.5 py-2 text-left transition-colors hover:bg-background"
+        class="flex min-w-[9.5rem] flex-1 items-center gap-2.5 rounded-md border px-2.5 py-2 text-left outline-none transition-colors hover:bg-background focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-brand"
         :class="threat.isPersonalWeakness ? 'border-danger/40 bg-danger/5' : 'border-border'"
         @click="emit('select', threat.battletag)"
       >

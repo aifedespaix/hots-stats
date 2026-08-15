@@ -28,8 +28,12 @@ function onClick(star: number) {
       :key="star"
       type="button"
       :tabindex="props.readonly ? -1 : 0"
-      class="text-accent"
-      :class="props.readonly ? 'cursor-default' : 'cursor-pointer transition-transform hover:scale-110'"
+      class="text-accent outline-none"
+      :class="
+        props.readonly
+          ? 'cursor-default'
+          : 'cursor-pointer rounded transition-transform hover:scale-110 focus-visible:ring-1 focus-visible:ring-brand'
+      "
       @click.stop.prevent="onClick(star)"
     >
       <UIcon :name="isFilled(star) ? 'i-heroicons-star-solid' : 'i-heroicons-star'" :class="size" />

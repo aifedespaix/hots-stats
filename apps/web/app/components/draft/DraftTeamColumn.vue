@@ -31,12 +31,17 @@ function isSelf(slot: DraftPlayerSlot) {
       <li
         v-for="slot in slots"
         :key="slot.slot"
-        class="flex items-center gap-2.5 rounded-md px-2.5 py-2 transition-colors"
+        class="flex items-center gap-2.5 rounded-md px-2.5 py-2 outline-none transition-colors"
         :class="[
-          slot.effectiveBattletag ? 'cursor-pointer hover:bg-background' : '',
+          slot.effectiveBattletag
+            ? 'cursor-pointer hover:bg-background focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-brand'
+            : '',
           isSelected(slot) ? 'bg-brand/15 ring-1 ring-inset ring-brand/40' : '',
         ]"
+        :tabindex="slot.effectiveBattletag ? 0 : undefined"
+        :role="slot.effectiveBattletag ? 'button' : undefined"
         @click="slot.effectiveBattletag && emit('select', slot)"
+        @keydown.enter="slot.effectiveBattletag && emit('select', slot)"
       >
         <span
           class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-background text-[11px] font-mono text-muted"
