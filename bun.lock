@@ -32,6 +32,7 @@
         "@nuxt/fonts": "0.14.0",
         "@nuxt/ui": "4.10.0",
         "@pinia/nuxt": "1.0.2",
+        "@vueuse/core": "14.4.0",
         "chart.js": "4.5.1",
         "nuxt": "4.5.2",
         "pinia": "4.0.3",

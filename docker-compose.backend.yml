@@ -24,6 +24,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      replay-parser:
+        condition: service_started
     environment:
       NODE_ENV: production
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
@@ -37,6 +39,18 @@ services:
       CLAUDE_INTERNAL_SECRET: ${CLAUDE_INTERNAL_SECRET}
       BATTLENET_CLIENT_ID: ${BATTLENET_CLIENT_ID}
       BATTLENET_CLIENT_SECRET: ${BATTLENET_CLIENT_SECRET}
+      # Internal-only (see apps/replay-parser/README.md): reached by service
+      # name over the compose network, never published or given a domain.
+      REPLAY_PARSER_URL: http://replay-parser:8090
+
+  # Parses raw `.StormReplay` uploads from the web dropzone (POST /uploads on
+  # `api`, above) -- internal-only, no published port, no Dokploy domain.
+  # See apps/replay-parser/README.md.
+  replay-parser:
+    build:
+      context: .
+      dockerfile: apps/replay-parser/Dockerfile
+    restart: unless-stopped
 
 volumes:
   hots_stats_pgdata:

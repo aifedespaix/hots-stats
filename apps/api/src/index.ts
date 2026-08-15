@@ -18,6 +18,7 @@ import { publicRoute } from "./routes/public";
 import { statsRoute } from "./routes/stats";
 import { talentAnalyzerRoute } from "./routes/talent-analyzer";
 import { tokensRoute } from "./routes/tokens";
+import { uploadsRoute } from "./routes/uploads";
 import { weaknessesRoute } from "./routes/weaknesses";
 
 const app = new Hono();
@@ -35,6 +36,7 @@ app.route("/health", healthRoute);
 app.route("/auth", authRoute);
 app.route("/tokens", tokensRoute);
 app.route("/ingest", ingestRoute);
+app.route("/uploads", uploadsRoute);
 app.route("/matches", matchesRoute);
 app.route("/stats", statsRoute);
 app.route("/heroes", heroesRoute);

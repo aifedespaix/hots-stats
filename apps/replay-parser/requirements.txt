@@ -1,0 +1,10 @@
+fastapi>=0.115
+uvicorn[standard]>=0.32
+python-multipart>=0.0.9
+mpyq>=0.2.5
+# PyPI's `heroprotocol` hasn't been published since 2.55.4.91756 (Jan 2024)
+# even though Blizzard keeps releasing new builds on GitHub -- pin directly
+# to their latest tag instead, same as daemon-python/pyproject.toml. Keep
+# these two in sync: both parse replays with the same `daemon_core/parser.py`
+# and must decode the same set of builds.
+heroprotocol @ git+https://github.com/Blizzard/heroprotocol.git@v2.55.15.96477

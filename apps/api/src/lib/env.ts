@@ -22,6 +22,11 @@ const envSchema = z.object({
   BATTLENET_CLIENT_ID: z.string().min(1).optional(),
   BATTLENET_CLIENT_SECRET: z.string().min(1).optional(),
   SESSION_SECRET: z.string().min(32),
+  // Internal-only Python microservice (apps/replay-parser) that turns a raw
+  // `.StormReplay` upload from the web dropzone (POST /uploads) into the
+  // same parsed JSON the daemon posts to POST /ingest. Reached over the
+  // docker-compose internal network in production -- never exposed publicly.
+  REPLAY_PARSER_URL: z.string().url().default("http://localhost:8090"),
   // Shared secret for the internal `/_internal/*` routes (e.g. quarantine
   // sample inspection) -- not tied to a user account, so it can't reuse
   // `authToken`/`authSession`. Not meant to be exposed to the daemon or web app.

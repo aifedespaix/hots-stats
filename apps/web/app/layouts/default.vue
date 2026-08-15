@@ -24,6 +24,7 @@ function isSpacer(entry: MobileNavEntry): entry is NavSpacer {
 // Logical order for the desktop sidebar (home first, settings last).
 const navItems: NavItem[] = [
   { to: "/", label: "Dashboard", icon: "i-heroicons-squares-2x2", featured: true },
+  { to: "/upload", label: "Upload", icon: "i-heroicons-cloud-arrow-up" },
   { to: "/draft", label: "Live Draft", icon: "i-heroicons-bolt" },
   { to: "/matches", label: "Historique", icon: "i-heroicons-clock" },
   { to: "/heroes", label: "Héros", icon: "i-heroicons-fire" },
