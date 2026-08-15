@@ -33,8 +33,22 @@ const config = useRuntimeConfig();
 const { data: filterOptions } = await useApiFetch<FiltersResponse>("/matches/filters");
 
 // Visiting the page is what clears the "new games" nav chip -- the sync
-// toast watermark (which games we've *notified* about) is tracked separately.
-useEngagementStore().markMatchesVisited();
+// toast watermark (which games we've *notified* about) is tracked
+// separately. `engagement.matchesTotal` can still be its stale startup
+// default (0) at this point, since the background poll it's normally fed
+// by (see useEngagementWatchers) hasn't necessarily resolved yet -- marking
+// visited against that stale value would peg the badge's baseline at 0 and
+// make it falsely count the whole history as "new" once the poll catches
+// up. Fetch the same lightweight total the poll uses so the baseline is
+// always current when we clear it.
+{
+  const engagementStore = useEngagementStore();
+  const { data: freshMatchesTotal } = await useApiFetch<MatchListResponse>("/matches", {
+    query: { page: 1, pageSize: 1, sortBy: "playedAt", sortDir: "desc" },
+  });
+  if (freshMatchesTotal.value) engagementStore.reportMatchesTotal(freshMatchesTotal.value.total);
+  engagementStore.markMatchesVisited();
+}
 
 const filtersStore = useMatchesFiltersStore();
 const { filters, sortKey, sortDir } = storeToRefs(filtersStore);
@@ -130,14 +144,17 @@ watch([sortKey, sortDir], () => {
   page.value = 1;
 });
 
-const heroItems = computed(() => [
-  { value: "", label: "Tous les héros" },
-  ...(filterOptions.value?.heroes ?? []).map((hero) => ({ value: hero.id, label: hero.name })),
-]);
-const mapItems = computed(() => [
-  { value: "", label: "Toutes les cartes" },
-  ...(filterOptions.value?.maps ?? []).map((map) => ({ value: map.id, label: map.name })),
-]);
+// No empty-string item here: reka-ui's Combobox reserves an empty-string
+// item value to mean "clear the selection" and throws if a real item uses
+// it, breaking the whole dropdown. "Tous les héros"/"Toutes les cartes" is
+// instead the select's own placeholder (heroId/mapId stays "") plus its
+// built-in clear ("x") button.
+const heroItems = computed(() =>
+  (filterOptions.value?.heroes ?? []).map((hero) => ({ value: hero.id, label: hero.name })),
+);
+const mapItems = computed(() =>
+  (filterOptions.value?.maps ?? []).map((map) => ({ value: map.id, label: map.name })),
+);
 
 // Backs the "joueur croisé" combobox: querying the full opponent list
 // upfront used to ship every battletag the user has ever crossed paths
@@ -169,7 +186,7 @@ watch(opponentSearchTerm, (rawQuery) => {
         label: battletag,
       }));
       if (res.hasMore) {
-        items.push({ value: "", label: "Plus de 5 résultats, précise ton pseudo…", disabled: true });
+        items.push({ value: "__more_results__", label: "Plus de 5 résultats, précise ton pseudo…", disabled: true });
       }
       opponentItems.value = items;
     } finally {
@@ -210,8 +227,8 @@ function goToMatch(row: Record<string, unknown>) {
     </div>
 
     <UiFilterBar :columns="4">
-      <USelectMenu v-model="heroId" value-key="value" :items="heroItems" placeholder="Héros" />
-      <USelectMenu v-model="mapId" value-key="value" :items="mapItems" placeholder="Carte" />
+      <USelectMenu v-model="heroId" value-key="value" :items="heroItems" placeholder="Héros" clear />
+      <USelectMenu v-model="mapId" value-key="value" :items="mapItems" placeholder="Carte" clear />
       <UInput v-model="dateFrom" type="date" placeholder="Du" />
       <UInput v-model="dateTo" type="date" placeholder="Au" />
       <USelectMenu
@@ -311,8 +328,8 @@ function goToMatch(row: Record<string, unknown>) {
 
     <div class="flex justify-center">
       <UPagination
-        v-model="page"
-        :page-count="pageSize"
+        v-model:page="page"
+        :items-per-page="pageSize"
         :total="matchesData?.total ?? 0"
         :disabled="pending"
       />

@@ -96,7 +96,7 @@ function formLabel(recentForm: boolean[]): string {
       Aucune carte ne correspond à ta recherche.
     </div>
 
-    <div v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div v-else class="grid grid-cols-[repeat(auto-fit,minmax(16.25rem,1fr))] gap-4">
       <NuxtLink
         v-for="map in filteredMaps"
         :key="map.mapId"

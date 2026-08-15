@@ -8,7 +8,12 @@ export type PlayersSortableColumn =
   | "wins"
   | "losses"
   | "winRatioAsAlly"
-  | "winRatioAsOpponent";
+  | "winRatioAsOpponent"
+  | "ratingAverage"
+  | "notesCount"
+  | "behaviorScore"
+  | "globalWinrate"
+  | "globalKdRatio";
 
 export const usePlayersFiltersStore = createFilterSortStore<{ search: string }, PlayersSortableColumn>(
   "players-filters",

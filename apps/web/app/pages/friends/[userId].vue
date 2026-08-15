@@ -124,8 +124,8 @@ function onScopeChange(value: HeroStatsScope) {
 
       <div class="mt-4 flex justify-center">
         <UPagination
-          v-model="page"
-          :page-count="pageSize"
+          v-model:page="page"
+          :items-per-page="pageSize"
           :total="matchesData?.total ?? 0"
           :disabled="matchesPending"
         />

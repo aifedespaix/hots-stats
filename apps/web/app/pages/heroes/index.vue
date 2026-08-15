@@ -122,7 +122,7 @@ function goToHero(row: Record<string, unknown>) {
       </UiTableScrollPanel>
 
       <div v-if="total > pageSize" class="mt-4 flex justify-center">
-        <UPagination v-model="page" :page-count="pageSize" :total="total" />
+        <UPagination v-model:page="page" :items-per-page="pageSize" :total="total" />
       </div>
     </UiGlobalScopeBadge>
   </div>

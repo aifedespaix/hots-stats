@@ -17,10 +17,12 @@ const props = withDefaults(
 
 const emit = defineEmits<{ (e: "update:modelValue", value: HeroStatsScope): void }>();
 
-const isGlobal = computed({
-  get: () => props.modelValue === "global",
-  set: (value: boolean) => emit("update:modelValue", value ? "global" : "personal"),
-});
+const isGlobal = computed(() => props.modelValue === "global");
+
+function select(value: HeroStatsScope) {
+  if (props.loading || value === props.modelValue) return;
+  emit("update:modelValue", value);
+}
 </script>
 
 <template>
@@ -31,10 +33,35 @@ const isGlobal = computed({
         {{ isGlobal ? "Toutes les parties enregistrées par l'application" : personalDescription }}
       </p>
     </div>
-    <div class="flex items-center gap-2 text-xs">
-      <span :class="!isGlobal ? 'font-medium text-foreground' : 'text-muted'">{{ personalLabel }}</span>
-      <UToggle v-model="isGlobal" :loading="loading" />
-      <span :class="isGlobal ? 'font-medium text-foreground' : 'text-muted'">Toute l'app</span>
+
+    <div
+      class="flex shrink-0 items-center gap-1 rounded-full border border-border bg-elevated p-1"
+      role="group"
+      aria-label="Portée des statistiques"
+    >
+      <button
+        type="button"
+        :disabled="loading"
+        :aria-pressed="!isGlobal"
+        class="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+        :class="!isGlobal ? 'bg-primary text-inverted' : 'text-muted hover:text-foreground'"
+        @click="select('personal')"
+      >
+        <UIcon name="i-heroicons-user" class="h-3.5 w-3.5" />
+        {{ personalLabel }}
+      </button>
+      <button
+        type="button"
+        :disabled="loading"
+        :aria-pressed="isGlobal"
+        class="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+        :class="isGlobal ? 'bg-primary text-inverted' : 'text-muted hover:text-foreground'"
+        @click="select('global')"
+      >
+        <UIcon name="i-heroicons-globe-alt" class="h-3.5 w-3.5" />
+        Toute l'app
+      </button>
+      <UIcon v-if="loading" name="i-heroicons-arrow-path" class="ml-1 h-3.5 w-3.5 shrink-0 animate-spin text-muted" />
     </div>
   </div>
 </template>

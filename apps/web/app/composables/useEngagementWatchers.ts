@@ -69,7 +69,12 @@ export function useEngagementWatchers() {
     }
   }
 
-  useIntervalFn(pollMatches, MATCHES_POLL_MS, { immediate: true });
+  // `immediate` only starts the timer right away -- it does *not* run the
+  // callback before the first tick, that's `immediateCallback`. Without it
+  // `matchesTotal` stays stuck at its default (0) for a full poll interval
+  // after every page load, which is exactly when markMatchesVisited() (see
+  // pages/matches/index.vue) or a stray toast could read a stale value.
+  useIntervalFn(pollMatches, MATCHES_POLL_MS, { immediate: true, immediateCallback: true });
 
   // --- Friend requests --------------------------------------------------
   async function pollFriendRequests() {
@@ -98,7 +103,7 @@ export function useEngagementWatchers() {
     }
   }
 
-  useIntervalFn(pollFriendRequests, FRIENDS_POLL_MS, { immediate: true });
+  useIntervalFn(pollFriendRequests, FRIENDS_POLL_MS, { immediate: true, immediateCallback: true });
 
   // --- Live draft ---------------------------------------------------------
   const { snapshot: draftSnapshot } = useDraftStream();

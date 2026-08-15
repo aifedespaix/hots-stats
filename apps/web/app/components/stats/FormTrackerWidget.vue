@@ -46,7 +46,9 @@ const open = ref(false);
 </script>
 
 <template>
-  <div class="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface px-4 py-3">
+  <div
+    class="flex flex-col gap-3 rounded-lg border border-border bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+  >
     <div class="min-w-0">
       <p class="text-xs uppercase tracking-wide text-muted">{{ title }}</p>
 
@@ -65,16 +67,23 @@ const open = ref(false);
       </div>
     </div>
 
-    <UTooltip text="Analyser la tendance" :popper="{ placement: 'top' }">
-      <button
-        type="button"
+    <div
+      class="flex shrink-0 items-center gap-3 rounded-md border border-brand/20 bg-brand/5 px-3 py-2 sm:max-w-xs"
+    >
+      <UIcon name="i-heroicons-presentation-chart-line" class="h-7 w-7 shrink-0 text-brand" />
+      <p class="min-w-0 flex-1 text-xs text-muted">Visualise l'évolution de ta forme sur la durée.</p>
+      <UButton
+        size="sm"
+        color="primary"
+        variant="soft"
+        icon="i-heroicons-chart-bar-square"
         aria-label="Analyser la tendance du winrate"
-        class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted transition-all duration-150 hover:scale-110 hover:bg-brand/15 hover:text-brand active:scale-95"
+        class="shrink-0"
         @click="open = true"
       >
-        <UIcon name="i-heroicons-plus" class="h-4 w-4" />
-      </button>
-    </UTooltip>
+        Analyser
+      </UButton>
+    </div>
 
     <ChartsFormTrackerModal
       v-model:open="open"
