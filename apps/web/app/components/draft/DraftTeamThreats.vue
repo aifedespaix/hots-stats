@@ -42,9 +42,7 @@ const hasPersonalWeakness = computed(() => threats.value.some((threat) => threat
     <!-- Only the very first load (no data yet) shows the spinner -- a
          background refresh keeps whatever's already on screen so the panel
          doesn't flash empty/spinner on every SSE push. -->
-    <div v-if="pending && !threatsData" class="flex items-center justify-center py-3 text-muted">
-      <UIcon name="i-heroicons-arrow-path" class="h-5 w-5 animate-spin" />
-    </div>
+    <UiStateCard v-if="pending && !threatsData" state="loading" size="sm" />
     <p v-else-if="errored" class="py-1 text-xs text-danger">Impossible de charger les menaces adverses.</p>
     <p v-else-if="threats.length === 0" class="py-1 text-xs text-muted">Pas assez de données sur cette équipe.</p>
 

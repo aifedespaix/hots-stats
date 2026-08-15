@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { PlayerAnnotationEntry } from "@hots-stats/shared-types";
+import type { PlayerAnnotationEntry, PlayerFriendshipStatus } from "@hots-stats/shared-types";
 import type { PlayerListResponse } from "~/types/analytics";
 import type { PlayersSortableColumn } from "~/stores/usePlayersFiltersStore";
 
@@ -170,7 +170,7 @@ function goToPlayer(row: Record<string, unknown>) {
     <h1 class="font-heading text-2xl font-semibold">Radar des joueurs</h1>
     <p class="text-sm text-muted">Tous les joueurs croisés (alliés ou adversaires) dans tes parties.</p>
 
-    <UInput v-model="search" placeholder="Rechercher un joueur (Pseudo#12345)" icon="i-lucide-search" class="max-w-sm" />
+    <UiSearchInput v-model="search" placeholder="Rechercher un joueur (Pseudo#12345)" />
 
     <UiFilterResetActions
       :filters-default="filtersStore.isFiltersDefault"
@@ -203,22 +203,7 @@ function goToPlayer(row: Record<string, unknown>) {
       </template>
       <template #cell-behaviorScore="{ row }">
         <div class="flex items-center gap-1.5">
-          <span
-            v-if="(row.pgmCount as number) > 0"
-            class="inline-flex items-center gap-0.5 rounded-full bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent"
-            :title="`Marqué sympa par ${row.pgmCount} joueur(s)`"
-          >
-            <UIcon name="i-heroicons-face-smile" class="h-3 w-3" />
-            {{ row.pgmCount }}
-          </span>
-          <span
-            v-if="(row.fdpCount as number) > 0"
-            class="inline-flex items-center gap-0.5 rounded-full bg-danger/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-danger"
-            :title="`Marqué FDP par ${row.fdpCount} joueur(s)`"
-          >
-            <UIcon name="i-heroicons-face-frown" class="h-3 w-3" />
-            {{ row.fdpCount }}
-          </span>
+          <PlayersBehaviorBadges :fdp-count="row.fdpCount as number" :pgm-count="row.pgmCount as number" />
           <span v-if="(row.pgmCount as number) === 0 && (row.fdpCount as number) === 0" class="text-xs text-muted">-</span>
         </div>
       </template>
@@ -260,37 +245,14 @@ function goToPlayer(row: Record<string, unknown>) {
         <span v-else class="text-muted">-</span>
       </template>
       <template #cell-account="{ row }">
-        <NuxtLink
-          v-if="row.friendshipStatus === 'friends'"
-          :to="`/friends/${row.accountUserId}`"
-          class="inline-flex items-center gap-1 text-xs font-medium text-success"
-          @click.stop
-        >
-          <UIcon name="i-heroicons-check-badge" class="h-4 w-4" />
-          Ami
-        </NuxtLink>
-        <span v-else-if="row.friendshipStatus === 'pending_outgoing'" class="text-xs text-muted">
-          Demande envoyée
-        </span>
-        <NuxtLink
-          v-else-if="row.friendshipStatus === 'pending_incoming'"
-          to="/friends"
-          class="text-xs font-medium text-brand"
-          @click.stop
-        >
-          À répondre
-        </NuxtLink>
-        <UButton
-          v-else-if="row.accountUserId"
-          size="xs"
-          variant="soft"
-          icon="i-heroicons-user-plus"
-          :loading="sendingIds[row.accountUserId as string]"
-          @click.stop="addFriend(row.accountUserId as string)"
-        >
-          Ajouter
-        </UButton>
-        <span v-else class="text-xs text-muted">-</span>
+        <PlayersFriendshipBadge
+          :status="row.friendshipStatus as PlayerFriendshipStatus"
+          variant="inline"
+          :friends-to="`/friends/${row.accountUserId}`"
+          :can-add="Boolean(row.accountUserId)"
+          :add-loading="sendingIds[row.accountUserId as string]"
+          @add="addFriend(row.accountUserId as string)"
+        />
       </template>
     </UiDataTable>
     </UiTableScrollPanel>

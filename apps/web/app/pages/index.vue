@@ -57,57 +57,39 @@ function goToMatch(row: Record<string, unknown>) {
       </p>
     </div>
 
-    <NuxtLink
-      to="/upload"
-      class="flex items-center gap-3 rounded-lg border border-brand/30 bg-brand/5 p-4 transition-colors hover:bg-brand/10"
-    >
-      <UIcon name="i-heroicons-cloud-arrow-up" class="h-5 w-5 shrink-0 text-brand" />
-      <div class="min-w-0 flex-1">
-        <p class="text-xs uppercase tracking-wide text-muted">Tes parties uploadées</p>
-        <p class="truncate text-sm font-medium">
-          {{ summary ? summary.gamesPlayed : "…" }} partie{{ (summary?.gamesPlayed ?? 0) > 1 ? "s" : "" }} sur ton
-          compte — envoie les prochaines
-        </p>
-      </div>
-      <UIcon name="i-heroicons-chevron-right" class="h-4 w-4 shrink-0 text-muted" />
-    </NuxtLink>
+    <UiTeaserLink to="/upload" icon="i-heroicons-cloud-arrow-up" eyebrow="Tes parties uploadées">
+      {{ summary ? summary.gamesPlayed : "…" }} partie{{ (summary?.gamesPlayed ?? 0) > 1 ? "s" : "" }} sur ton
+      compte — envoie les prochaines
+    </UiTeaserLink>
 
     <StatsAccountSummaryStats :summary="summary" />
 
     <div v-if="topLeak || topStrength" class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      <NuxtLink
+      <UiTeaserLink
         v-if="topStrength"
         to="/analysis"
-        class="flex items-center gap-3 rounded-lg border border-success/30 bg-success/5 p-4 transition-colors hover:bg-success/10"
+        icon="i-heroicons-sparkles"
+        tone="success"
+        eyebrow="Ton point fort du moment"
       >
-        <UIcon name="i-heroicons-sparkles" class="h-5 w-5 shrink-0 text-success" />
-        <div class="min-w-0 flex-1">
-          <p class="text-xs uppercase tracking-wide text-muted">Ton point fort du moment</p>
-          <p class="truncate text-sm font-medium">{{ topStrength.label }}</p>
-        </div>
-        <UIcon name="i-heroicons-chevron-right" class="h-4 w-4 shrink-0 text-muted" />
-      </NuxtLink>
+        {{ topStrength.label }}
+      </UiTeaserLink>
 
-      <NuxtLink
+      <UiTeaserLink
         v-if="topLeak"
         to="/analysis"
-        class="flex items-center gap-3 rounded-lg border border-danger/30 bg-danger/5 p-4 transition-colors hover:bg-danger/10"
+        icon="i-heroicons-exclamation-triangle"
+        tone="danger"
+        eyebrow="Ton point faible du moment"
       >
-        <UIcon name="i-heroicons-exclamation-triangle" class="h-5 w-5 shrink-0 text-danger" />
-        <div class="min-w-0 flex-1">
-          <p class="text-xs uppercase tracking-wide text-muted">Ton point faible du moment</p>
-          <p class="truncate text-sm font-medium">{{ topLeak.label }}</p>
-        </div>
-        <UIcon name="i-heroicons-chevron-right" class="h-4 w-4 shrink-0 text-muted" />
-      </NuxtLink>
+        {{ topLeak.label }}
+      </UiTeaserLink>
     </div>
 
     <div>
       <div class="mb-3 flex items-center justify-between">
         <h2 class="font-heading text-lg font-medium">Dernières parties</h2>
-        <NuxtLink to="/matches" class="text-sm text-brand hover:underline">
-          Voir tout l'historique
-        </NuxtLink>
+        <UiArrowLink to="/matches">Voir tout l'historique</UiArrowLink>
       </div>
 
       <UiDataTable

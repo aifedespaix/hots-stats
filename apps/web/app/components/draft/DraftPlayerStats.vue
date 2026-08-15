@@ -89,8 +89,8 @@ const sections = computed<Section[]>(() => {
       <!-- Only the very first load (no stats yet) shows the spinner -- a
            background refresh (e.g. re-selecting a still-loading player)
            keeps whatever's already on screen instead of flashing to it. -->
-      <div v-else-if="pending && !stats" class="flex h-full items-center justify-center text-muted">
-        <UIcon name="i-heroicons-arrow-path" class="h-6 w-6 animate-spin" />
+      <div v-else-if="pending && !stats" class="flex h-full items-center justify-center">
+        <UiStateCard state="loading" size="sm" />
       </div>
 
       <div v-else-if="errored" class="flex h-full flex-col items-center justify-center gap-2 text-center text-danger">

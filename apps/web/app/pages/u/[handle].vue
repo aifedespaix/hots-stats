@@ -36,12 +36,7 @@ useSeoMeta({
 <template>
   <div v-if="data" class="space-y-8">
     <div class="flex items-center gap-4">
-      <img
-        v-if="profile.avatarUrl"
-        :src="profile.avatarUrl"
-        :alt="profile.displayName"
-        class="h-16 w-16 shrink-0 rounded-full border border-border"
-      >
+      <PlayersPlayerAvatar :avatar-url="profile.avatarUrl" :display-name="profile.displayName" />
       <div class="min-w-0">
         <h1 class="break-words font-heading text-2xl font-semibold">{{ profile.displayName }}</h1>
         <p v-if="profile.battletag" class="break-all font-mono text-sm text-muted">{{ profile.battletag }}</p>

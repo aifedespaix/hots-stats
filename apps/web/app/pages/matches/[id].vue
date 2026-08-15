@@ -134,9 +134,7 @@ const displayedInsights = computed(() =>
 
   <div v-else-if="data" class="space-y-6">
     <div>
-      <NuxtLink to="/matches" class="text-sm text-brand hover:underline">
-        &larr; Retour à l'historique
-      </NuxtLink>
+      <UiBackLink to="/matches" label="Retour à l'historique" />
       <h1 class="mt-2 font-heading text-2xl font-semibold">{{ data.match.mapName }}</h1>
       <p class="mt-1 text-sm text-muted">
         {{ formatGameMode(data.match.gameMode) }} · {{ formatDate(data.match.playedAt) }} ·

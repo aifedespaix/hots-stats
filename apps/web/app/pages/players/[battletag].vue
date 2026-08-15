@@ -22,7 +22,7 @@ useSeoMeta({
 
 <template>
   <div class="space-y-4">
-    <NuxtLink to="/players" class="text-sm text-brand hover:underline">&larr; Retour aux joueurs</NuxtLink>
+    <UiBackLink to="/players" label="Retour aux joueurs" />
     <PlayersProfileDetail :battletag="battletag" />
   </div>
 </template>

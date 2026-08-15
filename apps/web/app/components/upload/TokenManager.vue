@@ -56,7 +56,7 @@ async function onRenew(id: string) {
     </div>
 
     <div v-if="pending && tokens.length === 0" class="space-y-2">
-      <div v-for="i in 2" :key="i" class="h-14 animate-pulse rounded-lg bg-background/60" />
+      <UiSkeletonBlock v-for="i in 2" :key="i" class="h-14 rounded-lg bg-background/60" />
     </div>
 
     <p v-else-if="tokens.length === 0" class="rounded-lg border border-dashed border-border py-6 text-center text-xs text-muted">

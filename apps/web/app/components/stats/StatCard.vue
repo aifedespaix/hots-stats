@@ -41,7 +41,7 @@ const iconToneClasses: Record<string, string> = {
     <div class="flex items-start justify-between gap-3">
       <div class="min-w-0 flex-1">
         <p class="text-xs font-medium uppercase tracking-wide text-muted">{{ title }}</p>
-        <div v-if="loading" class="mt-2 h-8 w-16 animate-pulse rounded bg-border/50" />
+        <UiSkeletonBlock v-if="loading" class="mt-2 h-8 w-16 rounded bg-border/50" />
         <p v-else-if="value !== undefined" class="mt-1 truncate font-heading text-2xl font-bold leading-none sm:text-3xl">
           {{ value }}
         </p>
@@ -57,9 +57,9 @@ const iconToneClasses: Record<string, string> = {
 
     <div class="mt-3.5">
       <div v-if="loading" class="space-y-1.5">
-        <div class="h-6 w-full animate-pulse rounded bg-border/40" />
-        <div class="h-6 w-full animate-pulse rounded bg-border/40" />
-        <div class="h-6 w-2/3 animate-pulse rounded bg-border/40" />
+        <UiSkeletonBlock class="h-6 w-full rounded bg-border/40" />
+        <UiSkeletonBlock class="h-6 w-full rounded bg-border/40" />
+        <UiSkeletonBlock class="h-6 w-2/3 rounded bg-border/40" />
       </div>
       <slot v-else />
     </div>

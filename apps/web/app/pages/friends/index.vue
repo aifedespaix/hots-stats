@@ -165,7 +165,7 @@ async function confirmRemoveFriend() {
 
     <section class="space-y-3 rounded-lg border border-border bg-surface p-4 sm:p-6">
       <h2 class="font-heading text-lg">Ajouter un ami</h2>
-      <UInput v-model="search" placeholder="Rechercher par BattleTag ou pseudo public" icon="i-lucide-search" />
+      <UiSearchInput v-model="search" placeholder="Rechercher par BattleTag ou pseudo public" full-width />
 
       <ul v-if="search.trim().length >= 2" class="divide-y divide-border">
         <li v-if="searching" class="py-3 text-sm text-muted">Recherche...</li>
@@ -179,23 +179,16 @@ async function confirmRemoveFriend() {
             <p class="truncate font-medium">{{ result.displayName }}</p>
             <p v-if="result.battletag" class="truncate font-mono text-xs text-muted">{{ result.battletag }}</p>
           </div>
-          <UButton
-            v-if="result.friendshipStatus === 'none'"
-            size="sm"
-            icon="i-heroicons-user-plus"
-            @click="sendRequest(result)"
-          >
-            Ajouter
-          </UButton>
-          <span v-else-if="result.friendshipStatus === 'friends'" class="shrink-0 text-sm text-success">
-            Déjà ami
-          </span>
-          <span v-else-if="result.friendshipStatus === 'pending_outgoing'" class="shrink-0 text-sm text-muted">
-            Demande envoyée
-          </span>
-          <span v-else-if="result.friendshipStatus === 'pending_incoming'" class="shrink-0 text-sm text-brand">
-            T'a demandé en ami
-          </span>
+          <PlayersFriendshipBadge
+            :status="result.friendshipStatus"
+            variant="search"
+            friends-label="Déjà ami"
+            pending-incoming-label="T'a demandé en ami"
+            :pending-incoming-to="null"
+            add-button-size="sm"
+            add-button-variant="solid"
+            @add="sendRequest(result)"
+          />
         </li>
       </ul>
     </section>
@@ -304,19 +297,18 @@ async function confirmRemoveFriend() {
       <p v-else class="py-4 text-center text-sm text-muted">Aucun ami pour le moment.</p>
     </section>
 
-    <UModal v-model:open="removeModalOpen" :title="`Retirer ${friendToRemove?.displayName ?? ''} de tes amis ?`">
-      <template #body>
-        <p class="text-sm text-muted">
-          Vous ne serez plus amis ni l'un ni l'autre. Tu pourras renvoyer une demande plus tard si tu changes
-          d'avis.
-        </p>
-        <div class="mt-6 flex justify-end gap-2">
-          <UButton variant="ghost" icon="i-heroicons-x-mark" @click="removeModalOpen = false">Annuler</UButton>
-          <UButton color="error" icon="i-heroicons-user-minus" :loading="removing" @click="confirmRemoveFriend">
-            Retirer
-          </UButton>
-        </div>
-      </template>
-    </UModal>
+    <UiConfirmModal
+      v-model:open="removeModalOpen"
+      :title="`Retirer ${friendToRemove?.displayName ?? ''} de tes amis ?`"
+      confirm-label="Retirer"
+      confirm-icon="i-heroicons-user-minus"
+      :loading="removing"
+      @confirm="confirmRemoveFriend"
+    >
+      <p class="text-sm text-muted">
+        Vous ne serez plus amis ni l'un ni l'autre. Tu pourras renvoyer une demande plus tard si tu changes
+        d'avis.
+      </p>
+    </UiConfirmModal>
   </div>
 </template>
