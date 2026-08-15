@@ -20,7 +20,11 @@ const {
     });
     return res.threats;
   },
-  watch: () => props.battletags,
+  // Joined string, not the array itself: `battletags` is rebuilt fresh from
+  // the SSE snapshot on every push (a brand-new array reference even when
+  // the actual roster hasn't changed), which would otherwise refetch --
+  // and flash this panel back to its spinner -- on every single push.
+  watch: () => props.battletags.join(","),
 });
 
 const threats = computed(() => threatsData.value ?? []);
@@ -35,7 +39,10 @@ const hasPersonalWeakness = computed(() => threats.value.some((threat) => threat
       <h2 class="text-xs font-medium uppercase tracking-wide text-muted">Menaces adverses</h2>
     </div>
 
-    <div v-if="pending" class="flex items-center justify-center py-3 text-muted">
+    <!-- Only the very first load (no data yet) shows the spinner -- a
+         background refresh keeps whatever's already on screen so the panel
+         doesn't flash empty/spinner on every SSE push. -->
+    <div v-if="pending && !threatsData" class="flex items-center justify-center py-3 text-muted">
       <UIcon name="i-heroicons-arrow-path" class="h-5 w-5 animate-spin" />
     </div>
     <p v-else-if="errored" class="py-1 text-xs text-danger">Impossible de charger les menaces adverses.</p>

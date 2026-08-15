@@ -3,8 +3,28 @@ const { tokens, pending, revealed, creating, renewingId, deletingId, createToken
   useTokens();
 const toast = useToast();
 
+// Briefly highlights the token that was just created/renewed (glow animation
+// on TokenCard) so the user's eye is drawn to the secret they need to copy.
+const justCreatedId = ref<string | null>(null);
+let justCreatedTimer: ReturnType<typeof setTimeout> | null = null;
+
+function flashJustCreated(id: string) {
+  if (justCreatedTimer) clearTimeout(justCreatedTimer);
+  justCreatedId.value = null;
+  // Reset to null first so re-triggering the same id still restarts the CSS animation.
+  nextTick(() => {
+    justCreatedId.value = id;
+    justCreatedTimer = setTimeout(() => (justCreatedId.value = null), 1500);
+  });
+}
+
+onUnmounted(() => {
+  if (justCreatedTimer) clearTimeout(justCreatedTimer);
+});
+
 async function onCreate() {
-  await createToken();
+  const id = await createToken();
+  if (id) flashJustCreated(id);
   toast.add({
     title: "Token créé",
     description: "Copie-le maintenant : il ne sera plus jamais affiché en clair.",
@@ -15,6 +35,7 @@ async function onCreate() {
 
 async function onRenew(id: string) {
   await renewToken(id);
+  flashJustCreated(id);
   toast.add({
     title: "Token renouvelé",
     description: "L'ancienne clé ne fonctionne plus. Copie la nouvelle maintenant.",
@@ -49,6 +70,7 @@ async function onRenew(id: string) {
           :revealed-value="revealed[token.id]"
           :renewing="renewingId === token.id"
           :deleting="deletingId === token.id"
+          :just-created="justCreatedId === token.id"
           @renew="onRenew(token.id)"
           @delete="deleteToken(token.id)"
         />

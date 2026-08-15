@@ -86,21 +86,20 @@ const teamImpactChartOptions = computed(() => ({
   <UiErrorState v-if="error" :status-code="404" message="Carte introuvable." back-to="/maps" back-label="Retour aux cartes" />
 
   <div v-else-if="data" class="space-y-8">
-    <div
-      class="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-brand/25 bg-gradient-to-br from-brand/15 via-surface to-accent/10 p-4 sm:p-5"
-    >
-      <div>
-        <NuxtLink to="/maps" class="text-sm text-brand hover:underline">&larr; Retour aux cartes</NuxtLink>
-        <div class="mt-2 flex items-center gap-2.5">
-          <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand/15 text-brand">
-            <UIcon name="i-heroicons-map" class="h-5 w-5" />
-          </span>
-          <h1 class="font-heading text-2xl font-semibold">{{ data.mapName }}</h1>
+    <div class="overflow-hidden rounded-lg border border-border bg-surface">
+      <div class="relative">
+        <MapsMapImage :map-id="mapId" :name="data.mapName" aspect="aspect-[21/9]" rounded="rounded-none" />
+        <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+        <div class="absolute inset-x-0 bottom-0 flex flex-wrap items-end justify-between gap-3 p-4 sm:p-5">
+          <div>
+            <NuxtLink to="/maps" class="text-sm text-white/80 hover:text-white hover:underline">&larr; Retour aux cartes</NuxtLink>
+            <h1 class="mt-1 font-heading text-2xl font-semibold text-white drop-shadow">{{ data.mapName }}</h1>
+          </div>
+          <UButton :to="`/talents?mapId=${mapId}`" color="primary" variant="solid" icon="i-heroicons-sparkles" size="sm">
+            Talents forts sur cette carte
+          </UButton>
         </div>
       </div>
-      <UButton :to="`/talents?mapId=${mapId}`" color="primary" variant="soft" icon="i-heroicons-sparkles" size="sm">
-        Talents forts sur cette carte
-      </UButton>
     </div>
 
     <StatsFormTrackerWidget
