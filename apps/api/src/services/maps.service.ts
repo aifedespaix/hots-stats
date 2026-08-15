@@ -6,6 +6,7 @@ import {
   SOAK_MIN_GAMES,
   TEAM_IMPACT_MIN_GAMES,
   type GameMode,
+  type HeroStatsScope,
   type MapDetailResponse,
   type MapHubEntry,
   type MapMetaHeroStats,
@@ -39,8 +40,14 @@ function rankedModeCondition(mode?: GameMode[]) {
  * queries, so the Hub stays a single round trip regardless of how many maps
  * the app knows about.
  */
-async function getRecentFormByMap(userId: string, mode?: GameMode[], heroId?: string): Promise<Map<string, boolean[]>> {
-  const conditions = [eq(matchPlayers.userId, userId), rankedModeCondition(mode)];
+async function getRecentFormByMap(
+  userId: string,
+  mode?: GameMode[],
+  heroId?: string,
+  scope: HeroStatsScope = "personal",
+): Promise<Map<string, boolean[]>> {
+  const conditions = [rankedModeCondition(mode)];
+  if (scope === "personal") conditions.push(eq(matchPlayers.userId, userId));
   if (heroId) conditions.push(eq(matchPlayers.heroId, heroId));
 
   const ranked = db.$with("ranked_map_games").as(
@@ -73,16 +80,24 @@ async function getRecentFormByMap(userId: string, mode?: GameMode[], heroId?: st
 }
 
 /**
- * All maps the app knows about, each with the connected user's own ranked
- * record -- the Hub's tile grid. A left join (via a personal-stats CTE)
- * keeps maps the user has never played in the list at 0 games, since the
- * Hub is a menu to browse, not a leaderboard of maps already played.
+ * All maps the app knows about, each with the requested scope's ranked
+ * record -- the Hub's tile grid ("personal", the Maps Hub page's only use)
+ * or, for the Talent Analyzer's Map select, whichever scope its page-level
+ * toggle is set to. A left join (via a scoped-stats CTE) keeps maps nobody
+ * (in scope) has played in the list at 0 games, since the Hub is a menu to
+ * browse, not a leaderboard of maps already played.
  */
-export async function getMapHub(userId: string, mode?: GameMode[], heroId?: string): Promise<MapHubEntry[]> {
-  const personalConditions = [eq(matchPlayers.userId, userId), rankedModeCondition(mode)];
-  if (heroId) personalConditions.push(eq(matchPlayers.heroId, heroId));
+export async function getMapHub(
+  userId: string,
+  mode?: GameMode[],
+  heroId?: string,
+  scope: HeroStatsScope = "personal",
+): Promise<MapHubEntry[]> {
+  const scopedConditions = [rankedModeCondition(mode)];
+  if (scope === "personal") scopedConditions.push(eq(matchPlayers.userId, userId));
+  if (heroId) scopedConditions.push(eq(matchPlayers.heroId, heroId));
 
-  const personal = db.$with("personal_map_stats").as(
+  const scoped = db.$with("scoped_map_stats").as(
     db
       .select({
         mapId: matches.mapId,
@@ -91,22 +106,22 @@ export async function getMapHub(userId: string, mode?: GameMode[], heroId?: stri
       })
       .from(matchPlayers)
       .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
-      .where(and(...personalConditions))
+      .where(and(...scopedConditions))
       .groupBy(matches.mapId),
   );
 
   const [rows, recentFormByMap] = await Promise.all([
     db
-      .with(personal)
+      .with(scoped)
       .select({
         mapId: maps.id,
         mapName: maps.name,
-        gamesPlayed: sql<number>`coalesce(${personal.gamesPlayed}, 0)::int`,
-        wins: sql<number>`coalesce(${personal.wins}, 0)::int`,
+        gamesPlayed: sql<number>`coalesce(${scoped.gamesPlayed}, 0)::int`,
+        wins: sql<number>`coalesce(${scoped.wins}, 0)::int`,
       })
       .from(maps)
-      .leftJoin(personal, eq(personal.mapId, maps.id)),
-    getRecentFormByMap(userId, mode, heroId),
+      .leftJoin(scoped, eq(scoped.mapId, maps.id)),
+    getRecentFormByMap(userId, mode, heroId, scope),
   ]);
 
   return rows

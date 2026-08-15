@@ -29,12 +29,15 @@ const minGames = ref(TALENT_ANALYZER_MIN_GAMES_DEFAULT);
 // Cross-filtering: picking a hero narrows the Map list to maps that hero has
 // actually been played on, and picking a map narrows the Hero list to heroes
 // played on that map -- both on top of the global game-mode filter, which
-// `useApiFetch` already injects as `mode` for every request below.
+// `useApiFetch` already injects as `mode` for every request below. Both
+// selects must also share the exact same `scope` as the toggle above them:
+// leaving one on a different scope than the other is what made a hero with
+// games show a map with "no games anywhere" for the same combination.
 const { data: heroesData } = await useApiFetch<HeroListResponse>("/heroes", {
-  query: computed(() => ({ scope: "global", ...(mapId.value ? { mapId: mapId.value } : {}) })),
+  query: computed(() => ({ scope: scope.value, ...(mapId.value ? { mapId: mapId.value } : {}) })),
 });
 const { data: mapsData } = await useApiFetch<MapHubResponse>("/maps", {
-  query: computed(() => (heroId.value ? { heroId: heroId.value } : {})),
+  query: computed(() => ({ scope: scope.value, ...(heroId.value ? { heroId: heroId.value } : {}) })),
 });
 
 // Enriched selector items: games/winrate/KDA (or recent form for maps) shown
@@ -51,7 +54,6 @@ interface HeroSelectItem {
   kda: number | null;
   reliable: boolean;
   disabled: boolean;
-  special?: boolean;
 }
 interface MapSelectItem {
   value: string;
@@ -61,12 +63,16 @@ interface MapSelectItem {
   recentForm: boolean[];
   reliable: boolean;
   disabled: boolean;
-  special?: boolean;
 }
 
-const heroOptions = computed<HeroSelectItem[]>(() => [
-  { value: "", label: "-- aucun --", heroRole: null, gamesPlayed: 0, winrate: 0, kda: null, reliable: true, disabled: false, special: true },
-  ...(heroesData.value?.heroes ?? [])
+// No "-- aucun --" placeholder item here: reka-ui's Combobox reserves an
+// empty-string item value to mean "clear the selection", so giving one to a
+// real item throws on every render of the list (visible as the dropdown's
+// items breaking/disappearing once a few are mounted) instead of ever
+// selecting it. "No selection" is instead the select's own placeholder
+// state (heroId/mapId stays "") plus the built-in clear ("x") button.
+const heroOptions = computed<HeroSelectItem[]>(() =>
+  (heroesData.value?.heroes ?? [])
     .map((h) => ({
       value: h.heroId,
       label: h.heroName,
@@ -78,10 +84,9 @@ const heroOptions = computed<HeroSelectItem[]>(() => [
       disabled: h.gamesPlayed === 0,
     }))
     .sort((a, b) => a.label.localeCompare(b.label)),
-]);
-const mapOptions = computed<MapSelectItem[]>(() => [
-  { value: "", label: "-- aucune --", gamesPlayed: 0, winrate: 0, recentForm: [], reliable: true, disabled: false, special: true },
-  ...(mapsData.value?.maps ?? [])
+);
+const mapOptions = computed<MapSelectItem[]>(() =>
+  (mapsData.value?.maps ?? [])
     .map((m) => ({
       value: m.mapId,
       label: m.mapName,
@@ -92,7 +97,7 @@ const mapOptions = computed<MapSelectItem[]>(() => [
       disabled: m.gamesPlayed === 0,
     }))
     .sort((a, b) => a.label.localeCompare(b.label)),
-]);
+);
 
 const selectedHeroName = computed(() => heroesData.value?.heroes.find((h) => h.heroId === heroId.value)?.heroName ?? "");
 
@@ -266,14 +271,14 @@ function applyBuild(row: (typeof buildRows.value)[number]) {
           :items="heroOptions"
           value-key="value"
           label-key="label"
+          placeholder="-- aucun --"
+          clear
           size="xl"
           class="w-full"
           :ui="{ base: 'h-14 w-full rounded-full px-5 text-base', leadingIcon: 'size-5', trailingIcon: 'size-5', itemLabel: 'w-full', item: 'py-2.5' }"
         >
           <template #item-label="{ item }">
-            <span v-if="item.special" class="text-base">{{ item.label }}</span>
             <div
-              v-else
               class="flex w-full min-w-0 items-center gap-3"
               :class="item.gamesPlayed > 0 && !item.reliable ? 'opacity-60' : ''"
             >
@@ -304,14 +309,14 @@ function applyBuild(row: (typeof buildRows.value)[number]) {
           :items="mapOptions"
           value-key="value"
           label-key="label"
+          placeholder="-- aucune --"
+          clear
           size="xl"
           class="w-full"
           :ui="{ base: 'h-14 w-full rounded-full px-5 text-base', leadingIcon: 'size-5', trailingIcon: 'size-5', itemLabel: 'w-full', item: 'py-2.5' }"
         >
           <template #item-label="{ item }">
-            <span v-if="item.special" class="text-base">{{ item.label }}</span>
             <div
-              v-else
               class="flex w-full min-w-0 items-center gap-3"
               :class="item.gamesPlayed > 0 && !item.reliable ? 'opacity-60' : ''"
             >

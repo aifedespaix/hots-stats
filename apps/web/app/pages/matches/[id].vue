@@ -6,7 +6,19 @@ definePageMeta({ middleware: "auth" });
 
 const route = useRoute();
 
-const { data, error } = await useApiFetch<MatchDetailResponse>(`/matches/${route.params.id}`);
+// This endpoint returns one specific match by id and ignores `mode`
+// entirely server-side, so it must opt out of useApiFetch's default game-mode
+// query injection. Leaving it on made the fetch's auto-generated key reactive
+// to the persisted (localStorage-only) game-mode filter: whenever that
+// filter differs from the SSR default the moment it's restored client-side,
+// Nuxt treats it as a different request, discards the SSR-fetched payload,
+// and refetches from scratch right after hydration -- on a hard reload that
+// briefly (or, combined with this app's hydration-patch issues, sometimes
+// permanently) shows the "Partie introuvable" error state before the refetch
+// resolves.
+const { data, error } = await useApiFetch<MatchDetailResponse>(`/matches/${route.params.id}`, {
+  withGameMode: false,
+});
 const { data: authData } = useAuthUser();
 
 const matchTitle = computed(() => data.value?.match.mapName ?? "Game Coach");

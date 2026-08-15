@@ -118,6 +118,47 @@ async function resolveAccountLinks(
   return links;
 }
 
+/**
+ * Each battletag's own record across every match it appears in -- unlike
+ * `encounterBase` (which is scoped to matches shared with `userId`), this
+ * ignores the viewer entirely, so it's the same number regardless of who's
+ * looking. Still respects the `mode` filter, same as everything else on
+ * this page. K/D (not KDA) per the "Ratio K/D" column's own definition;
+ * `null` when deathless, formatted as "Parfait" client-side.
+ */
+async function getGlobalPlayerStats(
+  battletags: string[],
+  mode?: GameMode[],
+): Promise<Map<string, { gamesPlayed: number; winrate: number; kdRatio: number | null }>> {
+  const result = new Map<string, { gamesPlayed: number; winrate: number; kdRatio: number | null }>();
+  if (battletags.length === 0) return result;
+
+  const conditions = [inArray(matchPlayers.battletag, battletags)];
+  if (mode && mode.length > 0) conditions.push(inArray(matches.gameMode, mode));
+
+  const rows = await db
+    .select({
+      battletag: matchPlayers.battletag,
+      gamesPlayed: sql<number>`count(*)::int`,
+      wins: sql<number>`count(*) filter (where ${matchPlayers.winner})::int`,
+      kills: sql<number>`coalesce(sum(${matchPlayers.kills}), 0)::int`,
+      deaths: sql<number>`coalesce(sum(${matchPlayers.deaths}), 0)::int`,
+    })
+    .from(matchPlayers)
+    .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
+    .where(and(...conditions))
+    .groupBy(matchPlayers.battletag);
+
+  for (const row of rows) {
+    result.set(row.battletag, {
+      gamesPlayed: row.gamesPlayed,
+      winrate: row.gamesPlayed > 0 ? row.wins / row.gamesPlayed : 0,
+      kdRatio: row.deaths > 0 ? row.kills / row.deaths : null,
+    });
+  }
+  return result;
+}
+
 export async function listPlayerEncounters(
   userId: string,
   sortBy: PlayerSortBy,
@@ -128,21 +169,28 @@ export async function listPlayerEncounters(
   const order = sortDir === "asc" ? sql`${sortColumn[sortBy]} asc` : sql`${sortColumn[sortBy]} desc`;
 
   const rows = await db.with(encounters).select().from(encounters).orderBy(order);
-  const links = await resolveAccountLinks(
-    userId,
-    rows.map((row) => row.battletag),
-  );
+  const battletags = rows.map((row) => row.battletag);
+  const [links, globalStats] = await Promise.all([
+    resolveAccountLinks(userId, battletags),
+    getGlobalPlayerStats(battletags, mode),
+  ]);
 
-  return rows.map((row) => ({
-    battletag: row.battletag,
-    gamesTogether: row.gamesTogether,
-    gamesAsAlly: row.gamesAsAlly,
-    gamesAsOpponent: row.gamesAsOpponent,
-    winsAsAlly: row.winsAsAlly,
-    winsAsOpponent: row.winsAsOpponent,
-    accountUserId: links.get(row.battletag)?.accountUserId ?? null,
-    friendshipStatus: links.get(row.battletag)?.friendshipStatus ?? "none",
-  }));
+  return rows.map((row) => {
+    const global = globalStats.get(row.battletag);
+    return {
+      battletag: row.battletag,
+      gamesTogether: row.gamesTogether,
+      gamesAsAlly: row.gamesAsAlly,
+      gamesAsOpponent: row.gamesAsOpponent,
+      winsAsAlly: row.winsAsAlly,
+      winsAsOpponent: row.winsAsOpponent,
+      accountUserId: links.get(row.battletag)?.accountUserId ?? null,
+      friendshipStatus: links.get(row.battletag)?.friendshipStatus ?? "none",
+      globalGamesPlayed: global?.gamesPlayed ?? 0,
+      globalWinrate: global?.winrate ?? 0,
+      globalKdRatio: global?.kdRatio ?? null,
+    };
+  });
 }
 
 export async function getPlayerEncounter(
@@ -171,8 +219,12 @@ export async function getPlayerEncounter(
 
   if (!row || row.gamesAsAlly + row.gamesAsOpponent === 0) return null;
 
-  const links = await resolveAccountLinks(userId, [battletag]);
+  const [links, globalStats] = await Promise.all([
+    resolveAccountLinks(userId, [battletag]),
+    getGlobalPlayerStats([battletag], mode),
+  ]);
   const link = links.get(battletag);
+  const global = globalStats.get(battletag);
 
   return {
     battletag,
@@ -183,6 +235,9 @@ export async function getPlayerEncounter(
     winsAsOpponent: row.winsAsOpponent,
     accountUserId: link?.accountUserId ?? null,
     friendshipStatus: link?.friendshipStatus ?? "none",
+    globalGamesPlayed: global?.gamesPlayed ?? 0,
+    globalWinrate: global?.winrate ?? 0,
+    globalKdRatio: global?.kdRatio ?? null,
   };
 }
 

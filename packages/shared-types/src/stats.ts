@@ -133,6 +133,13 @@ export interface PlayerEncounterStats {
   // Set when this battletag belongs to a registered account, so the UI can offer to add them as a friend.
   accountUserId: string | null;
   friendshipStatus: PlayerFriendshipStatus;
+  // This battletag's own record across every match it's in, independent of
+  // the viewer (unlike the fields above, which are all scoped to matches
+  // shared with the viewer) -- still respects the `mode` filter.
+  globalGamesPlayed: number;
+  globalWinrate: number;
+  // K/D, not KDA -- null when deathless.
+  globalKdRatio: number | null;
 }
 
 /** A hero needs at least this many games before it's eligible as a "signature
