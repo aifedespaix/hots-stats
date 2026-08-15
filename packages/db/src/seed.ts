@@ -39,6 +39,10 @@ const MAP_NAMES = [
   "Braxis Holdout",
   "Hanamura Temple",
   "Alterac Pass",
+  "Braxis Outpost",
+  "Industrial District",
+  "Lost Cavern",
+  "Silver City",
 ];
 
 type HeroRole = (typeof heroRoleEnum.enumValues)[number];
