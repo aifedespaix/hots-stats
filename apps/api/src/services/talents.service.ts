@@ -24,6 +24,7 @@ async function heroStatsQuery(
   heroId?: string,
   mode?: GameMode[],
   scope: HeroStatsScope = "personal",
+  mapId?: string,
 ) {
   const teamKills = db.$with("team_kills").as(
     db
@@ -38,6 +39,7 @@ async function heroStatsQuery(
 
   const conditions = scope === "personal" ? [eq(matchPlayers.userId, userId)] : [];
   if (heroId) conditions.push(eq(matchPlayers.heroId, heroId));
+  if (mapId) conditions.push(eq(matches.mapId, mapId));
   if (mode && mode.length > 0) conditions.push(inArray(matches.gameMode, mode));
 
   return db
@@ -70,8 +72,9 @@ export async function getHeroSummaries(
   userId: string,
   mode?: GameMode[],
   scope: HeroStatsScope = "personal",
+  mapId?: string,
 ): Promise<HeroStatsRow[]> {
-  const rows = await heroStatsQuery(userId, undefined, mode, scope);
+  const rows = await heroStatsQuery(userId, undefined, mode, scope, mapId);
   return rows.map((row) => ({
     ...row,
     winrate: row.gamesPlayed > 0 ? row.wins / row.gamesPlayed : 0,
@@ -82,8 +85,9 @@ export async function getHeroSummary(
   userId: string,
   heroId: string,
   scope: HeroStatsScope = "personal",
+  mode?: GameMode[],
 ): Promise<HeroStatsRow | null> {
-  const rows = await heroStatsQuery(userId, heroId, undefined, scope);
+  const rows = await heroStatsQuery(userId, heroId, mode, scope);
   const row = rows[0];
   if (!row) return null;
   return { ...row, winrate: row.gamesPlayed > 0 ? row.wins / row.gamesPlayed : 0 };

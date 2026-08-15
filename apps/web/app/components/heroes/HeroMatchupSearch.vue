@@ -10,21 +10,23 @@ const props = defineProps<{
 }>();
 
 const config = useRuntimeConfig();
+const gameModeStore = useGameModeStore();
 const selectedOpponentId = ref<string | undefined>(undefined);
 
 // Watches both the selected opponent and the page-level scope toggle -- a
 // scope change re-runs the currently open duel under the new scope instead
-// of leaving it showing stale numbers.
+// of leaving it showing stale numbers. Also watches the global game-mode
+// filter so a duel already on screen stays in sync with it.
 const { data: result, pending } = useAsyncResource<HeroMatchupResponse | null>({
   fetcher: async () => {
     if (!selectedOpponentId.value) return null;
     return $fetch<HeroMatchupResponse>(`/heroes/${props.heroId}/matchups/${selectedOpponentId.value}`, {
       baseURL: config.public.apiBase,
       credentials: "include",
-      query: { scope: props.scope },
+      query: { scope: props.scope, mode: gameModeStore.modeQueryParam },
     });
   },
-  watch: [selectedOpponentId, () => props.scope],
+  watch: [selectedOpponentId, () => props.scope, () => gameModeStore.modeQueryParam],
   immediate: false,
 });
 

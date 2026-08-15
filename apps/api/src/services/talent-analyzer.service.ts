@@ -1,6 +1,7 @@
 import { db, matchPlayers, matches, talentPicks } from "@hots-stats/db";
 import {
   TALENT_TIERS,
+  type GameMode,
   type HeroStatsScope,
   type TalentAnalyzerBuild,
   type TalentAnalyzerPin,
@@ -17,6 +18,7 @@ export interface TalentAnalyzerParams {
   heroId: string;
   mapId?: string;
   scope: HeroStatsScope;
+  mode?: GameMode[];
   pins: TalentAnalyzerPin[];
   minGames: number;
 }
@@ -33,6 +35,7 @@ async function getPopulationMatchPlayerIds(params: TalentAnalyzerParams): Promis
   const conditions = [eq(matchPlayers.heroId, params.heroId)];
   if (params.mapId) conditions.push(eq(matches.mapId, params.mapId));
   if (params.scope === "personal") conditions.push(eq(matchPlayers.userId, params.userId));
+  if (params.mode && params.mode.length > 0) conditions.push(inArray(matches.gameMode, params.mode));
 
   let query = db
     .select({ id: matchPlayers.id })
