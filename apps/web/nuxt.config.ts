@@ -1,9 +1,13 @@
 export default defineNuxtConfig({
-  compatibilityDate: "2025-01-01",
+  compatibilityDate: "2026-08-15",
   devtools: { enabled: true },
   modules: ["@nuxt/ui", "@nuxt/fonts", "@pinia/nuxt"],
   css: ["~/assets/css/globals.css"],
   ssr: true,
+  typescript: {
+    typeCheck: true,
+    strict: true,
+  },
   app: {
     head: {
       htmlAttrs: { lang: "fr" },
@@ -26,12 +30,8 @@ export default defineNuxtConfig({
       { name: "Outfit", provider: "google", weights: [400, 500, 600] },
       { name: "JetBrains Mono", provider: "google", weights: [400, 500, 600] },
     ],
-    // Avoid downloading/self-hosting font files during the Docker build
-    // (fonts.gstatic.com can be unreachable or return stale 404s in CI),
-    // load them from Google's CDN at runtime instead.
-    google: {
-      download: false,
-    },
+    // `throwOnError` defaults to false: a fonts.gstatic.com hiccup during the
+    // Docker build now logs a warning and falls back instead of failing the build.
   },
   runtimeConfig: {
     public: {
