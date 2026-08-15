@@ -27,7 +27,9 @@ const sortOptions: { value: SortMode; label: string }[] = [
 
 const filteredMaps = computed(() => {
   const term = search.value.trim().toLowerCase();
-  const rows = (data.value?.maps ?? []).filter((m) => (term ? m.mapName.toLowerCase().includes(term) : true));
+  const rows = (data.value?.maps ?? []).filter(
+    (m) => m.gamesPlayed > 0 && (term ? m.mapName.toLowerCase().includes(term) : true),
+  );
   const sorted = [...rows];
   if (sortMode.value === "performance") sorted.sort((a, b) => a.winrate - b.winrate);
   else if (sortMode.value === "games") sorted.sort((a, b) => b.gamesPlayed - a.gamesPlayed);
@@ -59,9 +61,9 @@ function formLabel(recentForm: boolean[]): string {
       <UInput v-model="search" placeholder="Rechercher une carte" icon="i-lucide-search" />
       <USelectMenu
         v-model="sortMode"
-        :options="sortOptions"
-        value-attribute="value"
-        option-attribute="label"
+        :items="sortOptions"
+        value-key="value"
+        label-key="label"
         placeholder="Trier par"
       />
     </UiFilterBar>

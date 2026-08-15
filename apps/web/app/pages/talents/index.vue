@@ -203,11 +203,11 @@ function applyBuild(row: (typeof buildRows.value)[number]) {
     <UiFilterBar :columns="2">
       <div>
         <label class="mb-1 block text-xs uppercase tracking-wide text-muted">Héros</label>
-        <USelectMenu v-model="heroId" :options="heroOptions" value-attribute="value" option-attribute="label" searchable />
+        <USelectMenu v-model="heroId" :items="heroOptions" value-key="value" label-key="label" />
       </div>
       <div>
         <label class="mb-1 block text-xs uppercase tracking-wide text-muted">Carte</label>
-        <USelectMenu v-model="mapId" :options="mapOptions" value-attribute="value" option-attribute="label" searchable />
+        <USelectMenu v-model="mapId" :items="mapOptions" value-key="value" label-key="label" />
       </div>
     </UiFilterBar>
     <p class="text-xs text-muted">
@@ -224,6 +224,7 @@ function applyBuild(row: (typeof buildRows.value)[number]) {
         Chargement...
       </div>
       <UiPanel v-else title="Héros les plus forts sur cette carte" :count="mapMetaData?.metaHeroes.length">
+        <UiTableScrollPanel max-height="50vh">
         <UiDataTable
           :columns="[
             { key: 'heroName', label: 'Héros' },
@@ -247,6 +248,7 @@ function applyBuild(row: (typeof buildRows.value)[number]) {
           </template>
           <template #cell-pickRate="{ row }">{{ formatPercent(row.pickRate as number) }}</template>
         </UiDataTable>
+        </UiTableScrollPanel>
         <p class="mt-3 text-xs text-muted">Clique un héros pour voir son board de talents sur cette carte.</p>
       </UiPanel>
     </div>

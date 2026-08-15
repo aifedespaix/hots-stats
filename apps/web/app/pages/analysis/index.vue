@@ -197,54 +197,57 @@ const talentColumns = [
 
     <!-- Browsable table: never collapsed, panel scrolls its own content (header pinned)
     from lg up so it doesn't stretch the whole page. -->
-    <UiPanel
-      v-model:search="matchupsSearch"
-      title="Matchups"
-      :count="filteredMatchups.length"
-      search-placeholder="Rechercher un héros"
-    >
-      <UiDataTable
-        :columns="matchupColumns"
-        :rows="filteredMatchups"
-        row-key="heroId"
-        sticky-header
-        :sort-key="matchupsSortKey"
-        :sort-dir="matchupsSortDir"
-        @sort="onMatchupsSort"
+    <!-- Desktop: 50/50 side-by-side grid. Mobile: stacked, each panel scrolling on its own. -->
+    <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <UiPanel
+        v-model:search="matchupsSearch"
+        title="Matchups"
+        :count="filteredMatchups.length"
+        search-placeholder="Rechercher un héros"
       >
-        <template #cell-winrate="{ row }">
-          <span :class="TONE_TEXT_CLASS[winrateTone(row.winrate as number)]">
-            {{ formatPercent(row.winrate as number) }}
-          </span>
-        </template>
-      </UiDataTable>
-    </UiPanel>
+        <UiDataTable
+          :columns="matchupColumns"
+          :rows="filteredMatchups"
+          row-key="heroId"
+          sticky-header
+          :sort-key="matchupsSortKey"
+          :sort-dir="matchupsSortDir"
+          @sort="onMatchupsSort"
+        >
+          <template #cell-winrate="{ row }">
+            <span :class="TONE_TEXT_CLASS[winrateTone(row.winrate as number)]">
+              {{ formatPercent(row.winrate as number) }}
+            </span>
+          </template>
+        </UiDataTable>
+      </UiPanel>
 
-    <UiPanel
-      v-model:search="talentsSearch"
-      title="Talents sous-performants"
-      :count="filteredTalents.length"
-      search-placeholder="Héros ou talent"
-    >
-      <UiDataTable
-        :columns="talentColumns"
-        :rows="filteredTalents"
-        row-key="talentId"
-        mobile-primary-key="talentName"
-        mobile-secondary-key="heroName"
-        sticky-header
-        :sort-key="talentsSortKey"
-        :sort-dir="talentsSortDir"
-        @sort="onTalentsSort"
+      <UiPanel
+        v-model:search="talentsSearch"
+        title="Talents sous-performants"
+        :count="filteredTalents.length"
+        search-placeholder="Héros ou talent"
       >
-        <template #cell-talentName="{ row }">
-          {{ formatTalentName(row.talentName as string, row.heroName as string) }}
-        </template>
-        <template #cell-talentWinrate="{ row }">
-          <span class="text-danger">{{ formatPercent(row.talentWinrate as number) }}</span>
-        </template>
-        <template #cell-heroWinrate="{ row }">{{ formatPercent(row.heroWinrate as number) }}</template>
-      </UiDataTable>
-    </UiPanel>
+        <UiDataTable
+          :columns="talentColumns"
+          :rows="filteredTalents"
+          row-key="talentId"
+          mobile-primary-key="talentName"
+          mobile-secondary-key="heroName"
+          sticky-header
+          :sort-key="talentsSortKey"
+          :sort-dir="talentsSortDir"
+          @sort="onTalentsSort"
+        >
+          <template #cell-talentName="{ row }">
+            {{ formatTalentName(row.talentName as string, row.heroName as string) }}
+          </template>
+          <template #cell-talentWinrate="{ row }">
+            <span class="text-danger">{{ formatPercent(row.talentWinrate as number) }}</span>
+          </template>
+          <template #cell-heroWinrate="{ row }">{{ formatPercent(row.heroWinrate as number) }}</template>
+        </UiDataTable>
+      </UiPanel>
+    </div>
   </div>
 </template>

@@ -11,3 +11,10 @@ export const TONE_TEXT_CLASS: Record<Tone, string> = {
   success: "text-success",
   danger: "text-danger",
 };
+
+/** Subtle tinted card background/border for tone-aware panels (e.g. UiStatTile). */
+export const TONE_TILE_CLASS: Record<Tone, string> = {
+  default: "border-border bg-surface",
+  success: "border-success/25 bg-success/5",
+  danger: "border-danger/25 bg-danger/5",
+};

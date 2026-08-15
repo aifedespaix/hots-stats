@@ -69,9 +69,9 @@ const stats = computed(() => ({
   pending: queue.value.filter((item) => item.status === "queued" || item.status === "uploading").length,
 }));
 
-const STATUS_META: Record<UploadItemStatus, { icon: string; class: string; label: string }> = {
+const STATUS_META: Record<UploadItemStatus, { icon: string; class: string; iconClass?: string; label: string }> = {
   queued: { icon: "i-heroicons-clock", class: "text-muted", label: "En attente" },
-  uploading: { icon: "i-heroicons-arrow-path", class: "text-brand animate-spin", label: "Envoi..." },
+  uploading: { icon: "i-heroicons-arrow-path", class: "text-brand", iconClass: "animate-spin", label: "Envoi" },
   uploaded: { icon: "i-heroicons-check-circle", class: "text-success", label: "Envoyée" },
   skipped: { icon: "i-heroicons-check-circle", class: "text-muted", label: "Déjà envoyée" },
   quarantined: { icon: "i-heroicons-shield-exclamation", class: "text-accent", label: "Vérification en cours" },
@@ -146,7 +146,11 @@ const STATUS_META: Record<UploadItemStatus, { icon: string; class: string; label
           :key="item.id"
           class="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-background/60"
         >
-          <UIcon :name="STATUS_META[item.status].icon" class="h-4 w-4 shrink-0" :class="STATUS_META[item.status].class" />
+          <UIcon
+            :name="STATUS_META[item.status].icon"
+            class="h-4 w-4 shrink-0"
+            :class="[STATUS_META[item.status].class, STATUS_META[item.status].iconClass]"
+          />
           <span class="min-w-0 flex-1 truncate font-mono text-xs">{{ item.file.name }}</span>
           <span class="shrink-0 text-[11px]" :class="STATUS_META[item.status].class">
             {{ item.message ?? STATUS_META[item.status].label }}

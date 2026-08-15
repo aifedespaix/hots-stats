@@ -213,27 +213,30 @@ function goToMatch(row: Record<string, unknown>) {
       @reset-sort="filtersStore.resetSort()"
     />
 
-    <UiDataTable
-      :columns="columns"
-      :rows="matchesData?.matches ?? []"
-      clickable
-      :sort-key="sortKey"
-      :sort-dir="sortDir"
-      mobile-primary-key="mapName"
-      mobile-secondary-key="playedAt"
-      mobile-badge-key="result"
-      @row-click="goToMatch"
-      @sort="onSort"
-    >
-      <template #cell-playedAt="{ row }">{{ formatDate(row.playedAt as string) }}</template>
-      <template #cell-gameMode="{ row }">{{ formatGameMode(row.gameMode as never) }}</template>
-      <template #cell-durationSeconds="{ row }">{{ formatDuration(row.durationSeconds as number) }}</template>
-      <template #cell-result="{ row }">
-        <span :class="row.winner ? TONE_TEXT_CLASS.success : TONE_TEXT_CLASS.danger">
-          {{ row.winner ? "Victoire" : "Défaite" }}
-        </span>
-      </template>
-    </UiDataTable>
+    <UiTableScrollPanel>
+      <UiDataTable
+        :columns="columns"
+        :rows="matchesData?.matches ?? []"
+        clickable
+        :sort-key="sortKey"
+        :sort-dir="sortDir"
+        mobile-primary-key="mapName"
+        mobile-secondary-key="playedAt"
+        mobile-badge-key="result"
+        sticky-header
+        @row-click="goToMatch"
+        @sort="onSort"
+      >
+        <template #cell-playedAt="{ row }">{{ formatDate(row.playedAt as string) }}</template>
+        <template #cell-gameMode="{ row }">{{ formatGameMode(row.gameMode as never) }}</template>
+        <template #cell-durationSeconds="{ row }">{{ formatDuration(row.durationSeconds as number) }}</template>
+        <template #cell-result="{ row }">
+          <span :class="row.winner ? TONE_TEXT_CLASS.success : TONE_TEXT_CLASS.danger">
+            {{ row.winner ? "Victoire" : "Défaite" }}
+          </span>
+        </template>
+      </UiDataTable>
+    </UiTableScrollPanel>
 
     <div class="flex justify-center">
       <UPagination

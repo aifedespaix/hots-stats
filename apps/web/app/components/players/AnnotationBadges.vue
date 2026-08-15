@@ -76,38 +76,38 @@ function openNoteModal() {
       <span v-if="entries.length > 1" class="text-[10px] font-semibold">{{ entries.length }}</span>
     </button>
 
-    <UModal v-model:open="noteModalOpen">
-      <div class="p-6" @click.stop>
-        <h2 class="break-all font-heading text-lg font-semibold font-mono">{{ battletag }}</h2>
-
-        <div v-if="entries.length > 1" class="mt-4">
-          <label class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">Auteur</label>
-          <USelectMenu
-            v-model="selectedAuthorId"
-            :options="authorOptions"
-            value-attribute="value"
-            option-attribute="label"
-          />
-        </div>
-
-        <div v-if="selectedEntry" class="mt-4 space-y-2">
-          <div class="flex flex-wrap items-center justify-between gap-2">
-            <p class="text-xs font-medium uppercase tracking-wide text-muted">
-              {{ selectedEntry.isMine ? `${selectedEntry.authorName} (moi)` : selectedEntry.authorName }}
-            </p>
-            <UiStarRating v-if="selectedEntry.rating" :model-value="selectedEntry.rating" size="h-3.5 w-3.5" />
+    <UModal v-model:open="noteModalOpen" :title="battletag ?? undefined">
+      <template #body>
+        <div class="space-y-4" @click.stop>
+          <div v-if="entries.length > 1">
+            <label class="mb-1 block text-xs font-medium uppercase tracking-wide text-muted">Auteur</label>
+            <USelectMenu
+              v-model="selectedAuthorId"
+              :items="authorOptions"
+              value-key="value"
+              label-key="label"
+            />
           </div>
-          <div class="flex gap-2 text-[10px] font-semibold uppercase tracking-wide">
-            <span v-if="selectedEntry.isFdp" class="text-danger">FDP</span>
-            <span v-if="selectedEntry.isPgm" class="text-accent">Sympa</span>
-          </div>
-          <p class="whitespace-pre-wrap text-sm text-foreground">{{ selectedEntry.note }}</p>
-        </div>
 
-        <div class="mt-6 flex justify-end">
-          <UButton variant="ghost" @click="noteModalOpen = false">Fermer</UButton>
+          <div v-if="selectedEntry" class="space-y-2">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <p class="text-xs font-medium uppercase tracking-wide text-muted">
+                {{ selectedEntry.isMine ? `${selectedEntry.authorName} (moi)` : selectedEntry.authorName }}
+              </p>
+              <UiStarRating v-if="selectedEntry.rating" :model-value="selectedEntry.rating" size="h-3.5 w-3.5" />
+            </div>
+            <div class="flex gap-2 text-[10px] font-semibold uppercase tracking-wide">
+              <span v-if="selectedEntry.isFdp" class="text-danger">FDP</span>
+              <span v-if="selectedEntry.isPgm" class="text-accent">Sympa</span>
+            </div>
+            <p class="whitespace-pre-wrap text-sm text-foreground">{{ selectedEntry.note }}</p>
+          </div>
+
+          <div class="flex justify-end">
+            <UButton variant="ghost" @click="noteModalOpen = false">Fermer</UButton>
+          </div>
         </div>
-      </div>
+      </template>
     </UModal>
   </span>
 </template>

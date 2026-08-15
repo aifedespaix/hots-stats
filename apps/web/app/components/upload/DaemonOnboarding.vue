@@ -7,8 +7,8 @@ const features = [
   },
   {
     icon: "i-heroicons-cpu-chip",
-    title: "Zéro lag",
-    desc: "Tourne en arrière-plan, aucun impact sur le jeu ni le FPS.",
+    title: "Impact minimal",
+    desc: "Tourne en arrière-plan à faible priorité et ne scanne les replays qu'en fin de partie, pour rester discret sur le CPU et le disque pendant que tu joues.",
   },
   {
     icon: "i-heroicons-signal",
@@ -46,15 +46,28 @@ const features = [
       </li>
     </ul>
 
-    <UButton
-      to="https://github.com/aifedespaix/hots-stats/releases/latest"
-      external
-      target="_blank"
-      block
-      size="lg"
-      icon="i-heroicons-arrow-down-tray"
-    >
-      Télécharger le daemon (Windows)
-    </UButton>
+    <div class="flex flex-col gap-2 sm:flex-row">
+      <UButton
+        to="https://github.com/aifedespaix/hots-stats/releases/latest"
+        external
+        target="_blank"
+        block
+        size="lg"
+        icon="i-heroicons-arrow-down-tray"
+        class="sm:flex-1"
+      >
+        Télécharger le daemon (Windows)
+      </UButton>
+      <UButton
+        to="/upload#token-manager"
+        variant="soft"
+        block
+        size="lg"
+        icon="i-heroicons-key"
+        class="sm:flex-1"
+      >
+        Récupérer mon token
+      </UButton>
+    </div>
   </div>
 </template>
