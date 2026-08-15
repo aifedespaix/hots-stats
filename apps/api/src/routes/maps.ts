@@ -1,5 +1,6 @@
 import type { User } from "@hots-stats/db";
 import { Hono } from "hono";
+import { gameModeListSchema } from "../lib/query";
 import { authSession, requireUser } from "../middleware/auth-session";
 import { getMapDetail, getMapHub } from "../services/maps.service";
 
@@ -12,7 +13,9 @@ export const mapsRoute = new Hono<Env>()
   .use("*", authSession, requireUser)
   .get("/", async (c) => {
     const user = c.get("user");
-    const maps = await getMapHub(user.id);
+    const parsed = gameModeListSchema.optional().safeParse(c.req.query("mode"));
+    if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+    const maps = await getMapHub(user.id, parsed.data);
     return c.json({ maps });
   })
   .get("/:mapId", async (c) => {
