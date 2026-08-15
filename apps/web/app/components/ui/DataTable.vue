@@ -113,8 +113,16 @@ function toggleSortDir() {
             v-for="row in rows"
             :key="String(row[props.rowKey])"
             class="border-b border-border last:border-0"
-            :class="[clickable ? 'cursor-pointer hover:bg-surface' : '', rowClass ? rowClass(row) : '']"
+            :class="[
+              clickable
+                ? 'cursor-pointer outline-none transition-colors hover:bg-surface focus-visible:bg-surface focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-brand'
+                : '',
+              rowClass ? rowClass(row) : '',
+            ]"
+            :tabindex="clickable ? 0 : undefined"
+            :role="clickable ? 'button' : undefined"
             @click="clickable && emit('row-click', row)"
+            @keydown.enter="clickable && emit('row-click', row)"
           >
             <td
               v-for="col in props.columns"
@@ -138,8 +146,16 @@ function toggleSortDir() {
         v-for="row in rows"
         :key="String(row[props.rowKey])"
         class="rounded-lg border border-border bg-surface p-4"
-        :class="[clickable ? 'cursor-pointer active:bg-background' : '', rowClass ? rowClass(row) : '']"
+        :class="[
+          clickable
+            ? 'cursor-pointer outline-none transition-colors hover:border-brand/40 active:bg-background focus-visible:border-brand/40 focus-visible:ring-1 focus-visible:ring-brand'
+            : '',
+          rowClass ? rowClass(row) : '',
+        ]"
+        :tabindex="clickable ? 0 : undefined"
+        :role="clickable ? 'button' : undefined"
         @click="clickable && emit('row-click', row)"
+        @keydown.enter="clickable && emit('row-click', row)"
       >
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0">

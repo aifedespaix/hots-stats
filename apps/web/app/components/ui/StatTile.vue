@@ -4,7 +4,7 @@ withDefaults(
     label: string;
     value: string;
     sublabel?: string;
-    tone?: "default" | "success" | "danger";
+    tone?: Tone;
   }>(),
   { tone: "default", sublabel: undefined },
 );
@@ -25,7 +25,7 @@ withDefaults(
         </template>
         <UIcon
           name="i-heroicons-information-circle"
-          class="h-3.5 w-3.5 shrink-0 cursor-help text-muted/70 transition-colors hover:text-brand"
+          class="h-3.5 w-3.5 shrink-0 cursor-help text-muted/70 transition-colors hover:text-info"
         />
       </UTooltip>
     </div>

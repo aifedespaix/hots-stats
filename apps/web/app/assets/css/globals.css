@@ -16,6 +16,7 @@
   --color-accent: oklch(var(--color-accent));
   --color-success: oklch(var(--color-success));
   --color-danger: oklch(var(--color-danger));
+  --color-info: oklch(var(--color-info));
 
   --color-role-tank: oklch(var(--color-role-tank));
   --color-role-bruiser: oklch(var(--color-role-bruiser));
@@ -57,6 +58,22 @@
   --color-brand-800: #5b21b6;
   --color-brand-900: #4c1d95;
   --color-brand-950: #2e1065;
+
+  /* Same "static" requirement as brand-* above: @nuxt/ui's color plugin reads
+     --color-info-500 etc. to compute --ui-info once app.config.ts maps
+     ui.colors.info = "info". Kept a distinct blue hue from --color-brand
+     (violet) so "conseil" callouts never read as a clickable primary action. */
+  --color-info-50: #eff6ff;
+  --color-info-100: #dbeafe;
+  --color-info-200: #bfdbfe;
+  --color-info-300: #93c5fd;
+  --color-info-400: #60a5fa;
+  --color-info-500: #3b82f6;
+  --color-info-600: #2563eb;
+  --color-info-700: #1d4ed8;
+  --color-info-800: #1e40af;
+  --color-info-900: #1e3a8a;
+  --color-info-950: #172554;
 }
 
 @font-face {
@@ -102,6 +119,7 @@
   --color-accent: 0.78 0.15 70;
   --color-success: 0.72 0.17 150;
   --color-danger: 0.63 0.21 25;
+  --color-info: 0.68 0.16 235;
 
   /* Hero role tints (Data-Grid / Hero ID Card / avatar fallback rings) --
      same L/C band as the palette above, spread across the remaining hues
@@ -132,6 +150,7 @@
   --color-accent: 0.62 0.16 60;
   --color-success: 0.55 0.15 150;
   --color-danger: 0.55 0.2 25;
+  --color-info: 0.55 0.17 235;
 
   --color-role-tank: 0.56 0.15 219;
   --color-role-bruiser: 0.56 0.15 48;
@@ -151,6 +170,7 @@
   --color-accent: 0.85 0.18 70;
   --color-success: 0.8 0.19 150;
   --color-danger: 0.7 0.22 25;
+  --color-info: 0.78 0.19 235;
 
   --color-role-tank: 0.78 0.19 219;
   --color-role-bruiser: 0.78 0.19 48;
