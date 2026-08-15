@@ -64,7 +64,7 @@ from __future__ import annotations
 PARSER_VERSION = "1.5"
 
 # Shown in the settings window. Bump alongside `[project].version` in pyproject.toml.
-APP_VERSION = "1.0.31"
+APP_VERSION = "1.0.32"
 
 # HotS talent tiers are always at these character levels, in pick order.
 TALENT_TIER_LEVELS = (1, 4, 7, 10, 13, 16, 20)
