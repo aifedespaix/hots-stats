@@ -20,10 +20,11 @@ export const matches = pgTable("matches", {
   // client writes its own (non-byte-identical) copy of the replay, so two
   // different players uploading the same game get two different hashes here.
   replayHash: text("replay_hash").notNull().unique(),
-  // Content-based game identity, stable across which player's daemon
-  // uploaded it -- see apps/api/src/lib/game-fingerprint.ts. This is the
-  // actual dedup key; `replayHash`'s uniqueness alone doesn't prevent the
-  // same game being inserted twice under two different players' hashes.
+  // Content-based game identity (map + roster), stable across which
+  // player's daemon uploaded it -- see apps/api/src/lib/game-fingerprint.ts.
+  // This is the actual dedup key; `replayHash`'s uniqueness alone doesn't
+  // prevent the same game being inserted twice under two different players'
+  // hashes.
   gameFingerprint: text("game_fingerprint").notNull().unique(),
   parserVersion: text("parser_version").notNull(),
   mapId: text("map_id")

@@ -11,18 +11,24 @@ import type { ReplayPayload } from "@hots-stats/shared-types";
  * catch it and the match gets inserted twice.
  *
  * This fingerprint is built only from data that's shared/deterministic
- * across every participant's replay: the map, the simulated match length
- * (`durationSeconds`, derived from the lockstep game-loop count, not a
- * wall-clock reading that could skew between clients), and the full roster
- * (battletag + hero). Deliberately excludes `playedAt`, which *is* a
- * per-client wall-clock timestamp and could differ by a second or two
- * between two players' own replay files of the same game.
+ * across every participant's replay: the map and the full roster (battletag
+ * + hero). Deliberately excludes:
+ *  - `playedAt`, a per-client wall-clock timestamp that could differ by a
+ *    second or two between two players' own replay files of the same game.
+ *  - `durationSeconds`, which turned out *not* to be reliably identical
+ *    either: it's derived from a "GatesOpen" tracker event whose detection
+ *    has had bugs across daemon/parser versions, so the same real match can
+ *    come out with two different durations depending on which version
+ *    produced each upload (see migration 0015, which had to fix this after
+ *    it let real duplicates slip past 0014's cleanup).
+ * The exact same map plus the exact same battletag/hero pairing for every
+ * player is already an extremely strong identity on its own.
  */
-export function computeGameFingerprint(payload: Pick<ReplayPayload, "map" | "durationSeconds" | "players">): string {
+export function computeGameFingerprint(payload: Pick<ReplayPayload, "map" | "players">): string {
   const roster = payload.players
     .map((player) => `${player.battletag}:${player.heroId}`)
     .sort()
     .join(",");
-  const source = `${payload.map}|${payload.durationSeconds}|${roster}`;
+  const source = `${payload.map}|${roster}`;
   return createHash("sha256").update(source).digest("hex");
 }
