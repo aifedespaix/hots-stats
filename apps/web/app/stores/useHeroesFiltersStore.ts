@@ -1,7 +1,7 @@
 import { createFilterSortStore } from "./filterSortStore";
 
-export const useHeroesFiltersStore = createFilterSortStore<{ mode: string; search: string }, string>(
+export const useHeroesFiltersStore = createFilterSortStore<{ search: string }, string>(
   "heroes-filters",
-  { mode: "", search: "" },
+  { search: "" },
   { key: "gamesPlayed", dir: "desc" },
 );

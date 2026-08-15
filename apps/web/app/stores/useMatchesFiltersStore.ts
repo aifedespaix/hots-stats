@@ -4,7 +4,6 @@ export type MatchesSortableColumn = "playedAt" | "durationSeconds" | "gameMode" 
 
 interface MatchesFilters {
   [key: string]: string;
-  mode: string;
   heroId: string;
   mapId: string;
   dateFrom: string;
@@ -14,6 +13,6 @@ interface MatchesFilters {
 
 export const useMatchesFiltersStore = createFilterSortStore<MatchesFilters, MatchesSortableColumn>(
   "matches-filters",
-  { mode: "", heroId: "", mapId: "", dateFrom: "", dateTo: "", opponentBattletag: "" },
+  { heroId: "", mapId: "", dateFrom: "", dateTo: "", opponentBattletag: "" },
   { key: "playedAt", dir: "desc" },
 );

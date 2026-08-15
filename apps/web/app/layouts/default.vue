@@ -67,12 +67,14 @@ async function handleLogout() {
     <header
       class="sticky top-0 z-40 flex items-center justify-between border-b border-border bg-surface/95 px-4 py-3 backdrop-blur sm:px-6"
     >
-      <NuxtLink to="/" class="flex items-center gap-2.5">
+      <NuxtLink to="/" class="flex shrink-0 items-center gap-2.5">
         <img src="/favicon.svg" alt="" width="32" height="32" class="h-8 w-8">
-        <span class="font-heading text-lg font-semibold tracking-tight">HotS Analytics</span>
+        <span class="hidden font-heading text-lg font-semibold tracking-tight sm:inline">HotS Analytics</span>
       </NuxtLink>
 
-      <div class="flex items-center gap-2 sm:gap-3">
+      <UiGameModeFilter class="min-w-0 flex-1 justify-center px-2" />
+
+      <div class="flex shrink-0 items-center gap-2 sm:gap-3">
         <UiThemeSwitcher />
         <template v-if="authData?.user">
           <NuxtLink

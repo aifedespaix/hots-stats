@@ -18,10 +18,6 @@ useSeoMeta({
 
 const filtersStore = useHeroesFiltersStore();
 const { filters, sortKey, sortDir } = storeToRefs(filtersStore);
-const mode = computed({
-  get: () => filters.value.mode,
-  set: (value: string) => (filters.value.mode = value),
-});
 const search = computed({
   get: () => filters.value.search,
   set: (value: string) => (filters.value.search = value),
@@ -29,15 +25,14 @@ const search = computed({
 const onSort = filtersStore.onSort;
 
 const { scope, saving: scopeSaving, setScope } = useHeroStatsScope();
+const gameModeStore = useGameModeStore();
 
 const query = computed(() => ({
-  ...(mode.value ? { mode: mode.value } : {}),
+  mode: gameModeStore.modeQueryParam,
   scope: scope.value,
 }));
 
 const { data } = await useApiFetch<HeroListResponse>("/heroes", { query });
-
-const modeOptions = [{ value: "" as const, label: "Tous les modes" }, ...gameModeFilterOptions()];
 
 const sortedHeroes = computed(() => {
   const searchTerm = search.value.trim().toLowerCase();
@@ -51,7 +46,7 @@ const sortedHeroes = computed(() => {
 // the search box keeps matching across the whole list, not just the current page.
 const { page, pageSize, total, paginated: pagedHeroes } = usePagination(sortedHeroes, 20);
 
-watch([mode, search], () => {
+watch([() => gameModeStore.activeTags, search], () => {
   page.value = 1;
 });
 
@@ -80,16 +75,7 @@ function goToHero(row: Record<string, unknown>) {
       @update:model-value="setScope"
     />
 
-    <UiFilterBar :columns="2">
-      <USelectMenu
-        v-model="mode"
-        :items="modeOptions"
-        value-key="value"
-        label-key="label"
-        placeholder="Mode"
-      />
-      <UInput v-model="search" placeholder="Rechercher un héros" icon="i-lucide-search" />
-    </UiFilterBar>
+    <UInput v-model="search" placeholder="Rechercher un héros" icon="i-lucide-search" class="max-w-sm" />
 
     <UiFilterResetActions
       :filters-default="filtersStore.isFiltersDefault"

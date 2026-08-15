@@ -15,31 +15,6 @@ export function formatGameMode(mode: GameMode): string {
   return gameModeLabels[mode] ?? mode;
 }
 
-/**
- * Filter-dropdown buckets ("mode" query param on /matches, /players,
- * /heroes) -- grouped down to the game's actual mode selector (Partie
- * rapide / Classé / Bagarre / ARAM / Personnalisée), instead of listing
- * all 8 raw `GameMode` values (which includes 4 separate historical
- * ranked-queue types: UnrankedDraft/HeroLeague/TeamLeague/StormLeague).
- * Each `value` is a comma-joined list of the raw `GameMode`s it covers,
- * sent as-is to the API (see `gameModeListSchema`) -- a match's *stored*
- * `gameMode` is never touched by this, only which filter bucket it falls
- * into. Doesn't include "Contre l'IA": vs-AI replays aren't ingested at
- * all yet (see parser.py's Computer-player rejection), so it would always
- * be an empty filter.
- */
-const gameModeFilterGroups: { value: string; label: string }[] = [
-  { value: "QuickMatch", label: "Partie rapide" },
-  { value: "UnrankedDraft,HeroLeague,TeamLeague,StormLeague", label: "Classé" },
-  { value: "Brawl", label: gameModeLabels.Brawl },
-  { value: "ARAM", label: gameModeLabels.ARAM },
-  { value: "Custom", label: gameModeLabels.Custom },
-];
-
-export function gameModeFilterOptions(): { value: string; label: string }[] {
-  return gameModeFilterGroups;
-}
-
 export function formatDuration(totalSeconds: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = Math.round(totalSeconds % 60);
