@@ -86,7 +86,10 @@ const sections = computed<Section[]>(() => {
         <p class="text-sm">Sélectionne un joueur dans une des deux équipes pour voir ses statistiques.</p>
       </div>
 
-      <div v-else-if="pending" class="flex h-full items-center justify-center text-muted">
+      <!-- Only the very first load (no stats yet) shows the spinner -- a
+           background refresh (e.g. re-selecting a still-loading player)
+           keeps whatever's already on screen instead of flashing to it. -->
+      <div v-else-if="pending && !stats" class="flex h-full items-center justify-center text-muted">
         <UIcon name="i-heroicons-arrow-path" class="h-6 w-6 animate-spin" />
       </div>
 
