@@ -244,7 +244,7 @@ function applyBuild(row: (typeof buildRows.value)[number]) {
       @update:model-value="setScope"
     />
 
-    <UiFilterBar :columns="2">
+    <div class="space-y-3">
       <div>
         <label class="mb-1.5 block text-xs uppercase tracking-wide text-muted">Héros</label>
         <USelectMenu
@@ -253,7 +253,8 @@ function applyBuild(row: (typeof buildRows.value)[number]) {
           value-key="value"
           label-key="label"
           size="xl"
-          :ui="{ base: 'h-14 rounded-full px-5 text-base', leadingIcon: 'size-5', trailingIcon: 'size-5', itemLabel: 'w-full', item: 'py-2.5' }"
+          class="w-full"
+          :ui="{ base: 'h-14 w-full rounded-full px-5 text-base', leadingIcon: 'size-5', trailingIcon: 'size-5', itemLabel: 'w-full', item: 'py-2.5' }"
         >
           <template #item-label="{ item }">
             <span v-if="item.special" class="text-base">{{ item.label }}</span>
@@ -290,7 +291,8 @@ function applyBuild(row: (typeof buildRows.value)[number]) {
           value-key="value"
           label-key="label"
           size="xl"
-          :ui="{ base: 'h-14 rounded-full px-5 text-base', leadingIcon: 'size-5', trailingIcon: 'size-5', itemLabel: 'w-full', item: 'py-2.5' }"
+          class="w-full"
+          :ui="{ base: 'h-14 w-full rounded-full px-5 text-base', leadingIcon: 'size-5', trailingIcon: 'size-5', itemLabel: 'w-full', item: 'py-2.5' }"
         >
           <template #item-label="{ item }">
             <span v-if="item.special" class="text-base">{{ item.label }}</span>
@@ -328,7 +330,7 @@ function applyBuild(row: (typeof buildRows.value)[number]) {
           </template>
         </USelectMenu>
       </div>
-    </UiFilterBar>
+    </div>
     <p class="text-xs text-muted">
       <UIcon name="i-heroicons-adjustments-horizontal" class="mr-1 inline h-3.5 w-3.5" />{{ modeLabel[mode] }}
       <span v-if="analyzerData && heroId"> -- {{ analyzerData.gamesPlayed }} parties correspondantes</span>
