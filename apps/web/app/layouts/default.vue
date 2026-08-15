@@ -3,6 +3,8 @@ const { data: authData } = await useAuthUser();
 const route = useRoute();
 
 const sidebarExpanded = ref(false);
+const engagement = useEngagementStore();
+useEngagementWatchers();
 
 interface NavItem {
   to: string;
@@ -56,6 +58,27 @@ function isActive(to: string) {
   return route.path === to || route.path.startsWith(`${to}/`);
 }
 
+const { snapshot: draftSnapshot } = useDraftStream();
+const isLiveDraftAlertVisible = computed(
+  () => !isDraftSnapshotEmpty(draftSnapshot.value) && !isActive("/draft"),
+);
+
+/** Nav chip config per item: a numeric badge for Historique/Amis, an alert dot for Live Draft. */
+function navChip(item: NavItem): { show: boolean; text?: string } | null {
+  if (item.to === "/matches") {
+    const count = engagement.newMatchesSinceVisit;
+    return { show: count > 0, text: count > 99 ? "99+" : String(count) };
+  }
+  if (item.to === "/friends") {
+    const count = engagement.pendingFriendRequestCount;
+    return { show: count > 0, text: count > 99 ? "99+" : String(count) };
+  }
+  if (item.to === "/draft") {
+    return { show: isLiveDraftAlertVisible.value };
+  }
+  return null;
+}
+
 async function handleLogout() {
   await logout();
   await navigateTo("/login");
@@ -75,7 +98,9 @@ async function handleLogout() {
       <UiGameModeFilter class="min-w-0 flex-1 justify-center px-2" />
 
       <div class="flex shrink-0 items-center gap-2 sm:gap-3">
-        <UiThemeSwitcher />
+        <div class="hidden md:block">
+          <UiThemeSwitcher />
+        </div>
         <template v-if="authData?.user">
           <NuxtLink
             to="/settings"
@@ -89,7 +114,7 @@ async function handleLogout() {
               class="h-6 w-6 rounded-full"
             >
             <UIcon v-else name="i-heroicons-user-circle" class="h-5 w-5" />
-            <span class="hidden sm:inline">{{ authData.user.displayName }}</span>
+            <span class="hidden md:inline">{{ authData.user.displayName }}</span>
           </NuxtLink>
           <button
             type="button"
@@ -98,7 +123,7 @@ async function handleLogout() {
             @click="handleLogout"
           >
             <UIcon name="i-heroicons-arrow-right-on-rectangle" class="h-5 w-5" />
-            <span class="hidden sm:inline">Se déconnecter</span>
+            <span class="hidden md:inline">Se déconnecter</span>
           </button>
         </template>
       </div>
@@ -127,7 +152,16 @@ async function handleLogout() {
                   : 'text-muted hover:bg-background hover:text-foreground',
             ]"
           >
-            <UIcon :name="item.icon" class="h-5 w-5 shrink-0" />
+            <UChip
+              v-if="navChip(item)"
+              :show="navChip(item)!.show"
+              :text="navChip(item)!.text"
+              color="error"
+              size="sm"
+            >
+              <UIcon :name="item.icon" class="h-5 w-5 shrink-0" />
+            </UChip>
+            <UIcon v-else :name="item.icon" class="h-5 w-5 shrink-0" />
             <span :class="sidebarExpanded ? 'inline' : 'hidden lg:inline'">{{ item.label }}</span>
           </NuxtLink>
         </nav>
@@ -175,6 +209,15 @@ async function handleLogout() {
           >
             <UIcon :name="item.icon" class="h-6 w-6" />
           </span>
+          <UChip
+            v-else-if="navChip(item)"
+            :show="navChip(item)!.show"
+            :text="navChip(item)!.text"
+            color="error"
+            size="sm"
+          >
+            <UIcon :name="item.icon" class="h-5 w-5" />
+          </UChip>
           <UIcon v-else :name="item.icon" class="h-5 w-5" />
           <span v-if="isActive(item.to)" class="truncate px-0.5" :class="item.featured ? 'font-medium' : ''">{{ item.label }}</span>
         </NuxtLink>
