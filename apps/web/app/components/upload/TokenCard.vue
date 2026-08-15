@@ -7,6 +7,8 @@ const props = defineProps<{
   revealedValue?: string;
   renewing: boolean;
   deleting: boolean;
+  /** True for a brief moment right after this token was created/renewed, to draw the eye to it. */
+  justCreated?: boolean;
 }>();
 
 const emit = defineEmits<{ (e: "renew"): void; (e: "delete"): void }>();
@@ -42,7 +44,7 @@ function maskedPreview(value: string): string {
 <template>
   <div
     class="flex flex-wrap items-center gap-3 rounded-lg border p-3 transition-colors sm:flex-nowrap"
-    :class="revealedValue ? 'border-brand/40 bg-brand/5' : 'border-border bg-surface'"
+    :class="[revealedValue ? 'border-brand/40 bg-brand/5' : 'border-border bg-surface', justCreated ? 'token-just-created' : '']"
   >
     <div
       class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
@@ -99,3 +101,24 @@ function maskedPreview(value: string): string {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* Draws the eye to a freshly created/renewed token so it doesn't get missed. */
+@keyframes token-just-created-glow {
+  0% {
+    box-shadow: 0 0 0 0 oklch(var(--raw-primary) / 0.55);
+    background-color: oklch(var(--raw-primary) / 0.2);
+  }
+  70% {
+    box-shadow: 0 0 0 14px oklch(var(--raw-primary) / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 oklch(var(--raw-primary) / 0);
+    background-color: transparent;
+  }
+}
+
+.token-just-created {
+  animation: token-just-created-glow 1.5s ease-out;
+}
+</style>
