@@ -72,13 +72,21 @@ function formLabel(recentForm: boolean[]): string {
     </div>
 
     <UiFilterBar :columns="2">
-      <UInput v-model="search" placeholder="Rechercher une carte" icon="i-lucide-search" />
+      <UInput
+        v-model="search"
+        placeholder="Rechercher une carte"
+        icon="i-lucide-search"
+        size="xl"
+        :ui="{ base: 'h-14 rounded-full px-5 text-base', leadingIcon: 'size-5' }"
+      />
       <USelectMenu
         v-model="sortMode"
         :items="sortOptions"
         value-key="value"
         label-key="label"
         placeholder="Trier par"
+        size="xl"
+        :ui="{ base: 'h-14 rounded-full px-5 text-base', trailingIcon: 'size-5' }"
       />
     </UiFilterBar>
 
