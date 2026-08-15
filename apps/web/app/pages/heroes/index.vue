@@ -83,9 +83,9 @@ function goToHero(row: Record<string, unknown>) {
     <UiFilterBar :columns="2">
       <USelectMenu
         v-model="mode"
-        :options="modeOptions"
-        value-attribute="value"
-        option-attribute="label"
+        :items="modeOptions"
+        value-key="value"
+        label-key="label"
         placeholder="Mode"
       />
       <UInput v-model="search" placeholder="Rechercher un héros" icon="i-lucide-search" />
@@ -99,6 +99,7 @@ function goToHero(row: Record<string, unknown>) {
     />
 
     <UiGlobalScopeBadge :scope="scope" label="Toute la communauté">
+      <UiTableScrollPanel>
       <UiDataTable
         :columns="columns"
         :rows="pagedHeroes"
@@ -108,6 +109,7 @@ function goToHero(row: Record<string, unknown>) {
         :sort-dir="sortDir"
         mobile-secondary-key="heroRole"
         mobile-badge-key="winrate"
+        sticky-header
         @row-click="goToHero"
         @sort="onSort"
       >
@@ -131,6 +133,7 @@ function goToHero(row: Record<string, unknown>) {
           {{ formatPercent(row.avgKillParticipation as number) }}
         </template>
       </UiDataTable>
+      </UiTableScrollPanel>
 
       <div v-if="total > pageSize" class="mt-4 flex justify-center">
         <UPagination v-model="page" :page-count="pageSize" :total="total" />

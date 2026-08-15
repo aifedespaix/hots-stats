@@ -86,12 +86,19 @@ const teamImpactChartOptions = computed(() => ({
   <UiErrorState v-if="error" :status-code="404" message="Carte introuvable." back-to="/maps" back-label="← Retour aux cartes" />
 
   <div v-else-if="data" class="space-y-8">
-    <div class="flex flex-wrap items-start justify-between gap-3">
+    <div
+      class="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-brand/25 bg-gradient-to-br from-brand/15 via-surface to-accent/10 p-4 sm:p-5"
+    >
       <div>
         <NuxtLink to="/maps" class="text-sm text-brand hover:underline">&larr; Retour aux cartes</NuxtLink>
-        <h1 class="mt-2 font-heading text-2xl font-semibold">{{ data.mapName }}</h1>
+        <div class="mt-2 flex items-center gap-2.5">
+          <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand/15 text-brand">
+            <UIcon name="i-heroicons-map" class="h-5 w-5" />
+          </span>
+          <h1 class="font-heading text-2xl font-semibold">{{ data.mapName }}</h1>
+        </div>
       </div>
-      <UButton :to="`/talents?mapId=${mapId}`" color="neutral" variant="soft" icon="i-heroicons-sparkles" size="sm">
+      <UButton :to="`/talents?mapId=${mapId}`" color="primary" variant="soft" icon="i-heroicons-sparkles" size="sm">
         Talents forts sur cette carte
       </UButton>
     </div>
@@ -137,8 +144,11 @@ const teamImpactChartOptions = computed(() => ({
 
     <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <!-- B. Mes stats -->
-      <div class="rounded-lg border border-border bg-surface p-4">
-        <h2 class="mb-3 font-heading text-sm font-medium">Mes stats sur cette carte</h2>
+      <div class="rounded-lg border border-accent/25 bg-gradient-to-br from-accent/5 to-surface p-4">
+        <h2 class="mb-3 flex items-center gap-1.5 font-heading text-sm font-medium">
+          <UIcon name="i-heroicons-chart-bar" class="h-4 w-4 text-accent" />
+          Mes stats sur cette carte
+        </h2>
         <div v-if="data.personalRanking.gamesPlayed === 0" class="text-sm text-muted">
           Pas encore de partie classée sur cette carte.
         </div>
@@ -174,8 +184,11 @@ const teamImpactChartOptions = computed(() => ({
       </div>
 
       <!-- C. Mes héros ici -->
-      <div class="rounded-lg border border-border bg-surface p-4">
-        <h2 class="mb-3 font-heading text-sm font-medium">Mes héros sur cette carte</h2>
+      <div class="rounded-lg border border-brand/25 bg-gradient-to-br from-brand/5 to-surface p-4">
+        <h2 class="mb-3 flex items-center gap-1.5 font-heading text-sm font-medium">
+          <UIcon name="i-heroicons-user-group" class="h-4 w-4 text-brand" />
+          Mes héros sur cette carte
+        </h2>
         <UiDataTable :columns="personalColumns" :rows="data.personalHeroes" row-key="heroId" mobile-badge-key="winrate">
           <template #cell-winrate="{ row }">
             <span :class="TONE_TEXT_CLASS[winrateTone(row.winrate as number)]">
@@ -191,8 +204,9 @@ const teamImpactChartOptions = computed(() => ({
     </div>
 
     <!-- D. Impact d'équipe -->
-    <div class="rounded-lg border border-border bg-surface p-4">
+    <div class="rounded-lg border border-success/25 bg-gradient-to-br from-success/5 to-surface p-4">
       <div class="mb-3 flex items-center gap-1.5">
+        <UIcon name="i-heroicons-shield-check" class="h-4 w-4 text-success" />
         <h2 class="font-heading text-sm font-medium">Impact d'équipe sur cette carte</h2>
         <UTooltip :popper="{ placement: 'top' }">
           <template #text>
@@ -225,8 +239,9 @@ const teamImpactChartOptions = computed(() => ({
     </div>
 
     <!-- E. Winrate par niveau de soak -->
-    <div class="rounded-lg border border-border bg-surface p-4">
+    <div class="rounded-lg border border-role-support/30 bg-gradient-to-br from-role-support/5 to-surface p-4">
       <div class="mb-3 flex items-center gap-1.5">
+        <UIcon name="i-heroicons-bolt" class="h-4 w-4 text-role-support" />
         <h2 class="font-heading text-sm font-medium">Winrate par niveau de soak</h2>
         <UTooltip :popper="{ placement: 'top' }">
           <template #text>

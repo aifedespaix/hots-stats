@@ -11,11 +11,11 @@ defineEmits<{ (e: "update:modelValue", value: boolean): void }>();
 <template>
   <UModal
     :open="modelValue"
-    :ui="{ content: 'sm:max-w-3xl' }"
+    :ui="{ content: 'sm:max-w-3xl', body: 'max-h-[85vh] overflow-y-auto' }"
     @update:open="(value: boolean) => $emit('update:modelValue', value)"
   >
-    <div class="max-h-[85vh] overflow-y-auto p-4 sm:p-6">
+    <template #body>
       <PlayersProfileDetail v-if="props.battletag" :battletag="props.battletag" />
-    </div>
+    </template>
   </UModal>
 </template>

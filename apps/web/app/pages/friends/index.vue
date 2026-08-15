@@ -302,10 +302,9 @@ async function confirmRemoveFriend() {
       <p v-else class="py-4 text-center text-sm text-muted">Aucun ami pour le moment.</p>
     </section>
 
-    <UModal v-model:open="removeModalOpen">
-      <div class="p-6">
-        <h2 class="font-heading text-lg font-semibold">Retirer {{ friendToRemove?.displayName }} de tes amis ?</h2>
-        <p class="mt-2 text-sm text-muted">
+    <UModal v-model:open="removeModalOpen" :title="`Retirer ${friendToRemove?.displayName ?? ''} de tes amis ?`">
+      <template #body>
+        <p class="text-sm text-muted">
           Vous ne serez plus amis ni l'un ni l'autre. Tu pourras renvoyer une demande plus tard si tu changes
           d'avis.
         </p>
@@ -313,7 +312,7 @@ async function confirmRemoveFriend() {
           <UButton variant="ghost" @click="removeModalOpen = false">Annuler</UButton>
           <UButton color="error" :loading="removing" @click="confirmRemoveFriend">Retirer</UButton>
         </div>
-      </div>
+      </template>
     </UModal>
   </div>
 </template>

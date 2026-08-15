@@ -24,8 +24,28 @@
   --color-role-healer: oklch(var(--color-role-healer));
   --color-role-support: oklch(var(--color-role-support));
 
-  /* Named "brand" (not "primary"): app.config.ts points ui.primary at this
-     palette so @nuxt/ui's runtime primary-color system resolves to it. */
+  --color-brand: oklch(var(--color-primary));
+
+  --font-heading: "BW Modelica", "Space Grotesk", "Bricolage Grotesque", sans-serif;
+  --font-body: "Outfit", "Geist", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+}
+
+/*
+ * `static` forces Tailwind to always emit these custom properties, even
+ * though no utility class ever references a specific `brand-50`..`brand-950`
+ * shade directly (only the bare `brand` alias above is used in class names).
+ * Without it, Tailwind v4 tree-shakes the whole numbered scale away, which
+ * breaks @nuxt/ui's runtime color plugin: it reads `var(--color-brand-500)`
+ * etc. to compute `--ui-primary`, and silently resolves to nothing --
+ * making every "primary" colored button (and anything else keyed off it)
+ * invisible.
+ */
+@theme static {
   --color-brand-50: #f5f3ff;
   --color-brand-100: #ede9fe;
   --color-brand-200: #ddd6fe;
@@ -37,15 +57,6 @@
   --color-brand-800: #5b21b6;
   --color-brand-900: #4c1d95;
   --color-brand-950: #2e1065;
-  --color-brand: oklch(var(--color-primary));
-
-  --font-heading: "BW Modelica", "Space Grotesk", "Bricolage Grotesque", sans-serif;
-  --font-body: "Outfit", "Geist", sans-serif;
-  --font-mono: "JetBrains Mono", monospace;
-
-  --radius-sm: 0.375rem;
-  --radius-md: 0.625rem;
-  --radius-lg: 0.875rem;
 }
 
 @font-face {

@@ -122,6 +122,7 @@ function rowClass(row: Record<string, unknown>): string {
   const annotation = annotationsStore.annotationFor(row.battletag as string);
   if (annotation?.fdpCount) return "bg-danger/5 hover:bg-danger/10";
   if (annotation?.pgmCount) return "bg-accent/5 hover:bg-accent/10";
+  if (row.friendshipStatus === "friends") return "bg-success/5 hover:bg-success/10";
   return "";
 }
 
@@ -150,9 +151,9 @@ function goToPlayer(row: Record<string, unknown>) {
     <UiFilterBar :columns="2">
       <USelectMenu
         v-model="mode"
-        :options="modeOptions"
-        value-attribute="value"
-        option-attribute="label"
+        :items="modeOptions"
+        value-key="value"
+        label-key="label"
         placeholder="Mode"
       />
       <UInput v-model="search" placeholder="Rechercher un joueur (Pseudo#12345)" icon="i-lucide-search" />
@@ -165,6 +166,7 @@ function goToPlayer(row: Record<string, unknown>) {
       @reset-sort="filtersStore.resetSort()"
     />
 
+    <UiTableScrollPanel>
     <UiDataTable
       :columns="columns"
       :rows="pagedRows"
@@ -173,6 +175,7 @@ function goToPlayer(row: Record<string, unknown>) {
       :sort-key="sortKey"
       :sort-dir="sortDir"
       :row-class="rowClass"
+      sticky-header
       @row-click="goToPlayer"
       @sort="onSort"
     >
@@ -183,10 +186,14 @@ function goToPlayer(row: Record<string, unknown>) {
         </div>
       </template>
       <template #cell-wins="{ row }">
-        <span class="text-success">{{ row.wins }}</span>
+        <span class="inline-flex items-center justify-center rounded-md bg-success/10 px-2 py-0.5 font-mono text-success">
+          {{ row.wins }}
+        </span>
       </template>
       <template #cell-losses="{ row }">
-        <span class="text-danger">{{ row.losses }}</span>
+        <span class="inline-flex items-center justify-center rounded-md bg-danger/10 px-2 py-0.5 font-mono text-danger">
+          {{ row.losses }}
+        </span>
       </template>
       <template #cell-winRatioAsAlly="{ row }">
         <span
@@ -240,6 +247,7 @@ function goToPlayer(row: Record<string, unknown>) {
         <span v-else class="text-xs text-muted">-</span>
       </template>
     </UiDataTable>
+    </UiTableScrollPanel>
 
     <div v-if="total > pageSize" class="flex justify-center">
       <UPagination v-model="page" :page-count="pageSize" :total="total" />

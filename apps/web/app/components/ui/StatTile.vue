@@ -11,7 +11,10 @@ withDefaults(
 </script>
 
 <template>
-  <div class="rounded-lg border border-border bg-surface p-3 sm:p-4">
+  <div
+    class="rounded-lg border p-3 sm:p-4 transition-colors"
+    :class="TONE_TILE_CLASS[tone]"
+  >
     <div class="flex items-center gap-1">
       <p class="text-xs uppercase tracking-wide text-muted">{{ label }}</p>
       <UTooltip v-if="$slots.tooltip" :popper="{ placement: 'top' }">

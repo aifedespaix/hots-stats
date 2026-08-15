@@ -261,10 +261,9 @@ async function confirmReset() {
       <UButton color="error" variant="outline" @click="openResetModal">Réinitialiser mes données</UButton>
     </section>
 
-    <UModal v-model:open="resetModalOpen">
-      <div class="p-6">
-        <h2 class="font-heading text-lg font-semibold text-danger">Réinitialiser mes données</h2>
-        <p class="mt-2 text-sm text-muted">
+    <UModal v-model:open="resetModalOpen" title="Réinitialiser mes données">
+      <template #body>
+        <p class="text-sm text-muted">
           Cette action supprime définitivement toutes les parties que tu as uploadées. Les parties dont le
           fichier <code class="font-mono text-xs">.StormReplay</code> n'existe plus sur ton disque seront
           perdues pour de bon.
@@ -279,7 +278,7 @@ async function confirmReset() {
             Confirmer la suppression
           </UButton>
         </div>
-      </div>
+      </template>
     </UModal>
   </div>
 </template>

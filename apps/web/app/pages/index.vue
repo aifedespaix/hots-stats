@@ -32,6 +32,7 @@ const { data: recentMatches } = await useApiFetch<MatchListResponse>("/matches",
 
 const { data: weaknesses } = await useApiFetch<WeaknessesResponse>("/weaknesses");
 const topLeak = computed(() => (weaknesses.value ? getTopWeaknesses(weaknesses.value, { limit: 1 })[0] : undefined));
+const topStrength = computed(() => (weaknesses.value ? getTopStrengths(weaknesses.value, { limit: 1 })[0] : undefined));
 
 const columns = [
   { key: "playedAt", label: "Date" },
@@ -73,18 +74,33 @@ function goToMatch(row: Record<string, unknown>) {
 
     <StatsAccountSummaryStats :summary="summary" />
 
-    <NuxtLink
-      v-if="topLeak"
-      to="/analysis"
-      class="flex items-center gap-3 rounded-lg border border-danger/30 bg-danger/5 p-4 transition-colors hover:bg-danger/10"
-    >
-      <UIcon name="i-heroicons-exclamation-triangle" class="h-5 w-5 shrink-0 text-danger" />
-      <div class="min-w-0 flex-1">
-        <p class="text-xs uppercase tracking-wide text-muted">Ton point faible du moment</p>
-        <p class="truncate text-sm font-medium">{{ topLeak.label }}</p>
-      </div>
-      <UIcon name="i-heroicons-chevron-right" class="h-4 w-4 shrink-0 text-muted" />
-    </NuxtLink>
+    <div v-if="topLeak || topStrength" class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <NuxtLink
+        v-if="topStrength"
+        to="/analysis"
+        class="flex items-center gap-3 rounded-lg border border-success/30 bg-success/5 p-4 transition-colors hover:bg-success/10"
+      >
+        <UIcon name="i-heroicons-sparkles" class="h-5 w-5 shrink-0 text-success" />
+        <div class="min-w-0 flex-1">
+          <p class="text-xs uppercase tracking-wide text-muted">Ton point fort du moment</p>
+          <p class="truncate text-sm font-medium">{{ topStrength.label }}</p>
+        </div>
+        <UIcon name="i-heroicons-chevron-right" class="h-4 w-4 shrink-0 text-muted" />
+      </NuxtLink>
+
+      <NuxtLink
+        v-if="topLeak"
+        to="/analysis"
+        class="flex items-center gap-3 rounded-lg border border-danger/30 bg-danger/5 p-4 transition-colors hover:bg-danger/10"
+      >
+        <UIcon name="i-heroicons-exclamation-triangle" class="h-5 w-5 shrink-0 text-danger" />
+        <div class="min-w-0 flex-1">
+          <p class="text-xs uppercase tracking-wide text-muted">Ton point faible du moment</p>
+          <p class="truncate text-sm font-medium">{{ topLeak.label }}</p>
+        </div>
+        <UIcon name="i-heroicons-chevron-right" class="h-4 w-4 shrink-0 text-muted" />
+      </NuxtLink>
+    </div>
 
     <div>
       <div class="mb-3 flex items-center justify-between">

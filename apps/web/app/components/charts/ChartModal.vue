@@ -31,11 +31,13 @@ defineEmits<{ (e: "update:modelValue", value: boolean): void }>();
 </script>
 
 <template>
-  <UModal :open="modelValue" @update:open="(value: boolean) => $emit('update:modelValue', value)">
-    <div class="p-6">
-      <h2 class="font-heading text-lg font-semibold">{{ title }}</h2>
-      <p v-if="description" class="mt-1 text-sm text-muted">{{ description }}</p>
-
+  <UModal
+    :open="modelValue"
+    :title="title"
+    :description="description"
+    @update:open="(value: boolean) => $emit('update:modelValue', value)"
+  >
+    <template #body>
       <slot name="extra" />
 
       <div class="mt-4 h-72">
@@ -48,6 +50,6 @@ defineEmits<{ (e: "update:modelValue", value: boolean): void }>();
         </p>
         <slot v-else />
       </div>
-    </div>
+    </template>
   </UModal>
 </template>

@@ -25,7 +25,7 @@ async function onRenew(id: string) {
 </script>
 
 <template>
-  <div class="space-y-3 rounded-lg border border-border bg-surface p-4 sm:p-5">
+  <div id="token-manager" class="space-y-3 rounded-lg border border-border bg-surface p-4 sm:p-5">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h3 class="font-heading text-sm font-medium">Tes tokens d'accès</h3>
