@@ -23,10 +23,7 @@ const backendSortableColumns = ["battletag", "gamesTogether", "gamesAsAlly", "ga
 
 const filtersStore = usePlayersFiltersStore();
 const { filters, sortKey, sortDir } = storeToRefs(filtersStore);
-const mode = computed({
-  get: () => filters.value.mode,
-  set: (value: string) => (filters.value.mode = value),
-});
+const gameModeStore = useGameModeStore();
 const search = computed({
   get: () => filters.value.search,
   set: (value: string) => (filters.value.search = value),
@@ -40,7 +37,7 @@ const config = useRuntimeConfig();
 const query = computed(() => ({
   sortBy: backendSortableColumns.includes(sortKey.value) ? sortKey.value : "gamesTogether",
   sortDir: sortDir.value,
-  ...(mode.value ? { mode: mode.value } : {}),
+  mode: gameModeStore.modeQueryParam,
 }));
 
 const { data, refresh } = await useApiFetch<PlayerListResponse>("/players", { query });
@@ -61,8 +58,6 @@ async function addFriend(accountUserId: string) {
     sendingIds[accountUserId] = false;
   }
 }
-
-const modeOptions = [{ value: "" as const, label: "Tous les modes" }, ...gameModeFilterOptions()];
 
 function winRatio(wins: number, games: number): number | null {
   return games > 0 ? wins / games : null;
@@ -105,7 +100,7 @@ const rows = computed(() => {
 // search box keeps matching across the whole list, not just the current page.
 const { page, pageSize, total, paginated: pagedRows } = usePagination(rows, 20);
 
-watch([mode, search], () => {
+watch([() => gameModeStore.activeTags, search], () => {
   page.value = 1;
 });
 
@@ -148,16 +143,7 @@ function goToPlayer(row: Record<string, unknown>) {
     <h1 class="font-heading text-2xl font-semibold">Radar des joueurs</h1>
     <p class="text-sm text-muted">Tous les joueurs croisés (alliés ou adversaires) dans tes parties.</p>
 
-    <UiFilterBar :columns="2">
-      <USelectMenu
-        v-model="mode"
-        :items="modeOptions"
-        value-key="value"
-        label-key="label"
-        placeholder="Mode"
-      />
-      <UInput v-model="search" placeholder="Rechercher un joueur (Pseudo#12345)" icon="i-lucide-search" />
-    </UiFilterBar>
+    <UInput v-model="search" placeholder="Rechercher un joueur (Pseudo#12345)" icon="i-lucide-search" class="max-w-sm" />
 
     <UiFilterResetActions
       :filters-default="filtersStore.isFiltersDefault"

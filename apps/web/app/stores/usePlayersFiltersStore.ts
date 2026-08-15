@@ -10,8 +10,8 @@ export type PlayersSortableColumn =
   | "winRatioAsAlly"
   | "winRatioAsOpponent";
 
-export const usePlayersFiltersStore = createFilterSortStore<{ mode: string; search: string }, PlayersSortableColumn>(
+export const usePlayersFiltersStore = createFilterSortStore<{ search: string }, PlayersSortableColumn>(
   "players-filters",
-  { mode: "", search: "" },
+  { search: "" },
   { key: "gamesTogether", dir: "desc" },
 );

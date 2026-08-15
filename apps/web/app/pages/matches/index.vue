@@ -32,10 +32,7 @@ const { data: filterOptions } = await useApiFetch<FiltersResponse>("/matches/fil
 
 const filtersStore = useMatchesFiltersStore();
 const { filters, sortKey, sortDir } = storeToRefs(filtersStore);
-const mode = computed({
-  get: () => filters.value.mode,
-  set: (value: string) => (filters.value.mode = value),
-});
+const gameModeStore = useGameModeStore();
 const heroId = computed({
   get: () => filters.value.heroId,
   set: (value: string) => (filters.value.heroId = value),
@@ -68,7 +65,7 @@ const pageSize = 20;
 const apiSortBy = computed(() => (sortKey.value === "result" ? "winner" : sortKey.value));
 
 const activeFilters = computed(() => ({
-  ...(mode.value ? { mode: mode.value } : {}),
+  mode: gameModeStore.modeQueryParam,
   ...(heroId.value ? { heroId: heroId.value } : {}),
   ...(mapId.value ? { mapId: mapId.value } : {}),
   ...(dateFrom.value ? { dateFrom: new Date(dateFrom.value).toISOString() } : {}),
@@ -86,7 +83,7 @@ const query = computed(() => ({
 
 const { data: matchesData, pending } = await useApiFetch<MatchListResponse>("/matches", { query });
 
-watch([mode, heroId, mapId, dateFrom, dateTo, opponentBattletag], () => {
+watch([() => gameModeStore.activeTags, heroId, mapId, dateFrom, dateTo, opponentBattletag], () => {
   page.value = 1;
 });
 
@@ -94,7 +91,6 @@ watch([sortKey, sortDir], () => {
   page.value = 1;
 });
 
-const modeOptions = [{ value: "" as const, label: "Tous les modes" }, ...gameModeFilterOptions()];
 const heroItems = computed(() => [
   { value: "", label: "Tous les héros" },
   ...(filterOptions.value?.heroes ?? []).map((hero) => ({ value: hero.id, label: hero.name })),
@@ -173,8 +169,7 @@ function goToMatch(row: Record<string, unknown>) {
       <StatsDashboard :filters="activeFilters" />
     </div>
 
-    <UiFilterBar :columns="6">
-      <USelectMenu v-model="mode" value-key="value" :items="modeOptions" placeholder="Mode" />
+    <UiFilterBar :columns="4">
       <USelectMenu v-model="heroId" value-key="value" :items="heroItems" placeholder="Héros" />
       <USelectMenu v-model="mapId" value-key="value" :items="mapItems" placeholder="Carte" />
       <UInput v-model="dateFrom" type="date" placeholder="Du" />
