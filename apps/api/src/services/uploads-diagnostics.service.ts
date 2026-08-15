@@ -1,5 +1,5 @@
-import { db, matchPlayers, matches, users } from "@hots-stats/db";
-import { desc, eq, isNull, sql } from "drizzle-orm";
+import { db, heroes, matchPlayers, matches, maps, users } from "@hots-stats/db";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 
 /**
  * `GET /_internal/diagnostics/uploads` -- breaks down who actually owns the
@@ -58,5 +58,83 @@ export async function getUploadsDiagnostics() {
     byUploader,
     topBattletagsInMatchPlayers: byBattletagInMatchPlayers,
     distinctUnlinkedBattletags: unlinkedBattletagRow[0]?.count ?? 0,
+  };
+}
+
+/**
+ * `GET /_internal/diagnostics/zero-kda` -- investigates reports of a player
+ * row showing 0 kills/deaths/assists despite a normal-looking game
+ * (non-zero damage/healing, plausible duration). All three should be
+ * essentially impossible to hit simultaneously in a real completed match, so
+ * every row this returns is a live instance of that bug. Broken out by
+ * parserVersion/heroId/gameMode to spot whether it's tied to a specific
+ * daemon build, hero, or mode rather than eyeballing one match at a time.
+ */
+export async function getZeroKdaDiagnostics(limit: number) {
+  const zeroKda = and(eq(matchPlayers.kills, 0), eq(matchPlayers.deaths, 0), eq(matchPlayers.assists, 0));
+
+  const totalsRow = await db
+    .select({
+      totalMatchPlayers: sql<number>`count(*)::int`,
+      zeroKdaCount: sql<number>`count(*) filter (where ${zeroKda})::int`,
+    })
+    .from(matchPlayers);
+
+  const byParserVersion = await db
+    .select({
+      parserVersion: matches.parserVersion,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(matchPlayers)
+    .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
+    .where(zeroKda)
+    .groupBy(matches.parserVersion)
+    .orderBy(desc(sql`count(*)`));
+
+  const byHero = await db
+    .select({
+      heroId: matchPlayers.heroId,
+      heroName: heroes.name,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(matchPlayers)
+    .innerJoin(heroes, eq(heroes.id, matchPlayers.heroId))
+    .where(zeroKda)
+    .groupBy(matchPlayers.heroId, heroes.name)
+    .orderBy(desc(sql`count(*)`))
+    .limit(20);
+
+  const samples = await db
+    .select({
+      matchId: matches.id,
+      playedAt: matches.playedAt,
+      battletag: matchPlayers.battletag,
+      heroId: matchPlayers.heroId,
+      heroName: heroes.name,
+      mapName: maps.name,
+      gameMode: matches.gameMode,
+      parserVersion: matches.parserVersion,
+      gameVersion: matches.gameVersion,
+      durationSeconds: matches.durationSeconds,
+      heroDamage: matchPlayers.heroDamage,
+      siegeDamage: matchPlayers.siegeDamage,
+      healing: matchPlayers.healing,
+      selfHealing: matchPlayers.selfHealing,
+      damageTaken: matchPlayers.damageTaken,
+      experienceContribution: matchPlayers.experienceContribution,
+    })
+    .from(matchPlayers)
+    .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
+    .innerJoin(heroes, eq(heroes.id, matchPlayers.heroId))
+    .innerJoin(maps, eq(maps.id, matches.mapId))
+    .where(zeroKda)
+    .orderBy(desc(matches.playedAt))
+    .limit(limit);
+
+  return {
+    totals: totalsRow[0] ?? { totalMatchPlayers: 0, zeroKdaCount: 0 },
+    byParserVersion,
+    byHero,
+    samples,
   };
 }

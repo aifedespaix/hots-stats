@@ -4,7 +4,7 @@ import { internalSecret } from "../middleware/internal-secret";
 import { verifyQuarantinedBuild } from "../services/build-verification.service";
 import { getDaemonErrorGroups, markDaemonErrorsResolved } from "../services/daemon-errors.service";
 import { getQuarantineOverview, getQuarantineSamples } from "../services/quarantine.service";
-import { getUploadsDiagnostics } from "../services/uploads-diagnostics.service";
+import { getUploadsDiagnostics, getZeroKdaDiagnostics } from "../services/uploads-diagnostics.service";
 
 const paramsSchema = z.object({
   buildId: z.coerce.number().int().nonnegative(),
@@ -16,6 +16,10 @@ const querySchema = z.object({
 
 const errorsQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(500).default(200),
+});
+
+const zeroKdaQuerySchema = z.object({
+  limit: z.coerce.number().int().positive().max(200).default(50),
 });
 
 const resolveErrorsSchema = z.object({
@@ -82,4 +86,11 @@ export const internalRoute = new Hono()
   })
   .get("/diagnostics/uploads", async (c) => {
     return c.json(await getUploadsDiagnostics());
+  })
+  .get("/diagnostics/zero-kda", async (c) => {
+    const query = zeroKdaQuerySchema.safeParse(c.req.query());
+    if (!query.success) {
+      return c.json({ error: query.error.flatten() }, 400);
+    }
+    return c.json(await getZeroKdaDiagnostics(query.data.limit));
   });
