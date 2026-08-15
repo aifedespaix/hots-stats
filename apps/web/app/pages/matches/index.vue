@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UNKNOWN_GAME_VERSION } from "@hots-stats/shared-types";
 import type { MatchListResponse } from "~/types/matches";
 import type { MatchesSortableColumn } from "~/stores/useMatchesFiltersStore";
 
@@ -20,6 +21,7 @@ useSeoMeta({
 interface FiltersResponse {
   heroes: { id: string; name: string }[];
   maps: { id: string; name: string }[];
+  gameVersions: string[];
 }
 
 interface PlayerSearchResponse {
@@ -37,6 +39,7 @@ useEngagementStore().markMatchesVisited();
 const filtersStore = useMatchesFiltersStore();
 const { filters, sortKey, sortDir } = storeToRefs(filtersStore);
 const gameModeStore = useGameModeStore();
+const gameVersionFilterStore = useGameVersionFilterStore();
 const heroId = computed({
   get: () => filters.value.heroId,
   set: (value: string) => (filters.value.heroId = value),
@@ -57,6 +60,25 @@ const opponentBattletag = computed({
   get: () => filters.value.opponentBattletag,
   set: (value: string) => (filters.value.opponentBattletag = value),
 });
+
+// --- Version filter (game patch) --------------------------------------
+
+const allGameVersions = computed(() => filterOptions.value?.gameVersions ?? []);
+const selectedGameVersions = computed<string[]>({
+  get: () => allGameVersions.value.filter((v) => !gameVersionFilterStore.isExcluded(v)),
+  set: (included) => gameVersionFilterStore.setIncluded(allGameVersions.value, included),
+});
+const gameVersionItems = computed(() =>
+  allGameVersions.value.map((v) => ({ value: v, label: v === UNKNOWN_GAME_VERSION ? "Version inconnue" : v })),
+);
+// A version filter that resolves to zero selected versions must still ask
+// the API for *something* (`gameVersion` can't be an empty list -- see
+// gameVersionListSchema) -- this placeholder never matches a real
+// `matches.gameVersion` value or the `UNKNOWN_GAME_VERSION` sentinel, so it
+// correctly yields an empty result set instead of accidentally matching
+// everything (an absent filter) or erroring (an empty one).
+const NO_VERSION_SELECTED = "__none_selected__";
+
 function onSort(key: string) {
   filtersStore.onSort(key as MatchesSortableColumn);
 }
@@ -75,6 +97,16 @@ const activeFilters = computed(() => ({
   ...(dateFrom.value ? { dateFrom: new Date(dateFrom.value).toISOString() } : {}),
   ...(dateTo.value ? { dateTo: new Date(dateTo.value).toISOString() } : {}),
   ...(opponentBattletag.value ? { opponentBattletag: opponentBattletag.value } : {}),
+  // Omitted entirely (not sent as the full list) when nothing's excluded,
+  // same reasoning as every other filter above -- keeps "everything
+  // checked" indistinguishable from "no version filter" server-side.
+  ...(!gameVersionFilterStore.isDefault
+    ? {
+        gameVersion: (selectedGameVersions.value.length > 0 ? selectedGameVersions.value : [NO_VERSION_SELECTED]).join(
+          ",",
+        ),
+      }
+    : {}),
 }));
 
 const query = computed(() => ({
@@ -87,9 +119,12 @@ const query = computed(() => ({
 
 const { data: matchesData, pending } = await useApiFetch<MatchListResponse>("/matches", { query });
 
-watch([() => gameModeStore.activeTags, heroId, mapId, dateFrom, dateTo, opponentBattletag], () => {
-  page.value = 1;
-});
+watch(
+  [() => gameModeStore.activeTags, heroId, mapId, dateFrom, dateTo, opponentBattletag, () => gameVersionFilterStore.excluded],
+  () => {
+    page.value = 1;
+  },
+);
 
 watch([sortKey, sortDir], () => {
   page.value = 1;
@@ -150,6 +185,7 @@ const columns = [
   { key: "heroName", label: "Héros", sortable: true },
   { key: "durationSeconds", label: "Durée", numeric: true, sortable: true },
   { key: "result", label: "Résultat", sortable: true },
+  { key: "gameVersion", label: "Version" },
 ];
 
 function goToMatch(row: Record<string, unknown>) {
@@ -203,12 +239,44 @@ function goToMatch(row: Record<string, unknown>) {
           {{ opponentSearchTerm.trim().length < 3 ? "Tape au moins 3 caractères" : "Aucun joueur trouvé" }}
         </template>
       </USelectMenu>
+
+      <div class="flex items-center gap-1.5">
+        <USelectMenu
+          v-model="selectedGameVersions"
+          multiple
+          value-key="value"
+          :items="gameVersionItems"
+          placeholder="Version"
+          class="flex-1"
+        />
+        <UButton
+          size="xs"
+          color="neutral"
+          variant="soft"
+          title="Cocher toutes les versions"
+          @click="gameVersionFilterStore.includeAll()"
+        >
+          Tout
+        </UButton>
+        <UButton
+          size="xs"
+          color="neutral"
+          variant="soft"
+          title="Décocher toutes les versions"
+          @click="gameVersionFilterStore.excludeAll(allGameVersions)"
+        >
+          Aucune
+        </UButton>
+      </div>
     </UiFilterBar>
 
     <UiFilterResetActions
-      :filters-default="filtersStore.isFiltersDefault"
+      :filters-default="filtersStore.isFiltersDefault && gameVersionFilterStore.isDefault"
       :sort-default="filtersStore.isSortDefault"
-      @reset-filters="filtersStore.resetFilters()"
+      @reset-filters="
+        filtersStore.resetFilters();
+        gameVersionFilterStore.includeAll();
+      "
       @reset-sort="filtersStore.resetSort()"
     />
 
@@ -233,6 +301,10 @@ function goToMatch(row: Record<string, unknown>) {
           <span :class="row.winner ? TONE_TEXT_CLASS.success : TONE_TEXT_CLASS.danger">
             {{ row.winner ? "Victoire" : "Défaite" }}
           </span>
+        </template>
+        <template #cell-gameVersion="{ row }">
+          <span v-if="row.gameVersion" class="font-mono text-xs text-muted">{{ row.gameVersion }}</span>
+          <span v-else class="text-xs text-muted">—</span>
         </template>
       </UiDataTable>
     </UiTableScrollPanel>

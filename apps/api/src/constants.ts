@@ -15,7 +15,7 @@ export const API_VERSION = "1.1.0";
  * the next run instead of being skipped as already up to date. Leave
  * unchanged for a daemon release that doesn't touch the payload shape.
  */
-export const MIN_PARSER_VERSION = "1.4";
+export const MIN_PARSER_VERSION = "1.5";
 
 /**
  * The site owner's account -- every brand new signup gets auto-friended

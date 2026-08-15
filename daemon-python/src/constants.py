@@ -52,10 +52,16 @@ from __future__ import annotations
 # `_extract_level_snapshots` in parser.py. Existing matches have no timeline
 # data yet; bumping the version re-syncs them (assuming the replay file is
 # still available locally) the same way 1.1-1.3 did for their own fixes.
+# 1.5: adds `gameVersion` ("major.minor.revision.baseBuild", from the
+# replay header's `m_version` -- always available, no new tracker-event
+# dependency) so matches can be filtered/labeled by game patch. Existing
+# matches have `gameVersion: null` until resynced.
 # Bumping this flags every previously-ingested match as stale so the
 # daemon's API-driven resync (see sync_state.py's `invalidate_stale`)
-# reparses and re-uploads it.
-PARSER_VERSION = "1.4"
+# reparses and re-uploads it. Whenever this changes, also bump
+# apps/api/src/constants.ts's MIN_PARSER_VERSION to the same value --
+# they're meant to move together (see that constant's docstring).
+PARSER_VERSION = "1.5"
 
 # Shown in the settings window. Bump alongside `[project].version` in pyproject.toml.
 APP_VERSION = "1.0.31"

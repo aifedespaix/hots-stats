@@ -121,6 +121,20 @@ def _windows_filetime_to_iso8601(filetime: int) -> str:
     )
 
 
+def _game_version(header: dict) -> str:
+    """"major.minor.revision.baseBuild" (e.g. "2.55.15.96477") -- the same
+    4-part convention this project already uses to identify a build
+    everywhere else (the `heroprotocol` git tag pinned in pyproject.toml,
+    `KNOWN_PROTOCOL_BUILDS`), keyed by `m_baseBuild` rather than the
+    sibling `m_build` for that same consistency: `m_baseBuild` is what
+    `_build_protocol` actually selects a decoder by, so it's the one that
+    unambiguously identifies "which wire format/patch this replay is on",
+    whereas `m_build` can bump on a data-only hotfix that doesn't change it.
+    """
+    version = header["m_version"]
+    return f"{version['m_major']}.{version['m_minor']}.{version['m_revision']}.{version['m_baseBuild']}"
+
+
 def _extract_battletags(archive: mpyq.MPQArchive, player_list: list[dict]) -> dict[str, str]:
     """Maps a player's toon handle -> full "Name#1234" battletag.
 
@@ -852,6 +866,7 @@ def build_payload(
         "m_baseBuild": header["m_version"]["m_baseBuild"],
         "replayHash": replay_hash,
         "parserVersion": constants.PARSER_VERSION,
+        "gameVersion": _game_version(header),
         "map": _slugify(map_display_name),
         "gameMode": game_mode,
         "region": region,

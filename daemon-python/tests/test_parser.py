@@ -10,6 +10,7 @@ from src.parser import (
     _build_protocol,
     _extract_deaths,
     _extract_level_snapshots,
+    _game_version,
     _has_computer_player_attribute,
     _hero_from_any_talent,
     _hero_from_talent_prefix,
@@ -96,6 +97,12 @@ def test_toon_handle():
 def test_windows_filetime_to_iso8601_roundtrip():
     iso = "2024-06-15T12:30:00+00:00"
     assert _windows_filetime_to_iso8601(_filetime(iso)) == "2024-06-15T12:30:00.000Z"
+
+
+def test_game_version_formats_major_minor_revision_base_build():
+    # baseBuild, not the sibling m_build -- see _game_version's docstring.
+    header = {"m_version": {"m_major": 2, "m_minor": 55, "m_revision": 15, "m_build": 999999, "m_baseBuild": 96477}}
+    assert _game_version(header) == "2.55.15.96477"
 
 
 def _string_entry(key: bytes, value: bytes) -> dict:
@@ -252,8 +259,18 @@ def _battletags() -> dict[str, str]:
     return {"1-Hero-1-1001": "Foo#1111", "1-Hero-1-1002": "Bar#2222"}
 
 
-def _header(elapsed_loops: int, base_build: int = 12345) -> dict:
-    return {"m_elapsedGameLoops": elapsed_loops, "m_version": {"m_baseBuild": base_build}}
+def _header(
+    elapsed_loops: int,
+    base_build: int = 12345,
+    *,
+    major: int = 2,
+    minor: int = 55,
+    revision: int = 15,
+) -> dict:
+    return {
+        "m_elapsedGameLoops": elapsed_loops,
+        "m_version": {"m_baseBuild": base_build, "m_major": major, "m_minor": minor, "m_revision": revision},
+    }
 
 
 def test_build_payload_happy_path():
@@ -269,6 +286,7 @@ def test_build_payload_happy_path():
 
     assert payload["replayHash"] == "a" * 64
     assert payload["m_baseBuild"] == 12345
+    assert payload["gameVersion"] == "2.55.15.12345"
     assert payload["map"] == "cursed-hollow"
     assert payload["gameMode"] == "QuickMatch"
     assert payload["region"] == "1"

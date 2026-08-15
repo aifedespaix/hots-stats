@@ -6,6 +6,9 @@ export interface MatchListItem {
   playedAt: string;
   durationSeconds: number;
   gameMode: GameMode;
+  /** "major.minor.revision.baseBuild" (e.g. "2.55.15.96477"); null for a
+   * match ingested before PARSER_VERSION 1.5, until it's resynced. */
+  gameVersion: string | null;
   mapId: string;
   mapName: string;
   winner: boolean;

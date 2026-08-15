@@ -93,6 +93,9 @@ export const replayPayloadSchema = z.object({
   map: z.string(),
   gameMode: gameModeSchema,
   region: z.string(),
+  // "major.minor.revision.baseBuild" (e.g. "2.55.15.96477"), from the
+  // replay header -- see daemon-python/src/parser.py's `_game_version`.
+  gameVersion: z.string(),
   playedAt: z.string().datetime(),
   durationSeconds: z.number().int().positive(),
   players: z.array(replayPlayerSchema).min(2),
