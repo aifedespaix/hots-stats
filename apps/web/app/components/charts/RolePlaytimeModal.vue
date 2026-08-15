@@ -23,7 +23,7 @@ const chartData = computed(() => ({
     {
       data: sortedRoles.value.map((role) => role.totalDurationSeconds),
       backgroundColor: sortedRoles.value.map((role) => heroRoleColor(role.role)),
-      borderColor: themeColor("--color-surface"),
+      borderColor: themeColor("--raw-surface"),
       borderWidth: 2,
       hoverOffset: 6,
     },
@@ -32,7 +32,7 @@ const chartData = computed(() => ({
 
 const chartOptions = computed(() => ({
   plugins: {
-    legend: { position: "bottom" as const, labels: { color: themeColor("--color-muted"), boxWidth: 10, padding: 12 } },
+    legend: { position: "bottom" as const, labels: { color: themeColor("--raw-muted"), boxWidth: 10, padding: 12 } },
     tooltip: {
       callbacks: {
         label: (ctx: TooltipItem<"doughnut">) => {

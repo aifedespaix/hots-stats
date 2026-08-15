@@ -2,30 +2,40 @@
  * Design tokens in OKLCH (perceptually uniform lightness across themes).
  * Values are "L C H" triplets consumed by Tailwind as oklch(var(--x) / <alpha>).
  * Theme switch is attribute-driven: [data-theme="dark|light|contrasted"] on <html>.
+ *
+ * Raw triplets live under a `--raw-*` name, never under the `--color-*` name
+ * Tailwind utilities read. Reusing the same name for both (`--color-success:
+ * oklch(var(--color-success))` in @theme, then `--color-success: 0.72 0.17
+ * 150` in :root) makes the :root declaration win the cascade and clobber the
+ * oklch() wrapper -- `--color-success` ends up holding a bare, wrapper-less
+ * triplet, which is an invalid <color> wherever a utility does `color:
+ * var(--color-success)`, silently falling back to the inherited text color.
+ * `--color-brand` already dodged this by sourcing from a differently-named
+ * `--color-primary`; every token below now follows that same split.
  */
 
 @import "tailwindcss";
 @import "@nuxt/ui";
 
 @theme {
-  --color-background: oklch(var(--color-background));
-  --color-surface: oklch(var(--color-surface));
-  --color-border: oklch(var(--color-border));
-  --color-foreground: oklch(var(--color-foreground));
-  --color-muted: oklch(var(--color-muted));
-  --color-accent: oklch(var(--color-accent));
-  --color-success: oklch(var(--color-success));
-  --color-danger: oklch(var(--color-danger));
-  --color-info: oklch(var(--color-info));
+  --color-background: oklch(var(--raw-background));
+  --color-surface: oklch(var(--raw-surface));
+  --color-border: oklch(var(--raw-border));
+  --color-foreground: oklch(var(--raw-foreground));
+  --color-muted: oklch(var(--raw-muted));
+  --color-accent: oklch(var(--raw-accent));
+  --color-success: oklch(var(--raw-success));
+  --color-danger: oklch(var(--raw-danger));
+  --color-info: oklch(var(--raw-info));
 
-  --color-role-tank: oklch(var(--color-role-tank));
-  --color-role-bruiser: oklch(var(--color-role-bruiser));
-  --color-role-ranged: oklch(var(--color-role-ranged));
-  --color-role-melee: oklch(var(--color-role-melee));
-  --color-role-healer: oklch(var(--color-role-healer));
-  --color-role-support: oklch(var(--color-role-support));
+  --color-role-tank: oklch(var(--raw-role-tank));
+  --color-role-bruiser: oklch(var(--raw-role-bruiser));
+  --color-role-ranged: oklch(var(--raw-role-ranged));
+  --color-role-melee: oklch(var(--raw-role-melee));
+  --color-role-healer: oklch(var(--raw-role-healer));
+  --color-role-support: oklch(var(--raw-role-support));
 
-  --color-brand: oklch(var(--color-primary));
+  --color-brand: oklch(var(--raw-primary));
 
   --font-heading: "BW Modelica", "Space Grotesk", "Bricolage Grotesque", sans-serif;
   --font-body: "Outfit", "Geist", sans-serif;
@@ -110,26 +120,26 @@
 
 :root {
   /* dark (default) */
-  --color-background: 0.16 0.03 265;
-  --color-surface: 0.21 0.03 265;
-  --color-border: 0.32 0.02 265;
-  --color-foreground: 0.95 0.01 265;
-  --color-muted: 0.65 0.02 265;
-  --color-primary: 0.62 0.19 288;
-  --color-accent: 0.78 0.15 70;
-  --color-success: 0.72 0.17 150;
-  --color-danger: 0.63 0.21 25;
-  --color-info: 0.68 0.16 235;
+  --raw-background: 0.16 0.03 265;
+  --raw-surface: 0.21 0.03 265;
+  --raw-border: 0.32 0.02 265;
+  --raw-foreground: 0.95 0.01 265;
+  --raw-muted: 0.65 0.02 265;
+  --raw-primary: 0.62 0.19 288;
+  --raw-accent: 0.78 0.15 70;
+  --raw-success: 0.72 0.17 150;
+  --raw-danger: 0.63 0.21 25;
+  --raw-info: 0.68 0.16 235;
 
   /* Hero role tints (Data-Grid / Hero ID Card / avatar fallback rings) --
      same L/C band as the palette above, spread across the remaining hues
      so no role collides with brand/accent/success/danger. */
-  --color-role-tank: 0.68 0.16 219;
-  --color-role-bruiser: 0.68 0.16 48;
-  --color-role-ranged: 0.68 0.16 320;
-  --color-role-melee: 0.68 0.16 353;
-  --color-role-healer: 0.68 0.16 184;
-  --color-role-support: 0.68 0.16 254;
+  --raw-role-tank: 0.68 0.16 219;
+  --raw-role-bruiser: 0.68 0.16 48;
+  --raw-role-ranged: 0.68 0.16 320;
+  --raw-role-melee: 0.68 0.16 353;
+  --raw-role-healer: 0.68 0.16 184;
+  --raw-role-support: 0.68 0.16 254;
 
   --font-heading: "BW Modelica", "Space Grotesk", "Bricolage Grotesque", sans-serif;
   --font-body: "Outfit", "Geist", sans-serif;
@@ -141,48 +151,48 @@
 }
 
 [data-theme="light"] {
-  --color-background: 0.98 0.004 265;
-  --color-surface: 0.995 0.003 265;
-  --color-border: 0.88 0.01 265;
-  --color-foreground: 0.2 0.02 265;
-  --color-muted: 0.45 0.02 265;
-  --color-primary: 0.52 0.19 288;
-  --color-accent: 0.62 0.16 60;
-  --color-success: 0.55 0.15 150;
-  --color-danger: 0.55 0.2 25;
-  --color-info: 0.55 0.17 235;
+  --raw-background: 0.98 0.004 265;
+  --raw-surface: 0.995 0.003 265;
+  --raw-border: 0.88 0.01 265;
+  --raw-foreground: 0.2 0.02 265;
+  --raw-muted: 0.45 0.02 265;
+  --raw-primary: 0.52 0.19 288;
+  --raw-accent: 0.62 0.16 60;
+  --raw-success: 0.55 0.15 150;
+  --raw-danger: 0.55 0.2 25;
+  --raw-info: 0.55 0.17 235;
 
-  --color-role-tank: 0.56 0.15 219;
-  --color-role-bruiser: 0.56 0.15 48;
-  --color-role-ranged: 0.56 0.15 320;
-  --color-role-melee: 0.56 0.15 353;
-  --color-role-healer: 0.56 0.15 184;
-  --color-role-support: 0.56 0.15 254;
+  --raw-role-tank: 0.56 0.15 219;
+  --raw-role-bruiser: 0.56 0.15 48;
+  --raw-role-ranged: 0.56 0.15 320;
+  --raw-role-melee: 0.56 0.15 353;
+  --raw-role-healer: 0.56 0.15 184;
+  --raw-role-support: 0.56 0.15 254;
 }
 
 [data-theme="contrasted"] {
-  --color-background: 0.05 0 0;
-  --color-surface: 0.1 0 0;
-  --color-border: 0.4 0 0;
-  --color-foreground: 1 0 0;
-  --color-muted: 0.8 0 0;
-  --color-primary: 0.7 0.2 288;
-  --color-accent: 0.85 0.18 70;
-  --color-success: 0.8 0.19 150;
-  --color-danger: 0.7 0.22 25;
-  --color-info: 0.78 0.19 235;
+  --raw-background: 0.05 0 0;
+  --raw-surface: 0.1 0 0;
+  --raw-border: 0.4 0 0;
+  --raw-foreground: 1 0 0;
+  --raw-muted: 0.8 0 0;
+  --raw-primary: 0.7 0.2 288;
+  --raw-accent: 0.85 0.18 70;
+  --raw-success: 0.8 0.19 150;
+  --raw-danger: 0.7 0.22 25;
+  --raw-info: 0.78 0.19 235;
 
-  --color-role-tank: 0.78 0.19 219;
-  --color-role-bruiser: 0.78 0.19 48;
-  --color-role-ranged: 0.78 0.19 320;
-  --color-role-melee: 0.78 0.19 353;
-  --color-role-healer: 0.78 0.19 184;
-  --color-role-support: 0.78 0.19 254;
+  --raw-role-tank: 0.78 0.19 219;
+  --raw-role-bruiser: 0.78 0.19 48;
+  --raw-role-ranged: 0.78 0.19 320;
+  --raw-role-melee: 0.78 0.19 353;
+  --raw-role-healer: 0.78 0.19 184;
+  --raw-role-support: 0.78 0.19 254;
 }
 
 body {
-  background-color: oklch(var(--color-background));
-  color: oklch(var(--color-foreground));
+  background-color: oklch(var(--raw-background));
+  color: oklch(var(--raw-foreground));
   font-family: var(--font-body);
 }
 

@@ -130,8 +130,8 @@ function nodeCenterY(node: LaidOutNode): number {
 }
 
 function winrateColor(winrate: number): string {
-  const danger = themeColorRaw("--color-danger");
-  const success = themeColorRaw("--color-success");
+  const danger = themeColorRaw("--raw-danger");
+  const success = themeColorRaw("--raw-success");
   const t = Math.min(1, Math.max(0, winrate));
   const [l, c, h] = danger.map((v, i) => v + ((success[i] ?? 0) - v) * t);
   return `oklch(${l} ${c} ${h})`;
@@ -186,7 +186,7 @@ const nodeShapes = computed(() =>
 
 const tierHeaders = computed(() => tiers.value.map((tier) => ({ tier, x: colX.value.get(tier) ?? 0 })));
 
-const legendGradient = computed(() => `linear-gradient(to right, ${themeColor("--color-danger")}, ${themeColor("--color-success")})`);
+const legendGradient = computed(() => `linear-gradient(to right, ${themeColor("--raw-danger")}, ${themeColor("--raw-success")})`);
 </script>
 
 <template>
@@ -214,7 +214,7 @@ const legendGradient = computed(() => `linear-gradient(to right, ${themeColor("-
           :x="header.x"
           y="14"
           text-anchor="middle"
-          :fill="themeColor('--color-muted')"
+          :fill="themeColor('--raw-muted')"
           font-size="11"
           font-family="var(--font-mono)"
           style="text-transform: uppercase; letter-spacing: 0.05em"
@@ -242,8 +242,8 @@ const legendGradient = computed(() => `linear-gradient(to right, ${themeColor("-
             :width="node.width"
             :height="node.height"
             rx="6"
-            :fill="node.isBest ? themeColor('--color-primary', 0.14) : themeColor('--color-surface')"
-            :stroke="node.isBest ? themeColor('--color-primary') : themeColor('--color-border')"
+            :fill="node.isBest ? themeColor('--raw-primary', 0.14) : themeColor('--raw-surface')"
+            :stroke="node.isBest ? themeColor('--raw-primary') : themeColor('--raw-border')"
             :stroke-width="node.isBest ? 2 : 1"
           >
             <title>{{ node.title }}</title>
@@ -252,7 +252,7 @@ const legendGradient = computed(() => `linear-gradient(to right, ${themeColor("-
             :x="node.centerX"
             :y="node.height > 40 ? node.centerY - 4 : node.centerY + 3.5"
             text-anchor="middle"
-            :fill="themeColor('--color-foreground')"
+            :fill="themeColor('--raw-foreground')"
             font-size="10.5"
             font-weight="500"
           >
@@ -263,7 +263,7 @@ const legendGradient = computed(() => `linear-gradient(to right, ${themeColor("-
             :x="node.centerX"
             :y="node.centerY + 12"
             text-anchor="middle"
-            :fill="themeColor('--color-muted')"
+            :fill="themeColor('--raw-muted')"
             font-size="9.5"
             font-family="var(--font-mono)"
           >
