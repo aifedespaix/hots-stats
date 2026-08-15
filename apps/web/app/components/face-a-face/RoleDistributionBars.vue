@@ -48,13 +48,13 @@ const chartData = computed(() => ({
     {
       label: props.meName,
       data: merged.value.map((r) => -r.myPct),
-      backgroundColor: themeColor("--color-primary"),
+      backgroundColor: themeColor("--raw-primary"),
       borderRadius: 4,
     },
     {
       label: props.friendName,
       data: merged.value.map((r) => r.friendPct),
-      backgroundColor: themeColor("--color-accent"),
+      backgroundColor: themeColor("--raw-accent"),
       borderRadius: 4,
     },
   ],
@@ -66,15 +66,15 @@ const chartOptions = computed(() => ({
     x: {
       min: -axisMax.value,
       max: axisMax.value,
-      grid: { color: themeColor("--color-border") },
+      grid: { color: themeColor("--raw-border") },
       ticks: {
-        color: themeColor("--color-muted"),
+        color: themeColor("--raw-muted"),
         callback: (value: number | string) => `${Math.abs(Number(value))}%`,
       },
     },
     y: {
       grid: { display: false },
-      ticks: { color: themeColor("--color-foreground") },
+      ticks: { color: themeColor("--raw-foreground") },
     },
   },
   plugins: {

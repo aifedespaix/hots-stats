@@ -24,13 +24,13 @@ const chartData = computed(() => ({
     {
       label: "Victoires",
       data: topMaps.value.map((map) => map.wins),
-      backgroundColor: themeColor("--color-success", 0.75),
+      backgroundColor: themeColor("--raw-success", 0.75),
       borderRadius: 4,
     },
     {
       label: "Défaites",
       data: topMaps.value.map((map) => map.gamesPlayed - map.wins),
-      backgroundColor: themeColor("--color-danger", 0.75),
+      backgroundColor: themeColor("--raw-danger", 0.75),
       borderRadius: 4,
     },
   ],
@@ -47,7 +47,7 @@ const chartOptions = computed(() => ({
       stacked: true,
       grid: { display: false },
       ticks: {
-        color: themeColor("--color-muted"),
+        color: themeColor("--raw-muted"),
         minRotation: 30,
         maxRotation: 45,
         font: { size: 10 },
@@ -60,12 +60,12 @@ const chartOptions = computed(() => ({
     y: {
       stacked: true,
       beginAtZero: true,
-      ticks: { color: themeColor("--color-muted"), precision: 0 },
-      grid: { color: themeColor("--color-border") },
+      ticks: { color: themeColor("--raw-muted"), precision: 0 },
+      grid: { color: themeColor("--raw-border") },
     },
   },
   plugins: {
-    legend: { position: "bottom" as const, labels: { color: themeColor("--color-muted"), boxWidth: 10, padding: 12 } },
+    legend: { position: "bottom" as const, labels: { color: themeColor("--raw-muted"), boxWidth: 10, padding: 12 } },
   },
 }));
 </script>

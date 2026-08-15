@@ -1,5 +1,5 @@
 /**
- * Reads a design token (e.g. "--color-primary") as an `oklch()` color string,
+ * Reads a design token (e.g. "--raw-primary") as an `oklch()` color string,
  * for chart.js colors that need to follow the active theme -- reused across
  * every chart in `components/charts/`, replacing what used to be a
  * copy-pasted helper in each modal.

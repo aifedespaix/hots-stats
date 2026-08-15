@@ -96,8 +96,8 @@ export function useWinrateTrendChart(points: Ref<WinrateTrendPoint[]>) {
       {
         label: "Winrate cumulé",
         data: cumulative.value.map((p) => p.winrate),
-        borderColor: themeColor("--color-primary"),
-        backgroundColor: themeColor("--color-primary"),
+        borderColor: themeColor("--raw-primary"),
+        backgroundColor: themeColor("--raw-primary"),
         pointRadius: 0,
         pointHoverRadius: 4,
         pointHitRadius: 8,
@@ -111,7 +111,7 @@ export function useWinrateTrendChart(points: Ref<WinrateTrendPoint[]>) {
         // via `plugins.tooltip.filter` below.
         label: "50%",
         data: cumulative.value.map(() => 50),
-        borderColor: themeColor("--color-muted"),
+        borderColor: themeColor("--raw-muted"),
         borderDash: [4, 4],
         borderWidth: 1,
         pointRadius: 0,
@@ -125,14 +125,14 @@ export function useWinrateTrendChart(points: Ref<WinrateTrendPoint[]>) {
     interaction: { mode: "index" as const, intersect: false },
     scales: {
       x: {
-        grid: { color: themeColor("--color-border") },
-        ticks: { color: themeColor("--color-muted"), maxTicksLimit: 8, maxRotation: 0 },
+        grid: { color: themeColor("--raw-border") },
+        ticks: { color: themeColor("--raw-muted"), maxTicksLimit: 8, maxRotation: 0 },
       },
       y: {
         min: 0,
         max: 100,
-        grid: { color: themeColor("--color-border") },
-        ticks: { color: themeColor("--color-muted"), callback: (value: number | string) => `${value}%` },
+        grid: { color: themeColor("--raw-border") },
+        ticks: { color: themeColor("--raw-muted"), callback: (value: number | string) => `${value}%` },
       },
     },
     plugins: {
