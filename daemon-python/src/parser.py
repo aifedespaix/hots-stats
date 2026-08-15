@@ -580,7 +580,20 @@ def _apply_score_event(tracker_events: list[dict], tracker_id_to_toon: dict[int,
                 toon_handle = tracker_id_to_toon.get(real_index)
                 player = players.get(toon_handle) if toon_handle else None
                 if player is not None:
-                    player["stats"][field] = int(values[0]["m_value"])
+                    # Each player's slot here isn't a single scalar -- it's a
+                    # `{m_value, m_time}` time series (confirmed against
+                    # heroprotocol's generated struct for
+                    # SScoreResultEvent.m_instanceList[].m_values[]), since a
+                    # stat like kills/deaths/assists gets a new entry pushed
+                    # every time it changes over the course of the match,
+                    # seeded with a baseline `m_value: 0` entry at game start.
+                    # `values[0]` was reading that baseline instead of the
+                    # final tally -- silently correct for a stat that only
+                    # ever gets one push (most damage/healing fields, where a
+                    # single entry means `[0] == [-1]`), but wrong for
+                    # anything updated more than once, which is exactly
+                    # kills/deaths/assists on any match with real combat.
+                    player["stats"][field] = int(values[-1]["m_value"])
         break
 
 

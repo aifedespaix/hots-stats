@@ -56,12 +56,23 @@ from __future__ import annotations
 # replay header's `m_version` -- always available, no new tracker-event
 # dependency) so matches can be filtered/labeled by game patch. Existing
 # matches have `gameVersion: null` until resynced.
+# 1.6: `_apply_score_event` read `values[0]["m_value"]` for every tracker
+# stat, but a player's slot in `SScoreResultEvent.m_instanceList[].m_values[]`
+# is a `{m_value, m_time}` *time series*, not a scalar -- confirmed against
+# heroprotocol's generated struct definitions. Blizzard seeds it with a
+# baseline `m_value: 0` entry at game start and pushes a new entry every time
+# the stat changes, so `values[0]` silently read that baseline zero instead
+# of the final tally for any stat updated more than once over the match --
+# in practice, kills/deaths/assists on any match with real combat (fields
+# like heroDamage/healing that only ever get one push happened to read
+# correctly, since `[0] == [-1]` when there's just one entry). Now reads
+# `values[-1]` (the most recent entry) instead.
 # Bumping this flags every previously-ingested match as stale so the
 # daemon's API-driven resync (see sync_state.py's `invalidate_stale`)
 # reparses and re-uploads it. Whenever this changes, also bump
 # apps/api/src/constants.ts's MIN_PARSER_VERSION to the same value --
 # they're meant to move together (see that constant's docstring).
-PARSER_VERSION = "1.5"
+PARSER_VERSION = "1.6"
 
 # Shown in the settings window. Bump alongside `[project].version` in pyproject.toml.
 APP_VERSION = "1.0.32"

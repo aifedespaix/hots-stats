@@ -337,6 +337,53 @@ def test_build_payload_forwards_stats_the_api_does_not_use_yet():
     assert players_by_tag["Bar#2222"]["minionKills"] == 7
 
 
+def test_build_payload_reads_the_latest_score_snapshot_not_the_first():
+    """A player's slot in `SScoreResultEvent.m_instanceList[].m_values[]` is a
+    `{m_value, m_time}` time series -- seeded with a baseline zero entry at
+    game start and appended to every time the stat changes (see
+    `_apply_score_event`'s comment) -- not a single scalar. Reading `[0]`
+    instead of `[-1]` would silently record that baseline zero instead of
+    the final tally for a stat pushed more than once over a real match,
+    which is exactly what happens to kills/deaths/assists in any match with
+    real combat."""
+    solo_kill_event = {
+        "m_name": b"SoloKill",
+        "m_values": [
+            # Foo (index 1): baseline 0, then two real increments up to 5.
+            [{"m_value": 0}, {"m_value": 3}, {"m_value": 5}],
+            # Bar (index 2): a single snapshot -- still correctly read either way.
+            [{"m_value": 6}],
+        ],
+    }
+    other_stats_event = {
+        "_event": "NNet.Replay.Tracker.SScoreResultEvent",
+        "m_instanceList": [
+            {"m_name": name.encode(), "m_values": [[{"m_value": v}] for v in values]}
+            for name, values in REQUIRED_STATS.items()
+            if name != "SoloKill"
+        ],
+    }
+    other_stats_event["m_instanceList"].append(solo_kill_event)
+
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=[
+            *_base_tracker_events()[:3],
+            other_stats_event,
+            *_base_tracker_events()[4:],
+        ],
+        attributes_events=_base_attributes_events(),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+    )
+
+    players_by_tag = {p["battletag"]: p for p in payload["players"]}
+    assert players_by_tag["Foo#1111"]["kills"] == 5
+    assert players_by_tag["Bar#2222"]["kills"] == 6
+
+
 def test_build_payload_unknown_map_falls_back_to_prettified_slug():
     """Regression test: a map internal name not yet in
     constants.MAP_DISPLAY_NAMES (a new battleground) must not produce a
