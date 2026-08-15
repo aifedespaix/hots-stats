@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { GAME_MODE_TAGS } from "~/utils/gameModeTags";
 import type { MapHubResponse } from "~/types/maps";
 
 definePageMeta({ middleware: "auth" });
@@ -14,7 +15,20 @@ useSeoMeta({
   robots: "noindex, follow",
 });
 
-const { data } = await useApiFetch<MapHubResponse>("/maps");
+// Synced with the header's global "Type de partie" filter -- switching it
+// recomputes this page's stats instantly instead of staying locked to Classé.
+const gameModeStore = useGameModeStore();
+const query = computed(() => ({ mode: gameModeStore.modeQueryParam }));
+
+const { data } = await useApiFetch<MapHubResponse>("/maps", { query });
+
+/** Human-readable label for whichever game-mode tags are currently active,
+ * for the page intro and the recent-form accessible summary below. */
+const activeModeLabel = computed(() =>
+  GAME_MODE_TAGS.filter((tag) => gameModeStore.activeTags.includes(tag.key))
+    .map((tag) => tag.label)
+    .join(" + "),
+);
 
 const search = ref("");
 type SortMode = "performance" | "name" | "games";
@@ -41,7 +55,7 @@ const filteredMaps = computed(() => {
  * themselves only carry color -- oldest game first, same order as rendered. */
 function formLabel(recentForm: boolean[]): string {
   const wins = recentForm.filter(Boolean).length;
-  return `Forme sur les ${recentForm.length} dernières parties classées : ${wins} victoire${wins > 1 ? "s" : ""}, ${
+  return `Forme sur les ${recentForm.length} dernières parties (${activeModeLabel.value}) : ${wins} victoire${wins > 1 ? "s" : ""}, ${
     recentForm.length - wins
   } défaite${recentForm.length - wins > 1 ? "s" : ""} -- de la plus ancienne à la plus récente.`;
 }
@@ -52,8 +66,8 @@ function formLabel(recentForm: boolean[]): string {
     <div>
       <h1 class="font-heading text-2xl font-semibold">Cartes</h1>
       <p class="mt-1 text-sm text-muted">
-        Ton winrate par carte, sur tes parties classées. Choisis une carte pour la méta, ton historique et ton impact
-        d'équipe dessus.
+        Ton winrate par carte, sur tes parties {{ activeModeLabel }}. Choisis une carte pour la méta, ton historique
+        et ton impact d'équipe dessus.
       </p>
     </div>
 
@@ -95,7 +109,7 @@ function formLabel(recentForm: boolean[]): string {
         </div>
 
         <p class="mt-1 text-xs text-muted">
-          {{ map.gamesPlayed }} partie{{ map.gamesPlayed > 1 ? "s" : "" }} classée{{ map.gamesPlayed > 1 ? "s" : "" }}
+          {{ map.gamesPlayed }} partie{{ map.gamesPlayed > 1 ? "s" : "" }} ({{ activeModeLabel }})
         </p>
 
         <div v-if="map.gamesPlayed > 0" class="mt-3">

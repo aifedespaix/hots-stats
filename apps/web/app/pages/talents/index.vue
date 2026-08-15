@@ -28,16 +28,60 @@ const minGames = ref(TALENT_ANALYZER_MIN_GAMES_DEFAULT);
 const { data: heroesData } = await useApiFetch<HeroListResponse>("/heroes", { query: { scope: "global" } });
 const { data: mapsData } = await useApiFetch<MapHubResponse>("/maps");
 
-const heroOptions = computed(() => [
-  { value: "", label: "-- aucun --" },
+// Enriched selector items: games/winrate/KDA (or recent form for maps) shown
+// directly in the dropdown so a player can pick without leaving the menu.
+// `disabled` hard-locks heroes/maps with zero recorded games; `reliable`
+// (Wilson lower bound close enough to the raw winrate, see utils/wilson.ts)
+// only mutes the option -- the data is still real, just not to be trusted yet.
+interface HeroSelectItem {
+  value: string;
+  label: string;
+  heroRole: string | null;
+  gamesPlayed: number;
+  winrate: number;
+  kda: number | null;
+  reliable: boolean;
+  disabled: boolean;
+  special?: boolean;
+}
+interface MapSelectItem {
+  value: string;
+  label: string;
+  gamesPlayed: number;
+  winrate: number;
+  recentForm: boolean[];
+  reliable: boolean;
+  disabled: boolean;
+  special?: boolean;
+}
+
+const heroOptions = computed<HeroSelectItem[]>(() => [
+  { value: "", label: "-- aucun --", heroRole: null, gamesPlayed: 0, winrate: 0, kda: null, reliable: true, disabled: false, special: true },
   ...(heroesData.value?.heroes ?? [])
-    .map((h) => ({ value: h.heroId, label: h.heroName }))
+    .map((h) => ({
+      value: h.heroId,
+      label: h.heroName,
+      heroRole: h.heroRole,
+      gamesPlayed: h.gamesPlayed,
+      winrate: h.winrate,
+      kda: computeKdaRatio(h.avgKills, h.avgDeaths, h.avgAssists),
+      reliable: isStatReliable(h.wins, h.gamesPlayed),
+      disabled: h.gamesPlayed === 0,
+    }))
     .sort((a, b) => a.label.localeCompare(b.label)),
 ]);
-const mapOptions = computed(() => [
-  { value: "", label: "-- aucune --" },
+const mapOptions = computed<MapSelectItem[]>(() => [
+  { value: "", label: "-- aucune --", gamesPlayed: 0, winrate: 0, recentForm: [], reliable: true, disabled: false, special: true },
   ...(mapsData.value?.maps ?? [])
-    .map((m) => ({ value: m.mapId, label: m.mapName }))
+    .map((m) => ({
+      value: m.mapId,
+      label: m.mapName,
+      gamesPlayed: m.gamesPlayed,
+      winrate: m.winrate,
+      recentForm: m.recentForm,
+      reliable: isStatReliable(m.wins, m.gamesPlayed),
+      disabled: m.gamesPlayed === 0,
+    }))
     .sort((a, b) => a.label.localeCompare(b.label)),
 ]);
 
@@ -203,11 +247,72 @@ function applyBuild(row: (typeof buildRows.value)[number]) {
     <UiFilterBar :columns="2">
       <div>
         <label class="mb-1 block text-xs uppercase tracking-wide text-muted">Héros</label>
-        <USelectMenu v-model="heroId" :items="heroOptions" value-key="value" label-key="label" />
+        <USelectMenu v-model="heroId" :items="heroOptions" value-key="value" label-key="label" :ui="{ itemLabel: 'w-full' }">
+          <template #item-label="{ item }">
+            <span v-if="item.special" class="text-sm">{{ item.label }}</span>
+            <div
+              v-else
+              class="flex w-full min-w-0 items-center gap-2.5 py-0.5"
+              :class="item.gamesPlayed > 0 && !item.reliable ? 'opacity-60' : ''"
+            >
+              <HeroesHeroAvatar :hero-id="item.value" :name="item.label" :role="item.heroRole" :size="22" />
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm">{{ item.label }}</p>
+                <p v-if="item.gamesPlayed > 0" class="flex items-center gap-2 font-mono text-[10.5px] text-muted">
+                  <span>{{ item.gamesPlayed }} partie{{ item.gamesPlayed > 1 ? "s" : "" }}</span>
+                  <span :class="TONE_TEXT_CLASS[winrateTone(item.winrate)]">{{ formatPercent(item.winrate) }} win</span>
+                  <span>KDA {{ formatKda(item.kda) }}</span>
+                </p>
+                <p v-else class="text-[10.5px] text-muted">Aucune partie</p>
+              </div>
+              <UIcon
+                v-if="item.gamesPlayed > 0 && !item.reliable"
+                name="i-heroicons-exclamation-triangle"
+                class="h-3 w-3 shrink-0 text-accent"
+                title="Échantillon faible"
+              />
+            </div>
+          </template>
+        </USelectMenu>
       </div>
       <div>
         <label class="mb-1 block text-xs uppercase tracking-wide text-muted">Carte</label>
-        <USelectMenu v-model="mapId" :items="mapOptions" value-key="value" label-key="label" />
+        <USelectMenu v-model="mapId" :items="mapOptions" value-key="value" label-key="label" :ui="{ itemLabel: 'w-full' }">
+          <template #item-label="{ item }">
+            <span v-if="item.special" class="text-sm">{{ item.label }}</span>
+            <div
+              v-else
+              class="flex w-full min-w-0 items-center gap-2.5 py-0.5"
+              :class="item.gamesPlayed > 0 && !item.reliable ? 'opacity-60' : ''"
+            >
+              <span class="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md bg-border/60 text-muted">
+                <UIcon name="i-heroicons-map" class="h-3.5 w-3.5" />
+              </span>
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm">{{ item.label }}</p>
+                <div v-if="item.gamesPlayed > 0" class="flex items-center gap-2 font-mono text-[10.5px] text-muted">
+                  <span>{{ item.gamesPlayed }} partie{{ item.gamesPlayed > 1 ? "s" : "" }}</span>
+                  <span :class="TONE_TEXT_CLASS[winrateTone(item.winrate)]">{{ formatPercent(item.winrate) }} win</span>
+                  <span v-if="item.recentForm.length > 0" class="flex items-center gap-[2px]">
+                    <span
+                      v-for="(win, formIndex) in item.recentForm.slice(-5)"
+                      :key="formIndex"
+                      class="h-1.5 w-1.5 rounded-[1.5px]"
+                      :class="win ? 'bg-success' : 'bg-danger'"
+                    />
+                  </span>
+                </div>
+                <p v-else class="text-[10.5px] text-muted">Aucune partie</p>
+              </div>
+              <UIcon
+                v-if="item.gamesPlayed > 0 && !item.reliable"
+                name="i-heroicons-exclamation-triangle"
+                class="h-3 w-3 shrink-0 text-accent"
+                title="Échantillon faible"
+              />
+            </div>
+          </template>
+        </USelectMenu>
       </div>
     </UiFilterBar>
     <p class="text-xs text-muted">

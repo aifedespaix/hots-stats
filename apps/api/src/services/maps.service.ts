@@ -5,6 +5,7 @@ import {
   MAP_META_MIN_GAMES,
   SOAK_MIN_GAMES,
   TEAM_IMPACT_MIN_GAMES,
+  type GameMode,
   type MapDetailResponse,
   type MapHubEntry,
   type MapMetaHeroStats,
@@ -21,12 +22,14 @@ import { getMapWeaknesses } from "./weaknesses.service";
 
 type HeroRole = (typeof heroRoleEnum.enumValues)[number];
 
-/** Every map/hero query on this page is scoped to ranked games, same as
- * `weaknesses.service`'s -- mixing in Brawl/ARAM would muddy both the
- * community "meta" and the player's own diagnostics with modes that don't
- * reflect competitive play. */
-function rankedModeCondition() {
-  return inArray(matches.gameMode, [...DRAFT_RANKED_MODES]);
+/** Every map/hero query on this page is scoped to ranked games by default,
+ * same as `weaknesses.service`'s -- mixing in Brawl/ARAM would muddy both
+ * the community "meta" and the player's own diagnostics with modes that
+ * don't reflect competitive play. The Maps Hub is the exception: it takes
+ * an explicit `mode` filter driven by the app's global game-mode filter, so
+ * a caller passing modes gets exactly those instead of the ranked default. */
+function rankedModeCondition(mode?: GameMode[]) {
+  return inArray(matches.gameMode, mode && mode.length > 0 ? mode : [...DRAFT_RANKED_MODES]);
 }
 
 /**
@@ -36,7 +39,7 @@ function rankedModeCondition() {
  * queries, so the Hub stays a single round trip regardless of how many maps
  * the app knows about.
  */
-async function getRecentFormByMap(userId: string): Promise<Map<string, boolean[]>> {
+async function getRecentFormByMap(userId: string, mode?: GameMode[]): Promise<Map<string, boolean[]>> {
   const ranked = db.$with("ranked_map_games").as(
     db
       .select({
@@ -47,7 +50,7 @@ async function getRecentFormByMap(userId: string): Promise<Map<string, boolean[]
       })
       .from(matchPlayers)
       .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
-      .where(and(eq(matchPlayers.userId, userId), rankedModeCondition())),
+      .where(and(eq(matchPlayers.userId, userId), rankedModeCondition(mode))),
   );
 
   const rows = await db
@@ -72,7 +75,7 @@ async function getRecentFormByMap(userId: string): Promise<Map<string, boolean[]
  * keeps maps the user has never played in the list at 0 games, since the
  * Hub is a menu to browse, not a leaderboard of maps already played.
  */
-export async function getMapHub(userId: string): Promise<MapHubEntry[]> {
+export async function getMapHub(userId: string, mode?: GameMode[]): Promise<MapHubEntry[]> {
   const personal = db.$with("personal_map_stats").as(
     db
       .select({
@@ -82,7 +85,7 @@ export async function getMapHub(userId: string): Promise<MapHubEntry[]> {
       })
       .from(matchPlayers)
       .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
-      .where(and(eq(matchPlayers.userId, userId), rankedModeCondition()))
+      .where(and(eq(matchPlayers.userId, userId), rankedModeCondition(mode)))
       .groupBy(matches.mapId),
   );
 
@@ -97,7 +100,7 @@ export async function getMapHub(userId: string): Promise<MapHubEntry[]> {
       })
       .from(maps)
       .leftJoin(personal, eq(personal.mapId, maps.id)),
-    getRecentFormByMap(userId),
+    getRecentFormByMap(userId, mode),
   ]);
 
   return rows
