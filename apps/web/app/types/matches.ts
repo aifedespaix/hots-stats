@@ -1,4 +1,5 @@
 import type { GameMode } from "@hots-stats/shared-types";
+import type { MatchTimelineData } from "./coach";
 
 export interface MatchListItem {
   id: string;
@@ -58,6 +59,13 @@ export interface MatchDetailResponse {
     region: string;
   };
   teams: { team: number; players: MatchDetailPlayer[] }[];
+  /**
+   * Not sent by the API today (see `MatchTimelineData`'s doc comment) --
+   * declared optional so the Coach tab's timeline-dependent insights start
+   * working the day `GET /matches/:id` grows this field, with no front-end
+   * change required. Always read as `data.timeline ?? null`.
+   */
+  timeline?: MatchTimelineData;
 }
 
 /** One filtered-vs-all-time-range metric powering a "Dashboard" radar chart axis. */

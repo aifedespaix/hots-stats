@@ -98,7 +98,7 @@ function toggleSortDir() {
               @click="col.sortable && emit('sort', col.key)"
             >
               <span class="inline-flex items-center gap-1" :class="col.numeric ? 'flex-row-reverse' : ''">
-                {{ col.label }}
+                <slot :name="`header-${col.key}`">{{ col.label }}</slot>
                 <UIcon
                   v-if="col.sortable && sortKey === col.key"
                   :name="sortDir === 'asc' ? 'i-heroicons-chevron-up' : 'i-heroicons-chevron-down'"
