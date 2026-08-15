@@ -33,7 +33,7 @@ const hasMatchupGames = computed(() => (data.value?.matchups.gamesPlayed ?? 0) >
           : 'Impossible de charger le Face-à-Face.'
     "
     back-to="/players"
-    back-label="← Retour aux joueurs"
+    back-label="Retour aux joueurs"
   />
 
   <div v-else-if="data" class="space-y-8">

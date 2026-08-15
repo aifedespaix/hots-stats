@@ -83,7 +83,7 @@ const teamImpactChartOptions = computed(() => ({
 </script>
 
 <template>
-  <UiErrorState v-if="error" :status-code="404" message="Carte introuvable." back-to="/maps" back-label="← Retour aux cartes" />
+  <UiErrorState v-if="error" :status-code="404" message="Carte introuvable." back-to="/maps" back-label="Retour aux cartes" />
 
   <div v-else-if="data" class="space-y-8">
     <div
@@ -218,7 +218,7 @@ const teamImpactChartOptions = computed(() => ({
               <p class="text-muted">Version phase 1 : proxy calculé sur les stats de fin de partie, pas encore sur les combats isolés.</p>
             </div>
           </template>
-          <UIcon name="i-heroicons-information-circle" class="h-3.5 w-3.5 cursor-help text-muted/70 hover:text-brand" />
+          <UIcon name="i-heroicons-information-circle" class="h-3.5 w-3.5 cursor-help text-muted/70 hover:text-info" />
         </UTooltip>
       </div>
 
@@ -253,7 +253,7 @@ const teamImpactChartOptions = computed(() => ({
               <p class="text-muted">Proxy en attendant la ventilation exacte de l'XP par source côté données.</p>
             </div>
           </template>
-          <UIcon name="i-heroicons-information-circle" class="h-3.5 w-3.5 cursor-help text-muted/70 hover:text-brand" />
+          <UIcon name="i-heroicons-information-circle" class="h-3.5 w-3.5 cursor-help text-muted/70 hover:text-info" />
         </UTooltip>
       </div>
 

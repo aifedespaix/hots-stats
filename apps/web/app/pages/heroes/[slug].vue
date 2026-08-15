@@ -117,7 +117,7 @@ const talentsByTier = computed(() => {
     :status-code="404"
     message="Héros introuvable - tu n'as pas encore de partie enregistrée avec ce héros."
     back-to="/heroes"
-    back-label="← Retour aux héros"
+    back-label="Retour aux héros"
   />
 
   <div v-else-if="data" class="space-y-8">
@@ -204,7 +204,7 @@ const talentsByTier = computed(() => {
               <span class="font-mono text-sm font-semibold sm:text-base">{{ formatAvg(data.hero.avgDeaths) }}</span>
             </span>
             <span
-              class="inline-flex items-center gap-1 rounded-full bg-blue-500/15 px-2 py-0.5 text-blue-400"
+              class="inline-flex items-center gap-1 rounded-full bg-info/15 px-2 py-0.5 text-info"
               title="Assistances"
             >
               <UIcon name="i-lucide-hand-helping" class="h-3.5 w-3.5" />

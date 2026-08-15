@@ -84,8 +84,8 @@ const sortedPlayers = computed(() => {
 function rowClass(row: Record<string, unknown>): string {
   const player = row as unknown as MatchDetailPlayer;
   const teamClass = isAlly(player)
-    ? "bg-blue-500/10 hover:bg-blue-500/15"
-    : "bg-red-500/10 hover:bg-red-500/15";
+    ? "bg-info/10 hover:bg-info/15"
+    : "bg-danger/10 hover:bg-danger/15";
   return isMe(player) ? `${teamClass} ring-1 ring-inset ring-brand` : teamClass;
 }
 
@@ -105,7 +105,7 @@ const columns = [
 </script>
 
 <template>
-  <UiErrorState v-if="error" :status-code="404" message="Partie introuvable." back-to="/matches" back-label="← Retour à l'historique" />
+  <UiErrorState v-if="error" :status-code="404" message="Partie introuvable." back-to="/matches" back-label="Retour à l'historique" />
 
   <div v-else-if="data" class="space-y-8">
     <div>

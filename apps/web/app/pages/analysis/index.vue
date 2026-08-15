@@ -141,8 +141,9 @@ const talentColumns = [
       </div>
       <div
         v-else
-        class="flex items-center justify-center rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted"
+        class="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted"
       >
+        <UIcon name="i-heroicons-inbox" class="h-5 w-5 text-muted/70" />
         <p v-if="totalRankedGames === 0">
           Pas encore de parties classées enregistrées -- reviens ici après quelques games.
         </p>
@@ -170,8 +171,9 @@ const talentColumns = [
       </div>
       <div
         v-else
-        class="flex items-center justify-center rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted"
+        class="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted"
       >
+        <UIcon name="i-heroicons-inbox" class="h-5 w-5 text-muted/70" />
         <p v-if="totalRankedGames === 0">
           Pas encore de parties classées enregistrées -- reviens ici après quelques games.
         </p>
