@@ -8,11 +8,14 @@ from src.parser import (
     ReplaySkipped,
     _attribute_scope_by_player_list_index,
     _build_protocol,
+    _extract_deaths,
+    _extract_level_snapshots,
     _has_computer_player_attribute,
     _hero_from_any_talent,
     _hero_from_talent_prefix,
     _hero_from_unit_spawn_by_toon,
     _hero_from_unit_type_name,
+    _hero_unit_tags_by_toon,
     _protocol_module,
     _read_archive_file,
     _slugify,
@@ -139,11 +142,41 @@ def _attributes_events(hero_by_tracker_id: dict[int, bytes]) -> dict:
     }
 
 
-def _unit_born_event(control_player_id: int, unit_type_name: str) -> dict:
+def _unit_born_event(
+    control_player_id: int,
+    unit_type_name: str,
+    *,
+    unit_tag_index: int | None = None,
+    unit_tag_recycle: int = 0,
+) -> dict:
     return {
         "_event": "NNet.Replay.Tracker.SUnitBornEvent",
         "m_controlPlayerId": control_player_id,
         "m_unitTypeName": unit_type_name.encode(),
+        # Defaults to `control_player_id` (distinct per call site in every
+        # existing test that doesn't care about tags) rather than a fixed
+        # constant, so two heroes born in the same test don't collide on the
+        # same tag by accident.
+        "m_unitTagIndex": control_player_id if unit_tag_index is None else unit_tag_index,
+        "m_unitTagRecycle": unit_tag_recycle,
+    }
+
+
+def _unit_died_event(unit_tag_index: int, gameloop: int, *, unit_tag_recycle: int = 0) -> dict:
+    return {
+        "_event": "NNet.Replay.Tracker.SUnitDiedEvent",
+        "m_unitTagIndex": unit_tag_index,
+        "m_unitTagRecycle": unit_tag_recycle,
+        "_gameloop": gameloop,
+    }
+
+
+def _level_up_event(tracker_id: int, level: int, gameloop: int) -> dict:
+    return {
+        "_event": "NNet.Replay.Tracker.SStatGameEvent",
+        "m_eventName": b"LevelUp",
+        "m_intData": [{"m_key": b"PlayerID", "m_value": tracker_id}, {"m_key": b"Level", "m_value": level}],
+        "_gameloop": gameloop,
     }
 
 
@@ -784,3 +817,164 @@ def test_has_computer_player_attribute_false_without_player_type_data():
     # at all -- must not be treated as "found a computer player".
     attributes_events = {"scopes": {1: {4002: [{"value": b"Wiza"}]}}}
     assert _has_computer_player_attribute(attributes_events) is False
+
+
+def test_hero_unit_tags_by_toon_ignores_non_hero_units():
+    tracker_id_to_toon = {1: "1-Hero-1-1001"}
+    events = [
+        _unit_born_event(1, "HeroLiMing", unit_tag_index=5),
+        {
+            "_event": "NNet.Replay.Tracker.SUnitBornEvent",
+            "m_controlPlayerId": 1,
+            "m_unitTypeName": b"NexusMinion",
+            "m_unitTagIndex": 6,
+            "m_unitTagRecycle": 0,
+        },
+    ]
+    assert _hero_unit_tags_by_toon(events, tracker_id_to_toon) == {(5, 0): "1-Hero-1-1001"}
+
+
+def test_hero_unit_tags_by_toon_keeps_every_tag_not_just_the_first():
+    # The Lost Vikings control three independently-tagged hero units at
+    # once -- unlike `_hero_from_unit_spawn_by_toon` (hero-name resolution,
+    # where any one of the three answers the same question), every tag must
+    # resolve back to the player for death tracking to work for all three.
+    tracker_id_to_toon = {1: "1-Hero-1-1001"}
+    events = [
+        _unit_born_event(1, "HeroBaleog", unit_tag_index=10),
+        _unit_born_event(1, "HeroErik", unit_tag_index=11),
+        _unit_born_event(1, "HeroOlaf", unit_tag_index=12),
+    ]
+    assert _hero_unit_tags_by_toon(events, tracker_id_to_toon) == {
+        (10, 0): "1-Hero-1-1001",
+        (11, 0): "1-Hero-1-1001",
+        (12, 0): "1-Hero-1-1001",
+    }
+
+
+def test_extract_deaths_skips_unresolvable_tags():
+    events = [_unit_died_event(999, 700)]
+    assert _extract_deaths(events, hero_unit_tags={}, players={}, gates_open_loop=0) == []
+
+
+def test_extract_level_snapshots_skips_unknown_tracker_id():
+    events = [_level_up_event(99, 2, 700)]
+    assert _extract_level_snapshots(events, tracker_id_to_toon={}, players={}, gates_open_loop=0) == []
+
+
+def test_build_payload_extracts_deaths_timeline():
+    events = [
+        *_base_tracker_events(),
+        _unit_born_event(1, "HeroLiMing"),
+        _unit_born_event(2, "HeroMalfurion"),
+        _unit_died_event(1, 610 + 16 * 30),  # Foo's Li-Ming dies 30s after gates open
+    ]
+
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=events,
+        attributes_events=_base_attributes_events(),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+    )
+
+    assert payload["timeline"]["deaths"] == [{"battletag": "Foo#1111", "team": 0, "atSeconds": 30}]
+    assert payload["timeline"]["levelSnapshots"] == []
+
+
+def test_build_payload_ignores_non_hero_unit_deaths():
+    events = [
+        *_base_tracker_events(),
+        _unit_born_event(1, "HeroLiMing"),
+        {
+            "_event": "NNet.Replay.Tracker.SUnitBornEvent",
+            "m_controlPlayerId": 1,
+            "m_unitTypeName": b"NexusMinion",
+            "m_unitTagIndex": 99,
+            "m_unitTagRecycle": 0,
+        },
+        _unit_died_event(99, 610 + 16 * 10),  # the minion, not the hero
+    ]
+
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=events,
+        attributes_events=_base_attributes_events(),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+    )
+
+    assert payload["timeline"]["deaths"] == []
+
+
+def test_build_payload_resolves_hero_deaths_after_respawn_same_tag():
+    """A hero keeps the same unit tag across a respawn (see
+    `_hero_unit_tags_by_toon`'s docstring) -- a second death on the same tag
+    must resolve to the same player, at its own timestamp."""
+    events = [
+        *_base_tracker_events(),
+        _unit_born_event(1, "HeroLiMing", unit_tag_index=42),
+        _unit_died_event(42, 610 + 16 * 30),
+        _unit_died_event(42, 610 + 16 * 90),
+    ]
+
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=events,
+        attributes_events=_base_attributes_events(),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+    )
+
+    assert payload["timeline"]["deaths"] == [
+        {"battletag": "Foo#1111", "team": 0, "atSeconds": 30},
+        {"battletag": "Foo#1111", "team": 0, "atSeconds": 90},
+    ]
+
+
+def test_build_payload_extracts_level_snapshots_timeline():
+    events = [
+        *_base_tracker_events(),
+        _level_up_event(1, 2, 610 + 16 * 45),
+        _level_up_event(2, 2, 610 + 16 * 45),
+    ]
+
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=events,
+        attributes_events=_base_attributes_events(),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+    )
+
+    assert payload["timeline"]["levelSnapshots"] == [
+        {"battletag": "Foo#1111", "atSeconds": 45, "level": 2},
+        {"battletag": "Bar#2222", "atSeconds": 45, "level": 2},
+    ]
+
+
+def test_build_payload_timeline_defaults_to_empty_lists():
+    # No SUnitBornEvent/SUnitDiedEvent/LevelUp events at all in the base
+    # fixture -- `timeline` must still be present with empty arrays, not
+    # omitted, so the API layer can tell "no timeline events occurred" apart
+    # from "this payload predates the timeline feature" (the latter simply
+    # won't have the key at all, from an un-upgraded daemon).
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=_base_tracker_events(),
+        attributes_events=_base_attributes_events(),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+    )
+
+    assert payload["timeline"] == {"deaths": [], "levelSnapshots": []}

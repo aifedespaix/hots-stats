@@ -1,4 +1,4 @@
-import { type User, db, heroes, matchPlayers, matches, maps, talentPicks } from "@hots-stats/db";
+import { type User, db, heroes, matchDeaths, matchLevelSnapshots, matchPlayers, matches, maps, talentPicks } from "@hots-stats/db";
 import { and, asc, desc, eq, exists, gte, ilike, inArray, lte, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { Hono } from "hono";
@@ -500,11 +500,49 @@ export const matchesRoute = new Hono<Env>()
       })),
     }));
 
+    // Only matches ingested with PARSER_VERSION >= 1.4 have any rows here --
+    // `timeline` is omitted entirely (not sent as empty arrays) for older
+    // matches, so the Coach tab correctly shows "unavailable" for them
+    // instead of misreading "no rows yet" as "no deaths this match".
+    const [deathRows, levelSnapshotRows] =
+      playerIds.length > 0
+        ? await Promise.all([
+            db
+              .select({ matchPlayerId: matchDeaths.matchPlayerId, atSeconds: matchDeaths.atSeconds })
+              .from(matchDeaths)
+              .where(inArray(matchDeaths.matchPlayerId, playerIds)),
+            db
+              .select({
+                matchPlayerId: matchLevelSnapshots.matchPlayerId,
+                atSeconds: matchLevelSnapshots.atSeconds,
+                level: matchLevelSnapshots.level,
+              })
+              .from(matchLevelSnapshots)
+              .where(inArray(matchLevelSnapshots.matchPlayerId, playerIds)),
+          ])
+        : [[], []];
+
+    const playerById = new Map(players.map((p) => [p.id, p]));
+    const timeline =
+      deathRows.length > 0 || levelSnapshotRows.length > 0
+        ? {
+            deaths: deathRows.flatMap((d) => {
+              const player = playerById.get(d.matchPlayerId);
+              return player ? [{ battletag: player.battletag, team: player.team, atSeconds: d.atSeconds }] : [];
+            }),
+            levelSnapshots: levelSnapshotRows.flatMap((s) => {
+              const player = playerById.get(s.matchPlayerId);
+              return player ? [{ battletag: player.battletag, atSeconds: s.atSeconds, level: s.level }] : [];
+            }),
+          }
+        : undefined;
+
     return c.json({
       match,
       teams: [0, 1].map((team) => ({
         team,
         players: playersWithTalents.filter((p) => p.team === team),
       })),
+      ...(timeline ? { timeline } : {}),
     });
   });

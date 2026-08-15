@@ -37,8 +37,7 @@ const plannedFeatures = [
 
       <p class="max-w-md text-[11px] text-muted">
         Nécessite les positions périodiques du replay (tracker event <code>SUnitPositionsEvent</code>), pas encore
-        extraites par le pipeline d'ingestion -- voir la critique de l'Onglet 2 pour le même constat sur les
-        timestamps de mort et de niveau.
+        extraites par le pipeline d'ingestion.
       </p>
     </div>
   </UCard>

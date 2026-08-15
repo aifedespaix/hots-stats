@@ -8,7 +8,7 @@ const props = defineProps<{
   sortDir: "asc" | "desc";
 }>();
 
-defineEmits<{ (e: "sort", key: string): void }>();
+const emit = defineEmits<{ (e: "sort", key: string): void; (e: "select-player", battletag: string): void }>();
 
 // The "raw box score" columns match Blizzard's own end-of-game scoreboard;
 // the three tinted ones (KP%, Dégâts/Mort, Part XP) are the added ratio
@@ -40,6 +40,10 @@ function rowClass(row: Record<string, unknown>): string {
 function badgesFor(row: Record<string, unknown>): TopPerformerBadge[] {
   return props.badges.get((row as unknown as ScoreboardRow).id) ?? [];
 }
+
+function onRowClick(row: Record<string, unknown>) {
+  emit("select-player", (row as unknown as ScoreboardRow).battletag);
+}
 </script>
 
 <template>
@@ -49,10 +53,12 @@ function badgesFor(row: Record<string, unknown>): TopPerformerBadge[] {
     :sort-key="sortKey"
     :sort-dir="sortDir"
     :row-class="rowClass"
+    clickable
     mobile-primary-key="heroName"
     mobile-secondary-key="battletag"
     mobile-badge-key="killParticipation"
-    @sort="$emit('sort', $event)"
+    @sort="emit('sort', $event)"
+    @row-click="onRowClick"
   >
     <template #header-killParticipation><span class="text-brand">KP%</span></template>
     <template #header-damagePerDeath><span class="text-brand">Dégâts/Mort</span></template>
@@ -75,6 +81,7 @@ function badgesFor(row: Record<string, unknown>): TopPerformerBadge[] {
           v-if="!(row as unknown as ScoreboardRow).isMe"
           :to="`/players/${encodeURIComponent(row.battletag as string)}`"
           class="font-mono underline-offset-2 hover:underline"
+          @click.stop
         >
           {{ row.battletag }}
         </NuxtLink>

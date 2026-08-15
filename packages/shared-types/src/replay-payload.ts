@@ -27,6 +27,33 @@ export const talentPickSchema = z.object({
 });
 export type TalentPick = z.infer<typeof talentPickSchema>;
 
+/** One hero death, timestamped relative to "gates open" (the same reference
+ * point `durationSeconds` uses) -- see daemon-python/src/parser.py's
+ * `_extract_deaths`. Powers the Coach tab's `outnumberedFights`/
+ * `staggeredDeaths`/`firstDeath` pillars (apps/web/app/utils/coachAnalysis.ts). */
+export const matchTimelineDeathSchema = z.object({
+  battletag: z.string(),
+  team: z.union([z.literal(0), z.literal(1)]),
+  atSeconds: z.number().int().nonnegative(),
+});
+export type MatchTimelineDeath = z.infer<typeof matchTimelineDeathSchema>;
+
+/** A player's character level at a point in time, from a `LevelUp` tracker
+ * event (see `_extract_level_snapshots`). Powers the Coach tab's
+ * `talentDelay` pillar. */
+export const matchTimelineLevelSnapshotSchema = z.object({
+  battletag: z.string(),
+  atSeconds: z.number().int().nonnegative(),
+  level: z.number().int().positive(),
+});
+export type MatchTimelineLevelSnapshot = z.infer<typeof matchTimelineLevelSnapshotSchema>;
+
+export const matchTimelineSchema = z.object({
+  deaths: z.array(matchTimelineDeathSchema),
+  levelSnapshots: z.array(matchTimelineLevelSnapshotSchema),
+});
+export type MatchTimeline = z.infer<typeof matchTimelineSchema>;
+
 export const replayPlayerSchema = z.object({
   battletag: z.string(),
   heroId: z.string(),
@@ -69,5 +96,9 @@ export const replayPayloadSchema = z.object({
   playedAt: z.string().datetime(),
   durationSeconds: z.number().int().positive(),
   players: z.array(replayPlayerSchema).min(2),
+  // Optional so a daemon build older than PARSER_VERSION 1.4 (which doesn't
+  // send this yet) still validates -- see replay-upsert.service.ts, which
+  // simply skips writing timeline rows when it's absent.
+  timeline: matchTimelineSchema.optional(),
 });
 export type ReplayPayload = z.infer<typeof replayPayloadSchema>;

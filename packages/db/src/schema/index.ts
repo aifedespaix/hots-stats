@@ -5,6 +5,8 @@ export * from "./maps";
 export * from "./matches";
 export * from "./match-players";
 export * from "./talent-picks";
+export * from "./match-deaths";
+export * from "./match-level-snapshots";
 export * from "./friendships";
 export * from "./quarantine";
 export * from "./draft-pseudo-preferences";
