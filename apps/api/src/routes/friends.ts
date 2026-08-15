@@ -1,8 +1,9 @@
 import { type User, db, heroes, matchPlayers, matches, maps } from "@hots-stats/db";
 import { heroStatsScopeSchema } from "@hots-stats/shared-types";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
+import { gameModeListSchema } from "../lib/query";
 import { authSession, requireUser } from "../middleware/auth-session";
 import {
   areFriends,
@@ -30,11 +31,12 @@ const sendRequestSchema = z
 
 const searchQuerySchema = z.object({ q: z.string().default("") });
 
-const scopeQuerySchema = z.object({ scope: heroStatsScopeSchema.optional() });
+const scopeQuerySchema = z.object({ scope: heroStatsScopeSchema.optional(), mode: gameModeListSchema.optional() });
 
 const matchesQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(50).default(20),
+  mode: gameModeListSchema.optional(),
 });
 
 export const friendsRoute = new Hono<Env>()
@@ -122,8 +124,8 @@ export const friendsRoute = new Hono<Env>()
     const scope = parsed.data.scope ?? user.heroStatsScope;
 
     const [summary, heroSummaries] = await Promise.all([
-      getStatsSummary(friendId, scope),
-      getHeroSummaries(friendId, undefined, scope),
+      getStatsSummary(friendId, scope, parsed.data.mode),
+      getHeroSummaries(friendId, parsed.data.mode, scope),
     ]);
 
     return c.json({ friend, summary, heroes: heroSummaries, scope });
@@ -138,8 +140,10 @@ export const friendsRoute = new Hono<Env>()
 
     const parsed = matchesQuerySchema.safeParse(c.req.query());
     if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
-    const { page, pageSize } = parsed.data;
-    const where = eq(matchPlayers.userId, friendId);
+    const { page, pageSize, mode } = parsed.data;
+    const conditions = [eq(matchPlayers.userId, friendId)];
+    if (mode && mode.length > 0) conditions.push(inArray(matches.gameMode, mode));
+    const where = and(...conditions);
 
     const [rows, countRows] = await Promise.all([
       db

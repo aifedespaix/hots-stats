@@ -12,6 +12,7 @@ import type { MatchListResponse } from "~/types/matches";
 const props = defineProps<{ battletag: string }>();
 
 const config = useRuntimeConfig();
+const gameModeStore = useGameModeStore();
 const { data: authData } = await useAuthUser();
 const ownBattletag = computed(() => authData.value?.user?.battletag ?? null);
 const isSelf = computed(() => Boolean(ownBattletag.value) && ownBattletag.value === props.battletag);
@@ -27,6 +28,7 @@ const {
     $fetch<PlayerDetailResponse>(`/players/${encodeURIComponent(props.battletag)}`, {
       baseURL: config.public.apiBase,
       credentials: "include",
+      query: { mode: gameModeStore.modeQueryParam },
     }),
   immediate: false,
 });
@@ -42,13 +44,13 @@ const {
     $fetch<MatchListResponse>("/matches", {
       baseURL: config.public.apiBase,
       credentials: "include",
-      query: { opponentBattletag: props.battletag, page: page.value, pageSize },
+      query: { opponentBattletag: props.battletag, page: page.value, pageSize, mode: gameModeStore.modeQueryParam },
     }),
   immediate: false,
 });
 
 watch(
-  () => props.battletag,
+  [() => props.battletag, () => gameModeStore.modeQueryParam],
   () => {
     page.value = 1;
     loadProfile();

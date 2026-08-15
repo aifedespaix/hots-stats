@@ -6,7 +6,10 @@ definePageMeta({ layout: "public-profile" });
 const route = useRoute();
 const handle = route.params.handle as string;
 
-const { data, error } = await useApiFetch<PublicProfileResponse>(`/public/u/${handle}`);
+// Public, unauthenticated share card: always the account's all-time stats,
+// never scoped to whichever anonymous visitor's local game-mode filter --
+// the same link must show the same numbers to everyone.
+const { data, error } = await useApiFetch<PublicProfileResponse>(`/public/u/${handle}`, { withGameMode: false });
 
 if (error.value) {
   throw createError({ statusCode: 404, statusMessage: "Profil introuvable", fatal: true });

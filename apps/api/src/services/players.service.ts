@@ -148,8 +148,12 @@ export async function listPlayerEncounters(
 export async function getPlayerEncounter(
   userId: string,
   battletag: string,
+  mode?: GameMode[],
 ): Promise<PlayerEncounterStats | null> {
   const other = alias(matchPlayers, "other");
+
+  const conditions = [eq(matchPlayers.userId, userId), eq(other.battletag, battletag)];
+  if (mode && mode.length > 0) conditions.push(inArray(matches.gameMode, mode));
 
   const [row] = await db
     .select({
@@ -161,8 +165,9 @@ export async function getPlayerEncounter(
         sql<number>`count(*) filter (where ${matchPlayers.team} != ${other.team} and ${matchPlayers.winner})::int`,
     })
     .from(matchPlayers)
+    .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
     .innerJoin(other, and(eq(other.matchId, matchPlayers.matchId), ne(other.id, matchPlayers.id)))
-    .where(and(eq(matchPlayers.userId, userId), eq(other.battletag, battletag)));
+    .where(and(...conditions));
 
   if (!row || row.gamesAsAlly + row.gamesAsOpponent === 0) return null;
 
@@ -189,8 +194,12 @@ export async function getPlayerEncounter(
 export async function getPlayerHeroBreakdown(
   userId: string,
   battletag: string,
+  mode?: GameMode[],
 ): Promise<PlayerHeroBreakdown[]> {
   const other = alias(matchPlayers, "other");
+
+  const conditions = [eq(matchPlayers.userId, userId), eq(other.battletag, battletag)];
+  if (mode && mode.length > 0) conditions.push(inArray(matches.gameMode, mode));
 
   const rows = await db
     .select({
@@ -201,6 +210,7 @@ export async function getPlayerHeroBreakdown(
     })
     .from(matchPlayers)
     .innerJoin(heroes, eq(heroes.id, matchPlayers.heroId))
+    .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
     .innerJoin(
       other,
       and(
@@ -209,7 +219,7 @@ export async function getPlayerHeroBreakdown(
         ne(matchPlayers.team, other.team),
       ),
     )
-    .where(and(eq(matchPlayers.userId, userId), eq(other.battletag, battletag)))
+    .where(and(...conditions))
     .groupBy(matchPlayers.heroId, heroes.name)
     .orderBy(desc(sql`count(*)`));
 
@@ -224,8 +234,12 @@ export async function getPlayerHeroBreakdown(
 export async function getOpponentHeroBreakdown(
   userId: string,
   battletag: string,
+  mode?: GameMode[],
 ): Promise<PlayerHeroBreakdown[]> {
   const other = alias(matchPlayers, "other");
+
+  const conditions = [eq(matchPlayers.userId, userId), eq(other.battletag, battletag)];
+  if (mode && mode.length > 0) conditions.push(inArray(matches.gameMode, mode));
 
   const rows = await db
     .select({
@@ -235,6 +249,7 @@ export async function getOpponentHeroBreakdown(
       wins: sql<number>`count(*) filter (where ${other.winner})::int`,
     })
     .from(matchPlayers)
+    .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
     .innerJoin(
       other,
       and(
@@ -244,7 +259,7 @@ export async function getOpponentHeroBreakdown(
       ),
     )
     .innerJoin(heroes, eq(heroes.id, other.heroId))
-    .where(and(eq(matchPlayers.userId, userId), eq(other.battletag, battletag)))
+    .where(and(...conditions))
     .groupBy(other.heroId, heroes.name)
     .orderBy(desc(sql`count(*)`));
 
@@ -259,8 +274,12 @@ export async function getOpponentHeroBreakdown(
 export async function getPlayerMapBreakdown(
   userId: string,
   battletag: string,
+  mode?: GameMode[],
 ): Promise<PlayerMapBreakdown[]> {
   const other = alias(matchPlayers, "other");
+
+  const conditions = [eq(matchPlayers.userId, userId), eq(other.battletag, battletag)];
+  if (mode && mode.length > 0) conditions.push(inArray(matches.gameMode, mode));
 
   const rows = await db
     .select({
@@ -280,7 +299,7 @@ export async function getPlayerMapBreakdown(
         ne(matchPlayers.team, other.team),
       ),
     )
-    .where(and(eq(matchPlayers.userId, userId), eq(other.battletag, battletag)))
+    .where(and(...conditions))
     .groupBy(matches.mapId, maps.name)
     .orderBy(desc(sql`count(*)`));
 

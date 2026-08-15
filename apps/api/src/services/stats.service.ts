@@ -1,6 +1,6 @@
 import { db, matchPlayers, matches } from "@hots-stats/db";
-import type { HeroStatsScope } from "@hots-stats/shared-types";
-import { eq, sql } from "drizzle-orm";
+import type { GameMode, HeroStatsScope } from "@hots-stats/shared-types";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 export interface StatsSummary {
   gamesPlayed: number;
@@ -12,7 +12,11 @@ export interface StatsSummary {
 export async function getStatsSummary(
   userId: string,
   scope: HeroStatsScope = "personal",
+  mode?: GameMode[],
 ): Promise<StatsSummary> {
+  const conditions = scope === "personal" ? [eq(matchPlayers.userId, userId)] : [];
+  if (mode && mode.length > 0) conditions.push(inArray(matches.gameMode, mode));
+
   const [row] = await db
     .select({
       gamesPlayed: sql<number>`count(*)::int`,
@@ -21,7 +25,7 @@ export async function getStatsSummary(
     })
     .from(matchPlayers)
     .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
-    .where(scope === "personal" ? eq(matchPlayers.userId, userId) : undefined);
+    .where(conditions.length > 0 ? and(...conditions) : undefined);
 
   const gamesPlayed = row?.gamesPlayed ?? 0;
   const wins = row?.wins ?? 0;

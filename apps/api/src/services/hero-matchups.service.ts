@@ -1,6 +1,6 @@
-import { db, heroes, matchPlayers } from "@hots-stats/db";
-import { HERO_MATCHUP_MIN_GAMES, type HeroMatchupEntry, type HeroStatsScope } from "@hots-stats/shared-types";
-import { and, eq, ne, sql } from "drizzle-orm";
+import { db, heroes, matchPlayers, matches } from "@hots-stats/db";
+import { HERO_MATCHUP_MIN_GAMES, type GameMode, type HeroMatchupEntry, type HeroStatsScope } from "@hots-stats/shared-types";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { wilsonLowerBound, wilsonUpperBound } from "../lib/wilson";
 
@@ -30,7 +30,7 @@ const emptyBaseline: Baseline = {
  * heroDamage/damageTaken/experienceContribution averages that query doesn't
  * select, and touching its shape would ripple into the Heroes list/detail
  * pages that already depend on it. */
-async function getBaseline(userId: string, heroId: string, scope: HeroStatsScope): Promise<Baseline> {
+async function getBaseline(userId: string, heroId: string, scope: HeroStatsScope, mode?: GameMode[]): Promise<Baseline> {
   const teamKills = db.$with("team_kills").as(
     db
       .select({
@@ -44,6 +44,7 @@ async function getBaseline(userId: string, heroId: string, scope: HeroStatsScope
 
   const conditions = [eq(matchPlayers.heroId, heroId)];
   if (scope === "personal") conditions.push(eq(matchPlayers.userId, userId));
+  if (mode && mode.length > 0) conditions.push(inArray(matches.gameMode, mode));
 
   const [row] = await db
     .with(teamKills)
@@ -64,6 +65,7 @@ async function getBaseline(userId: string, heroId: string, scope: HeroStatsScope
       ), 0)::float`,
     })
     .from(matchPlayers)
+    .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
     .innerJoin(teamKills, and(eq(teamKills.matchId, matchPlayers.matchId), eq(teamKills.team, matchPlayers.team)))
     .where(and(...conditions));
 
@@ -100,6 +102,7 @@ async function getAllMatchupEntries(
   heroId: string,
   scope: HeroStatsScope,
   baseline: Baseline,
+  mode?: GameMode[],
 ): Promise<HeroMatchupEntry[]> {
   const a = alias(matchPlayers, "a");
   const b = alias(matchPlayers, "b");
@@ -117,6 +120,7 @@ async function getAllMatchupEntries(
 
   const conditions = [eq(a.heroId, heroId)];
   if (scope === "personal") conditions.push(eq(a.userId, userId));
+  if (mode && mode.length > 0) conditions.push(inArray(matches.gameMode, mode));
 
   const rows = await db
     .with(teamKills)
@@ -141,6 +145,7 @@ async function getAllMatchupEntries(
     })
     .from(a)
     .innerJoin(b, and(eq(b.matchId, a.matchId), ne(b.team, a.team), ne(b.id, a.id)))
+    .innerJoin(matches, eq(matches.id, a.matchId))
     .innerJoin(heroB, eq(heroB.id, b.heroId))
     .innerJoin(teamKills, and(eq(teamKills.matchId, a.matchId), eq(teamKills.team, a.team)))
     .where(and(...conditions))
@@ -211,9 +216,14 @@ export interface HeroMatchupsResult {
  * the matchup winrate (confidently good); "worst" ranks by the confident
  * *upper* bound (confidently bad).
  */
-export async function getHeroMatchups(userId: string, heroId: string, scope: HeroStatsScope): Promise<HeroMatchupsResult> {
-  const baseline = await getBaseline(userId, heroId, scope);
-  const entries = await getAllMatchupEntries(userId, heroId, scope, baseline);
+export async function getHeroMatchups(
+  userId: string,
+  heroId: string,
+  scope: HeroStatsScope,
+  mode?: GameMode[],
+): Promise<HeroMatchupsResult> {
+  const baseline = await getBaseline(userId, heroId, scope, mode);
+  const entries = await getAllMatchupEntries(userId, heroId, scope, baseline, mode);
 
   const bestMatchups = pickTopMatchups(entries, (entry) => wilsonLowerBound(entry.wins, entry.gamesPlayed));
   // Excludes whatever `bestMatchups` already claimed: with few distinct
@@ -250,9 +260,10 @@ export async function getHeroMatchup(
   heroId: string,
   opponentHeroId: string,
   scope: HeroStatsScope,
+  mode?: GameMode[],
 ): Promise<HeroMatchupResult | null> {
-  const baseline = await getBaseline(userId, heroId, scope);
-  const entries = await getAllMatchupEntries(userId, heroId, scope, baseline);
+  const baseline = await getBaseline(userId, heroId, scope, mode);
+  const entries = await getAllMatchupEntries(userId, heroId, scope, baseline, mode);
   const found = entries.find((entry) => entry.heroId === opponentHeroId);
   if (found) return { baselineWinrate: baseline.winrate, baselineGamesPlayed: baseline.gamesPlayed, opponent: found };
 

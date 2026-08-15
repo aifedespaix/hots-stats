@@ -95,7 +95,10 @@ export async function getHeroSummary(
 
 const TALENT_TIERS = [1, 4, 7, 10, 13, 16, 20] as const;
 
-export async function getTalentTierStats(userId: string, heroId: string): Promise<TalentTierStats[]> {
+export async function getTalentTierStats(userId: string, heroId: string, mode?: GameMode[]): Promise<TalentTierStats[]> {
+  const conditions = [eq(matchPlayers.heroId, heroId), eq(matchPlayers.userId, userId)];
+  if (mode && mode.length > 0) conditions.push(inArray(matches.gameMode, mode));
+
   const rows = await db
     .select({
       tier: talentPicks.tier,
@@ -106,7 +109,8 @@ export async function getTalentTierStats(userId: string, heroId: string): Promis
     })
     .from(talentPicks)
     .innerJoin(matchPlayers, eq(matchPlayers.id, talentPicks.matchPlayerId))
-    .where(and(eq(matchPlayers.heroId, heroId), eq(matchPlayers.userId, userId)))
+    .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
+    .where(and(...conditions))
     .groupBy(talentPicks.tier, talentPicks.talentId, talentPicks.talentName);
 
   const picksByTier = new Map<number, number>();

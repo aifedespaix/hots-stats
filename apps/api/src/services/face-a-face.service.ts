@@ -8,8 +8,9 @@ import {
   type FaceAFaceRoleDistributionEntry,
   type FaceAFaceSignatureHero,
   type FaceAFaceSynergyStats,
+  type GameMode,
 } from "@hots-stats/shared-types";
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 /**
@@ -20,8 +21,9 @@ import { alias } from "drizzle-orm/pg-core";
  */
 export type FaceAFaceTarget = { userId: string } | { battletag: string };
 
-function targetCondition(target: FaceAFaceTarget) {
-  return "userId" in target ? eq(matchPlayers.userId, target.userId) : eq(matchPlayers.battletag, target.battletag);
+function targetCondition(target: FaceAFaceTarget, mode?: GameMode[]) {
+  const base = "userId" in target ? eq(matchPlayers.userId, target.userId) : eq(matchPlayers.battletag, target.battletag);
+  return mode && mode.length > 0 ? and(base, inArray(matches.gameMode, mode)) : base;
 }
 
 /**
@@ -32,7 +34,7 @@ function targetCondition(target: FaceAFaceTarget) {
  * able to silently balloon into "the whole app's data" via a stray "global"
  * scope -- it would still render, just compare nonsense.
  */
-export async function getPlayerOverviewStats(target: FaceAFaceTarget): Promise<FaceAFaceOverviewStats> {
+export async function getPlayerOverviewStats(target: FaceAFaceTarget, mode?: GameMode[]): Promise<FaceAFaceOverviewStats> {
   const teamKills = db.$with("team_kills").as(
     db
       .select({
@@ -69,7 +71,7 @@ export async function getPlayerOverviewStats(target: FaceAFaceTarget): Promise<F
     .from(matchPlayers)
     .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
     .innerJoin(teamKills, and(eq(teamKills.matchId, matchPlayers.matchId), eq(teamKills.team, matchPlayers.team)))
-    .where(targetCondition(target));
+    .where(targetCondition(target, mode));
 
   const gamesPlayed = row?.gamesPlayed ?? 0;
   const wins = row?.wins ?? 0;
@@ -97,12 +99,16 @@ export async function getPlayerOverviewStats(target: FaceAFaceTarget): Promise<F
 }
 
 /** Share of a player's own games spent on each hero role. */
-export async function getRoleDistribution(target: FaceAFaceTarget): Promise<FaceAFaceRoleDistributionEntry[]> {
+export async function getRoleDistribution(
+  target: FaceAFaceTarget,
+  mode?: GameMode[],
+): Promise<FaceAFaceRoleDistributionEntry[]> {
   const rows = await db
     .select({ role: heroes.role, gamesPlayed: sql<number>`count(*)::int` })
     .from(matchPlayers)
     .innerJoin(heroes, eq(heroes.id, matchPlayers.heroId))
-    .where(targetCondition(target))
+    .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
+    .where(targetCondition(target, mode))
     .groupBy(heroes.role);
 
   const total = rows.reduce((sum, row) => sum + row.gamesPlayed, 0);
@@ -120,7 +126,7 @@ export async function getRoleDistribution(target: FaceAFaceTarget): Promise<Face
  * talents.service's `getHeroSummaries` (userId-only): a comparison target
  * without a registered account only has a battletag to filter on.
  */
-async function getHeroBreakdown(target: FaceAFaceTarget) {
+async function getHeroBreakdown(target: FaceAFaceTarget, mode?: GameMode[]) {
   const rows = await db
     .select({
       heroId: matchPlayers.heroId,
@@ -133,7 +139,8 @@ async function getHeroBreakdown(target: FaceAFaceTarget) {
     })
     .from(matchPlayers)
     .innerJoin(heroes, eq(heroes.id, matchPlayers.heroId))
-    .where(targetCondition(target))
+    .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
+    .where(targetCondition(target, mode))
     .groupBy(matchPlayers.heroId, heroes.name);
 
   return rows.map((row) => ({ ...row, winrate: row.gamesPlayed > 0 ? row.wins / row.gamesPlayed : 0 }));
@@ -145,8 +152,8 @@ async function getHeroBreakdown(target: FaceAFaceTarget) {
  * when fewer than 3 clear the floor -- an empty/short card row reads as
  * broken, a flagged thin-sample pick reads as honest.
  */
-export async function getSignatureHeroes(target: FaceAFaceTarget): Promise<FaceAFaceSignatureHero[]> {
-  const heroStats = await getHeroBreakdown(target);
+export async function getSignatureHeroes(target: FaceAFaceTarget, mode?: GameMode[]): Promise<FaceAFaceSignatureHero[]> {
+  const heroStats = await getHeroBreakdown(target, mode);
   const withKda = heroStats.map((hero) => ({
     heroId: hero.heroId,
     heroName: hero.heroName,
@@ -214,6 +221,7 @@ async function getPairedComboStats(
   userId: string,
   targetBattletag: string,
   sameTeam: boolean,
+  mode?: GameMode[],
 ): Promise<{ gamesPlayed: number; wins: number; combos: ComboRow[] }> {
   const a = alias(matchPlayers, "a");
   const b = alias(matchPlayers, "b");
@@ -221,7 +229,9 @@ async function getPairedComboStats(
   const heroB = alias(heroes, "hero_b");
 
   const join = and(eq(b.matchId, a.matchId), sameTeam ? eq(b.team, a.team) : ne(b.team, a.team), ne(b.id, a.id));
-  const pairWhere = and(eq(a.userId, userId), eq(b.battletag, targetBattletag));
+  const pairConditions = [eq(a.userId, userId), eq(b.battletag, targetBattletag)];
+  if (mode && mode.length > 0) pairConditions.push(inArray(matches.gameMode, mode));
+  const pairWhere = and(...pairConditions);
 
   const [overviewRows, comboRows] = await Promise.all([
     db
@@ -231,6 +241,7 @@ async function getPairedComboStats(
       })
       .from(a)
       .innerJoin(b, join)
+      .innerJoin(matches, eq(matches.id, a.matchId))
       .where(pairWhere),
     db
       .select({
@@ -243,6 +254,7 @@ async function getPairedComboStats(
       })
       .from(a)
       .innerJoin(b, join)
+      .innerJoin(matches, eq(matches.id, a.matchId))
       .innerJoin(heroA, eq(heroA.id, a.heroId))
       .innerJoin(heroB, eq(heroB.id, b.heroId))
       .where(pairWhere)
@@ -254,8 +266,12 @@ async function getPairedComboStats(
 }
 
 /** Stats for games where `userId` and `targetBattletag` were on the same team. */
-export async function getSynergyStats(userId: string, targetBattletag: string): Promise<FaceAFaceSynergyStats> {
-  const { gamesPlayed, wins, combos } = await getPairedComboStats(userId, targetBattletag, true);
+export async function getSynergyStats(
+  userId: string,
+  targetBattletag: string,
+  mode?: GameMode[],
+): Promise<FaceAFaceSynergyStats> {
+  const { gamesPlayed, wins, combos } = await getPairedComboStats(userId, targetBattletag, true, mode);
 
   const withWinrate: FaceAFaceHeroCombo[] = combos.map((combo) => ({
     ...combo,
@@ -277,8 +293,12 @@ export async function getSynergyStats(userId: string, targetBattletag: string): 
  * teams -- the raw material for "what should I pick against them" (best
  * winrate combos) and "what do they beat me with" (worst winrate combos).
  */
-export async function getMatchupStats(userId: string, targetBattletag: string): Promise<FaceAFaceMatchupStats> {
-  const { gamesPlayed, wins, combos } = await getPairedComboStats(userId, targetBattletag, false);
+export async function getMatchupStats(
+  userId: string,
+  targetBattletag: string,
+  mode?: GameMode[],
+): Promise<FaceAFaceMatchupStats> {
+  const { gamesPlayed, wins, combos } = await getPairedComboStats(userId, targetBattletag, false, mode);
 
   const withWinrate: FaceAFaceHeroCombo[] = combos.map((combo) => ({
     ...combo,
