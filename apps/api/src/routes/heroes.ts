@@ -52,23 +52,35 @@ export const heroesRoute = new Hono<Env>()
   })
   .get("/:heroId/talents", async (c) => {
     const user = c.get("user");
-    const talents = await getTalentTierStats(user.id, c.req.param("heroId"));
+    const parsed = z.object({ mode: gameModeListSchema.optional() }).safeParse(c.req.query());
+    if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+    const talents = await getTalentTierStats(user.id, c.req.param("heroId"), parsed.data.mode);
     return c.json({ talents });
   })
   .get("/:heroId/matchups", async (c) => {
     const user = c.get("user");
-    const parsed = z.object({ scope: heroStatsScopeSchema.optional() }).safeParse(c.req.query());
+    const parsed = z
+      .object({ scope: heroStatsScopeSchema.optional(), mode: gameModeListSchema.optional() })
+      .safeParse(c.req.query());
     if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
     const scope = parsed.data.scope ?? user.heroStatsScope;
-    const matchups = await getHeroMatchups(user.id, c.req.param("heroId"), scope);
+    const matchups = await getHeroMatchups(user.id, c.req.param("heroId"), scope, parsed.data.mode);
     return c.json({ ...matchups, scope });
   })
   .get("/:heroId/matchups/:opponentHeroId", async (c) => {
     const user = c.get("user");
-    const parsed = z.object({ scope: heroStatsScopeSchema.optional() }).safeParse(c.req.query());
+    const parsed = z
+      .object({ scope: heroStatsScopeSchema.optional(), mode: gameModeListSchema.optional() })
+      .safeParse(c.req.query());
     if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
     const scope = parsed.data.scope ?? user.heroStatsScope;
-    const matchup = await getHeroMatchup(user.id, c.req.param("heroId"), c.req.param("opponentHeroId"), scope);
+    const matchup = await getHeroMatchup(
+      user.id,
+      c.req.param("heroId"),
+      c.req.param("opponentHeroId"),
+      scope,
+      parsed.data.mode,
+    );
     if (!matchup) return c.json({ error: "Hero not found" }, 404);
     return c.json({ ...matchup, scope });
   });
