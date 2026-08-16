@@ -14,6 +14,8 @@ from src.parser import (
     _extract_deaths,
     _extract_level_snapshots,
     _extract_spatial,
+    _extract_structure_events,
+    _extract_trajectories,
     _game_version,
     _has_computer_player_attribute,
     _hero_from_any_talent,
@@ -28,6 +30,8 @@ from src.parser import (
     _protocol_module,
     _read_archive_file,
     _slugify,
+    _structure_type_from_unit_type_name,
+    _structure_unit_teams_by_tag,
     _toon_handle,
     _windows_filetime_to_iso8601,
     build_payload,
@@ -1216,7 +1220,7 @@ def test_build_payload_timeline_defaults_to_empty_lists():
         replay_hash="a" * 64,
     )
 
-    assert payload["timeline"] == {"deaths": [], "levelSnapshots": []}
+    assert payload["timeline"] == {"deaths": [], "levelSnapshots": [], "structureEvents": []}
 
 
 def test_iter_unit_positions_decodes_delta_encoded_tags():
@@ -1520,3 +1524,169 @@ def test_build_payload_death_includes_position_and_killer():
     assert death["y"] == pytest.approx(0.5)
     assert death["killers"] == ["Bar#2222"]
     assert death["killType"] == "hero"
+
+
+def test_structure_type_from_unit_type_name_matches_known_prefixes():
+    assert _structure_type_from_unit_type_name("TownFortHeroesLegacy") == "fort"
+    assert _structure_type_from_unit_type_name("TownKeepBlue") == "keep"
+    assert _structure_type_from_unit_type_name("TownWallLeft") == "wall"
+    assert _structure_type_from_unit_type_name("TownGateLeft") == "wall"
+    assert _structure_type_from_unit_type_name("TownTownCore") == "core"
+    assert _structure_type_from_unit_type_name("HeroLiMing") is None
+    assert _structure_type_from_unit_type_name("NexusMinion") is None
+
+
+def test_structure_unit_teams_by_tag_resolves_from_born_event():
+    players = {"1-Hero-1-1001": {"battletag": "Foo#1111", "team": 0, "heroId": "li-ming"}}
+    events = [_unit_born_event(1, "TownFort", unit_tag_index=200)]
+
+    tags = _structure_unit_teams_by_tag(events, tracker_id_to_toon={1: "1-Hero-1-1001"}, players=players)
+
+    assert tags == {(200, 0): ("fort", 0)}
+
+
+def test_structure_unit_teams_by_tag_skips_non_structure_units():
+    players = {"1-Hero-1-1001": {"battletag": "Foo#1111", "team": 0, "heroId": "li-ming"}}
+    events = [_unit_born_event(1, "HeroLiMing", unit_tag_index=5)]
+
+    assert _structure_unit_teams_by_tag(events, tracker_id_to_toon={1: "1-Hero-1-1001"}, players=players) == {}
+
+
+def test_extract_structure_events_resolves_owning_team_and_type():
+    events = [
+        _unit_born_event(1, "TownFort", unit_tag_index=200),
+        _unit_died_event(200, 610 + 16 * 300),
+    ]
+    players = {"1-Hero-1-1001": {"battletag": "Foo#1111", "team": 0, "heroId": "li-ming"}}
+
+    result = _extract_structure_events(
+        events, tracker_id_to_toon={1: "1-Hero-1-1001"}, players=players, gates_open_loop=610
+    )
+
+    assert result == [{"team": 0, "atSeconds": 300, "structureType": "fort"}]
+
+
+def test_extract_structure_events_ignores_hero_deaths():
+    events = [
+        _unit_born_event(1, "HeroLiMing", unit_tag_index=5),
+        _unit_died_event(5, 610 + 16 * 30),
+    ]
+    players = {"1-Hero-1-1001": {"battletag": "Foo#1111", "team": 0, "heroId": "li-ming"}}
+
+    result = _extract_structure_events(
+        events, tracker_id_to_toon={1: "1-Hero-1-1001"}, players=players, gates_open_loop=610
+    )
+
+    assert result == []
+
+
+def test_extract_structure_events_skips_unresolvable_tags():
+    events = [_unit_died_event(999, 700)]
+
+    assert _extract_structure_events(events, tracker_id_to_toon={}, players={}, gates_open_loop=0) == []
+
+
+def test_build_payload_includes_structure_events_for_fort_destruction():
+    events = [
+        *_base_tracker_events(),
+        _unit_born_event(1, "TownFort", unit_tag_index=200),
+        _unit_died_event(200, 610 + 16 * 300),
+    ]
+
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=events,
+        attributes_events=_base_attributes_events(),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+    )
+
+    assert payload["timeline"]["structureEvents"] == [{"team": 0, "atSeconds": 300, "structureType": "fort"}]
+
+
+def test_extract_trajectories_downsamples_to_the_configured_interval():
+    calibration = {"minX": 0.0, "maxX": 100.0, "minY": 0.0, "maxY": 100.0}
+    players = {"1-Hero-1-1001": {"battletag": "Foo#1111", "team": 0, "heroId": "li-ming"}}
+    interval_loops = constants.SPATIAL_TRAJECTORY_SAMPLE_INTERVAL_SECONDS * 16
+    events = [
+        _unit_born_event(1, "HeroLiMing"),
+        # Three samples spaced half an interval apart -- only the 1st and 3rd
+        # should survive downsampling (the 2nd is too soon after the 1st).
+        _unit_positions_event(0, [(1, 10.0, 10.0)]),
+        _unit_positions_event(interval_loops // 2, [(1, 20.0, 20.0)]),
+        _unit_positions_event(interval_loops, [(1, 30.0, 30.0)]),
+    ]
+
+    trajectories = _extract_trajectories(
+        events, tracker_id_to_toon={1: "1-Hero-1-1001"}, players=players, calibration=calibration, gates_open_loop=0
+    )
+
+    assert len(trajectories) == 1
+    foo = trajectories[0]
+    assert foo["battletag"] == "Foo#1111"
+    assert foo["heroId"] == "li-ming"
+    assert foo["layer"] is None
+    assert foo["atSeconds"] == [0, constants.SPATIAL_TRAJECTORY_SAMPLE_INTERVAL_SECONDS]
+    assert foo["x"] == pytest.approx([0.1, 0.3])
+    assert foo["y"] == pytest.approx([0.1, 0.3])
+
+
+def test_extract_trajectories_returns_empty_without_position_events():
+    calibration = {"minX": 0.0, "maxX": 100.0, "minY": 0.0, "maxY": 100.0}
+
+    assert (
+        _extract_trajectories(
+            _base_tracker_events(), tracker_id_to_toon={}, players={}, calibration=calibration, gates_open_loop=0
+        )
+        == []
+    )
+
+
+def test_build_payload_includes_trajectories_alongside_presence_grid():
+    events = [
+        *_base_tracker_events(),
+        _unit_born_event(1, "HeroLiMing"),
+        _unit_born_event(2, "HeroMalfurion"),
+        _unit_positions_event(610, [(1, 10.0, 10.0), (2, 90.0, 90.0)]),
+        _unit_positions_event(610 + 16 * 10, [(1, 20.0, 20.0), (2, 90.0, 90.0)]),
+    ]
+
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=events,
+        attributes_events=_base_attributes_events(),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+        calibrations={"cursed-hollow": {"minX": 0.0, "maxX": 100.0, "minY": 0.0, "maxY": 100.0}},
+    )
+
+    trajectories_by_tag = {t["battletag"]: t for t in payload["spatial"]["trajectories"]}
+    foo = trajectories_by_tag["Foo#1111"]
+    assert foo["atSeconds"] == [0, 10]
+    assert foo["x"] == pytest.approx([0.1, 0.2])
+    assert foo["y"] == pytest.approx([0.1, 0.2])
+
+
+def test_build_payload_omits_trajectories_key_without_calibration():
+    events = [
+        *_base_tracker_events(),
+        _unit_born_event(1, "HeroLiMing"),
+        _unit_positions_event(610, [(1, 10.0, 10.0)]),
+    ]
+
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=events,
+        attributes_events=_base_attributes_events(),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+        calibrations={},  # no calibration for "cursed-hollow" -- spatial itself is omitted
+    )
+
+    assert "spatial" not in payload

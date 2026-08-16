@@ -26,9 +26,23 @@ export interface MatchTimelineLevelSnapshot {
   level: number;
 }
 
+/** A fort/keep/wall/core destruction -- `team` is the *owning* team (the
+ * side that lost the structure). Present for a match ingested with
+ * PARSER_VERSION >= 1.11 whose structure-destruction detection matched at
+ * least one event; best-effort (see `matchStructureEventSchema` in
+ * shared-types), so its absence doesn't imply anything about the match. An
+ * event-anchor source for the Pro Comparison View
+ * (`useHeatmapSync.ts`). */
+export interface MatchTimelineStructureEvent {
+  team: 0 | 1;
+  atSeconds: number;
+  structureType: "fort" | "keep" | "wall" | "core";
+}
+
 export interface MatchTimelineData {
   deaths: MatchTimelineDeath[];
   levelSnapshots: MatchTimelineLevelSnapshot[];
+  structureEvents?: MatchTimelineStructureEvent[];
 }
 
 /** A player row enriched with match-relative ratios no single raw stat conveys on its own. */

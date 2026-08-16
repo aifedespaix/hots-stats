@@ -57,6 +57,22 @@ export const matchTimelineDeathSchema = z.object({
 });
 export type MatchTimelineDeath = z.infer<typeof matchTimelineDeathSchema>;
 
+/** A fort/keep/wall/core destruction (`SUnitDiedEvent` on a structure unit
+ * -- see `_extract_structure_events` in daemon-python/src/parser.py,
+ * PARSER_VERSION 1.11). `team` is the *owning* team, i.e. the side that
+ * lost the structure. An anchor point for the Pro Comparison View's
+ * event-anchored heatmap slices (apps/web/app/composables/useHeatmapSync.ts).
+ * Optional/best-effort: the daemon's structure-unit-type-name table is
+ * unconfirmed against a real replay (see that changelog entry), so this may
+ * under- or over-match on some replays -- absence never blocks the rest of
+ * `timeline`. */
+export const matchStructureEventSchema = z.object({
+  team: z.union([z.literal(0), z.literal(1)]),
+  atSeconds: z.number().int().nonnegative(),
+  structureType: z.enum(["fort", "keep", "wall", "core"]),
+});
+export type MatchStructureEvent = z.infer<typeof matchStructureEventSchema>;
+
 /** A player's character level at a point in time, from a `LevelUp` tracker
  * event (see `_extract_level_snapshots`). Powers the Coach tab's
  * `talentDelay` pillar. */
@@ -70,6 +86,10 @@ export type MatchTimelineLevelSnapshot = z.infer<typeof matchTimelineLevelSnapsh
 export const matchTimelineSchema = z.object({
   deaths: z.array(matchTimelineDeathSchema),
   levelSnapshots: z.array(matchTimelineLevelSnapshotSchema),
+  // Optional so a daemon build older than PARSER_VERSION 1.11 (which
+  // doesn't send this yet) still validates -- see replay-upsert.service.ts,
+  // which simply skips writing structure-event rows when it's absent.
+  structureEvents: z.array(matchStructureEventSchema).optional(),
 });
 export type MatchTimeline = z.infer<typeof matchTimelineSchema>;
 
@@ -110,10 +130,35 @@ export const spatialPresenceEntrySchema = z.object({
 });
 export type SpatialPresenceEntry = z.infer<typeof spatialPresenceEntrySchema>;
 
+/**
+ * One hero's downsampled, *timestamped* path for the match (see
+ * `_extract_trajectories` in daemon-python/src/parser.py, PARSER_VERSION
+ * 1.11) -- structure-of-arrays like `spatialPresenceEntrySchema` above
+ * (`atSeconds[i]` <-> `x[i]`/`y[i]`), but deliberately a separate,
+ * parallel block: `spatial.presence[]` collapses every sample into a
+ * match-long aggregate with no timestamp left to slice by, which is
+ * exactly why the Pro Comparison View (time-sliced/event-anchored
+ * heatmaps, literal rotation pathing -- see
+ * apps/web/app/composables/useHeatmapSync.ts) needs this instead.
+ */
+export const matchHeroTrajectorySchema = z.object({
+  battletag: z.string(),
+  heroId: z.string(),
+  layer: z.string().nullable(),
+  atSeconds: z.array(z.number().int().nonnegative()),
+  x: z.array(z.number().min(0).max(1)),
+  y: z.array(z.number().min(0).max(1)),
+});
+export type MatchHeroTrajectory = z.infer<typeof matchHeroTrajectorySchema>;
+
 export const spatialSchema = z.object({
   schemaVersion: z.number().int().positive(),
   grid: z.object({ cols: z.number().int().positive(), rows: z.number().int().positive() }),
   presence: z.array(spatialPresenceEntrySchema),
+  // Optional so a daemon build older than PARSER_VERSION 1.11 (which
+  // doesn't send this yet) still validates -- see replay-upsert.service.ts,
+  // which simply skips writing trajectory rows when it's absent.
+  trajectories: z.array(matchHeroTrajectorySchema).optional(),
 });
 export type Spatial = z.infer<typeof spatialSchema>;
 

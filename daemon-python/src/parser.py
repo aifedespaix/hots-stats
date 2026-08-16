@@ -494,6 +494,106 @@ def _extract_deaths(
     return deaths
 
 
+_STRUCTURE_UNIT_TYPE_NAME_PREFIXES: dict[str, str] = {
+    "TownFort": "fort",
+    "TownKeep": "keep",
+    "TownGate": "wall",
+    "TownWall": "wall",
+    "TownTownCore": "core",
+}
+
+
+def _structure_type_from_unit_type_name(unit_type_name: str) -> str | None:
+    """Resolves a fort/keep/wall/core `structureType` from
+    `SUnitBornEvent`/`SUnitDiedEvent`'s `m_unitTypeName`, prefix-matched
+    against `_STRUCTURE_UNIT_TYPE_NAME_PREFIXES`.
+
+    UNCONFIRMED: these prefixes are a best-effort guess from community
+    parser documentation, not verified against a real replay -- same
+    caveat as `_iter_unit_positions` and the hero-side
+    `UNIT_TYPE_HERO_OVERRIDES` table before it was corrected against real
+    fixtures (see PARSER_VERSION's 1.10/1.11 changelog entries). Under- or
+    over-matching here only affects the optional `timeline.structureEvents[]`
+    block, never any other field.
+    """
+    for prefix, structure_type in _STRUCTURE_UNIT_TYPE_NAME_PREFIXES.items():
+        if unit_type_name.startswith(prefix):
+            return structure_type
+    return None
+
+
+def _structure_unit_teams_by_tag(
+    tracker_events: list[dict], tracker_id_to_toon: dict[int, str], players: dict[str, dict[str, Any]]
+) -> dict[tuple[int, int], tuple[str, int]]:
+    """Every structure unit's `(m_unitTagIndex, m_unitTagRecycle)` tag ->
+    `(structureType, owning team)`, from `SUnitBornEvent` -- same tag
+    convention `_hero_unit_tags_by_toon` relies on for heroes.
+
+    UNCONFIRMED: assumes a structure's `SUnitBornEvent` carries a
+    resolvable `m_controlPlayerId` naming one representative player on its
+    owning team (HotS structures aren't player-controlled in-game the way
+    heroes are, but the tracker stream may still tag them this way -- same
+    unverified-shape caveat as `_structure_type_from_unit_type_name`). A
+    structure whose team can't be resolved this way is simply never added
+    here, so `_extract_structure_events` skips its destruction rather than
+    guessing a team.
+    """
+    tags: dict[tuple[int, int], tuple[str, int]] = {}
+    for event in tracker_events:
+        if event.get("_event") != _UNIT_BORN_EVENT:
+            continue
+        structure_type = _structure_type_from_unit_type_name(_s(event["m_unitTypeName"]))
+        if structure_type is None:
+            continue
+        toon_handle = tracker_id_to_toon.get(event.get("m_controlPlayerId"))
+        player = players.get(toon_handle) if toon_handle else None
+        if player is None:
+            continue
+        tags[(event["m_unitTagIndex"], event["m_unitTagRecycle"])] = (structure_type, player["team"])
+    return tags
+
+
+def _extract_structure_events(
+    tracker_events: list[dict],
+    tracker_id_to_toon: dict[int, str],
+    players: dict[str, dict[str, Any]],
+    gates_open_loop: int,
+) -> list[dict[str, Any]]:
+    """Every fort/keep/wall/core destruction (`SUnitDiedEvent` on a
+    structure unit, resolved via `_structure_unit_teams_by_tag`), as
+    `{team, atSeconds, structureType}` -- an anchor point for the Pro
+    Comparison View's event-anchored heatmap slices (e.g. "show presence
+    density in the window right after this fort fell", see
+    `useHeatmapSync.ts`). `team` is the *owning* team, i.e. the side that
+    lost the structure.
+
+    Best-effort: a structure whose tag never resolved a team (see
+    `_structure_unit_teams_by_tag`'s own caveat) is silently absent from
+    the result, same "skip rather than guess" posture `_extract_deaths`
+    already takes for non-hero unit deaths.
+    """
+    structure_tags = _structure_unit_teams_by_tag(tracker_events, tracker_id_to_toon, players)
+    if not structure_tags:
+        return []
+
+    events: list[dict[str, Any]] = []
+    for event in tracker_events:
+        if event.get("_event") != _UNIT_DIED_EVENT:
+            continue
+        structure = structure_tags.get((event["m_unitTagIndex"], event["m_unitTagRecycle"]))
+        if structure is None:
+            continue
+        structure_type, team = structure
+        events.append(
+            {
+                "team": team,
+                "atSeconds": max(0, round((event["_gameloop"] - gates_open_loop) / _GAMELOOPS_PER_SECOND)),
+                "structureType": structure_type,
+            }
+        )
+    return events
+
+
 def _extract_level_snapshots(
     tracker_events: list[dict],
     tracker_id_to_toon: dict[int, str],
@@ -771,6 +871,68 @@ def _extract_spatial(
         "grid": {"cols": cols, "rows": rows},
         "presence": presence,
     }
+
+
+def _extract_trajectories(
+    tracker_events: list[dict],
+    tracker_id_to_toon: dict[int, str],
+    players: dict[str, dict[str, Any]],
+    calibration: dict[str, float],
+    gates_open_loop: int,
+) -> list[dict[str, Any]]:
+    """Builds `spatial.trajectories[]`: a downsampled, per-hero path that
+    keeps each sample's own timestamp -- `{atSeconds[], x[], y[]}`, same
+    structure-of-arrays convention as `spatial.presence[]`.
+
+    This is deliberately a *separate* block from `spatial.presence[]`, not
+    a replacement: the presence grid collapses every sample into a
+    match-long aggregate (cheap, great for "where did this hero spend
+    time overall"), which is exactly why it has no timestamp left to slice
+    by. The Pro Comparison View needs literal rotation paths and
+    time/event-windowed heatmaps, which need each point's own `atSeconds`
+    -- hence this parallel, timestamped path per hero (see
+    `apps/web/app/composables/useHeatmapSync.ts`).
+
+    Downsampled to one point per `constants.SPATIAL_TRAJECTORY_SAMPLE_INTERVAL_SECONDS`
+    of elapsed match time, independently per hero: macro-strategic rotation
+    analysis doesn't need sub-second resolution, and keeps payload size
+    bounded (a 30-minute game x 10 heroes at the default 2s interval is
+    ~9k points total).
+    """
+    samples_by_toon = _normalized_position_samples_by_toon(tracker_events, tracker_id_to_toon, calibration)
+    if not samples_by_toon:
+        return []
+
+    interval_loops = constants.SPATIAL_TRAJECTORY_SAMPLE_INTERVAL_SECONDS * _GAMELOOPS_PER_SECOND
+    trajectories: list[dict[str, Any]] = []
+    for toon_handle, samples in samples_by_toon.items():
+        if toon_handle not in players:
+            continue
+        player = players[toon_handle]
+        at_seconds: list[int] = []
+        xs: list[float] = []
+        ys: list[float] = []
+        next_loop: float | None = None
+        for loop, xn, yn in samples:
+            if next_loop is not None and loop < next_loop:
+                continue
+            at_seconds.append(max(0, round((loop - gates_open_loop) / _GAMELOOPS_PER_SECOND)))
+            xs.append(round(xn, 4))
+            ys.append(round(yn, 4))
+            next_loop = loop + interval_loops
+        if not at_seconds:
+            continue
+        trajectories.append(
+            {
+                "battletag": player["battletag"],
+                "heroId": player["heroId"],
+                "layer": None,
+                "atSeconds": at_seconds,
+                "x": xs,
+                "y": ys,
+            }
+        )
+    return trajectories
 
 
 def _attribute_scope_by_player_list_index(attributes_events: dict, player_count: int) -> dict[int, int]:
@@ -1232,8 +1394,14 @@ def build_payload(
     hero_unit_tags = _hero_unit_tags_by_toon(tracker_events, tracker_id_to_toon)
     deaths = _extract_deaths(tracker_events, hero_unit_tags, tracker_id_to_toon, players, gates_open_loop, calibration)
     level_snapshots = _extract_level_snapshots(tracker_events, tracker_id_to_toon, players, gates_open_loop)
+    structure_events = _extract_structure_events(tracker_events, tracker_id_to_toon, players, gates_open_loop)
 
     spatial = _extract_spatial(tracker_events, tracker_id_to_toon, players, calibration) if calibration else None
+    trajectories = (
+        _extract_trajectories(tracker_events, tracker_id_to_toon, players, calibration, gates_open_loop)
+        if calibration
+        else []
+    )
     pending_points = None if calibration else _collect_calibration_samples(tracker_events)
 
     payload = {
@@ -1253,7 +1421,7 @@ def build_payload(
         "region": region,
         "playedAt": _windows_filetime_to_iso8601(details["m_timeUTC"]),
         "durationSeconds": duration_seconds,
-        "timeline": {"deaths": deaths, "levelSnapshots": level_snapshots},
+        "timeline": {"deaths": deaths, "levelSnapshots": level_snapshots, "structureEvents": structure_events},
         "players": [
             {
                 "battletag": p["battletag"],
@@ -1267,6 +1435,8 @@ def build_payload(
         ],
     }
     if spatial is not None:
+        if trajectories:
+            spatial["trajectories"] = trajectories
         payload["spatial"] = spatial
     # Internal, non-schema key: popped by `ingestion.ingest_file` and POSTed
     # to `/spatial/samples` rather than sent to `/ingest` -- see this

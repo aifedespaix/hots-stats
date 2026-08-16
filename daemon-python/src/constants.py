@@ -138,7 +138,23 @@ from __future__ import annotations
 # already-stored matches that hit the latter case (assuming the replay file
 # is still available locally), the same way 1.1-1.3 did for hero-resolution
 # fixes of their own.
-PARSER_VERSION = "1.10"
+# 1.11: adds two more additive, calibration/`SUnitPositionsEvent`-dependent
+# blocks for the Pro Comparison View (side-by-side heatmap comparator):
+# `spatial.trajectories[]` (a downsampled, per-hero, *timestamped* path --
+# `{atSeconds[], x[], y[]}` -- unlike `spatial.presence[]`'s match-long
+# aggregated grid, which has no timestamp left to slice by once built) and
+# `timeline.structureEvents[]` (fort/keep/wall destructions, from the same
+# `SUnitDiedEvent` stream `_extract_deaths` already reads, filtered by
+# structure unit type -- see `_extract_trajectories`/`_extract_structure_events`
+# in parser.py). Same non-strict-schema additive rollout as 1.8: both are
+# absent/empty for a replay whose map has no calibration yet, and
+# `structureEvents`' structure-unit-type-name table is UNCONFIRMED against a
+# real replay (same caveat as `_iter_unit_positions` and the hero-side
+# `UNIT_TYPE_HERO_OVERRIDES` table before it) -- ships anyway since the rest
+# of the payload is unaffected if it under- or over-matches, pending
+# real-replay validation. Deliberately NOT paired with a
+# `MIN_PARSER_VERSION` bump, same reasoning as 1.8's entry above.
+PARSER_VERSION = "1.11"
 
 # How many times a single replay is allowed to fail with a parse error (a
 # corrupt/incomplete archive -- see parser.ReplayParseError) at the *same*
@@ -172,6 +188,18 @@ SPATIAL_GRID_ROWS = 128
 # mounted/boosted traversal times (see
 # tasks/epic-10-analyse-spatiale.md section 1).
 SPATIAL_MAX_INTERPOLATION_SPEED_NORMALIZED = 0.10
+
+# Minimum elapsed match time between two consecutive points kept in
+# `spatial.trajectories[]` (per hero, independently -- see
+# `_extract_trajectories` in parser.py). Downsampled rather than forwarding
+# every raw `SUnitPositionsEvent` sample: macro-strategic rotation/pathing
+# analysis doesn't need sub-second resolution, and `_presence_seconds_by_cell`
+# already recovers full-density "continuous route" coverage for the grid
+# view from the same underlying samples. A 30-minute game x 10 heroes at
+# this interval is ~9k points total, well within the payload's existing
+# ~100KB budget (see tasks/epic-10-analyse-spatiale.md's presence-grid
+# budget calculation, same order of magnitude).
+SPATIAL_TRAJECTORY_SAMPLE_INTERVAL_SECONDS = 2
 
 # Target number of raw (x, y) points collected and POSTed to
 # /spatial/samples for a map with no calibration yet -- evenly strided

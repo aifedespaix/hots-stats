@@ -8,6 +8,7 @@
     "build": "nuxt build",
     "start": "bun .output/server/index.mjs",
     "typecheck": "nuxt typecheck",
+    "test": "vitest run",
     "generate:og": "bun run scripts/generate-og.ts",
     "mirror:hero-images": "bun run scripts/mirror-hero-images.ts"
   },
@@ -33,6 +34,7 @@
     "satori-html": "0.3.2",
     "tailwindcss": "4.3.3",
     "typescript": "6.0.3",
+    "vitest": "^4.1.10",
     "vue-tsc": "3.3.10"
   }
 }

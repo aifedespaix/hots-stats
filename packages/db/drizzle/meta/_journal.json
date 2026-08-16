@@ -127,6 +127,13 @@
       "when": 1786871229183,
       "tag": "0017_right_blue_marvel",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1786904719608,
+      "tag": "0018_thin_natasha_romanoff",
+      "breakpoints": true
     }
   ]
 }
