@@ -106,6 +106,18 @@ SPATIAL_SCHEMA_VERSION = 1
 SPATIAL_GRID_COLS = 128
 SPATIAL_GRID_ROWS = 128
 
+# Interpolation discontinuity ("teleport") threshold, expressed as a
+# fraction of the map's width/height crossed per second, rather than an
+# absolute world-units/sec speed -- sidesteps needing to know the real
+# world-unit-to-distance conversion (unconfirmed), since it's relative to
+# the calibrated bounds themselves. 0.10 means "crossing the whole map in
+# under ~10s is treated as a discontinuity (Blink/Dash/Warp), not legitimate
+# movement" -- a starting guess, not a measured value; tune once a real
+# replay confirms both SUnitPositionsEvent's sampling rate and typical
+# mounted/boosted traversal times (see
+# tasks/epic-10-analyse-spatiale.md section 1).
+SPATIAL_MAX_INTERPOLATION_SPEED_NORMALIZED = 0.10
+
 # Target number of raw (x, y) points collected and POSTed to
 # /spatial/samples for a map with no calibration yet -- evenly strided
 # across the whole match rather than front-loaded (see

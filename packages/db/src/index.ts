@@ -1,2 +1,2 @@
 export * from "./schema";
-export { db, type Database } from "./client";
+export { db, type Database, type Transaction } from "./client";

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { MatchDetailResponse } from "~/types/matches";
 import type { ScoreboardRow } from "~/types/coach";
+import type { MatchSlotHero } from "~/types/spatial";
 
 definePageMeta({ middleware: "auth" });
 
@@ -62,6 +63,32 @@ const scoreboardRows = computed(() => buildScoreboardRows(allPlayers.value, myBa
 const performerBadges = computed(() => topPerformerBadges(scoreboardRows.value));
 const viewerAllyRows = computed(() => scoreboardRows.value.filter((r) => r.isAlly));
 const viewerEnemyRows = computed(() => scoreboardRows.value.filter((r) => !r.isAlly));
+
+// --- Tab 2: spatial analysis ------------------------------------------------
+
+const spatialGrid = computed(() => data.value?.spatial?.grid ?? null);
+const spatialMatchHeroes = computed<MatchSlotHero[]>(() => {
+  const spatial = data.value?.spatial;
+  if (!spatial) return [];
+  const rowById = new Map(scoreboardRows.value.map((row) => [row.id, row]));
+  return spatial.heroes.flatMap((hero) => {
+    const row = rowById.get(hero.matchPlayerId);
+    if (!row) return [];
+    return [
+      {
+        matchPlayerId: hero.matchPlayerId,
+        battletag: row.battletag,
+        heroId: row.heroId,
+        heroName: row.heroName,
+        team: row.team,
+        isAlly: row.isAlly,
+        presence: hero.presence,
+        kills: hero.kills,
+        deaths: hero.deaths,
+      },
+    ];
+  });
+});
 
 /** Default sort: me, then my teammates, then opponents. */
 function rank(row: ScoreboardRow): number {
@@ -162,7 +189,14 @@ const displayedInsights = computed(() =>
 
       <template #heatmaps>
         <div class="mt-4">
-          <CoachHeatmapsPlaceholder />
+          <SpatialMatchSlot
+            v-if="spatialGrid && spatialMatchHeroes.length > 0"
+            :map-id="data.match.mapId"
+            :grid-cols="spatialGrid.cols"
+            :grid-rows="spatialGrid.rows"
+            :heroes="spatialMatchHeroes"
+          />
+          <CoachHeatmapsPlaceholder v-else />
         </div>
       </template>
     </UTabs>

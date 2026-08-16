@@ -16,6 +16,7 @@ import { mapsRoute } from "./routes/maps";
 import { matchesRoute } from "./routes/matches";
 import { playersRoute } from "./routes/players";
 import { publicRoute } from "./routes/public";
+import { spatialAggregateRoute } from "./routes/spatial-aggregate";
 import { spatialRoute } from "./routes/spatial";
 import { statsRoute } from "./routes/stats";
 import { talentAnalyzerRoute } from "./routes/talent-analyzer";
@@ -52,6 +53,7 @@ app.route("/talent-analyzer", talentAnalyzerRoute);
 app.route("/public", publicRoute);
 app.route("/_internal", internalRoute);
 app.route("/spatial", spatialRoute);
+app.route("/spatial", spatialAggregateRoute);
 app.route("/admin/spatial", adminSpatialRoute);
 
 startQuarantineVerificationJob();

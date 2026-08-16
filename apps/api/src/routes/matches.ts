@@ -1,5 +1,16 @@
-import { type User, db, heroes, matchDeaths, matchLevelSnapshots, matchPlayers, matches, maps, talentPicks } from "@hots-stats/db";
-import { UNKNOWN_GAME_VERSION } from "@hots-stats/shared-types";
+import {
+  type User,
+  db,
+  heroes,
+  matchDeaths,
+  matchLevelSnapshots,
+  matchPlayers,
+  matchSpatialGrids,
+  matches,
+  maps,
+  talentPicks,
+} from "@hots-stats/db";
+import { UNKNOWN_GAME_VERSION, type Grid, gridToWireArrays } from "@hots-stats/shared-types";
 import { and, asc, desc, eq, exists, gte, ilike, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { Hono } from "hono";
@@ -548,11 +559,21 @@ export const matchesRoute = new Hono<Env>()
     // `timeline` is omitted entirely (not sent as empty arrays) for older
     // matches, so the Coach tab correctly shows "unavailable" for them
     // instead of misreading "no rows yet" as "no deaths this match".
-    const [deathRows, levelSnapshotRows] =
+    // `spatial` (match_spatial_grids) is separately gated on PARSER_VERSION
+    // >= 1.7 *and* the map having had a calibration at ingestion time --
+    // see spatial-rollup.service.ts / replay-upsert.service.ts.
+    const [deathRows, levelSnapshotRows, spatialGridRows] =
       playerIds.length > 0
         ? await Promise.all([
             db
-              .select({ matchPlayerId: matchDeaths.matchPlayerId, atSeconds: matchDeaths.atSeconds })
+              .select({
+                matchPlayerId: matchDeaths.matchPlayerId,
+                atSeconds: matchDeaths.atSeconds,
+                x: matchDeaths.x,
+                y: matchDeaths.y,
+                killers: matchDeaths.killers,
+                killType: matchDeaths.killType,
+              })
               .from(matchDeaths)
               .where(inArray(matchDeaths.matchPlayerId, playerIds)),
             db
@@ -563,8 +584,19 @@ export const matchesRoute = new Hono<Env>()
               })
               .from(matchLevelSnapshots)
               .where(inArray(matchLevelSnapshots.matchPlayerId, playerIds)),
+            db
+              .select({
+                matchPlayerId: matchSpatialGrids.matchPlayerId,
+                gridCols: matchSpatialGrids.gridCols,
+                gridRows: matchSpatialGrids.gridRows,
+                presenceGrid: matchSpatialGrids.presenceGrid,
+                killsGrid: matchSpatialGrids.killsGrid,
+                deathsGrid: matchSpatialGrids.deathsGrid,
+              })
+              .from(matchSpatialGrids)
+              .where(inArray(matchSpatialGrids.matchPlayerId, playerIds)),
           ])
-        : [[], []];
+        : [[], [], []];
 
     const playerById = new Map(players.map((p) => [p.id, p]));
     const timeline =
@@ -572,11 +604,44 @@ export const matchesRoute = new Hono<Env>()
         ? {
             deaths: deathRows.flatMap((d) => {
               const player = playerById.get(d.matchPlayerId);
-              return player ? [{ battletag: player.battletag, team: player.team, atSeconds: d.atSeconds }] : [];
+              if (!player) return [];
+              return [
+                {
+                  battletag: player.battletag,
+                  team: player.team,
+                  atSeconds: d.atSeconds,
+                  ...(d.x !== null && d.y !== null ? { x: d.x, y: d.y } : {}),
+                  ...(d.killType ? { killers: d.killers ?? [], killType: d.killType } : {}),
+                },
+              ];
             }),
             levelSnapshots: levelSnapshotRows.flatMap((s) => {
               const player = playerById.get(s.matchPlayerId);
               return player ? [{ battletag: player.battletag, atSeconds: s.atSeconds, level: s.level }] : [];
+            }),
+          }
+        : undefined;
+
+    // One grid per hero that has one -- lets the frontend's "Cette partie"
+    // Slot toggle heroes individually (see
+    // tasks/epic-10-analyse-spatiale.md's Slot model). `null` (field
+    // omitted) rather than an empty array when no hero in this match has
+    // spatial data, same "absent, not empty" convention as `timeline`.
+    const spatial =
+      spatialGridRows.length > 0
+        ? {
+            grid: { cols: spatialGridRows[0]!.gridCols, rows: spatialGridRows[0]!.gridRows },
+            heroes: spatialGridRows.map((row) => {
+              const player = playerById.get(row.matchPlayerId);
+              return {
+                matchPlayerId: row.matchPlayerId,
+                battletag: player?.battletag ?? null,
+                heroId: player?.heroId ?? null,
+                team: player?.team ?? null,
+                presence: gridToWireArrays(row.presenceGrid as Grid),
+                kills: gridToWireArrays(row.killsGrid as Grid),
+                deaths: gridToWireArrays(row.deathsGrid as Grid),
+              };
             }),
           }
         : undefined;
@@ -588,5 +653,6 @@ export const matchesRoute = new Hono<Env>()
         players: playersWithTalents.filter((p) => p.team === team),
       })),
       ...(timeline ? { timeline } : {}),
+      ...(spatial ? { spatial } : {}),
     });
   });

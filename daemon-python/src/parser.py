@@ -17,9 +17,11 @@ that stream's own scope numbering (see that function's docstring).
 
 from __future__ import annotations
 
+import bisect
 import datetime as dt
 import importlib
 import logging
+import math
 import re
 import sys
 import types
@@ -417,8 +419,10 @@ def _hero_unit_tags_by_toon(
 def _extract_deaths(
     tracker_events: list[dict],
     hero_unit_tags: dict[tuple[int, int], str],
+    tracker_id_to_toon: dict[int, str],
     players: dict[str, dict[str, Any]],
     gates_open_loop: int,
+    calibration: dict[str, float] | None,
 ) -> list[dict[str, Any]]:
     """Every hero death (`SUnitDiedEvent`), as `{battletag, team, atSeconds}`
     -- the timeline data the Coach tab's `outnumberedFights`/`staggeredDeaths`/
@@ -428,7 +432,33 @@ def _extract_deaths(
     in `hero_unit_tags`. `atSeconds` is measured from `gates_open_loop`, the
     same reference point `durationSeconds` below uses, so it lines up with
     the match clock the UI already shows.
+
+    Two additional, independently-gated enrichments (see
+    tasks/epic-10-analyse-spatiale.md Livrable 1):
+
+    - `x`/`y` (normalized `[0,1]` position of the death): only added when
+      `calibration` is given (the map has a spatial calibration) *and* the
+      dying hero has a position sample at or before the death -- taken from
+      `SUnitPositionsEvent` via `_normalized_position_samples_by_toon`
+      (`SUnitDiedEvent` is not assumed to carry its own position; deriving
+      it from the position stream avoids stacking a second unconfirmed field
+      hypothesis on top of the first).
+    - `killers`/`killType`: independent of `calibration` -- from
+      `SUnitDiedEvent`'s **hypothesized** `m_killerPlayerId` field (an
+      optional tracker PlayerID). UNCONFIRMED: no real replay was available
+      to verify this field name/shape (same caveat as
+      `_iter_unit_positions`). Resolves to `killType="hero"` +
+      `killers=[battletag]` when it names a player in this match, else
+      `killType="other"` with `killers=[]` -- a kill by a minion, a
+      structure, terrain (lava/void), or an unrecognized/absent field are
+      all indistinguishable from each other without further unconfirmed
+      fields, so they're deliberately not split further (see
+      `killTypeSchema` in shared-types).
     """
+    samples_by_toon = (
+        _normalized_position_samples_by_toon(tracker_events, tracker_id_to_toon, calibration) if calibration else {}
+    )
+
     deaths: list[dict[str, Any]] = []
     for event in tracker_events:
         if event.get("_event") != _UNIT_DIED_EVENT:
@@ -437,13 +467,30 @@ def _extract_deaths(
         player = players.get(toon_handle) if toon_handle else None
         if player is None:
             continue
-        deaths.append(
-            {
-                "battletag": player["battletag"],
-                "team": player["team"],
-                "atSeconds": max(0, round((event["_gameloop"] - gates_open_loop) / _GAMELOOPS_PER_SECOND)),
-            }
-        )
+
+        death: dict[str, Any] = {
+            "battletag": player["battletag"],
+            "team": player["team"],
+            "atSeconds": max(0, round((event["_gameloop"] - gates_open_loop) / _GAMELOOPS_PER_SECOND)),
+        }
+
+        toon_samples = samples_by_toon.get(toon_handle) if toon_handle else None
+        if toon_samples:
+            position = _position_at_or_before(toon_samples, event["_gameloop"])
+            if position is not None:
+                death["x"], death["y"] = position
+
+        killer_tracker_id = event.get("m_killerPlayerId")
+        killer_toon = tracker_id_to_toon.get(killer_tracker_id) if killer_tracker_id is not None else None
+        killer_player = players.get(killer_toon) if killer_toon else None
+        if killer_player is not None:
+            death["killers"] = [killer_player["battletag"]]
+            death["killType"] = "hero"
+        else:
+            death["killers"] = []
+            death["killType"] = "other"
+
+        deaths.append(death)
     return deaths
 
 
@@ -560,6 +607,117 @@ def _collect_calibration_samples(
     return [{"x": all_points[int(i * step)][0], "y": all_points[int(i * step)][1]} for i in range(target_count)]
 
 
+def _normalized_position_samples_by_toon(
+    tracker_events: list[dict], tracker_id_to_toon: dict[int, str], calibration: dict[str, float]
+) -> dict[str, list[tuple[int, float, float]]]:
+    """Every `SUnitPositionsEvent` sample for a hero unit, normalized against
+    `calibration`'s world bounds into `[0,1]`, grouped by toon handle and
+    sorted chronologically by gameloop. Out-of-`[0,1]` samples are dropped
+    (an off-map position, or a still-imprecise calibration -- either way,
+    not something that should corrupt a grid cell index). Returns `{}` if
+    `calibration` is degenerate (zero-width/height bounding box -- can't
+    happen from the calibration tool's own validation, guarded here since
+    this function has no other way to signal it back).
+
+    Shared by `_extract_spatial` (the presence grid) and `_extract_deaths`
+    (each death's approximate position, looked up via
+    `_position_at_or_before`) so both agree on exactly the same normalized
+    positions.
+    """
+    min_x, max_x, min_y, max_y = calibration["minX"], calibration["maxX"], calibration["minY"], calibration["maxY"]
+    if max_x <= min_x or max_y <= min_y:
+        return {}
+
+    hero_tags = _hero_unit_tags_by_index(tracker_events, tracker_id_to_toon)
+    samples: dict[str, list[tuple[int, float, float]]] = {}
+    for gameloop, tag_index, x, y in _iter_unit_positions(tracker_events):
+        toon_handle = hero_tags.get(tag_index)
+        if toon_handle is None:
+            continue
+        xn = (x - min_x) / (max_x - min_x)
+        yn = (y - min_y) / (max_y - min_y)
+        if not (0.0 <= xn <= 1.0 and 0.0 <= yn <= 1.0):
+            continue
+        samples.setdefault(toon_handle, []).append((gameloop, xn, yn))
+
+    for toon_samples in samples.values():
+        toon_samples.sort(key=lambda sample: sample[0])
+    return samples
+
+
+def _position_at_or_before(samples: list[tuple[int, float, float]], gameloop: int) -> tuple[float, float] | None:
+    """Latest normalized `(x, y)` in `samples` (sorted by gameloop, see
+    `_normalized_position_samples_by_toon`) at or before `gameloop`, or
+    `None` if every sample is after it (e.g. the hero died before its first
+    position sample)."""
+    idx = bisect.bisect_right(samples, (gameloop, math.inf, math.inf)) - 1
+    if idx < 0:
+        return None
+    _, xn, yn = samples[idx]
+    return xn, yn
+
+
+def _distribute_segment_across_cells(
+    xn0: float, yn0: float, xn1: float, yn1: float, cols: int, rows: int
+) -> dict[int, float]:
+    """Approximates a Bresenham/DDA line walk between two normalized `[0,1]`
+    positions by supersampling the segment at a resolution proportional to
+    the number of cells it could cross, returning each crossed cell's share
+    of the segment (fractions summing to ~1.0). Simpler to get right than an
+    exact integer-grid DDA adapted to floating-point normalized coordinates,
+    at the cost of a little redundant sampling near cell boundaries --
+    immaterial here since the result only feeds a seconds-per-cell tally,
+    not a rendered line (see `_presence_seconds_by_cell`).
+    """
+    col0 = min(cols - 1, max(0, int(xn0 * cols)))
+    row0 = min(rows - 1, max(0, int(yn0 * rows)))
+    col1 = min(cols - 1, max(0, int(xn1 * cols)))
+    row1 = min(rows - 1, max(0, int(yn1 * rows)))
+    if col0 == col1 and row0 == row1:
+        return {row0 * cols + col0: 1.0}
+
+    steps = max(1, round(math.hypot(col1 - col0, row1 - row0) * 2))
+    shares: dict[int, float] = {}
+    share = 1.0 / (steps + 1)
+    for i in range(steps + 1):
+        t = i / steps
+        xn = xn0 + (xn1 - xn0) * t
+        yn = yn0 + (yn1 - yn0) * t
+        col = min(cols - 1, max(0, int(xn * cols)))
+        row = min(rows - 1, max(0, int(yn * rows)))
+        cell_index = row * cols + col
+        shares[cell_index] = shares.get(cell_index, 0.0) + share
+    return shares
+
+
+def _presence_seconds_by_cell(samples: list[tuple[int, float, float]], cols: int, rows: int) -> dict[int, float]:
+    """Seconds spent in each grid cell across one hero's `samples` (sorted,
+    normalized -- see `_normalized_position_samples_by_toon`), interpolating
+    between consecutive samples via `_distribute_segment_across_cells`
+    rather than crediting only the arrival cell -- otherwise a fast-moving
+    hero's heatmap would look "dotted" (gaps at whatever cells were crossed
+    but never sampled directly in), per epic-10 section 1.
+
+    A gap whose implied speed exceeds `constants.SPATIAL_MAX_INTERPOLATION_SPEED_NORMALIZED`
+    is treated as a discontinuity (Blink/Dash/Warp through terrain the hero
+    never actually walked) and dropped entirely -- not interpolated, and not
+    credited to either endpoint either, since we genuinely don't know where
+    the hero was during that gap (see epic-10 section 1's "seuil de
+    téléportation").
+    """
+    cells: dict[int, float] = {}
+    for (prev_loop, prev_xn, prev_yn), (loop, xn, yn) in zip(samples, samples[1:]):
+        elapsed = (loop - prev_loop) / _GAMELOOPS_PER_SECOND
+        if elapsed <= 0:
+            continue
+        distance = math.hypot(xn - prev_xn, yn - prev_yn)
+        if distance / elapsed > constants.SPATIAL_MAX_INTERPOLATION_SPEED_NORMALIZED:
+            continue
+        for cell_index, share in _distribute_segment_across_cells(prev_xn, prev_yn, xn, yn, cols, rows).items():
+            cells[cell_index] = cells.get(cell_index, 0.0) + elapsed * share
+    return cells
+
+
 def _extract_spatial(
     tracker_events: list[dict],
     tracker_id_to_toon: dict[int, str],
@@ -568,56 +726,23 @@ def _extract_spatial(
 ) -> dict[str, Any] | None:
     """Builds the `spatial.presence[]` block: a sparse per-hero grid of
     seconds spent in each cell, normalized against `calibration`'s
-    `{minX, maxX, minY, maxY}` world bounds (see
-    tasks/epic-10-analyse-spatiale.md Livrable 1). Returns `None` if the
-    replay has no `SUnitPositionsEvent` at all, or if `calibration` is
-    degenerate (a zero-width/height bounding box -- can't happen from the
-    calibration tool's own validation, but guarded here since this function
-    has no other way to signal it back).
-
-    Deliberately doesn't yet do the Bresenham-style interpolation between
-    samples (or teleport-gap detection) that epic-10 Livrable 1 specs for
-    the full heatmap feature -- this is the calibration system's own slice,
-    proving calibration data flows end to end into a real grid. A straight
-    per-sample bucketing undercounts presence for fast-moving heroes exactly
-    as that doc describes; revisit once a real replay confirms
-    `SUnitPositionsEvent`'s actual sampling rate.
+    `{minX, maxX, minY, maxY}` world bounds and interpolated between
+    samples (see `_presence_seconds_by_cell`) -- tasks/epic-10-analyse-spatiale.md
+    Livrable 1. Returns `None` if the replay has no `SUnitPositionsEvent` at
+    all, or if `calibration` is degenerate.
     """
-    min_x, max_x, min_y, max_y = calibration["minX"], calibration["maxX"], calibration["minY"], calibration["maxY"]
-    if max_x <= min_x or max_y <= min_y:
-        return None
-
-    hero_tags = _hero_unit_tags_by_index(tracker_events, tracker_id_to_toon)
-    seconds_by_cell: dict[str, dict[int, float]] = {}
-    last_gameloop_by_toon: dict[str, int] = {}
     cols, rows = constants.SPATIAL_GRID_COLS, constants.SPATIAL_GRID_ROWS
-
-    for gameloop, tag_index, x, y in _iter_unit_positions(tracker_events):
-        toon_handle = hero_tags.get(tag_index)
-        if toon_handle is None or toon_handle not in players:
-            continue
-        xn = (x - min_x) / (max_x - min_x)
-        yn = (y - min_y) / (max_y - min_y)
-        if not (0.0 <= xn <= 1.0 and 0.0 <= yn <= 1.0):
-            continue
-        col = min(cols - 1, max(0, int(xn * cols)))
-        row = min(rows - 1, max(0, int(yn * rows)))
-        cell_index = row * cols + col
-
-        previous_gameloop = last_gameloop_by_toon.get(toon_handle)
-        elapsed_seconds = (
-            max(0.0, (gameloop - previous_gameloop) / _GAMELOOPS_PER_SECOND) if previous_gameloop is not None else 0.0
-        )
-        last_gameloop_by_toon[toon_handle] = gameloop
-
-        cells = seconds_by_cell.setdefault(toon_handle, {})
-        cells[cell_index] = cells.get(cell_index, 0.0) + elapsed_seconds
-
-    if not seconds_by_cell:
+    samples_by_toon = _normalized_position_samples_by_toon(tracker_events, tracker_id_to_toon, calibration)
+    if not samples_by_toon:
         return None
 
     presence = []
-    for toon_handle, cells in seconds_by_cell.items():
+    for toon_handle, samples in samples_by_toon.items():
+        if toon_handle not in players:
+            continue
+        cells = _presence_seconds_by_cell(samples, cols, rows)
+        if not cells:
+            continue
         player = players[toon_handle]
         cell_indices = sorted(cells)
         presence.append(
@@ -626,9 +751,20 @@ def _extract_spatial(
                 "heroId": player["heroId"],
                 "layer": None,
                 "cellIndex": cell_indices,
-                "secondsInCell": [round(cells[idx], 1) for idx in cell_indices],
+                # 2 decimals, not 1: interpolation can spread one gap's
+                # elapsed time across a hundred-plus cells, so a per-cell
+                # share is often well under 0.1s -- rounding to a single
+                # decimal there would systematically round many small shares
+                # up, inflating the total by a meaningful margin summed
+                # across that many cells (confirmed by a failing test with
+                # ~15% drift). 2 decimals shrinks that quantization error by
+                # roughly 10x for a negligible payload cost.
+                "secondsInCell": [round(cells[idx], 2) for idx in cell_indices],
             }
         )
+
+    if not presence:
+        return None
 
     return {
         "schemaVersion": constants.SPATIAL_SCHEMA_VERSION,
@@ -1029,12 +1165,13 @@ def build_payload(
 
     duration_seconds = max(0, round((header["m_elapsedGameLoops"] - gates_open_loop) / _GAMELOOPS_PER_SECOND))
 
-    hero_unit_tags = _hero_unit_tags_by_toon(tracker_events, tracker_id_to_toon)
-    deaths = _extract_deaths(tracker_events, hero_unit_tags, players, gates_open_loop)
-    level_snapshots = _extract_level_snapshots(tracker_events, tracker_id_to_toon, players, gates_open_loop)
-
     map_slug = _slugify(map_display_name)
     calibration = calibrations.get(map_slug) if calibrations else None
+
+    hero_unit_tags = _hero_unit_tags_by_toon(tracker_events, tracker_id_to_toon)
+    deaths = _extract_deaths(tracker_events, hero_unit_tags, tracker_id_to_toon, players, gates_open_loop, calibration)
+    level_snapshots = _extract_level_snapshots(tracker_events, tracker_id_to_toon, players, gates_open_loop)
+
     spatial = _extract_spatial(tracker_events, tracker_id_to_toon, players, calibration) if calibration else None
     pending_points = None if calibration else _collect_calibration_samples(tracker_events)
 

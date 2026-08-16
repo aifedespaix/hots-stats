@@ -1,8 +1,26 @@
-import { db, heroes, matchDeaths, matchLevelSnapshots, matchPlayers, matches, talentPicks, users } from "@hots-stats/db";
-import type { ReplayPayload } from "@hots-stats/shared-types";
+import {
+  db,
+  heroes,
+  matchDeaths,
+  matchLevelSnapshots,
+  matchPlayers,
+  matchSpatialGrids,
+  matches,
+  talentPicks,
+  users,
+} from "@hots-stats/db";
+import {
+  type Grid,
+  type MatchTimelineDeath,
+  type ReplayPayload,
+  cellIndexForPosition,
+  gridFromWireArrays,
+  incrementCell,
+} from "@hots-stats/shared-types";
 import { eq, inArray, or } from "drizzle-orm";
-import { computeGameFingerprint } from "../lib/game-fingerprint";
 import { displayNameFromSlug, ensureMapExists } from "../lib/ensure-map";
+import { computeGameFingerprint } from "../lib/game-fingerprint";
+import { type SpatialGridContribution, applySpatialRollupDelta } from "./spatial-rollup.service";
 
 export type UpsertResult =
   | { upserted: true; matchId: string }
@@ -18,6 +36,57 @@ function isVersionGreater(incoming: string, stored: string): boolean {
     if (x !== y) return x > y;
   }
   return false;
+}
+
+interface PlayerSpatialContribution {
+  battletag: string;
+  heroId: string;
+  gridCols: number;
+  gridRows: number;
+  presenceGrid: Grid;
+  killsGrid: Grid;
+  deathsGrid: Grid;
+}
+
+/**
+ * Derives each hero's per-match spatial grids from `payload.spatial`
+ * (presence, pre-gridded by the daemon) and `payload.timeline.deaths`
+ * (kills/deaths, bucketed here from each death's normalized `x`/`y` --
+ * the daemon only pre-grids presence, not individual deaths). `null` when
+ * the replay has no `spatial` block at all (map wasn't calibrated at parse
+ * time, or an older daemon build).
+ */
+function buildSpatialContributions(payload: ReplayPayload): PlayerSpatialContribution[] | null {
+  if (!payload.spatial) return null;
+  const { cols, rows } = payload.spatial.grid;
+
+  const contributions = new Map<string, PlayerSpatialContribution>();
+  for (const entry of payload.spatial.presence) {
+    contributions.set(entry.battletag, {
+      battletag: entry.battletag,
+      heroId: entry.heroId,
+      gridCols: cols,
+      gridRows: rows,
+      presenceGrid: gridFromWireArrays(entry.cellIndex, entry.secondsInCell),
+      killsGrid: {},
+      deathsGrid: {},
+    });
+  }
+
+  for (const death of payload.timeline?.deaths ?? []) {
+    if (death.x === undefined || death.y === undefined) continue;
+    const cellIndex = cellIndexForPosition(death.x, death.y, cols, rows);
+
+    const victim = contributions.get(death.battletag);
+    if (victim) incrementCell(victim.deathsGrid, cellIndex);
+
+    for (const killerBattletag of death.killers ?? []) {
+      const killer = contributions.get(killerBattletag);
+      if (killer) incrementCell(killer.killsGrid, cellIndex);
+    }
+  }
+
+  return [...contributions.values()];
 }
 
 /**
@@ -61,7 +130,7 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
   // still finds its existing row too. See lib/game-fingerprint.ts.
   const gameFingerprint = computeGameFingerprint(payload);
   const [existing] = await db
-    .select({ id: matches.id, parserVersion: matches.parserVersion })
+    .select({ id: matches.id, parserVersion: matches.parserVersion, mapId: matches.mapId })
     .from(matches)
     .where(or(eq(matches.replayHash, payload.replayHash), eq(matches.gameFingerprint, gameFingerprint)))
     .limit(1);
@@ -73,10 +142,10 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
   // Grouped by battletag up front so the per-player loop below can look each
   // player's slice up in O(1) instead of re-filtering the whole match's
   // timeline once per player.
-  const deathsByBattletag = new Map<string, { atSeconds: number }[]>();
+  const deathsByBattletag = new Map<string, MatchTimelineDeath[]>();
   for (const death of payload.timeline?.deaths ?? []) {
     const list = deathsByBattletag.get(death.battletag) ?? [];
-    list.push({ atSeconds: death.atSeconds });
+    list.push(death);
     deathsByBattletag.set(death.battletag, list);
   }
   const levelSnapshotsByBattletag = new Map<string, { atSeconds: number; level: number }[]>();
@@ -86,11 +155,54 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
     levelSnapshotsByBattletag.set(snapshot.battletag, list);
   }
 
+  const spatialContributionsByBattletag = new Map(
+    (buildSpatialContributions(payload) ?? []).map((c) => [c.battletag, c]),
+  );
+
   return db.transaction(async (tx) => {
     let matchId: string;
 
     if (existing) {
       matchId = existing.id;
+
+      // Undo this match's *old* contribution to the spatial rollups before
+      // its match_players (and, via cascade, match_spatial_grids) are
+      // deleted below -- otherwise re-syncing the same match twice would
+      // double-count it (see spatial-rollup.service.ts).
+      const oldContributions = await tx
+        .select({
+          battletag: matchPlayers.battletag,
+          heroId: matchPlayers.heroId,
+          winner: matchPlayers.winner,
+          gridCols: matchSpatialGrids.gridCols,
+          gridRows: matchSpatialGrids.gridRows,
+          presenceGrid: matchSpatialGrids.presenceGrid,
+          killsGrid: matchSpatialGrids.killsGrid,
+          deathsGrid: matchSpatialGrids.deathsGrid,
+        })
+        .from(matchPlayers)
+        .leftJoin(matchSpatialGrids, eq(matchSpatialGrids.matchPlayerId, matchPlayers.id))
+        .where(eq(matchPlayers.matchId, matchId));
+
+      for (const old of oldContributions) {
+        if (old.gridCols === null || old.gridRows === null || old.presenceGrid === null) continue;
+        await applySpatialRollupDelta(
+          tx,
+          {
+            mapId: existing.mapId,
+            heroId: old.heroId,
+            battletag: old.battletag,
+            outcome: old.winner ? "win" : "loss",
+            gridCols: old.gridCols,
+            gridRows: old.gridRows,
+            presenceGrid: old.presenceGrid,
+            killsGrid: old.killsGrid ?? {},
+            deathsGrid: old.deathsGrid ?? {},
+          },
+          -1,
+        );
+      }
+
       await tx
         .update(matches)
         .set({
@@ -106,7 +218,7 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
         })
         .where(eq(matches.id, matchId));
       // Replacing match_players cascades the delete to talent_picks,
-      // match_deaths and match_level_snapshots.
+      // match_deaths, match_level_snapshots and match_spatial_grids.
       await tx.delete(matchPlayers).where(eq(matchPlayers.matchId, matchId));
     } else {
       const [created] = await tx
@@ -169,7 +281,14 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
       const deaths = deathsByBattletag.get(player.battletag) ?? [];
       if (deaths.length > 0) {
         await tx.insert(matchDeaths).values(
-          deaths.map((death) => ({ matchPlayerId: createdPlayer.id, atSeconds: death.atSeconds })),
+          deaths.map((death) => ({
+            matchPlayerId: createdPlayer.id,
+            atSeconds: death.atSeconds,
+            x: death.x ?? null,
+            y: death.y ?? null,
+            killers: death.killers ?? null,
+            killType: death.killType ?? null,
+          })),
         );
       }
 
@@ -182,6 +301,31 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
             level: snapshot.level,
           })),
         );
+      }
+
+      const spatial = spatialContributionsByBattletag.get(player.battletag);
+      if (spatial) {
+        await tx.insert(matchSpatialGrids).values({
+          matchPlayerId: createdPlayer.id,
+          gridCols: spatial.gridCols,
+          gridRows: spatial.gridRows,
+          presenceGrid: spatial.presenceGrid,
+          killsGrid: spatial.killsGrid,
+          deathsGrid: spatial.deathsGrid,
+        });
+
+        const contribution: SpatialGridContribution = {
+          mapId: payload.map,
+          heroId: player.heroId,
+          battletag: player.battletag,
+          outcome: player.winner ? "win" : "loss",
+          gridCols: spatial.gridCols,
+          gridRows: spatial.gridRows,
+          presenceGrid: spatial.presenceGrid,
+          killsGrid: spatial.killsGrid,
+          deathsGrid: spatial.deathsGrid,
+        };
+        await applySpatialRollupDelta(tx, contribution, 1);
       }
     }
 

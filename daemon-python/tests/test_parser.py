@@ -10,8 +10,10 @@ from src.parser import (
     _attribute_scope_by_player_list_index,
     _build_protocol,
     _collect_calibration_samples,
+    _distribute_segment_across_cells,
     _extract_deaths,
     _extract_level_snapshots,
+    _extract_spatial,
     _game_version,
     _has_computer_player_attribute,
     _hero_from_any_talent,
@@ -20,6 +22,9 @@ from src.parser import (
     _hero_from_unit_type_name,
     _hero_unit_tags_by_toon,
     _iter_unit_positions,
+    _normalized_position_samples_by_toon,
+    _position_at_or_before,
+    _presence_seconds_by_cell,
     _protocol_module,
     _read_archive_file,
     _slugify,
@@ -172,13 +177,18 @@ def _unit_born_event(
     }
 
 
-def _unit_died_event(unit_tag_index: int, gameloop: int, *, unit_tag_recycle: int = 0) -> dict:
-    return {
+def _unit_died_event(
+    unit_tag_index: int, gameloop: int, *, unit_tag_recycle: int = 0, killer_player_id: int | None = None
+) -> dict:
+    event: dict = {
         "_event": "NNet.Replay.Tracker.SUnitDiedEvent",
         "m_unitTagIndex": unit_tag_index,
         "m_unitTagRecycle": unit_tag_recycle,
         "_gameloop": gameloop,
     }
+    if killer_player_id is not None:
+        event["m_killerPlayerId"] = killer_player_id
+    return event
 
 
 def _unit_positions_event(gameloop: int, positions: list[tuple[int, float, float]]) -> dict:
@@ -941,7 +951,12 @@ def test_hero_unit_tags_by_toon_keeps_every_tag_not_just_the_first():
 
 def test_extract_deaths_skips_unresolvable_tags():
     events = [_unit_died_event(999, 700)]
-    assert _extract_deaths(events, hero_unit_tags={}, players={}, gates_open_loop=0) == []
+    assert (
+        _extract_deaths(
+            events, hero_unit_tags={}, tracker_id_to_toon={}, players={}, gates_open_loop=0, calibration=None
+        )
+        == []
+    )
 
 
 def test_extract_level_snapshots_skips_unknown_tracker_id():
@@ -967,7 +982,9 @@ def test_build_payload_extracts_deaths_timeline():
         replay_hash="a" * 64,
     )
 
-    assert payload["timeline"]["deaths"] == [{"battletag": "Foo#1111", "team": 0, "atSeconds": 30}]
+    assert payload["timeline"]["deaths"] == [
+        {"battletag": "Foo#1111", "team": 0, "atSeconds": 30, "killers": [], "killType": "other"}
+    ]
     assert payload["timeline"]["levelSnapshots"] == []
 
 
@@ -1020,8 +1037,8 @@ def test_build_payload_resolves_hero_deaths_after_respawn_same_tag():
     )
 
     assert payload["timeline"]["deaths"] == [
-        {"battletag": "Foo#1111", "team": 0, "atSeconds": 30},
-        {"battletag": "Foo#1111", "team": 0, "atSeconds": 90},
+        {"battletag": "Foo#1111", "team": 0, "atSeconds": 30, "killers": [], "killType": "other"},
+        {"battletag": "Foo#1111", "team": 0, "atSeconds": 90, "killers": [], "killType": "other"},
     ]
 
 
@@ -1179,3 +1196,192 @@ def test_build_payload_omits_spatial_without_any_position_events():
 
     assert "spatial" not in payload
     assert "_pendingSpatialSample" not in payload
+
+
+def test_distribute_segment_across_cells_same_cell_returns_single_share():
+    assert _distribute_segment_across_cells(0.05, 0.05, 0.08, 0.08, cols=10, rows=10) == {0: 1.0}
+
+
+def test_distribute_segment_across_cells_splits_across_crossed_cells():
+    shares = _distribute_segment_across_cells(0.05, 0.05, 0.95, 0.05, cols=10, rows=10)
+
+    assert sum(shares.values()) == pytest.approx(1.0, abs=0.05)
+    assert 0 in shares  # starting cell (col 0, row 0)
+    assert 9 in shares  # ending cell (col 9, row 0)
+    assert len(shares) > 2  # crosses intermediate cells too, not just start/end
+
+
+def test_presence_seconds_by_cell_interpolates_between_samples():
+    # 10s spent moving steadily from cell (0,0) to (9,0) on a 10x10 grid --
+    # below the teleport threshold (0.9 normalized distance / 10s = 0.09 <
+    # SPATIAL_MAX_INTERPOLATION_SPEED_NORMALIZED's 0.10).
+    samples = [(0, 0.05, 0.05), (160, 0.95, 0.05)]
+
+    cells = _presence_seconds_by_cell(samples, cols=10, rows=10)
+
+    assert sum(cells.values()) == pytest.approx(10.0, abs=0.5)
+    assert len(cells) > 1  # filled intermediate cells, not just the arrival one
+
+
+def test_presence_seconds_by_cell_drops_teleport_gaps():
+    # Crossing 90% of the map in 1s is far above the interpolation threshold.
+    samples = [(0, 0.0, 0.0), (16, 0.9, 0.9)]
+
+    assert _presence_seconds_by_cell(samples, cols=10, rows=10) == {}
+
+
+def test_presence_seconds_by_cell_ignores_out_of_order_zero_or_negative_gaps():
+    # Two samples at the exact same gameloop (or, defensively, an
+    # out-of-order pair) contribute nothing rather than dividing by zero.
+    samples = [(100, 0.1, 0.1), (100, 0.2, 0.2)]
+
+    assert _presence_seconds_by_cell(samples, cols=10, rows=10) == {}
+
+
+def test_position_at_or_before_returns_the_latest_sample_not_after_gameloop():
+    samples = [(0, 0.1, 0.1), (160, 0.2, 0.2), (320, 0.3, 0.3)]
+
+    assert _position_at_or_before(samples, 200) == (0.2, 0.2)
+    assert _position_at_or_before(samples, 320) == (0.3, 0.3)
+    assert _position_at_or_before(samples, -1) is None
+
+
+def test_normalized_position_samples_by_toon_sorts_and_drops_out_of_bounds():
+    calibration = {"minX": 0.0, "maxX": 100.0, "minY": 0.0, "maxY": 100.0}
+    events = [
+        _unit_positions_event(160, [(1, 50.0, 50.0)]),
+        _unit_positions_event(0, [(1, 10.0, 10.0), (1, -50.0, -50.0)]),  # out-of-bounds point dropped
+        _unit_born_event(1, "HeroLiMing"),
+    ]
+
+    samples = _normalized_position_samples_by_toon(events, tracker_id_to_toon={1: "1-Hero-1-1001"}, calibration=calibration)
+
+    assert samples["1-Hero-1-1001"] == [(0, 0.1, 0.1), (160, 0.5, 0.5)]
+
+
+def test_extract_spatial_returns_none_for_degenerate_calibration():
+    calibration = {"minX": 50.0, "maxX": 50.0, "minY": 0.0, "maxY": 100.0}
+    events = [_unit_positions_event(0, [(1, 10.0, 10.0)])]
+
+    assert _extract_spatial(events, tracker_id_to_toon={}, players={}, calibration=calibration) is None
+
+
+def test_extract_deaths_derives_position_from_last_known_sample():
+    players = {"toon-1": {"battletag": "Foo#1111", "team": 0, "heroId": "li-ming"}}
+    hero_unit_tags = {(1, 0): "toon-1"}
+    tracker_id_to_toon = {1: "toon-1"}
+    calibration = {"minX": 0.0, "maxX": 100.0, "minY": 0.0, "maxY": 100.0}
+    events = [
+        # `_normalized_position_samples_by_toon` (unlike `hero_unit_tags`
+        # above) resolves tag -> toon via a real SUnitBornEvent scan, not
+        # the dict passed in -- needed here for the death's position lookup.
+        _unit_born_event(1, "HeroLiMing"),
+        _unit_positions_event(0, [(1, 10.0, 10.0)]),
+        _unit_positions_event(160, [(1, 20.0, 20.0)]),  # 10s later
+        _unit_died_event(1, 200),  # dies shortly after the second sample
+    ]
+
+    deaths = _extract_deaths(
+        events, hero_unit_tags, tracker_id_to_toon, players, gates_open_loop=0, calibration=calibration
+    )
+
+    assert len(deaths) == 1
+    assert deaths[0]["x"] == pytest.approx(0.2)
+    assert deaths[0]["y"] == pytest.approx(0.2)
+
+
+def test_extract_deaths_omits_position_without_calibration():
+    players = {"toon-1": {"battletag": "Foo#1111", "team": 0, "heroId": "li-ming"}}
+    hero_unit_tags = {(1, 0): "toon-1"}
+    tracker_id_to_toon = {1: "toon-1"}
+    events = [_unit_positions_event(0, [(1, 10.0, 10.0)]), _unit_died_event(1, 200)]
+
+    deaths = _extract_deaths(
+        events, hero_unit_tags, tracker_id_to_toon, players, gates_open_loop=0, calibration=None
+    )
+
+    assert "x" not in deaths[0]
+    assert "y" not in deaths[0]
+
+
+def test_extract_deaths_attributes_killer_when_resolvable():
+    players = {
+        "toon-1": {"battletag": "Foo#1111", "team": 0, "heroId": "li-ming"},
+        "toon-2": {"battletag": "Bar#2222", "team": 1, "heroId": "malfurion"},
+    }
+    hero_unit_tags = {(1, 0): "toon-1"}
+    tracker_id_to_toon = {1: "toon-1", 2: "toon-2"}
+    events = [_unit_died_event(1, 200, killer_player_id=2)]
+
+    deaths = _extract_deaths(
+        events, hero_unit_tags, tracker_id_to_toon, players, gates_open_loop=0, calibration=None
+    )
+
+    assert deaths[0]["killers"] == ["Bar#2222"]
+    assert deaths[0]["killType"] == "hero"
+
+
+def test_extract_deaths_kill_type_other_without_a_resolvable_killer():
+    players = {"toon-1": {"battletag": "Foo#1111", "team": 0, "heroId": "li-ming"}}
+    hero_unit_tags = {(1, 0): "toon-1"}
+    events = [_unit_died_event(1, 200)]  # no killer_player_id at all
+
+    deaths = _extract_deaths(
+        events, hero_unit_tags, tracker_id_to_toon={}, players=players, gates_open_loop=0, calibration=None
+    )
+
+    assert deaths[0]["killers"] == []
+    assert deaths[0]["killType"] == "other"
+
+
+def test_build_payload_spatial_presence_interpolates_fast_movement():
+    events = [
+        *_base_tracker_events(),
+        _unit_born_event(1, "HeroLiMing"),
+        _unit_born_event(2, "HeroMalfurion"),
+        _unit_positions_event(610, [(1, 5.0, 5.0), (2, 90.0, 90.0)]),
+        _unit_positions_event(610 + 16 * 10, [(1, 95.0, 5.0), (2, 90.0, 90.0)]),  # Foo crosses the map in 10s
+    ]
+
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=events,
+        attributes_events=_base_attributes_events(),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+        calibrations={"cursed-hollow": {"minX": 0.0, "maxX": 100.0, "minY": 0.0, "maxY": 100.0}},
+    )
+
+    presence_by_tag = {p["battletag"]: p for p in payload["spatial"]["presence"]}
+    foo = presence_by_tag["Foo#1111"]
+    assert len(foo["cellIndex"]) > 1  # filled intermediate cells, not just the arrival one
+    assert sum(foo["secondsInCell"]) == pytest.approx(10.0, abs=1.0)
+
+
+def test_build_payload_death_includes_position_and_killer():
+    events = [
+        *_base_tracker_events(),
+        _unit_born_event(1, "HeroLiMing"),
+        _unit_born_event(2, "HeroMalfurion"),
+        _unit_positions_event(610, [(1, 50.0, 50.0)]),
+        _unit_died_event(1, 610 + 16 * 5, killer_player_id=2),
+    ]
+
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=events,
+        attributes_events=_base_attributes_events(),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+        calibrations={"cursed-hollow": {"minX": 0.0, "maxX": 100.0, "minY": 0.0, "maxY": 100.0}},
+    )
+
+    death = payload["timeline"]["deaths"][0]
+    assert death["x"] == pytest.approx(0.5)
+    assert death["y"] == pytest.approx(0.5)
+    assert death["killers"] == ["Bar#2222"]
+    assert death["killType"] == "hero"

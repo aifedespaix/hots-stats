@@ -7,8 +7,10 @@ const route = useRoute();
 const mapId = route.params.mapId as string;
 
 const { data, error } = await useApiFetch<MapDetailResponse>(`/maps/${mapId}`);
+const { data: authData } = useAuthUser();
 
 const mapName = computed(() => data.value?.mapName ?? "Carte");
+const spatialHeroOptions = computed(() => (data.value?.metaHeroes ?? []).map((h) => ({ id: h.heroId, name: h.heroName })));
 
 useSeoMeta({
   title: () => mapName.value,
@@ -270,6 +272,24 @@ const teamImpactChartOptions = computed(() => ({
           <UiWinrateBar :winrate="bucket.winrate" />
         </li>
       </ol>
+    </div>
+
+    <!-- F. Analyse spatiale -->
+    <div class="rounded-lg border border-border bg-surface p-4">
+      <div class="mb-3 flex items-center gap-1.5">
+        <UIcon name="i-heroicons-viewfinder-circle" class="h-4 w-4 text-brand" />
+        <h2 class="font-heading text-sm font-medium">Analyse spatiale</h2>
+      </div>
+      <p class="mb-4 text-xs text-muted">
+        Heatmap de présence, kills et morts, agrégée sur les parties enregistrées pour cette carte. Certaines cartes
+        n'ont pas encore été calibrées côté serveur ; aucune donnée n'apparaît alors ci-dessous.
+      </p>
+      <SpatialAggregateSlot
+        v-if="spatialHeroOptions.length > 0"
+        :map-id="mapId"
+        :hero-options="spatialHeroOptions"
+        :my-battletag="authData?.user?.battletag ?? null"
+      />
     </div>
   </div>
 </template>

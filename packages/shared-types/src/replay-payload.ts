@@ -30,11 +30,30 @@ export type TalentPick = z.infer<typeof talentPickSchema>;
 /** One hero death, timestamped relative to "gates open" (the same reference
  * point `durationSeconds` uses) -- see daemon-python/src/parser.py's
  * `_extract_deaths`. Powers the Coach tab's `outnumberedFights`/
- * `staggeredDeaths`/`firstDeath` pillars (apps/web/app/utils/coachAnalysis.ts). */
+ * `staggeredDeaths`/`firstDeath` pillars (apps/web/app/utils/coachAnalysis.ts).
+ *
+ * `x`/`y`/`killers`/`killType` are optional additions (see
+ * tasks/epic-10-analyse-spatiale.md Livrable 1): only present when the
+ * replay's map has a spatial calibration (same gate as the `spatial` block
+ * below). `x`/`y` are the *normalized* `[0,1]` position of the death,
+ * derived by the daemon from the dying hero's last known position sample at
+ * or before the death (not a field `SUnitDiedEvent` is confirmed to carry
+ * itself). `killType` is deliberately a 2-way split, not the 4-way
+ * "hero/minion/structure/environment" originally envisioned in epic-10: the
+ * daemon can only confirm a killer *player* id or the absence of one, not
+ * distinguish a minion/structure/terrain kill from each other -- narrowing
+ * the field rather than fabricating a distinction the data doesn't support. */
+export const killTypeSchema = z.enum(["hero", "other"]);
+export type KillType = z.infer<typeof killTypeSchema>;
+
 export const matchTimelineDeathSchema = z.object({
   battletag: z.string(),
   team: z.union([z.literal(0), z.literal(1)]),
   atSeconds: z.number().int().nonnegative(),
+  x: z.number().min(0).max(1).optional(),
+  y: z.number().min(0).max(1).optional(),
+  killers: z.array(z.string()).optional(),
+  killType: killTypeSchema.optional(),
 });
 export type MatchTimelineDeath = z.infer<typeof matchTimelineDeathSchema>;
 
@@ -73,6 +92,32 @@ export const replayPlayerSchema = z.object({
 export type ReplayPlayer = z.infer<typeof replayPlayerSchema>;
 
 /**
+ * One hero's sparse presence grid for the match (see
+ * tasks/epic-10-analyse-spatiale.md Livrable 1) -- structure-of-arrays
+ * (`cellIndex[i]` <-> `secondsInCell[i]`) rather than an array of `{cell,
+ * seconds}` objects, to avoid repeating JSON keys per cell in a match with
+ * hundreds of occupied cells across 10 heroes.
+ */
+export const spatialPresenceEntrySchema = z.object({
+  battletag: z.string(),
+  heroId: z.string(),
+  // Always null today (single-layer maps only) -- reserved for a map like
+  // Haunted Mines whose surface/underground may need distinct calibrations.
+  // See epic-10 section 1.4.
+  layer: z.string().nullable(),
+  cellIndex: z.array(z.number().int().nonnegative()),
+  secondsInCell: z.array(z.number().nonnegative()),
+});
+export type SpatialPresenceEntry = z.infer<typeof spatialPresenceEntrySchema>;
+
+export const spatialSchema = z.object({
+  schemaVersion: z.number().int().positive(),
+  grid: z.object({ cols: z.number().int().positive(), rows: z.number().int().positive() }),
+  presence: z.array(spatialPresenceEntrySchema),
+});
+export type Spatial = z.infer<typeof spatialSchema>;
+
+/**
  * Payload posted by the Python daemon to POST /api/ingest.
  * `parserVersion` drives the upsert logic: a match is only overwritten
  * when the incoming version is strictly greater than the stored one.
@@ -103,5 +148,10 @@ export const replayPayloadSchema = z.object({
   // send this yet) still validates -- see replay-upsert.service.ts, which
   // simply skips writing timeline rows when it's absent.
   timeline: matchTimelineSchema.optional(),
+  // Optional: only present when the replay's map has a spatial calibration
+  // at parse time -- absent for an uncalibrated map (the daemon instead
+  // POSTs raw samples to /spatial/samples, see spatial-calibration docs) or
+  // a daemon build older than PARSER_VERSION 1.7.
+  spatial: spatialSchema.optional(),
 });
 export type ReplayPayload = z.infer<typeof replayPayloadSchema>;
