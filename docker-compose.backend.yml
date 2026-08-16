@@ -52,5 +52,22 @@ services:
       dockerfile: apps/replay-parser/Dockerfile
     restart: unless-stopped
 
+  # DB admin UI (browse/edit rows). Talks to `postgres` over the internal
+  # compose network -- Postgres itself is never published. No `ports:`
+  # here on purpose (same as `api`/`replay-parser`): nothing is exposed on
+  # the Pi's host network. Reach it only by adding a Dokploy Domain ->
+  # container port 8080, and put a Cloudflare Access policy on that
+  # hostname (Zero Trust) so it requires your login before Traefik is even
+  # hit -- Adminer itself has no auth of its own beyond the Postgres
+  # credentials.
+  adminer:
+    image: adminer:4-standalone
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+
 volumes:
   hots_stats_pgdata:

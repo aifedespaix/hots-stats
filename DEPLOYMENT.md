@@ -138,6 +138,35 @@ docker exec $(docker ps -qf "name=hots-stats-backend.*postgres") \
 À planifier en cron régulièrement, et à copier hors du Pi (le SD/SSD d'un Pi
 n'est pas un stockage de confiance à long terme).
 
+## Accès UI à la base de données (Adminer, derrière Cloudflare Access)
+
+`docker-compose.backend.yml` inclut un service `adminer` (UI web légère
+pour Postgres : parcourir/éditer les tables, lancer du SQL). Il parle à
+`postgres` via le réseau interne du compose -- Postgres lui-même n'est
+jamais publié. Comme `api`, il n'a **aucun `ports:`** dans le compose : rien
+n'est ouvert sur le réseau du Pi tant que tu ne le rattaches pas
+explicitement dans Dokploy.
+
+Pour y accéder :
+
+1. Dans Dokploy, onglet **Domains** du service `adminer` -> ajouter un
+   sous-domaine dédié (ex. `db.mondomaine.fr`) -> port conteneur `8080`.
+   Le tunnel Cloudflare route alors ce hostname vers Traefik comme pour
+   `api`/`web`.
+2. **Indispensable** : dans le dashboard Cloudflare Zero Trust, créer une
+   **Access Application** sur ce même hostname (`db.mondomaine.fr`) avec
+   une policy restreinte à ton email/compte. Adminer n'a aucune
+   authentification propre (juste les identifiants Postgres derrière) --
+   sans Access, quiconque trouve ou devine le sous-domaine y a un accès
+   complet lecture/écriture à la base. Avec Access, Cloudflare exige ta
+   connexion (OTP email, Google, etc.) avant même que la requête
+   n'atteigne le Pi.
+
+Une fois dedans : système `PostgreSQL`, serveur `postgres` (pré-rempli via
+`ADMINER_DEFAULT_SERVER`), puis les mêmes `POSTGRES_USER` /
+`POSTGRES_PASSWORD` / `POSTGRES_DB` que dans les variables d'env Dokploy du
+service `postgres`.
+
 ## Notes spécifiques Raspberry Pi
 
 - Le Pi a des ressources limitées : évite de lancer `docker compose build`
