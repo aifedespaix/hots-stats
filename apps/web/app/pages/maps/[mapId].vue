@@ -92,7 +92,7 @@ const teamImpactChartOptions = computed(() => ({
         <div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
         <div class="absolute inset-x-0 bottom-0 flex flex-wrap items-end justify-between gap-3 p-4 sm:p-5">
           <div>
-            <NuxtLink to="/maps" class="text-sm text-white/80 hover:text-white hover:underline">&larr; Retour aux cartes</NuxtLink>
+            <UiBackLink to="/maps" label="Retour aux cartes" tone="inverted" />
             <h1 class="mt-1 font-heading text-2xl font-semibold text-white drop-shadow">{{ data.mapName }}</h1>
           </div>
           <UButton :to="`/talents?mapId=${mapId}`" color="primary" variant="solid" icon="i-heroicons-sparkles" size="sm">

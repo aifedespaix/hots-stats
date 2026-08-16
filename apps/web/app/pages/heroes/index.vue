@@ -75,7 +75,7 @@ function goToHero(row: Record<string, unknown>) {
       @update:model-value="setScope"
     />
 
-    <UInput v-model="search" placeholder="Rechercher un héros" icon="i-lucide-search" class="max-w-sm" />
+    <UiSearchInput v-model="search" placeholder="Rechercher un héros" />
 
     <UiFilterResetActions
       :filters-default="filtersStore.isFiltersDefault"

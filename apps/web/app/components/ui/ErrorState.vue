@@ -29,9 +29,6 @@ const iconToneClass = computed(() =>
   <div class="flex flex-col items-center gap-3 rounded-lg border border-border bg-surface p-8 text-center text-muted">
     <UIcon :name="icon" class="h-8 w-8" :class="iconToneClass" />
     <p>{{ message ?? defaultMessage }}</p>
-    <NuxtLink v-if="backTo" :to="backTo" class="mt-1 inline-flex items-center gap-1 text-sm text-brand hover:underline">
-      <UIcon name="i-heroicons-arrow-left" class="h-4 w-4" />
-      {{ backLabel ?? "Retour" }}
-    </NuxtLink>
+    <UiBackLink v-if="backTo" :to="backTo" :label="backLabel" class="mt-1" />
   </div>
 </template>

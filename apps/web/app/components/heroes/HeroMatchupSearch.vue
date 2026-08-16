@@ -62,10 +62,10 @@ function closeCard() {
       <template #empty>Aucun héros trouvé</template>
     </USelectMenu>
 
-    <div v-if="pending" class="animate-pulse space-y-3 rounded-lg border border-border bg-surface p-4">
-      <div class="mx-auto h-4 w-1/3 rounded bg-border" />
-      <div class="mx-auto h-8 w-1/4 rounded bg-border" />
-      <div class="h-16 rounded bg-border" />
+    <div v-if="pending" class="space-y-3 rounded-lg border border-border bg-surface p-4">
+      <UiSkeletonBlock class="mx-auto h-4 w-1/3 rounded bg-border" />
+      <UiSkeletonBlock class="mx-auto h-8 w-1/4 rounded bg-border" />
+      <UiSkeletonBlock class="h-16 rounded bg-border" />
     </div>
 
     <Transition name="matchup-card">
@@ -157,12 +157,9 @@ function closeCard() {
             }}) -- verdict à prendre avec prudence.
           </p>
 
-          <NuxtLink
-            :to="`/matches?heroId=${heroId}&opponentHeroId=${selectedOpponentId}`"
-            class="inline-flex items-center gap-1 text-sm text-brand hover:underline"
-          >
-            Voir nos parties l'un contre l'autre &rarr;
-          </NuxtLink>
+          <UiArrowLink :to="`/matches?heroId=${heroId}&opponentHeroId=${selectedOpponentId}`">
+            Voir nos parties l'un contre l'autre
+          </UiArrowLink>
         </template>
       </div>
     </Transition>

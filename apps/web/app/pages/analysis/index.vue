@@ -139,16 +139,16 @@ const talentColumns = [
           </li>
         </ol>
       </div>
-      <div
+      <UiStateCard
         v-else
-        class="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted"
-      >
-        <UIcon name="i-heroicons-inbox" class="h-5 w-5 text-muted/70" />
-        <p v-if="totalRankedGames === 0">
-          Pas encore de parties classées enregistrées -- reviens ici après quelques games.
-        </p>
-        <p v-else>Aucun point faible marquant sur tes {{ totalRankedGames }} parties classées.</p>
-      </div>
+        state="empty"
+        size="sm"
+        :message="
+          totalRankedGames === 0
+            ? 'Pas encore de parties classées enregistrées -- reviens ici après quelques games.'
+            : `Aucun point faible marquant sur tes ${totalRankedGames} parties classées.`
+        "
+      />
 
       <div v-if="topStrengths.length > 0" class="rounded-lg border border-success/30 bg-success/5 p-3 sm:p-4">
         <h2 class="mb-2 flex items-center gap-1.5 font-heading text-sm font-semibold">
@@ -169,16 +169,16 @@ const talentColumns = [
           </li>
         </ol>
       </div>
-      <div
+      <UiStateCard
         v-else
-        class="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted"
-      >
-        <UIcon name="i-heroicons-inbox" class="h-5 w-5 text-muted/70" />
-        <p v-if="totalRankedGames === 0">
-          Pas encore de parties classées enregistrées -- reviens ici après quelques games.
-        </p>
-        <p v-else>Aucun point fort marquant sur tes {{ totalRankedGames }} parties classées.</p>
-      </div>
+        state="empty"
+        size="sm"
+        :message="
+          totalRankedGames === 0
+            ? 'Pas encore de parties classées enregistrées -- reviens ici après quelques games.'
+            : `Aucun point fort marquant sur tes ${totalRankedGames} parties classées.`
+        "
+      />
     </div>
 
     <!-- Winrate par carte now lives on its own page (Hub des cartes), with the meta,

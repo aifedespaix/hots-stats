@@ -190,14 +190,9 @@ async function confirmReset() {
         </UButton>
       </div>
       <p v-if="publicHandleError" class="text-sm text-danger">{{ publicHandleError }}</p>
-      <NuxtLink
-        v-if="authData?.user?.publicHandle"
-        :to="`/u/${authData.user.publicHandle}`"
-        target="_blank"
-        class="inline-block text-sm text-brand hover:underline"
-      >
-        Voir mon profil public &rarr;
-      </NuxtLink>
+      <UiArrowLink v-if="authData?.user?.publicHandle" :to="`/u/${authData.user.publicHandle}`" target="_blank">
+        Voir mon profil public
+      </UiArrowLink>
     </section>
 
     <section class="space-y-4 rounded-lg border border-border p-4 sm:p-6">
@@ -238,17 +233,9 @@ async function confirmReset() {
       </template>
     </section>
 
-    <NuxtLink
-      to="/upload"
-      class="flex items-center gap-3 rounded-lg border border-brand/30 bg-brand/5 p-4 transition-colors hover:bg-brand/10"
-    >
-      <UIcon name="i-heroicons-key" class="h-5 w-5 shrink-0 text-brand" />
-      <div class="min-w-0 flex-1">
-        <p class="text-xs uppercase tracking-wide text-muted">Tokens d'accès &amp; daemon</p>
-        <p class="truncate text-sm font-medium">Gère tes tokens et connecte le daemon depuis la page Upload</p>
-      </div>
-      <UIcon name="i-heroicons-chevron-right" class="h-4 w-4 shrink-0 text-muted" />
-    </NuxtLink>
+    <UiTeaserLink to="/upload" icon="i-heroicons-key" eyebrow="Tokens d'accès &amp; daemon">
+      Gère tes tokens et connecte le daemon depuis la page Upload
+    </UiTeaserLink>
 
     <section class="space-y-4 rounded-lg border border-danger p-4 sm:p-6">
       <h2 class="font-heading text-lg text-danger">Zone dangereuse</h2>
@@ -277,30 +264,24 @@ async function confirmReset() {
       </UButton>
     </section>
 
-    <UModal v-model:open="resetModalOpen" title="Réinitialiser mes données">
-      <template #body>
-        <p class="text-sm text-muted">
-          Cette action supprime définitivement toutes les parties que tu as uploadées. Les parties dont le
-          fichier <code class="font-mono text-xs">.StormReplay</code> n'existe plus sur ton disque seront
-          perdues pour de bon.
-        </p>
-        <p class="mt-4 text-sm">
-          Tape <strong>{{ RESET_CONFIRM_WORD }}</strong> pour confirmer :
-        </p>
-        <UInput v-model="resetConfirmText" class="mt-2" placeholder="SUPPRIMER" />
-        <div class="mt-6 flex justify-end gap-2">
-          <UButton variant="ghost" icon="i-heroicons-x-mark" @click="resetModalOpen = false">Annuler</UButton>
-          <UButton
-            color="error"
-            icon="i-heroicons-trash"
-            :disabled="!canConfirmReset"
-            :loading="resetting"
-            @click="confirmReset"
-          >
-            Confirmer la suppression
-          </UButton>
-        </div>
-      </template>
-    </UModal>
+    <UiConfirmModal
+      v-model:open="resetModalOpen"
+      title="Réinitialiser mes données"
+      confirm-label="Confirmer la suppression"
+      confirm-icon="i-heroicons-trash"
+      :disabled="!canConfirmReset"
+      :loading="resetting"
+      @confirm="confirmReset"
+    >
+      <p class="text-sm text-muted">
+        Cette action supprime définitivement toutes les parties que tu as uploadées. Les parties dont le
+        fichier <code class="font-mono text-xs">.StormReplay</code> n'existe plus sur ton disque seront
+        perdues pour de bon.
+      </p>
+      <p class="mt-4 text-sm">
+        Tape <strong>{{ RESET_CONFIRM_WORD }}</strong> pour confirmer :
+      </p>
+      <UInput v-model="resetConfirmText" class="mt-2" placeholder="SUPPRIMER" />
+    </UiConfirmModal>
   </div>
 </template>

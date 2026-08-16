@@ -141,9 +141,7 @@ function goToMatch(row: Record<string, unknown>) {
 </script>
 
 <template>
-  <div v-if="pending" class="flex items-center justify-center py-16 text-muted">
-    <UIcon name="i-heroicons-arrow-path" class="h-6 w-6 animate-spin" />
-  </div>
+  <UiStateCard v-if="pending" state="loading" size="sm" />
 
   <UiErrorState v-else-if="notFound" :status-code="404" message="Aucune partie en commun avec ce joueur." />
 
@@ -159,35 +157,16 @@ function goToMatch(row: Record<string, unknown>) {
           <h1 class="break-all font-heading text-2xl font-semibold font-mono">{{ data.player.battletag }}</h1>
           <PlayersAnnotationBadges :battletag="data.player.battletag" />
 
-          <span
-            v-if="data.player.friendshipStatus === 'friends'"
-            class="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-3 py-1 text-xs font-medium text-success"
-          >
-            <UIcon name="i-heroicons-check-badge" class="h-4 w-4" />
-            Ami
-          </span>
-          <span
-            v-else-if="data.player.friendshipStatus === 'pending_outgoing'"
-            class="inline-flex items-center gap-1.5 rounded-full bg-background px-3 py-1 text-xs text-muted"
-          >
-            Demande envoyée
-          </span>
-          <NuxtLink
-            v-else-if="data.player.friendshipStatus === 'pending_incoming'"
-            to="/friends"
-            class="inline-flex items-center gap-1.5 rounded-full bg-brand/15 px-3 py-1 text-xs font-medium text-brand"
-          >
-            T'a demandé en ami · répondre
-          </NuxtLink>
-          <UButton
-            v-else-if="data.player.accountUserId"
-            size="xs"
-            icon="i-heroicons-user-plus"
-            :loading="sendingRequest"
-            @click="addFriend"
-          >
-            Ajouter en ami
-          </UButton>
+          <PlayersFriendshipBadge
+            :status="data.player.friendshipStatus"
+            variant="pill"
+            pending-incoming-label="T'a demandé en ami · répondre"
+            add-label="Ajouter en ami"
+            add-button-variant="solid"
+            :can-add="Boolean(data.player.accountUserId)"
+            :add-loading="sendingRequest"
+            @add="addFriend"
+          />
         </div>
         <p v-if="requestError" class="mt-2 text-sm text-danger">{{ requestError }}</p>
       </div>

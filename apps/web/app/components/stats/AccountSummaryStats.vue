@@ -19,7 +19,7 @@ const props = withDefaults(
 <template>
   <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
     <template v-if="loading && !summary">
-      <div v-for="i in 4" :key="i" class="h-[86px] animate-pulse rounded-lg border border-border bg-surface" />
+      <UiSkeletonBlock v-for="i in 4" :key="i" class="h-[86px] rounded-lg border border-border bg-surface" />
     </template>
     <template v-else>
       <UiStatTile

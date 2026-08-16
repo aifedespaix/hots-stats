@@ -54,12 +54,11 @@ const worstComboItems = computed(() => toComboItems(props.matchups.worstMatchups
       </div>
     </div>
 
-    <NuxtLink
+    <UiArrowLink
       v-if="opponentBattletag && matchups.gamesPlayed > 0"
       :to="`/matches?opponentBattletag=${encodeURIComponent(opponentBattletag)}`"
-      class="inline-flex items-center gap-1 text-sm text-brand hover:underline"
     >
-      Voir nos parties l'un contre l'autre &rarr;
-    </NuxtLink>
+      Voir nos parties l'un contre l'autre
+    </UiArrowLink>
   </div>
 </template>

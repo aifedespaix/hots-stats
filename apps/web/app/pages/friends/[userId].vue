@@ -71,7 +71,7 @@ function onScopeChange(value: HeroStatsScope) {
   <div v-else-if="data" class="space-y-8">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <NuxtLink to="/friends" class="text-sm text-brand hover:underline">&larr; Retour à mes amis</NuxtLink>
+        <UiBackLink to="/friends" label="Retour à mes amis" />
         <h1 class="mt-2 break-words font-heading text-2xl font-semibold">{{ data.friend.displayName }}</h1>
         <p v-if="data.friend.battletag" class="font-mono text-sm text-muted">{{ data.friend.battletag }}</p>
       </div>

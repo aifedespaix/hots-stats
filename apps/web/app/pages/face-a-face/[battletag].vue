@@ -38,9 +38,10 @@ const hasMatchupGames = computed(() => (data.value?.matchups.gamesPlayed ?? 0) >
 
   <div v-else-if="data" class="space-y-8">
     <div>
-      <NuxtLink :to="`/players/${encodeURIComponent(data.opponent.battletag ?? battletag)}`" class="text-sm text-brand hover:underline">
-        &larr; Retour au profil de {{ data.opponent.displayName }}
-      </NuxtLink>
+      <UiBackLink
+        :to="`/players/${encodeURIComponent(data.opponent.battletag ?? battletag)}`"
+        :label="`Retour au profil de ${data.opponent.displayName}`"
+      />
       <h1 class="mt-2 font-heading text-2xl font-semibold">Face-à-Face</h1>
     </div>
 

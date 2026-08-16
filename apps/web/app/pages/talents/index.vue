@@ -357,12 +357,8 @@ function applyBuild(row: (typeof buildRows.value)[number]) {
 
     <!-- Carte seule: pas de héros choisi -> table méta, chaque héros ouvre son board -->
     <div v-if="mode === 'map'">
-      <div v-if="!mapId" class="rounded-lg border border-dashed border-border p-8 text-center text-muted">
-        Choisis un héros, une carte, ou les deux pour démarrer une analyse.
-      </div>
-      <div v-else-if="mapMetaPending" class="rounded-lg border border-border bg-surface p-8 text-center text-muted">
-        Chargement...
-      </div>
+      <UiStateCard v-if="!mapId" state="empty" message="Choisis un héros, une carte, ou les deux pour démarrer une analyse." />
+      <UiStateCard v-else-if="mapMetaPending" state="loading" />
       <UiPanel v-else title="Héros les plus forts sur cette carte" :count="mapMetaData?.metaHeroes.length">
         <UiTableScrollPanel max-height="50vh">
         <UiDataTable
@@ -421,13 +417,7 @@ function applyBuild(row: (typeof buildRows.value)[number]) {
         </UButton>
       </div>
 
-      <div
-        v-if="!heroId"
-        class="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border p-8 text-center text-muted"
-      >
-        <UIcon name="i-heroicons-cursor-arrow-rays" class="h-6 w-6 text-muted/70" />
-        Choisis un héros pour démarrer une analyse.
-      </div>
+      <UiStateCard v-if="!heroId" state="empty" message="Choisis un héros pour démarrer une analyse." />
 
       <template v-else>
         <!-- Fiabilité -->
@@ -444,13 +434,7 @@ function applyBuild(row: (typeof buildRows.value)[number]) {
           trait, pas au winrate affiché, pour ne jamais laisser un talent joué une fois passer devant un build éprouvé.
         </p>
 
-        <div
-          v-if="analyzerPending && !analyzerData"
-          class="flex flex-col items-center gap-2 rounded-lg border border-border bg-surface p-8 text-center text-muted"
-        >
-          <UIcon name="i-heroicons-arrow-path" class="h-6 w-6 animate-spin" />
-          Chargement...
-        </div>
+        <UiStateCard v-if="analyzerPending && !analyzerData" state="loading" />
 
         <div v-else class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div v-for="tier in TALENT_TIERS" :key="tier" class="rounded-lg border border-border bg-surface p-3">

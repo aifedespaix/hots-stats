@@ -41,13 +41,13 @@ defineEmits<{ (e: "update:modelValue", value: boolean): void }>();
       <slot name="extra" />
 
       <div class="mt-4 h-72">
-        <p v-if="pending" class="flex h-full items-center justify-center text-sm text-muted">Chargement…</p>
-        <p v-else-if="errored" class="flex h-full items-center justify-center text-sm text-danger">
-          {{ errorText }}
-        </p>
-        <p v-else-if="empty" class="flex h-full items-center justify-center text-sm text-muted">
-          {{ emptyText }}
-        </p>
+        <div v-if="pending || errored || empty" class="flex h-full items-center justify-center">
+          <UiStateCard
+            :state="pending ? 'loading' : errored ? 'error' : 'empty'"
+            :message="errored ? errorText : empty ? emptyText : undefined"
+            size="sm"
+          />
+        </div>
         <slot v-else />
       </div>
     </template>

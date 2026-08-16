@@ -1,8 +1,14 @@
 <script setup lang="ts">
-const props = defineProps<{
-  state: "loading" | "empty" | "error";
-  message?: string;
-}>();
+const props = withDefaults(
+  defineProps<{
+    state: "loading" | "empty" | "error";
+    message?: string;
+    /** "md" (défaut) = carte bordée pleine largeur. "sm" = pas de bordure/fond, padding
+     * réduit, icône plus petite -- pour un état imbriqué dans un panneau/modale déjà encadré. */
+    size?: "md" | "sm";
+  }>(),
+  { size: "md" },
+);
 
 const defaultMessage: Record<"loading" | "empty" | "error", string> = {
   loading: "Chargement…",
@@ -26,12 +32,14 @@ const text = computed(() => props.message ?? defaultMessage[props.state]);
 </script>
 
 <template>
-  <div class="flex flex-col items-center gap-3 rounded-lg border border-border bg-surface p-8 text-center text-muted">
+  <div
+    class="flex flex-col items-center gap-3 text-center text-muted"
+    :class="size === 'md' ? 'rounded-lg border border-border bg-surface p-8' : 'p-3'"
+  >
     <UIcon
       :name="stateIcon[state]"
-      class="h-8 w-8"
-      :class="[stateToneClass[state], state === 'loading' ? 'animate-spin' : '']"
+      :class="[stateToneClass[state], state === 'loading' ? 'animate-spin' : '', size === 'md' ? 'h-8 w-8' : 'h-5 w-5']"
     />
-    <p :class="state === 'error' ? 'text-danger' : ''">{{ text }}</p>
+    <p :class="[state === 'error' ? 'text-danger' : '', size === 'sm' ? 'text-sm' : '']">{{ text }}</p>
   </div>
 </template>

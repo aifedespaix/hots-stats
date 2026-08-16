@@ -72,14 +72,7 @@ function formLabel(recentForm: boolean[]): string {
     </div>
 
     <div class="space-y-3">
-      <UInput
-        v-model="search"
-        placeholder="Rechercher une carte"
-        icon="i-lucide-search"
-        size="xl"
-        class="w-full"
-        :ui="{ base: 'h-14 w-full rounded-full px-5 text-base', leadingIcon: 'size-5' }"
-      />
+      <UiSearchInput v-model="search" placeholder="Rechercher une carte" size="lg" full-width />
       <USelectMenu
         v-model="sortMode"
         :items="sortOptions"
@@ -92,9 +85,7 @@ function formLabel(recentForm: boolean[]): string {
       />
     </div>
 
-    <div v-if="filteredMaps.length === 0" class="rounded-lg border border-dashed border-border p-8 text-center text-muted">
-      Aucune carte ne correspond à ta recherche.
-    </div>
+    <UiStateCard v-if="filteredMaps.length === 0" state="empty" message="Aucune carte ne correspond à ta recherche." />
 
     <div v-else class="grid grid-cols-[repeat(auto-fit,minmax(16.25rem,1fr))] gap-4">
       <NuxtLink

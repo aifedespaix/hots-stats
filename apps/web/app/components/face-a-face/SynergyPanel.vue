@@ -43,12 +43,8 @@ const comboItems = computed(() =>
       />
     </div>
 
-    <NuxtLink
-      v-if="friendBattletag && synergy.gamesPlayed > 0"
-      :to="`/matches?allyBattletag=${encodeURIComponent(friendBattletag)}`"
-      class="inline-flex items-center gap-1 text-sm text-brand hover:underline"
-    >
-      Voir nos parties ensemble &rarr;
-    </NuxtLink>
+    <UiArrowLink v-if="friendBattletag && synergy.gamesPlayed > 0" :to="`/matches?allyBattletag=${encodeURIComponent(friendBattletag)}`">
+      Voir nos parties ensemble
+    </UiArrowLink>
   </div>
 </template>

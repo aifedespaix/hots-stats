@@ -12,13 +12,7 @@ defineProps<{ me: VersusPlayer; friend: VersusPlayer }>();
   <div class="relative overflow-hidden rounded-lg border border-border bg-surface">
     <div class="flex">
       <div class="flex flex-1 flex-col items-center gap-2 bg-brand/10 px-3 py-8 text-center sm:py-10">
-        <img
-          v-if="me.avatarUrl"
-          :src="me.avatarUrl"
-          :alt="me.displayName"
-          class="h-16 w-16 rounded-full ring-4 ring-brand sm:h-20 sm:w-20"
-        >
-        <UIcon v-else name="i-heroicons-user-circle" class="h-16 w-16 text-brand sm:h-20 sm:w-20" />
+        <PlayersPlayerAvatar :avatar-url="me.avatarUrl" :display-name="me.displayName" size="lg" tone="brand" />
         <p class="mt-1 max-w-full truncate font-heading text-lg font-semibold text-brand sm:text-xl">
           {{ me.displayName }}
         </p>
@@ -26,13 +20,12 @@ defineProps<{ me: VersusPlayer; friend: VersusPlayer }>();
       </div>
 
       <div class="flex flex-1 flex-col items-center gap-2 bg-accent/10 px-3 py-8 text-center sm:py-10">
-        <img
-          v-if="friend.avatarUrl"
-          :src="friend.avatarUrl"
-          :alt="friend.displayName"
-          class="h-16 w-16 rounded-full ring-4 ring-accent sm:h-20 sm:w-20"
-        >
-        <UIcon v-else name="i-heroicons-user-circle" class="h-16 w-16 text-accent sm:h-20 sm:w-20" />
+        <PlayersPlayerAvatar
+          :avatar-url="friend.avatarUrl"
+          :display-name="friend.displayName"
+          size="lg"
+          tone="accent"
+        />
         <p class="mt-1 max-w-full truncate font-heading text-lg font-semibold text-accent sm:text-xl">
           {{ friend.displayName }}
         </p>

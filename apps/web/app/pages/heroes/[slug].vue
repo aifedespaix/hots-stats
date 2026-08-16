@@ -122,7 +122,7 @@ const talentsByTier = computed(() => {
 
   <div v-else-if="data" class="space-y-8">
     <div class="space-y-3">
-      <NuxtLink to="/heroes" class="text-sm text-brand hover:underline">&larr; Retour aux héros</NuxtLink>
+      <UiBackLink to="/heroes" label="Retour aux héros" />
       <div class="flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-center gap-4">
           <HeroesHeroAvatar :hero-id="heroId" :name="data.hero.heroName" :role="data.hero.heroRole" :size="80" ring />
@@ -238,7 +238,7 @@ const talentsByTier = computed(() => {
       </div>
 
       <div v-if="matchupsPending" class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div v-for="i in 2" :key="i" class="h-40 animate-pulse rounded-lg border border-border bg-surface" />
+        <UiSkeletonBlock v-for="i in 2" :key="i" class="h-40 rounded-lg border border-border bg-surface" />
       </div>
       <UiGlobalScopeBadge v-else-if="matchupsData" :scope="matchupScope">
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
