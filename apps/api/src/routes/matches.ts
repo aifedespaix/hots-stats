@@ -16,7 +16,9 @@ import { and, asc, desc, eq, exists, gte, ilike, inArray, isNull, lte, ne, or, s
 import { alias } from "drizzle-orm/pg-core";
 import { Hono } from "hono";
 import { z } from "zod";
+import { MIN_RELIABLE_STATS_PARSER_VERSION } from "../constants";
 import { gameModeListSchema, gameVersionListSchema } from "../lib/query";
+import { isVersionAtLeast } from "../lib/parser-version";
 import { authSession, requireUser } from "../middleware/auth-session";
 import { getFriendshipStatuses } from "../services/friendships.service";
 
@@ -476,6 +478,7 @@ export const matchesRoute = new Hono<Env>()
         mapId: matches.mapId,
         mapName: maps.name,
         region: matches.region,
+        parserVersion: matches.parserVersion,
       })
       .from(matches)
       .innerJoin(maps, eq(maps.id, matches.mapId))
@@ -485,6 +488,12 @@ export const matchesRoute = new Hono<Env>()
     if (!match) {
       return c.json({ error: "Match not found" }, 404);
     }
+
+    // See MIN_RELIABLE_STATS_PARSER_VERSION's docstring -- a match parsed
+    // before that version can have corrupted combat stats (whole columns
+    // stuck at 0, or one player's value duplicated onto others), and only
+    // self-heals once its owning player's daemon resyncs it.
+    const statsReliable = isVersionAtLeast(match.parserVersion, MIN_RELIABLE_STATS_PARSER_VERSION);
 
     const players = await db
       .select({
@@ -658,6 +667,7 @@ export const matchesRoute = new Hono<Env>()
 
     return c.json({
       match,
+      statsReliable,
       teams: [0, 1].map((team) => ({
         team,
         players: playersWithTalents.filter((p) => p.team === team),
