@@ -17,11 +17,12 @@ internal network (see `REPLAY_PARSER_URL` in apps/api/src/lib/env.ts).
 
 from __future__ import annotations
 
+import json
 import logging
 import tempfile
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
 from daemon_core import parser as replay_parser
@@ -38,12 +39,22 @@ def health() -> dict[str, bool]:
 
 
 @app.post("/parse")
-async def parse(file: UploadFile = File(...)) -> JSONResponse:
+async def parse(file: UploadFile = File(...), calibrations: str | None = Form(None)) -> JSONResponse:
     """Parses one uploaded replay and returns `replayPayloadSchema`-shaped
     JSON (see packages/shared-types) -- the exact same shape `parser.py`
     hands to `ApiClient.post_replay` in the daemon. `apps/api`'s `POST
     /uploads` feeds this straight into `ingestReplayPayload`, the same
     adapter-resolution/upsert path `POST /ingest` uses for the daemon.
+
+    `calibrations` is an optional JSON-encoded `{mapId: {minX, maxX, minY,
+    maxY, ...}}` form field, passed straight through to `parse_replay` (see
+    its docstring) so a web-uploaded replay gets a `spatial` block exactly
+    like a daemon upload does when its map is calibrated -- this service has
+    no daemon-style local cache of its own, so `apps/api`'s `POST /uploads`
+    (which already reads `map_calibrations` directly for other purposes)
+    fetches it fresh and forwards it on every request instead. Malformed or
+    missing JSON is treated the same as "no calibrations known" rather than
+    failing the whole parse over it.
 
     422 (not 400) for a file that read fine but couldn't be turned into a
     valid payload -- `ReplaySkipped` (e.g. an AI player) and
@@ -55,12 +66,19 @@ async def parse(file: UploadFile = File(...)) -> JSONResponse:
     if not (file.filename or "").lower().endswith(".stormreplay"):
         raise HTTPException(status_code=400, detail={"message": "Expected a .StormReplay file."})
 
+    parsed_calibrations: dict[str, dict] | None = None
+    if calibrations:
+        try:
+            parsed_calibrations = json.loads(calibrations)
+        except (TypeError, ValueError):
+            logger.warning("Ignoring malformed calibrations field for %s", file.filename)
+
     data = await file.read()
     with tempfile.NamedTemporaryFile(suffix=".StormReplay") as tmp:
         tmp.write(data)
         tmp.flush()
         try:
-            payload = replay_parser.parse_replay(Path(tmp.name))
+            payload = replay_parser.parse_replay(Path(tmp.name), calibrations=parsed_calibrations)
         except replay_parser.ReplaySkipped as err:
             logger.info("Skipped %s: %s", file.filename, err)
             raise HTTPException(status_code=422, detail={"reason": err.reason, "message": str(err)}) from err

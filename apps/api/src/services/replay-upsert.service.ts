@@ -38,6 +38,28 @@ function isVersionGreater(incoming: string, stored: string): boolean {
   return false;
 }
 
+/**
+ * True if `matchId` already has at least one `match_spatial_grids` row.
+ * Only queried on the "otherwise would be a stale-version no-op" path in
+ * `upsertReplay` below, to detect the one case where a same-version
+ * re-upload must still go through: a map getting calibrated *after* a
+ * match was first ingested doesn't bump PARSER_VERSION at all (calibration
+ * is server-side data, not parser code), so without this check a replay
+ * re-parsed specifically to pick up that new calibration -- daemon-side via
+ * `sync_state.invalidate_stale_for_maps`, or a manual web re-upload -- would
+ * arrive with a non-null `payload.spatial` and still be silently dropped as
+ * "stale_version", never actually backfilling the heatmap it was re-sent for.
+ */
+async function matchHasSpatialData(matchId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ matchPlayerId: matchSpatialGrids.matchPlayerId })
+    .from(matchSpatialGrids)
+    .innerJoin(matchPlayers, eq(matchPlayers.id, matchSpatialGrids.matchPlayerId))
+    .where(eq(matchPlayers.matchId, matchId))
+    .limit(1);
+  return row !== undefined;
+}
+
 interface PlayerSpatialContribution {
   battletag: string;
   heroId: string;
@@ -136,7 +158,10 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
     .limit(1);
 
   if (existing && !isVersionGreater(payload.parserVersion, existing.parserVersion)) {
-    return { upserted: false, reason: "stale_version", matchId: existing.id };
+    const addsSpatialData = payload.spatial != null && !(await matchHasSpatialData(existing.id));
+    if (!addsSpatialData) {
+      return { upserted: false, reason: "stale_version", matchId: existing.id };
+    }
   }
 
   // Grouped by battletag up front so the per-player loop below can look each

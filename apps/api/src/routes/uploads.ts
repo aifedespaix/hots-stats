@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { env } from "../lib/env";
 import { authSession, requireUser } from "../middleware/auth-session";
 import { ingestReplayPayload } from "../services/replay-ingest.service";
+import { getAllCalibrations } from "../services/spatial-calibration.service";
 
 type Env = { Variables: { user: User } };
 
@@ -25,10 +26,20 @@ const REPLAY_EXTENSION = ".stormreplay";
  * Windows daemon produces locally and posts to `POST /ingest` -- letting the
  * web dropzone reuse the exact same downstream adapter/upsert pipeline
  * (`ingestReplayPayload`) as the daemon, instead of a second, divergent one.
+ *
+ * `calibrations` (this request's `getAllCalibrations()` snapshot, fetched
+ * once for the whole batch below) is forwarded as a JSON form field so
+ * replay-parser can build a `spatial` block for a calibrated map, the same
+ * way the daemon does with its own cached copy -- without this, a web
+ * upload could never produce spatial data at all, calibrated map or not.
  */
-async function parseWithReplayParser(file: File): Promise<Record<string, unknown>> {
+async function parseWithReplayParser(
+  file: File,
+  calibrations: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
   const form = new FormData();
   form.append("file", file, file.name);
+  form.append("calibrations", JSON.stringify(calibrations));
 
   let response: Response;
   try {
@@ -77,6 +88,11 @@ export const uploadsRoute = new Hono<Env>()
       return c.json({ error: `Trop de fichiers en une seule fois (maximum ${MAX_FILES_PER_REQUEST}).` }, 400);
     }
 
+    // Fetched once for the whole batch, not per-file -- a drag-and-drop of
+    // a full replay folder can be dozens of files, and calibrations don't
+    // change mid-request.
+    const calibrations = await getAllCalibrations();
+
     const results: UploadOutcome[] = [];
     for (const file of files) {
       if (!file.name.toLowerCase().endsWith(REPLAY_EXTENSION)) {
@@ -86,7 +102,7 @@ export const uploadsRoute = new Hono<Env>()
 
       let payload: Record<string, unknown>;
       try {
-        payload = await parseWithReplayParser(file);
+        payload = await parseWithReplayParser(file, calibrations);
       } catch (err) {
         results.push({
           fileName: file.name,
