@@ -190,6 +190,18 @@
   --raw-role-support: 0.78 0.19 254;
 }
 
+/*
+ * Belt-and-suspenders against horizontal scroll: any element that
+ * miscalculates its width (e.g. a flex child without min-width: 0 whose
+ * content grows -- see the game-version USelectMenu fix in matches/index.vue)
+ * should clip rather than push the whole page sideways on mobile.
+ */
+html,
+body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
 body {
   background-color: oklch(var(--raw-background));
   color: oklch(var(--raw-foreground));
