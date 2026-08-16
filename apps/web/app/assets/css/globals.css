@@ -195,9 +195,15 @@
  * miscalculates its width (e.g. a flex child without min-width: 0 whose
  * content grows -- see the game-version USelectMenu fix in matches/index.vue)
  * should clip rather than push the whole page sideways on mobile.
+ *
+ * This must stay on `html` only, never also on `body`: overflow-x on the
+ * root only propagates to the viewport's scrolling box when the root's
+ * overflow is `visible`. Setting it on both turns `body` into its own real
+ * scroll container instead, which splits page scrolling into two nested
+ * contexts -- the sticky header and sidebar then stick to the wrong one
+ * and scroll away with the page instead of staying fixed.
  */
-html,
-body {
+html {
   overflow-x: hidden;
   max-width: 100vw;
 }
