@@ -13,8 +13,12 @@ interface NavItem {
   featured?: boolean;
 }
 
-// Logical order for the desktop sidebar (home first, settings last).
-const navItems: NavItem[] = [
+const isAdmin = computed(() => authData.value?.user?.role === "admin");
+
+// Logical order for the desktop sidebar (home first, settings last). Admin
+// (when applicable) is appended last of all -- a rare, power-user-only
+// entry, kept out of the fixed mobile bottom bar below.
+const navItems = computed<NavItem[]>(() => [
   { to: "/", label: "Dashboard", icon: "i-heroicons-squares-2x2", featured: true },
   { to: "/upload", label: "Upload", icon: "i-heroicons-cloud-arrow-up" },
   { to: "/draft", label: "Live Draft", icon: "i-heroicons-bolt" },
@@ -26,11 +30,12 @@ const navItems: NavItem[] = [
   { to: "/analysis", label: "Diagnostic", icon: "i-heroicons-chart-bar" },
   { to: "/friends", label: "Amis", icon: "i-heroicons-users" },
   { to: "/settings", label: "Paramètres", icon: "i-heroicons-cog-6-tooth" },
-];
+  ...(isAdmin.value ? [{ to: "/admin", label: "Admin", icon: "i-heroicons-shield-check" }] : []),
+]);
 
 // The mobile app bar only has room for 2 links on each side of the central
 // Dashboard button -- every other page (Upload, Cartes, Talents, Joueurs,
-// Diagnostic, Paramètres) is reachable from the Dashboard's nav cards
+// Diagnostic, Paramètres, Admin) is reachable from the Dashboard's nav cards
 // instead. These are the four kept visible at all times.
 const mobileNavLeft: NavItem[] = [
   { to: "/draft", label: "Live Draft", icon: "i-heroicons-bolt" },

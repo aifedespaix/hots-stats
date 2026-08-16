@@ -4,6 +4,7 @@ import { Hono } from "hono";
 import { authSession, requireUser } from "../middleware/auth-session";
 import { requireAdmin } from "../middleware/require-admin";
 import {
+  generateExampleSample,
   getPendingSample,
   listPendingMapIds,
   saveCalibration,
@@ -25,6 +26,13 @@ export const adminSpatialRoute = new Hono<Env>()
       return c.json({ error: "No pending sample for this map" }, 404);
     }
     return c.json({ mapId: sample.mapId, points: sample.rawPoints, receivedAt: sample.receivedAt.toISOString() });
+  })
+  // Testing convenience, not a real ingestion path: generates a synthetic
+  // raw sample for `mapId` so the calibration tool can be exercised without
+  // a real replay upload -- see `generateExampleSample`'s doc comment.
+  .post("/samples/:mapId/example", async (c) => {
+    const result = await generateExampleSample(c.req.param("mapId"));
+    return c.json({ status: "ok", pointCount: result.points.length }, 202);
   })
   .post("/calibrate", async (c) => {
     const parsed = postSpatialCalibrateInputSchema.safeParse(await c.req.json().catch(() => null));
