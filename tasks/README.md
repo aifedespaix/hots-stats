@@ -224,3 +224,14 @@ Voir aussi `tasks/daemon-audit-2026-08-12.md` : état des lieux critique du
 daemon (perf/logique/UX), 3 corrections déjà appliquées, et 5 chantiers plus
 gros identifiés (notifications proactives du tray, sync initiale
 parallélisée, etc.) qui restent à valider avant implémentation.
+
+Voir aussi `tasks/epic-10-analyse-spatiale.md` : brief de conception (pas
+encore implémenté) pour une fonctionnalité "Analyse Spatiale" (heatmap de
+présence + kills/morts superposés sur l'image de map) sur `/matches/:id`
+(remplace le placeholder `HeatmapsPlaceholder.vue`) et `/maps/:mapId`.
+Couvre le modèle de payload Daemon→API (grille sparse + résolution
+mathématiquement justifiée), l'algorithme de normalisation
+coordonnées→pixels responsive, et le wireframe/UX (concept de "Slot" de
+comparaison réutilisable). Prérequis non satisfait aujourd'hui : le daemon
+n'extrait pas encore `SUnitPositionsEvent` (aucune coordonnée nulle part
+dans le pipeline actuel) — c'est le premier chantier avant tout le reste.
