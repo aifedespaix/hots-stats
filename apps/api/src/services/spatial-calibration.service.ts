@@ -30,6 +30,62 @@ export async function upsertRawSamples(mapId: string, points: { x: number; y: nu
     });
 }
 
+// Arbitrary fixed "world" rectangle for synthetic example data -- not tied
+// to any real HotS map's actual coordinate system (which the calibration
+// tool has no way to know ahead of time anyway). Only exists so an admin
+// can exercise the real /admin/spatial/samples/:mapId -> canvas ->
+// /admin/spatial/calibrate pipeline end to end without a real replay.
+const EXAMPLE_WORLD_BOUNDS = { minX: -200, maxX: 200, minY: -150, maxY: 150 };
+const EXAMPLE_SCATTER_COUNT = 200;
+const EXAMPLE_CLUSTER_COUNT = 50;
+// Scattered points stay this far inset from the true bounds (real player
+// positions rarely touch the literal map edge) -- also means "Auto-ajuster
+// aux points" won't trivially reproduce EXAMPLE_WORLD_BOUNDS exactly,
+// closer to what a real daemon sample would look like.
+const EXAMPLE_INSET_RATIO = 0.15;
+
+function randomInRange(min: number, max: number): number {
+  return min + Math.random() * (max - min);
+}
+
+/**
+ * Generates a synthetic raw sample for `mapId` and stores it exactly like a
+ * real daemon upload would (via `upsertRawSamples`) -- lets an admin test
+ * the calibration tool's canvas/projection/save flow against a real map
+ * image without needing an actual replay. Not real spatial data: never
+ * calibrate a map for production use from this, only to verify the tool
+ * itself works.
+ *
+ * The point cloud is deliberately asymmetric: most points scattered evenly
+ * across an inset rectangle, plus a denser cluster near the `(minX, minY)`
+ * corner -- once calibrated, that cluster should visibly land at the
+ * *bottom-left* of the canvas, which is a concrete, checkable confirmation
+ * that the Y-axis inversion (`utils/mapProjection.ts`) is behaving as
+ * intended, not just "some points appeared somewhere."
+ */
+export async function generateExampleSample(mapId: string): Promise<{ mapId: string; points: { x: number; y: number }[] }> {
+  const { minX, maxX, minY, maxY } = EXAMPLE_WORLD_BOUNDS;
+  const insetX = (maxX - minX) * EXAMPLE_INSET_RATIO;
+  const insetY = (maxY - minY) * EXAMPLE_INSET_RATIO;
+
+  const scattered = Array.from({ length: EXAMPLE_SCATTER_COUNT }, () => ({
+    x: randomInRange(minX + insetX, maxX - insetX),
+    y: randomInRange(minY + insetY, maxY - insetY),
+  }));
+
+  // The dense corner cluster stays inside the same inset rectangle's
+  // bottom-left quarter, not right at the literal (minX, minY) corner --
+  // still unambiguously "the bottom-left region" once rendered.
+  const clustered = Array.from({ length: EXAMPLE_CLUSTER_COUNT }, () => ({
+    x: randomInRange(minX + insetX, minX + insetX + (maxX - minX) / 4),
+    y: randomInRange(minY + insetY, minY + insetY + (maxY - minY) / 4),
+  }));
+
+  const points = [...scattered, ...clustered];
+  await upsertRawSamples(mapId, points);
+  return { mapId, points };
+}
+
 /** GET /admin/spatial/pending-maps -- populates the calibration tool's map picker. */
 export async function listPendingMapIds(): Promise<string[]> {
   const rows = await db.select({ mapId: rawMapSamples.mapId }).from(rawMapSamples);

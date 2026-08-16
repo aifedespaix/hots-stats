@@ -23,8 +23,13 @@ function isSpacer(entry: MobileNavEntry): entry is NavSpacer {
   return "spacer" in entry;
 }
 
-// Logical order for the desktop sidebar (home first, settings last).
-const navItems: NavItem[] = [
+const isAdmin = computed(() => authData.value?.user?.role === "admin");
+
+// Logical order for the desktop sidebar (home first, settings last). Admin
+// (when applicable) is appended last of all -- a rare, power-user-only
+// entry, kept out of the mobile bottom bar below rather than disturbing its
+// already-tight FAB-centering layout for an infrequent path.
+const navItems = computed<NavItem[]>(() => [
   { to: "/", label: "Dashboard", icon: "i-heroicons-squares-2x2", featured: true },
   { to: "/upload", label: "Upload", icon: "i-heroicons-cloud-arrow-up" },
   { to: "/draft", label: "Live Draft", icon: "i-heroicons-bolt" },
@@ -36,18 +41,20 @@ const navItems: NavItem[] = [
   { to: "/analysis", label: "Diagnostic", icon: "i-heroicons-chart-bar" },
   { to: "/friends", label: "Amis", icon: "i-heroicons-users" },
   { to: "/settings", label: "Paramètres", icon: "i-heroicons-cog-6-tooth" },
-];
+  ...(isAdmin.value ? [{ to: "/admin", label: "Admin", icon: "i-heroicons-shield-check" }] : []),
+]);
 
 // The mobile app bar renders the featured item as a centered FAB, so it
 // needs the featured item moved to the middle of the row, with an equal
 // number of items on each side. When the remaining items are odd in
 // number, a non-clickable spacer pads the shorter side so the FAB stays
-// centered.
+// centered. Admin is excluded here (see comment on navItems above).
 const mobileNavItems = computed<MobileNavEntry[]>(() => {
-  const featuredIndex = navItems.findIndex((item) => item.featured);
-  if (featuredIndex === -1) return navItems;
-  const featured = navItems[featuredIndex]!;
-  const rest: MobileNavEntry[] = navItems.filter((_, index) => index !== featuredIndex);
+  const items = navItems.value.filter((item) => item.to !== "/admin");
+  const featuredIndex = items.findIndex((item) => item.featured);
+  if (featuredIndex === -1) return items;
+  const featured = items[featuredIndex]!;
+  const rest: MobileNavEntry[] = items.filter((_, index) => index !== featuredIndex);
   const padded = rest.length % 2 === 0 ? rest : [...rest, { spacer: true as const }];
   const middle = padded.length / 2;
   return [...padded.slice(0, middle), featured, ...padded.slice(middle)];
