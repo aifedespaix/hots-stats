@@ -138,31 +138,34 @@ docker exec $(docker ps -qf "name=hots-stats-backend.*postgres") \
 À planifier en cron régulièrement, et à copier hors du Pi (le SD/SSD d'un Pi
 n'est pas un stockage de confiance à long terme).
 
-## Accès UI à la base de données (Adminer, LAN uniquement)
+## Accès UI à la base de données (Adminer, derrière Cloudflare Access)
 
 `docker-compose.backend.yml` inclut un service `adminer` (UI web légère
 pour Postgres : parcourir/éditer les tables, lancer du SQL). Il parle à
 `postgres` via le réseau interne du compose -- Postgres lui-même n'est
-jamais publié, ni sur le LAN ni sur internet.
+jamais publié. Comme `api`, il n'a **aucun `ports:`** dans le compose : rien
+n'est ouvert sur le réseau du Pi tant que tu ne le rattaches pas
+explicitement dans Dokploy.
 
-Adminer, lui, est publié sur le port `8080` du Pi
-(`http://<ip-lan-du-pi>:8080`). Ça reste **local au réseau** tant que :
+Pour y accéder :
 
-- **aucun domaine Dokploy** n'est créé pour ce service (pas d'onglet
-  Domains sur `adminer`) ;
-- **aucune entrée n'est ajoutée dans la config du tunnel Cloudflare**
-  (`cloudflared` ne route que les hostnames explicitement déclarés dans son
-  `config.yml`/dashboard -- tant que `8080`/`adminer` n'y figure pas, le
-  tunnel ne l'expose pas, même si le port écoute sur `0.0.0.0`) ;
-- pas de redirection de port sur ta box/routeur vers `8080`.
+1. Dans Dokploy, onglet **Domains** du service `adminer` -> ajouter un
+   sous-domaine dédié (ex. `db.mondomaine.fr`) -> port conteneur `8080`.
+   Le tunnel Cloudflare route alors ce hostname vers Traefik comme pour
+   `api`/`web`.
+2. **Indispensable** : dans le dashboard Cloudflare Zero Trust, créer une
+   **Access Application** sur ce même hostname (`db.mondomaine.fr`) avec
+   une policy restreinte à ton email/compte. Adminer n'a aucune
+   authentification propre (juste les identifiants Postgres derrière) --
+   sans Access, quiconque trouve ou devine le sous-domaine y a un accès
+   complet lecture/écriture à la base. Avec Access, Cloudflare exige ta
+   connexion (OTP email, Google, etc.) avant même que la requête
+   n'atteigne le Pi.
 
-Le seul chemin d'accès reste donc "être sur le même réseau que le Pi" (WiFi
-maison, ou VPN vers ce réseau). Pour se connecter dans Adminer : système
-`PostgreSQL`, serveur `postgres` (déjà pré-rempli via
+Une fois dedans : système `PostgreSQL`, serveur `postgres` (pré-rempli via
 `ADMINER_DEFAULT_SERVER`), puis les mêmes `POSTGRES_USER` /
 `POSTGRES_PASSWORD` / `POSTGRES_DB` que dans les variables d'env Dokploy du
-service `postgres` -- Adminer n'a pas de compte propre, comme Drizzle
-Studio.
+service `postgres`.
 
 ## Notes spécifiques Raspberry Pi
 
