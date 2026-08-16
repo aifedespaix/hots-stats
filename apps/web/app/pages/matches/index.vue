@@ -257,14 +257,14 @@ function goToMatch(row: Record<string, unknown>) {
         </template>
       </USelectMenu>
 
-      <div class="flex items-center gap-1.5">
+      <div class="flex min-w-0 items-center gap-1.5">
         <USelectMenu
           v-model="selectedGameVersions"
           multiple
           value-key="value"
           :items="gameVersionItems"
           placeholder="Version"
-          class="flex-1"
+          class="min-w-0 flex-1"
         />
         <UButton
           size="xs"

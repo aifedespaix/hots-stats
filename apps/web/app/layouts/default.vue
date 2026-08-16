@@ -13,16 +13,6 @@ interface NavItem {
   featured?: boolean;
 }
 
-interface NavSpacer {
-  spacer: true;
-}
-
-type MobileNavEntry = NavItem | NavSpacer;
-
-function isSpacer(entry: MobileNavEntry): entry is NavSpacer {
-  return "spacer" in entry;
-}
-
 // Logical order for the desktop sidebar (home first, settings last).
 const navItems: NavItem[] = [
   { to: "/", label: "Dashboard", icon: "i-heroicons-squares-2x2", featured: true },
@@ -38,20 +28,24 @@ const navItems: NavItem[] = [
   { to: "/settings", label: "Paramètres", icon: "i-heroicons-cog-6-tooth" },
 ];
 
-// The mobile app bar renders the featured item as a centered FAB, so it
-// needs the featured item moved to the middle of the row, with an equal
-// number of items on each side. When the remaining items are odd in
-// number, a non-clickable spacer pads the shorter side so the FAB stays
-// centered.
-const mobileNavItems = computed<MobileNavEntry[]>(() => {
-  const featuredIndex = navItems.findIndex((item) => item.featured);
-  if (featuredIndex === -1) return navItems;
-  const featured = navItems[featuredIndex]!;
-  const rest: MobileNavEntry[] = navItems.filter((_, index) => index !== featuredIndex);
-  const padded = rest.length % 2 === 0 ? rest : [...rest, { spacer: true as const }];
-  const middle = padded.length / 2;
-  return [...padded.slice(0, middle), featured, ...padded.slice(middle)];
-});
+// The mobile app bar only has room for 2 links on each side of the central
+// Dashboard button -- every other page (Upload, Cartes, Talents, Joueurs,
+// Diagnostic, Paramètres) is reachable from the Dashboard's nav cards
+// instead. These are the four kept visible at all times.
+const mobileNavLeft: NavItem[] = [
+  { to: "/draft", label: "Live Draft", icon: "i-heroicons-bolt" },
+  { to: "/friends", label: "Amis", icon: "i-heroicons-users" },
+];
+const mobileNavRight: NavItem[] = [
+  { to: "/matches", label: "Historique", icon: "i-heroicons-clock" },
+  { to: "/heroes", label: "Héros", icon: "i-heroicons-fire" },
+];
+const mobileDashboardItem: NavItem = {
+  to: "/",
+  label: "Dashboard",
+  icon: "i-heroicons-squares-2x2",
+  featured: true,
+};
 
 function isActive(to: string) {
   if (to === "/") return route.path === "/";
@@ -189,28 +183,15 @@ async function handleLogout() {
       class="fixed inset-x-0 bottom-0 z-40 flex items-stretch justify-around border-t border-border bg-surface/95 backdrop-blur md:hidden"
       style="padding-bottom: env(safe-area-inset-bottom)"
     >
-      <div
-        v-for="(item, index) in mobileNavItems"
-        :key="isSpacer(item) ? `spacer-${index}` : item.to"
-        class="flex flex-1"
-      >
-        <span v-if="isSpacer(item)" class="flex-1" aria-hidden="true" />
+      <div v-for="item in mobileNavLeft" :key="item.to" class="flex flex-1">
         <NuxtLink
-          v-else
           :to="item.to"
           :aria-current="isActive(item.to) ? 'page' : undefined"
           class="flex flex-1 flex-col items-center justify-center gap-1 py-2 text-[11px] transition-colors"
-          :class="item.featured ? 'text-foreground' : isActive(item.to) ? 'text-brand' : 'text-muted'"
+          :class="isActive(item.to) ? 'text-brand' : 'text-muted'"
         >
-          <span
-            v-if="item.featured"
-            class="-mt-7 flex h-12 w-12 items-center justify-center rounded-full bg-brand text-white shadow-lg shadow-brand/40 ring-4 ring-background transition-transform"
-            :class="isActive(item.to) ? 'scale-105' : ''"
-          >
-            <UIcon :name="item.icon" class="h-6 w-6" />
-          </span>
           <UChip
-            v-else-if="navChip(item)"
+            v-if="navChip(item)"
             :show="navChip(item)!.show"
             :text="navChip(item)!.text"
             color="error"
@@ -219,7 +200,44 @@ async function handleLogout() {
             <UIcon :name="item.icon" class="h-5 w-5" />
           </UChip>
           <UIcon v-else :name="item.icon" class="h-5 w-5" />
-          <span v-if="isActive(item.to)" class="truncate px-0.5" :class="item.featured ? 'font-medium' : ''">{{ item.label }}</span>
+          <span v-if="isActive(item.to)" class="truncate px-0.5">{{ item.label }}</span>
+        </NuxtLink>
+      </div>
+
+      <div class="flex flex-1">
+        <NuxtLink
+          :to="mobileDashboardItem.to"
+          :aria-current="isActive(mobileDashboardItem.to) ? 'page' : undefined"
+          class="flex flex-1 flex-col items-center justify-center gap-1 py-2 text-[11px] text-foreground transition-colors"
+        >
+          <span
+            class="-mt-7 flex h-12 w-12 items-center justify-center rounded-full bg-brand text-white shadow-lg shadow-brand/40 ring-4 ring-background transition-transform"
+            :class="isActive(mobileDashboardItem.to) ? 'scale-105' : ''"
+          >
+            <UIcon :name="mobileDashboardItem.icon" class="h-6 w-6" />
+          </span>
+          <span v-if="isActive(mobileDashboardItem.to)" class="truncate px-0.5 font-medium">{{ mobileDashboardItem.label }}</span>
+        </NuxtLink>
+      </div>
+
+      <div v-for="item in mobileNavRight" :key="item.to" class="flex flex-1">
+        <NuxtLink
+          :to="item.to"
+          :aria-current="isActive(item.to) ? 'page' : undefined"
+          class="flex flex-1 flex-col items-center justify-center gap-1 py-2 text-[11px] transition-colors"
+          :class="isActive(item.to) ? 'text-brand' : 'text-muted'"
+        >
+          <UChip
+            v-if="navChip(item)"
+            :show="navChip(item)!.show"
+            :text="navChip(item)!.text"
+            color="error"
+            size="sm"
+          >
+            <UIcon :name="item.icon" class="h-5 w-5" />
+          </UChip>
+          <UIcon v-else :name="item.icon" class="h-5 w-5" />
+          <span v-if="isActive(item.to)" class="truncate px-0.5">{{ item.label }}</span>
         </NuxtLink>
       </div>
     </nav>
