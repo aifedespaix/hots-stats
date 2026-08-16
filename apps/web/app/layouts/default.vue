@@ -29,12 +29,12 @@ const navItems: NavItem[] = [
 ];
 
 // The mobile app bar only has room for 2 links on each side of the central
-// Dashboard button -- every other page (Cartes, Talents, Joueurs,
-// Diagnostic, Amis, Paramètres) is reachable from the Dashboard's nav cards
+// Dashboard button -- every other page (Upload, Cartes, Talents, Joueurs,
+// Diagnostic, Paramètres) is reachable from the Dashboard's nav cards
 // instead. These are the four kept visible at all times.
 const mobileNavLeft: NavItem[] = [
-  { to: "/upload", label: "Upload", icon: "i-heroicons-cloud-arrow-up" },
   { to: "/draft", label: "Live Draft", icon: "i-heroicons-bolt" },
+  { to: "/friends", label: "Amis", icon: "i-heroicons-users" },
 ];
 const mobileNavRight: NavItem[] = [
   { to: "/matches", label: "Historique", icon: "i-heroicons-clock" },
