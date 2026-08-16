@@ -1,16 +1,16 @@
-# Graph Report - hots-stats  (2026-08-14)
+# Graph Report - hots-stats  (2026-08-16)
 
 ## Corpus Check
-- 250 files · ~223,265 words
+- 371 files · ~754,176 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1754 nodes · 3375 edges · 130 communities (108 shown, 22 thin omitted)
-- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 62 edges (avg confidence: 0.63)
+- 1468 nodes · 3061 edges · 92 communities (72 shown, 20 thin omitted)
+- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 61 edges (avg confidence: 0.63)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `503b2fe7`
+- Built from commit: `f5a519da`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -18,99 +18,72 @@
 - test_parser.py
 - draft_layout.py
 - dependencies
-- schema/index.ts
+- users
 - SyncState
-- adapters/index.ts
+- Config
 - OcrResult
 - ApiClient
 - api/src/index.ts
 - test_draft_capture.py
 - test_screen_capture.py
-- internal.ts
+- ingest.ts
 - watch_replays
 - api/package.json
-- settings/index.vue
+- test_api_client.py
 - routes/friends.ts
 - TeamCropResult
 - test_hotkey.py
-- talents.service.ts
+- ocr.py
 - db/package.json
 - routes/auth.ts
 - UpdateStatusTracker
 - test_config.py
 - daemon-python README
-- ingest.ts
+- ._set_status
 - scripts
 - auth-token.ts
-- matches/index.vue
+- routes/matches.ts
 - _SettingsWindow
-- test_app.py
+- config_file_path
 - draft_capture.py
-- quarantine.ts
+- .__init__
 - gui.py
 - tray.py
-- StatusTracker
+- ConfigError
 - find_update
 - test_updater.py
-- users.ts
-- [id].vue
-- _DaemonRunner
-- replay-payload.ts
+- hash_replay_file
+- constants.py
+- test_app.py
+- _clear_env
 - players.service.ts
 - app.py
 - compilerOptions
 - draft.service.ts
 - shared-types/package.json
-- friends/index.vue
-- players/index.vue
-- [battletag].vue
 - ._build_ui
 - autostart.py
 - updater.py
-- WinrateTrendModal.vue
-- DraftPlayerStats.vue
-- draft/index.vue
-- daemon-error.ts
 - TestChooseReading
-- [userId].vue
-- heroes/index.vue
 - fake_engines
 - Path
-- useFormat.ts
-- types/friends.ts
 - Lock
 - guess_settings_url
 - apply_update_and_exit
 - _render_relaunch_script
-- analytics.ts
 - Enum
 - Event
 - _FakeStreamingResponse
-- routes/draft.ts
-- DataTable.vue
-- [slug].vue
 - acquire
-- src/draft.ts
-- shared-types/src/index.ts
-- default.vue
 - DEPLOYMENT.md — Raspberry Pi + Dokploy Guide
-- TopHeroesTop3.vue
-- _version_gte
 - trigger_manual_update
-- DraftTeamColumn.vue
 - HOTS Stats Favicon
 - str
 - sync_state_file_path
 - ReplayErrorRecord
 - db/tsconfig.json
 - api/tsconfig.json
-- pages/index.vue
 - shared-types/tsconfig.json
-- DraftSnapshot
-- [handle].vue
-- _now
-- ThemeSwitcher.vue
-- useApiFetch.ts
 - Hero Detail OG Image
 - Home Page OG Image
 - Login Page OG Image
@@ -150,12 +123,12 @@
   tasks/daemon-audit-2026-08-12.md → daemon-python/README.md
 - `Epic 3 — Daemon & Ingestion Pipeline Brief` --conceptually_related_to--> `daemon-python README`  [INFERRED]
   tasks/epic-3-daemon-ingestion.md → daemon-python/README.md
-- `Section` --references--> `DraftHeroStat`  [EXTRACTED]
-  apps/web/components/draft/DraftPlayerStats.vue → packages/shared-types/src/draft.ts
-- `DraftPlayerStatsResponse` --references--> `DraftPlayerStats`  [EXTRACTED]
-  apps/web/types/draft.ts → packages/shared-types/src/draft.ts
-- `FriendSummaryResponse` --references--> `HeroStatsScope`  [EXTRACTED]
-  apps/web/types/friends.ts → packages/shared-types/src/stats.ts
+- `Epic 4 — Daemon CI/CD Brief` --references--> `Build Daemon Workflow`  [EXTRACTED]
+  tasks/epic-4-daemon-cicd.md → .github/workflows/build-daemon.yml
+- `README.md — HotS Analytics Overview` --references--> `DEPLOYMENT.md — Raspberry Pi + Dokploy Guide`  [EXTRACTED]
+  README.md → DEPLOYMENT.md
+- `CapturePhase` --uses--> `TeamCropResult`  [INFERRED]
+  daemon-python/src/draft_capture.py → daemon-python/src/draft_layout.py
 
 ## Import Cycles
 - None detected.
@@ -165,11 +138,11 @@
 - **Epics Roadmap Bundle** — tasks_readme_roadmap, tasks_epic_3_daemon_ingestion_brief, tasks_epic_4_daemon_cicd_brief, tasks_epic_5_web_core_brief, tasks_epic_6_web_analytics_brief [EXTRACTED 1.00]
 - **Daemon Hardening Audit Program** — daemon_python_readme_guide, tasks_daemon_audit_2026_08_12_report, concept_file_hash_cache, concept_initial_sync_threadpool, concept_proactive_tray_notifications [INFERRED 0.85]
 
-## Communities (130 total, 22 thin omitted)
+## Communities (92 total, 20 thin omitted)
 
 ### Community 0 - "test_parser.py"
 Cohesion: 0.07
-Nodes (73): Any, Tracker stat name (e.g. "HeroDamage") -> API payload field name (e.g.…, stat_field_name(), _apply_score_event(), _attribute_scope_by_player_list_index(), build_payload(), _build_protocol(), _extract_battletags() (+65 more)
+Nodes (71): Any, _apply_score_event(), _attribute_scope_by_player_list_index(), build_payload(), _build_protocol(), _extract_battletags(), _hero_attribute_code(), parse_replay() (+63 more)
 
 ### Community 1 - "draft_layout.py"
 Cohesion: 0.11
@@ -179,41 +152,41 @@ Nodes (41): _box_from_list(), _box_to_list(), crop_config_file_path(), _crop_rel
 Cohesion: 0.05
 Nodes (40): dependencies, chart.js, @hots-stats/shared-types, nuxt, @nuxt/fonts, @nuxt/ui, sharp, vue (+32 more)
 
-### Community 3 - "schema/index.ts"
-Cohesion: 0.11
-Nodes (21): Hero, heroes, heroRoleEnum, NewHero, Map, maps, NewMap, MatchPlayer (+13 more)
+### Community 3 - "users"
+Cohesion: 0.06
+Nodes (36): daemonErrorStatusEnum, daemonErrorTypeEnum, DaemonIngestError, daemonIngestErrors, NewDaemonIngestError, DraftPseudoPreference, draftPseudoPreferences, NewDraftPseudoPreference (+28 more)
 
 ### Community 4 - "SyncState"
-Cohesion: 0.09
-Nodes (29): Tracks, per replay (keyed by content hash), whether it's synced or errored, at…, Drops every "synced"/"error" record, regardless of parser version -- unlike…, Updates `file_exists` for every tracked replay against the set of…, Returns the previously computed hash for `file_path`, but only if its size and…, Records `file_path`'s freshly computed hash alongside the size/mtime it was…, SyncState, A replay overwritten in place (same size, by coincidence) but with a newer…, A daemon update that bumps PARSER_VERSION must make previously synced replays… (+21 more)
+Cohesion: 0.07
+Nodes (36): _now(), Tracks, per replay (keyed by content hash), whether it's synced or errored, at…, True if `replay_hash` was already synced at `parser_version` or newer., Records a failed parse/upload attempt so it shows up in the Debug report. A…, Drops the "synced" record for every replay synced at a parser version older…, Drops every "synced"/"error" record, regardless of parser version -- unlike…, Updates `file_exists` for every tracked replay against the set of…, Returns the previously computed hash for `file_path`, but only if its size and… (+28 more)
 
-### Community 5 - "adapters/index.ts"
-Cohesion: 0.33
-Nodes (7): DefaultAdapter, ReplayValidationError, CUSTOM_ADAPTERS, getCustomAdapter(), resolveAdapter(), ParsedReplayData, ReplayAdapter
+### Community 5 - "Config"
+Cohesion: 0.09
+Nodes (22): Top-level launcher used only for the compiled (Nuitka) build. Nuitka compiles…, ApiClientError, AuthError, Exception, QuarantinedError, Thin HTTP client for POSTing parsed replay payloads to the ingestion API., POSTs a live-draft snapshot. Unlike `post_replay`, this is time-sensitive --…, POSTs one local ingestion failure to `/ingest/errors`, so it's triageable… (+14 more)
 
 ### Community 6 - "OcrResult"
-Cohesion: 0.10
-Nodes (40): _build_team_payload(), _background_color(), _clean_text(), _get_latin_engine(), _get_multilingual_engine(), OcrResult, _prepare_crop(), Image (+32 more)
+Cohesion: 0.22
+Nodes (22): OcrResult, Reads a single player-name crop. Returns `OcrResult(None, 0.0)` for a missing…, read_player_name(), _crop(), Image, The multilingual engine failing to build (a corrupted install, a bad Nuitka…, A packaging mistake that drops `src/models/en_PP-OCRv5_rec_mobile.onnx` must…, A native ~30px-tall crop gives the recognition models far less detail to work… (+14 more)
 
 ### Community 7 - "ApiClient"
-Cohesion: 0.05
-Nodes (95): ApiClient, ApiClientError, AuthError, fetch_summary(), fetch_version(), IngestResult, ping_health(), Exception (+87 more)
+Cohesion: 0.15
+Nodes (38): ApiClient, IngestResult, ingest_file(), IngestOutcome, Path, Parses and (re-)uploads every replay in `replays_dir`. Safe to run repeatedly:…, Result of one `ingest_file` call, for callers that want to react to it: the…, Best-effort forwards one local ingestion failure to the API (`POST… (+30 more)
 
 ### Community 8 - "api/src/index.ts"
-Cohesion: 0.14
-Nodes (19): app, requireUser, healthRoute, buildMatchConditions(), Env, filtersQuerySchema, listQuerySchema, matchesRoute (+11 more)
+Cohesion: 0.13
+Nodes (22): app, requireUser, healthRoute, Env, heroesRoute, listQuerySchema, publicRoute, Env (+14 more)
 
 ### Community 9 - "test_draft_capture.py"
-Cohesion: 0.10
-Nodes (32): capture_and_submit(), CaptureStatus, DraftCaptureCoordinator, Runs one full capture. Never raises: this is called directly from the global…, Thread-safe, shared across every hotkey-triggered capture for the daemon's…, No-ops if `generation` has since been superseded, so a stale run's phase update…, Like `finish`, but leaves the failure visible (ERROR, with `message`) instead…, _client() (+24 more)
+Cohesion: 0.14
+Nodes (29): capture_and_submit(), DraftCaptureCoordinator, Runs one full capture. Never raises: this is called directly from the global…, Thread-safe, shared across every hotkey-triggered capture for the daemon's…, _client(), _no_debug_log_handler(), fixture, A superseded (older) capture finishing after a newer one has already started… (+21 more)
 
 ### Community 10 - "test_screen_capture.py"
 Cohesion: 0.11
 Nodes (29): capture_foreground_window(), capture_game_window(), capture_window(), find_foreground_window(), find_game_window(), GameWindowNotFoundError, Exception, Image (+21 more)
 
-### Community 11 - "internal.ts"
-Cohesion: 0.18
-Nodes (17): main(), errorsQuerySchema, internalRoute, paramsSchema, querySchema, resolveErrorsSchema, QuarantineVerificationResult, verifyQuarantinedBuild() (+9 more)
+### Community 11 - "ingest.ts"
+Cohesion: 0.06
+Nodes (53): main(), DefaultAdapter, ReplayValidationError, CUSTOM_ADAPTERS, getCustomAdapter(), resolveAdapter(), ParsedReplayData, ReplayAdapter (+45 more)
 
 ### Community 12 - "watch_replays"
 Cohesion: 0.13
@@ -223,9 +196,9 @@ Nodes (26): Event, Lock, Path, Watches the replays folder for newly-written `.St
 Cohesion: 0.07
 Nodes (28): dependencies, arctic, drizzle-orm, hono, @hots-stats/db, @hots-stats/shared-types, zod, devDependencies (+20 more)
 
-### Community 14 - "settings/index.vue"
-Cohesion: 0.07
-Nodes (21): battletag, battletagError, canConfirmReset, config, createdToken, { data: tokensData, refresh: refreshTokens }, newTokenName, PatSummary (+13 more)
+### Community 14 - "test_api_client.py"
+Cohesion: 0.14
+Nodes (31): fetch_summary(), fetch_version(), ping_health(), True iff `GET {base_url}/health` responds 200. Used to validate the API Base…, Best-effort `GET {base_url}/ingest/version` fetch: `{"apiVersion": ...,…, Best-effort `GET {base_url}/ingest/summary` fetch, used to validate the Access…, _config(), _response() (+23 more)
 
 ### Community 15 - "routes/friends.ts"
 Cohesion: 0.16
@@ -239,129 +212,109 @@ Nodes (25): debug_dir(), install_file_log_handler(), Image, Path, Persists debug
 Cohesion: 0.12
 Nodes (20): HotkeyManager, InvalidHotkeyError, Global keyboard shortcut that triggers a live-draft capture. Backed by the…, Raised by `validate` for a combo that can't be registered., Normalizes and validates a hotkey string (e.g. "ctrl+shift+d"), raising…, Registers a single global hotkey and calls `on_trigger` (on `keyboard`'s own…, Validates and registers `hotkey`, replacing any previously registered one. Logs…, validate() (+12 more)
 
-### Community 18 - "talents.service.ts"
-Cohesion: 0.23
-Nodes (11): Env, heroesRoute, listQuerySchema, getHeroSummaries(), getHeroSummary(), getTalentTierStats(), heroStatsQuery(), HeroStatsRow (+3 more)
+### Community 18 - "ocr.py"
+Cohesion: 0.14
+Nodes (17): _background_color(), _clean_text(), _get_latin_engine(), _get_multilingual_engine(), _prepare_crop(), Image, OCR for the tiny player-name crops off the draft screen. Backed by RapidOCR…, Builds (and caches) RapidOCR's own default (multilingual) engine. Returns… (+9 more)
 
 ### Community 19 - "db/package.json"
 Cohesion: 0.08
 Nodes (25): drizzle-kit, dependencies, drizzle-orm, postgres, devDependencies, drizzle-kit, @types/bun, typescript (+17 more)
 
 ### Community 20 - "routes/auth.ts"
-Cohesion: 0.15
-Nodes (18): env, envSchema, google, createSessionToken(), SESSION_COOKIE_MAX_AGE, SESSION_COOKIE_NAME, verifySessionToken(), authSession (+10 more)
+Cohesion: 0.16
+Nodes (17): env, envSchema, google, createSessionToken(), SESSION_COOKIE_MAX_AGE, SESSION_COOKIE_NAME, verifySessionToken(), authSession (+9 more)
 
 ### Community 21 - "UpdateStatusTracker"
-Cohesion: 0.13
-Nodes (27): AvailableUpdate, perform_update(), Thread-safe last-known-state of the updater, polled by the settings window (see…, Downloads and applies `update`, reporting progress on `status` throughout.…, Runs for the app's lifetime on a background thread: checks for a newer release…, UpdateStatusTracker, watch_for_updates(), `apply_update_and_exit` returning False means it aborted instead of exiting… (+19 more)
+Cohesion: 0.16
+Nodes (24): AvailableUpdate, perform_update(), Thread-safe last-known-state of the updater, polled by the settings window (see…, Downloads and applies `update`, reporting progress on `status` throughout.…, Runs for the app's lifetime on a background thread: checks for a newer release…, UpdateStatusTracker, watch_for_updates(), `apply_update_and_exit` returning False means it aborted instead of exiting… (+16 more)
 
 ### Community 22 - "test_config.py"
-Cohesion: 0.08
-Nodes (44): config_file_path(), ConfigError, default_replays_dir(), is_auto_update_enabled(), load_config(), open_config_folder(), open_path(), Exception (+36 more)
+Cohesion: 0.19
+Nodes (19): default_replays_dir(), load_config(), Writes the user-provided fields to the JSON config file, creating its parent…, Best-effort guess at the default HotS replays folder, e.g.…, save_config(), test_config_exists_false_before_save_true_after(), test_default_replays_dir_globs_account_folders(), test_default_replays_dir_prefers_account_with_replays() (+11 more)
 
 ### Community 23 - "daemon-python README"
 Cohesion: 0.10
 Nodes (23): Auto-Update Self-Replace/Relaunch Handoff, Daemon pytest CI Job Kept Separate From Windows Release Build, Account Data Reset Wipes Local Sync Cache, file_hash_cache Table (skip re-hashing unchanged replays), Generation-Number Cooperative Capture Cancellation, ThreadPoolExecutor for Initial Sync Backlog, Live Draft Capture Feature, Nuitka Compilation Cache Persistence (+15 more)
 
-### Community 24 - "ingest.ts"
-Cohesion: 0.24
-Nodes (11): API_VERSION, MIN_PARSER_VERSION, Env, extractBaseBuild(), ingestRoute, recordDaemonError(), quarantineRawReplay(), displayNameFromSlug() (+3 more)
+### Community 24 - "._set_status"
+Cohesion: 0.16
+Nodes (6): Caps `text` at `max_chars`, replacing anything cut off with an ellipsis, so a…, Records a rebind by listening for the next real key combo instead of asking the…, Polled while the window is open (see `__init__`/`_on_close`) so a hotkey-…, _truncate(), Label, TestCaptureResult
 
 ### Community 25 - "scripts"
 Cohesion: 0.09
 Nodes (22): devDependencies, typescript, typescript, name, private, scripts, build, check-build (+14 more)
 
 ### Community 26 - "auth-token.ts"
-Cohesion: 0.24
-Nodes (9): generatePersonalAccessToken(), hashToken(), authToken, Env, createTokenSchema, tokensRoute, NewPersonalAccessToken, PersonalAccessToken (+1 more)
+Cohesion: 0.33
+Nodes (7): generatePersonalAccessToken(), hashToken(), authToken, Env, createTokenSchema, tokensRoute, User
 
-### Community 27 - "matches/index.vue"
-Cohesion: 0.10
-Nodes (18): activeFilters, apiSortBy, columns, { data: filterOptions }, { data: matchesData, pending }, dateFrom, dateTo, FiltersResponse (+10 more)
-
-### Community 28 - "_SettingsWindow"
-Cohesion: 0.08
-Nodes (10): Caps `text` at `max_chars`, replacing anything cut off with an ellipsis, so a…, Locks the window to a fixed size and centers it. Without an explicit "WxH", Tk…, Temporarily fills every dynamically-updated label with max-length placeholder…, `self._root.after(0, func, *args)`, but a no-op once the window has closed.…, Records a rebind by listening for the next real key combo instead of asking the…, Polled while the window is open (see `__init__`/`_on_close`) so a hotkey-…, _SettingsWindow, _truncate() (+2 more)
-
-### Community 29 - "test_app.py"
+### Community 27 - "routes/matches.ts"
 Cohesion: 0.16
-Nodes (23): Event, Path, Called once per daemon start: asks the API its version and, if it reports a…, Uploads every replay already on disk -- via a small pool of worker threads, see…, _run_sync_loop(), _sync_api_version(), _config(), Regression test: an install that has synced replays before but has never yet… (+15 more)
+Nodes (12): gameModeListSchema, buildMatchConditions(), Env, filtersQuerySchema, listQuerySchema, matchesRoute, SORTABLE_COLUMNS, matchPlayers (+4 more)
+
+### Community 29 - "config_file_path"
+Cohesion: 0.17
+Nodes (11): config_file_path(), open_config_folder(), open_path(), Path, Path to the JSON config file, e.g. `%APPDATA%\\hots-analytics\\config.json`., Opens `path` (a file or a folder) with whatever the OS considers its default…, Opens `%APPDATA%\\hots-analytics\\` (config.json, sync_state.db, update.log,…, test_open_config_folder_creates_the_directory_if_missing() (+3 more)
 
 ### Community 30 - "draft_capture.py"
-Cohesion: 0.22
-Nodes (10): CapturePhase, Enum, str, Orchestrates one live-draft capture: hotkey press -> find the game window ->…, Everything the settings window's "Tester la capture" button (see…, Runs the same screenshot -> crop -> OCR pipeline as a real hotkey press…, run_test_capture(), TestCaptureResult (+2 more)
+Cohesion: 0.11
+Nodes (14): _build_team_payload(), CapturePhase, CaptureStatus, Enum, str, Orchestrates one live-draft capture: hotkey press -> find the game window ->…, Everything the settings window's "Tester la capture" button (see…, Runs the same screenshot -> crop -> OCR pipeline as a real hotkey press… (+6 more)
 
-### Community 31 - "quarantine.ts"
-Cohesion: 0.25
-Nodes (7): KnownBuild, knownBuilds, NewKnownBuild, NewRawReplayQuarantine, quarantineStatusEnum, RawReplayQuarantine, rawReplaysQuarantine
+### Community 31 - ".__init__"
+Cohesion: 0.20
+Nodes (7): Locks the window to a fixed size and centers it. Without an explicit "WxH", Tk…, Temporarily fills every dynamically-updated label with max-length placeholder…, Opens the settings window and blocks (on the calling thread) until it's closed.…, run_settings_window(), DraftCaptureCoordinator, StatusTracker, SyncState
 
 ### Community 32 - "gui.py"
-Cohesion: 0.13
-Nodes (12): _apply_dark_style(), _format_update_status(), _ProgressBarDriver, Settings window: shown on first run to collect the 3 required fields, and…, Renders the updater's current phase as one French status line -- including…, Switches a `ttk.Progressbar` between determinate (a known 0-100%) and…, Builds the shared dark ttk theme -- called every time a window is created (the…, _UpdateProgressWindow (+4 more)
+Cohesion: 0.11
+Nodes (15): _apply_dark_style(), _format_update_status(), _ProgressBarDriver, Settings window: shown on first run to collect the 3 required fields, and…, Renders the updater's current phase as one French status line -- including…, Switches a `ttk.Progressbar` between determinate (a known 0-100%) and…, Builds the shared dark ttk theme -- called every time a window is created (the…, _UpdateProgressWindow (+7 more)
 
 ### Community 33 - "tray.py"
 Cohesion: 0.22
 Nodes (6): Base64-encoded tray icon PNG, generated from apps/web/public/favicon.svg (the…, _build_icon_image(), Image, System tray icon (pystray): reopen the settings window, or quit cleanly.…, Loads the app's icon (the web app's favicon, composited onto a small dark…, Lock
 
-### Community 34 - "StatusTracker"
-Cohesion: 0.16
-Nodes (10): DaemonStatus, Thread-safe snapshot of the background daemon's live state: how many replays it…, StatusTracker, The initial backlog is ingested by a small pool of worker threads (see app.py's…, test_consecutive_failures_counts_a_run_without_success(), test_initial_snapshot_is_empty(), test_set_found_and_bump_found(), test_syncing_lifecycle_failure_keeps_last_error() (+2 more)
+### Community 34 - "ConfigError"
+Cohesion: 0.18
+Nodes (10): ConfigError, is_auto_update_enabled(), Exception, Reads just the `autoUpdateEnabled` preference, independent of the rest of…, Raised when required configuration is missing or invalid., Returns the raw JSON config as a dict, or `{}` if it doesn't exist yet. Used…, read_config_file(), test_is_auto_update_enabled_reads_saved_value() (+2 more)
 
 ### Community 35 - "find_update"
 Cohesion: 0.19
 Nodes (19): check_for_update(), find_update(), Pure decision logic, split out from `check_for_update` for testing: given a…, Best-effort check against GitHub's "latest release" API. Returns None on any…, _asset(), The asset itself is never versioned (see updater._ASSET_NAME) -- the release's…, Exact match, not a prefix/suffix check -- a differently-purposed asset that…, _release() (+11 more)
 
 ### Community 36 - "test_updater.py"
-Cohesion: 0.14
-Nodes (22): cleanup_stale_downloads(), downloads_dir(), parse_version(), _powershell_diagnostics(), Where a downloaded update build is staged before being handed off to the…, Clears `downloads_dir()` of anything left over from a previous run -- an update…, "v1.2.3" / "1.2.3" -> (1, 2, 3). None for anything that isn't a plain dotted-…, A best-effort environment fingerprint, logged right before every relaunch… (+14 more)
+Cohesion: 0.12
+Nodes (25): cleanup_stale_downloads(), downloads_dir(), parse_version(), _powershell_diagnostics(), Where a downloaded update build is staged before being handed off to the…, Clears `downloads_dir()` of anything left over from a previous run -- an update…, "v1.2.3" / "1.2.3" -> (1, 2, 3). None for anything that isn't a plain dotted-…, A best-effort environment fingerprint, logged right before every relaunch… (+17 more)
 
-### Community 37 - "users.ts"
-Cohesion: 0.11
-Nodes (15): daemonErrorStatusEnum, daemonErrorTypeEnum, DaemonIngestError, daemonIngestErrors, NewDaemonIngestError, DraftPseudoPreference, draftPseudoPreferences, NewDraftPseudoPreference (+7 more)
+### Community 37 - "hash_replay_file"
+Cohesion: 0.33
+Nodes (8): hash_replay_file(), Path, Stable, content-based hashing of replay files. A HotS replay file is never…, Returns the SHA-256 hex digest of the replay file's contents., Path, test_hash_differs_for_different_content(), test_hash_matches_manual_sha256(), test_hash_stable_across_calls()
 
-### Community 38 - "[id].vue"
-Cohesion: 0.14
-Nodes (17): allPlayers, columns, { data: authData }, { data, error }, isAlly(), isMe(), matchSeoDescription, matchTitle (+9 more)
+### Community 38 - "constants.py"
+Cohesion: 0.50
+Nodes (3): Static lookup tables used to translate raw replay data into the API's payload…, Tracker stat name (e.g. "HeroDamage") -> API payload field name (e.g.…, stat_field_name()
 
-### Community 39 - "_DaemonRunner"
-Cohesion: 0.10
-Nodes (19): _DaemonRunner, Starts/stops the background replay-watcher thread, one instance at a time., Wires up `TrayController.notify` (message, title) so this runner can…, Checks the just-updated status and, the first time consecutive failures cross…, `announce_initial_scan`, when True, has the tray post a one-time "found N…, _fail_once(), A run of failures crossing the threshold, then recovering, then failing again…, A `_DaemonRunner` that never had `set_tray_notify` called (every headless test… (+11 more)
-
-### Community 40 - "replay-payload.ts"
-Cohesion: 0.29
-Nodes (6): ReplayPayload, replayPayloadSchema, ReplayPlayer, replayPlayerSchema, TalentPick, talentPickSchema
+### Community 39 - "test_app.py"
+Cohesion: 0.06
+Nodes (52): _DaemonRunner, Event, Path, Called once per daemon start: asks the API its version and, if it reports a…, Starts/stops the background replay-watcher thread, one instance at a time., Wires up `TrayController.notify` (message, title) so this runner can…, Checks the just-updated status and, the first time consecutive failures cross…, `announce_initial_scan`, when True, has the tray post a one-time "found N… (+44 more)
 
 ### Community 41 - "players.service.ts"
-Cohesion: 0.18
-Nodes (13): gameModeListSchema, Env, listQuerySchema, playersRoute, encounterBase(), getPlayerHeroBreakdown(), listPlayerEncounters(), PlayerHeroBreakdown (+5 more)
+Cohesion: 0.15
+Nodes (17): Env, listQuerySchema, playersRoute, encounterBase(), getPlayerEncounter(), getPlayerHeroBreakdown(), listPlayerEncounters(), PlayerHeroBreakdown (+9 more)
 
 ### Community 42 - "app.py"
-Cohesion: 0.09
-Nodes (20): Top-level launcher used only for the compiled (Nuitka) build. Nuitka compiles…, _notify_already_running(), Wires together first-run setup, the tray icon, and the background sync daemon.…, A second launch (double-click, or autostart racing a manual start) must not…, run_app(), config_exists(), Opens the settings window and blocks (on the calling thread) until it's closed.…, A small, always-on-top standalone window shown while an update… (+12 more)
+Cohesion: 0.15
+Nodes (12): _notify_already_running(), Wires together first-run setup, the tray icon, and the background sync daemon.…, A second launch (double-click, or autostart racing a manual start) must not…, run_app(), config_exists(), A small, always-on-top standalone window shown while an update…, run_update_progress_window(), Blocks for the app's whole lifetime, pumping the tray icon's message loop. (+4 more)
 
 ### Community 43 - "compilerOptions"
 Cohesion: 0.12
 Nodes (16): compilerOptions, esModuleInterop, forceConsistentCasingInFileNames, isolatedModules, lib, module, moduleResolution, noEmit (+8 more)
 
 ### Community 44 - "draft.service.ts"
-Cohesion: 0.21
-Nodes (15): getCurrentSnapshotForViewer(), ingestDraftSnapshot(), isNewGame(), latestSnapshotByUserId, loadPreferences(), mergeTeam(), pooledNames(), publish() (+7 more)
+Cohesion: 0.10
+Nodes (35): draftRoute, Env, DraftEventSink, getCurrentSnapshotForViewer(), getPlayerDraftStats(), ingestDraftSnapshot(), isNewGame(), latestSnapshotByUserId (+27 more)
 
 ### Community 45 - "shared-types/package.json"
 Cohesion: 0.12
 Nodes (15): dependencies, zod, devDependencies, typescript, exports, typescript, zod, main (+7 more)
-
-### Community 46 - "friends/index.vue"
-Cohesion: 0.20
-Nodes (14): acceptRequest(), actionError, cancelRequest(), config, { data: friendsData, refresh: refreshFriends }, { data: requestsData, refresh: refreshRequests }, declineRequest(), extractError() (+6 more)
-
-### Community 47 - "players/index.vue"
-Cohesion: 0.13
-Nodes (12): columns, config, { data, refresh }, mode, modeOptions, { page, pageSize, total, paginated: pagedRows }, query, rows (+4 more)
-
-### Community 48 - "[battletag].vue"
-Cohesion: 0.14
-Nodes (11): battletag, columns, config, { data, error, refresh }, { data: matchesData, pending }, page, playerSeoDescription, requestError (+3 more)
 
 ### Community 49 - "._build_ui"
 Cohesion: 0.21
@@ -372,48 +325,16 @@ Cohesion: 0.22
 Nodes (12): is_enabled(), is_supported(), Launch at Windows startup" toggle, backed by the current user's `Run` registry…, True only for the compiled .exe on Windows: there's no installed binary to…, Best-effort: a registry write can fail (permissions, a locked-down machine) but…, set_enabled(), Regression test: the Run key must point at `installed_exe_path()` (the real,…, test_is_enabled_false_when_not_supported() (+4 more)
 
 ### Community 51 - "updater.py"
-Cohesion: 0.12
-Nodes (24): _append_update_log_line(), installed_exe_path(), manual_fallback_exe_path(), manual_fallback_message(), Background self-update: checks GitHub Releases for a daemon build newer than…, The path of the .exe the user actually launched (double-clicked, or the…, Where a downloaded update ends up if the automatic swap+relaunch could never be…, Best-effort copy of the already-downloaded `new_exe` to… (+16 more)
-
-### Community 52 - "WinrateTrendModal.vue"
-Cohesion: 0.18
-Nodes (11): chartData, chartOptions, cumulative, CumulativePoint, emit, errored, pending, points (+3 more)
-
-### Community 53 - "DraftPlayerStats.vue"
-Cohesion: 0.19
-Nodes (11): config, errored, medals, pending, props, Section, sections, stats (+3 more)
-
-### Community 54 - "draft/index.vue"
-Cohesion: 0.18
-Nodes (9): applyOverrides(), capturedAgoLabel, config, overrides, ownBattletag, selectedBattletag, { snapshot, connected }, teamLeft (+1 more)
-
-### Community 55 - "daemon-error.ts"
-Cohesion: 0.40
-Nodes (4): DaemonErrorReportInput, daemonErrorReportInputSchema, DaemonErrorType, daemonErrorTypeSchema
+Cohesion: 0.13
+Nodes (21): _append_update_log_line(), installed_exe_path(), manual_fallback_exe_path(), manual_fallback_message(), Background self-update: checks GitHub Releases for a daemon build newer than…, The path of the .exe the user actually launched (double-clicked, or the…, Where a downloaded update ends up if the automatic swap+relaunch could never be…, Best-effort copy of the already-downloaded `new_exe` to… (+13 more)
 
 ### Community 56 - "TestChooseReading"
 Cohesion: 0.23
 Nodes (4): _choose_reading(), Reconciles the two engines' votes for one crop. The multilingual engine wins…, `_choose_reading` is the pure decision function reconciling the two engines'…, TestChooseReading
 
-### Community 57 - "[userId].vue"
-Cohesion: 0.17
-Nodes (9): columns, { data, error }, { data: matchesData, pending: matchesPending }, friendId, friendName, page, route, { scope, saving: scopeSaving, setScope } (+1 more)
-
-### Community 58 - "heroes/index.vue"
-Cohesion: 0.17
-Nodes (10): columns, { data }, mode, modeOptions, { page, pageSize, total, paginated: pagedHeroes }, query, { scope, saving: scopeSaving, setScope }, search (+2 more)
-
 ### Community 59 - "fake_engines"
 Cohesion: 0.67
 Nodes (3): fake_engines(), fixture, Two independent fake engines, distinguished by whether RapidOCR was constructed…
-
-### Community 61 - "useFormat.ts"
-Cohesion: 0.18
-Nodes (3): gameModeFilterGroups, gameModeLabels, heroRoleLabels
-
-### Community 62 - "types/friends.ts"
-Cohesion: 0.17
-Nodes (15): HeroStats, FriendRequestItem, FriendRequestsResponse, FriendSearchResponse, FriendSearchResult, FriendsListResponse, FriendSummaryResponse, FriendUser (+7 more)
 
 ### Community 64 - "guess_settings_url"
 Cohesion: 0.29
@@ -427,61 +348,21 @@ Nodes (11): apply_update_and_exit(), Hands off to a detached PowerShell script t
 Cohesion: 0.18
 Nodes (11): Pure string-formatting split out from `apply_update_and_exit` so the script's…, _render_relaunch_script(), The bug this guards against: if Copy-Item never succeeds (e.g. a lingering…, `Start-Process` with a bare -FilePath goes through the same ShellExecute path…, Paths are interpolated with single quotes, not double quotes: a `$` in a…, `Start-Process` doesn't wait, so on its own it can't tell "relaunched and…, test_render_relaunch_script_falls_back_to_previous_version_on_copy_failure(), test_render_relaunch_script_includes_paths_version_and_retry_logic() (+3 more)
 
-### Community 67 - "analytics.ts"
-Cohesion: 0.27
-Nodes (9): HeroDetailResponse, HeroListResponse, HeroTalentsResponse, PlayerDetailResponse, PlayerHeroBreakdown, PlayerListResponse, PublicProfileResponse, PlayerEncounterStats (+1 more)
-
 ### Community 70 - "_FakeStreamingResponse"
 Cohesion: 0.22
 Nodes (5): download_update(), Streams the release asset to `dest_dir / update.asset_name`, calling…, _FakeStreamingResponse, test_download_update_reports_none_progress_without_content_length(), test_download_update_reports_progress_fraction()
-
-### Community 71 - "routes/draft.ts"
-Cohesion: 0.31
-Nodes (8): draftRoute, Env, getPlayerDraftStats(), setDraftPseudoPreference(), subscribeToDraftUpdates(), getPlayerEncounter(), draftPreferenceInputSchema, draftSnapshotInputSchema
-
-### Community 72 - "DataTable.vue"
-Cohesion: 0.25
-Nodes (8): cardColumns, DataTableColumn, emit, primaryKey, props, rows, sortableColumns, toggleSortDir()
-
-### Community 73 - "[slug].vue"
-Cohesion: 0.22
-Nodes (8): { data, error }, { data: talentsData }, heroId, heroName, heroSeoDescription, route, talentsByTier, talentTiers
 
 ### Community 74 - "acquire"
 Cohesion: 0.36
 Nodes (7): acquire(), Prevents two copies of the daemon's tray app from running at once. Uses a named…, Returns True if this process now (exclusively) holds the daemon's single-…, _install_fake_win32_modules(), test_acquire_always_true_off_windows(), test_acquire_false_and_releases_handle_when_already_running(), test_acquire_true_when_no_other_instance_holds_it()
 
-### Community 75 - "src/draft.ts"
-Cohesion: 0.22
-Nodes (8): DRAFT_MIN_RANKED_GAMES_FOR_RANKING, DRAFT_RANKED_MODES, DraftPreferenceInput, draftSlotInputSchema, DraftSlotStatus, draftSlotStatusSchema, DraftSnapshotInput, draftTeamInputSchema
-
-### Community 76 - "shared-types/src/index.ts"
-Cohesion: 0.21
-Nodes (5): emit, isGlobal, props, AuthUser, HeroStatsScope
-
-### Community 77 - "default.vue"
-Cohesion: 0.25
-Nodes (5): mobileNavItems, NavItem, navItems, route, sidebarExpanded
-
 ### Community 78 - "DEPLOYMENT.md — Raspberry Pi + Dokploy Guide"
 Cohesion: 0.25
 Nodes (5): Automatic DB Migrations on Container Startup, COOKIE_DOMAIN for Cross-Subdomain Session Sharing, Dokploy Separate Backend/Frontend Apps, DEPLOYMENT.md — Raspberry Pi + Dokploy Guide, README.md — HotS Analytics Overview
 
-### Community 79 - "TopHeroesTop3.vue"
-Cohesion: 0.29
-Nodes (6): categories, Category, medals, props, rankings, TopHeroEntry
-
-### Community 80 - "_version_gte"
-Cohesion: 0.29
-Nodes (5): True if `replay_hash` was already synced at `parser_version` or newer., Drops the "synced" record for every replay synced at a parser version older…, _version_gte(), _version_tuple(), test_version_tuple_numeric_compare()
-
 ### Community 81 - "trigger_manual_update"
 Cohesion: 0.38
 Nodes (7): Runs one check-and-apply cycle right now, on a background thread -- what the…, trigger_manual_update(), `apply_update_and_exit`'s diagnostics line only ever gets written during a real…, test_trigger_manual_update_applies_when_available(), test_trigger_manual_update_logs_diagnostics_even_when_up_to_date(), test_trigger_manual_update_reports_up_to_date(), _wait_until()
-
-### Community 82 - "DraftTeamColumn.vue"
-Cohesion: 0.33
-Nodes (3): emit, props, DraftPlayerSlot
 
 ### Community 83 - "HOTS Stats Favicon"
 Cohesion: 0.40
@@ -503,17 +384,9 @@ Nodes (5): extends, include, ../config/tsconfig-base/base.json, src, drizzle.con
 Cohesion: 0.40
 Nodes (4): extends, include, src, ../../packages/config/tsconfig-base/base.json
 
-### Community 89 - "pages/index.vue"
-Cohesion: 0.40
-Nodes (3): columns, { data: recentMatches }, { data: summary }
-
 ### Community 91 - "shared-types/tsconfig.json"
 Cohesion: 0.40
 Nodes (4): extends, include, ../config/tsconfig-base/base.json, src
-
-### Community 94 - "[handle].vue"
-Cohesion: 0.50
-Nodes (3): { data, error }, handle, route
 
 ### Community 98 - "Hero Detail OG Image"
 Cohesion: 0.67
@@ -548,18 +421,18 @@ Cohesion: 0.67
 Nodes (3): Hexagon Brand Logo (F monogram), User Profile OG Image, /u/[handle] Public Profile Page
 
 ## Knowledge Gaps
-- **407 isolated node(s):** `QuarantineVerificationResult`, `DaemonErrorGroup`, `PatSummary`, `Env`, `FriendRequest` (+402 more)
+- **236 isolated node(s):** `QuarantineVerificationResult`, `DaemonErrorGroup`, `Env`, `FriendRequest`, `FriendshipStatus` (+231 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **22 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **20 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `SyncState` connect `SyncState` to `ApiClient`, `_DaemonRunner`, `app.py`, `_version_gte`, `sync_state_file_path`, `test_config.py`, `ReplayErrorRecord`, `test_app.py`, `_now`?**
-  _High betweenness centrality (0.048) - this node is a cross-community bridge._
-- **Why does `UpdateStatusTracker` connect `UpdateStatusTracker` to `gui.py`, `test_updater.py`, `_FakeStreamingResponse`, `_DaemonRunner`, `app.py`, `trigger_manual_update`, `updater.py`, `_SettingsWindow`?**
-  _High betweenness centrality (0.036) - this node is a cross-community bridge._
-- **Why does `_SettingsWindow` connect `_SettingsWindow` to `gui.py`, `guess_settings_url`, `app.py`, `._crop_to_photo`, `._build_ui`, `updater.py`, `UpdateStatusTracker`, `test_config.py`?**
+- **Why does `SyncState` connect `SyncState` to `Config`, `ApiClient`, `test_app.py`, `app.py`, `sync_state_file_path`, `ReplayErrorRecord`?**
+  _High betweenness centrality (0.058) - this node is a cross-community bridge._
+- **Why does `_SettingsWindow` connect `_SettingsWindow` to `gui.py`, `guess_settings_url`, `ConfigError`, `._crop_to_photo`, `._build_ui`, `UpdateStatusTracker`, `._set_status`, `config_file_path`, `.__init__`?**
+  _High betweenness centrality (0.035) - this node is a cross-community bridge._
+- **Why does `UpdateStatusTracker` connect `UpdateStatusTracker` to `gui.py`, `test_updater.py`, `_FakeStreamingResponse`, `test_app.py`, `app.py`, `trigger_manual_update`, `updater.py`, `_SettingsWindow`, `.__init__`?**
   _High betweenness centrality (0.033) - this node is a cross-community bridge._
 - **Are the 2 inferred relationships involving `SyncState` (e.g. with `_DaemonRunner` and `IngestOutcome`) actually correct?**
   _`SyncState` has 2 INFERRED edges - model-reasoned connections that need verification._
@@ -567,5 +440,5 @@ _Questions this graph is uniquely positioned to answer:_
   _`_SettingsWindow` has 3 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 5 inferred relationships involving `UpdateStatusTracker` (e.g. with `_DaemonRunner` and `_ProgressBarDriver`) actually correct?**
   _`UpdateStatusTracker` has 5 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `QuarantineVerificationResult`, `DaemonErrorGroup`, `PatSummary` to the rest of the system?**
-  _407 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **What connects `QuarantineVerificationResult`, `DaemonErrorGroup`, `Env` to the rest of the system?**
+  _236 weakly-connected nodes found - possible documentation gaps or missing edges._

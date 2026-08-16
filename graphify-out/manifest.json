@@ -5,9 +5,9 @@
     "semantic_hash": "c3cc0fb5f93036bb234265262c724442"
   },
   "apps/api/package.json": {
-    "mtime": 1786527852.6861272,
-    "ast_hash": "144dc381b09714496c08e974283d7c46",
-    "semantic_hash": "144dc381b09714496c08e974283d7c46"
+    "mtime": 1786873817.3358688,
+    "ast_hash": "fde373cdc12abb7947c059bd2e5051b1",
+    "semantic_hash": ""
   },
   "apps/api/scripts/check-build.ts": {
     "mtime": 1786551201.7217054,
@@ -35,18 +35,18 @@
     "semantic_hash": "ff7cb66d4fbe78776d531d20da655a60"
   },
   "apps/api/src/constants.ts": {
-    "mtime": 1786658905.9228704,
-    "ast_hash": "acbb03182b45076fe264c115e7843b49",
+    "mtime": 1786873817.337875,
+    "ast_hash": "61f6a741026defe3ae1973e104646d68",
     "semantic_hash": ""
   },
   "apps/api/src/index.ts": {
-    "mtime": 1786709582.1444786,
-    "ast_hash": "4d750db726b2c3f605a026a1bece986d",
+    "mtime": 1786873817.338873,
+    "ast_hash": "3c80a314b61a1bf5f0cedb0c9c9eb9ab",
     "semantic_hash": ""
   },
   "apps/api/src/lib/env.ts": {
-    "mtime": 1786639416.47525,
-    "ast_hash": "688793068fe42d00d62485fd7f28bf7a",
+    "mtime": 1786806433.9914618,
+    "ast_hash": "3db19a664fcff30c536a3ab96f2df83b",
     "semantic_hash": ""
   },
   "apps/api/src/lib/oauth.ts": {
@@ -55,9 +55,9 @@
     "semantic_hash": ""
   },
   "apps/api/src/lib/query.ts": {
-    "mtime": 1786527852.6929421,
-    "ast_hash": "3ac4d702de4690c674eb7b233023a1b7",
-    "semantic_hash": "3ac4d702de4690c674eb7b233023a1b7"
+    "mtime": 1786873817.3403769,
+    "ast_hash": "1bbb51f5d98dd6ae2696f89f92c79359",
+    "semantic_hash": ""
   },
   "apps/api/src/lib/session.ts": {
     "mtime": 1786460876.747339,
@@ -85,8 +85,8 @@
     "semantic_hash": "d9fbe42d6c32985aa0863feeb5c4bd4e"
   },
   "apps/api/src/routes/auth.ts": {
-    "mtime": 1786658905.924869,
-    "ast_hash": "d5aa59ad3143fd0c4236f7ac096eb12d",
+    "mtime": 1786873817.3428867,
+    "ast_hash": "76a6c141a63c80847a0248631eddc783",
     "semantic_hash": ""
   },
   "apps/api/src/routes/draft.ts": {
@@ -95,9 +95,9 @@
     "semantic_hash": ""
   },
   "apps/api/src/routes/friends.ts": {
-    "mtime": 1786658905.926375,
-    "ast_hash": "06ccb95baed04db0606c7265587503ca",
-    "semantic_hash": "06ccb95baed04db0606c7265587503ca"
+    "mtime": 1786806433.9939735,
+    "ast_hash": "0d52e755895c1c996420fda08de9d70d",
+    "semantic_hash": ""
   },
   "apps/api/src/routes/health.ts": {
     "mtime": 1786460876.750385,
@@ -105,28 +105,28 @@
     "semantic_hash": "d44218c811d3a7f5e19f98729e4cf0b4"
   },
   "apps/api/src/routes/heroes.ts": {
-    "mtime": 1786709582.147205,
-    "ast_hash": "b12072421c48f508c80eb497b5482f89",
+    "mtime": 1786806433.9949727,
+    "ast_hash": "62c73a55dccaa40328e1ec7eb4c56518",
     "semantic_hash": ""
   },
   "apps/api/src/routes/ingest.ts": {
-    "mtime": 1786639416.4777539,
-    "ast_hash": "e3e3283ad053e90759e7d39a2695d637",
+    "mtime": 1786806433.9959726,
+    "ast_hash": "b6009fbe395da6d7336060599721eee2",
     "semantic_hash": ""
   },
   "apps/api/src/routes/internal.ts": {
-    "mtime": 1786625437.5570438,
-    "ast_hash": "0ca0e8e0f400921dc0d7317017d009e6",
+    "mtime": 1786873817.343392,
+    "ast_hash": "af950aaa2b55defa51c26b630ab0da72",
     "semantic_hash": ""
   },
   "apps/api/src/routes/matches.ts": {
-    "mtime": 1786709582.1482112,
-    "ast_hash": "8c713be7bab8630c243818b0191c5459",
+    "mtime": 1786901468.3393142,
+    "ast_hash": "a0c9ac2c30f321de9af1243c41c6d543",
     "semantic_hash": ""
   },
   "apps/api/src/routes/players.ts": {
-    "mtime": 1786658905.9275599,
-    "ast_hash": "e61c446e13f0e5b993c4d6de56f89399",
+    "mtime": 1786806433.9969714,
+    "ast_hash": "621ff0bab93a223b2a5d02a4ac035b9f",
     "semantic_hash": ""
   },
   "apps/api/src/routes/public.ts": {
@@ -135,14 +135,14 @@
     "semantic_hash": "9a3863edec9b60c5a6f80d809db2a4a6"
   },
   "apps/api/src/routes/stats.ts": {
-    "mtime": 1786527852.7000024,
-    "ast_hash": "ce3706de98e0728cd3e6e9309c2ac775",
-    "semantic_hash": "ce3706de98e0728cd3e6e9309c2ac775"
+    "mtime": 1786806433.9984753,
+    "ast_hash": "174ed807a2b92d51837ca633716c160b",
+    "semantic_hash": ""
   },
   "apps/api/src/routes/tokens.ts": {
-    "mtime": 1786460876.7524087,
-    "ast_hash": "dd99883d8cf8fcd9695d1dac522a3b85",
-    "semantic_hash": "dd99883d8cf8fcd9695d1dac522a3b85"
+    "mtime": 1786806434.0004811,
+    "ast_hash": "e4621cc9b8d5a4fba70cff06aa68e021",
+    "semantic_hash": ""
   },
   "apps/api/src/services/build-verification.service.ts": {
     "mtime": 1786551201.7247334,
@@ -170,8 +170,8 @@
     "semantic_hash": ""
   },
   "apps/api/src/services/players.service.ts": {
-    "mtime": 1786621339.3781734,
-    "ast_hash": "c991ac9703b09a850fe2e9fd63447b70",
+    "mtime": 1786873817.350423,
+    "ast_hash": "b673bbafa72cae555f348aabbbcbb6ba",
     "semantic_hash": ""
   },
   "apps/api/src/services/quarantine.service.ts": {
@@ -180,244 +180,44 @@
     "semantic_hash": "419b343e549d86077ff7918bfb9077b9"
   },
   "apps/api/src/services/replay-upsert.service.ts": {
-    "mtime": 1786527852.7030022,
-    "ast_hash": "e7775eed117e03b0e8102b8b90f099b9",
-    "semantic_hash": "e7775eed117e03b0e8102b8b90f099b9"
+    "mtime": 1786901468.3428288,
+    "ast_hash": "cb954428deb8c27ede8ec2393e663bc4",
+    "semantic_hash": ""
   },
   "apps/api/src/services/stats.service.ts": {
-    "mtime": 1786527852.7040026,
-    "ast_hash": "71701dae64fbe3f1cfe443bcb46b7bf3",
-    "semantic_hash": "71701dae64fbe3f1cfe443bcb46b7bf3"
+    "mtime": 1786806434.0069902,
+    "ast_hash": "dda4c265503ee31b58af38a0798255e7",
+    "semantic_hash": ""
   },
   "apps/api/src/services/talents.service.ts": {
-    "mtime": 1786527852.7050025,
-    "ast_hash": "344f10e8c030d32ed89e818b96c33953",
-    "semantic_hash": "344f10e8c030d32ed89e818b96c33953"
+    "mtime": 1786806434.0084927,
+    "ast_hash": "75a111d9a47ed8e116ac40951c9c67e2",
+    "semantic_hash": ""
   },
   "apps/api/tsconfig.json": {
     "mtime": 1786460876.7555351,
     "ast_hash": "3e6a3c6c488713edd6b270ce8eabb135",
     "semantic_hash": "3e6a3c6c488713edd6b270ce8eabb135"
   },
-  "apps/web/app.config.ts": {
-    "mtime": 1786460876.7575433,
-    "ast_hash": "56929ae69fa39438f723dfda6212a555",
-    "semantic_hash": "56929ae69fa39438f723dfda6212a555"
-  },
-  "apps/web/app.vue": {
-    "mtime": 1786647302.9552653,
-    "ast_hash": "b1298d75a22b9e6bfafbb2686a45eba3",
-    "semantic_hash": ""
-  },
-  "apps/web/components/charts/WinrateTrendModal.vue": {
-    "mtime": 1786709582.1552825,
-    "ast_hash": "4fa47e745050f5a15150e4598b409d24",
-    "semantic_hash": ""
-  },
-  "apps/web/components/draft/DraftPlayerStats.vue": {
-    "mtime": 1786709582.156289,
-    "ast_hash": "92b9fa9eaf5decbd5d106edff74af6b5",
-    "semantic_hash": ""
-  },
-  "apps/web/components/draft/DraftTeamColumn.vue": {
-    "mtime": 1786647302.957265,
-    "ast_hash": "85f1db616b2f16e6dc9d4e834b996d53",
-    "semantic_hash": ""
-  },
-  "apps/web/components/ui/DataTable.vue": {
-    "mtime": 1786621339.3801832,
-    "ast_hash": "f61d4d8c4e708a27a7c16a1b28879492",
-    "semantic_hash": ""
-  },
-  "apps/web/components/ui/StatTile.vue": {
-    "mtime": 1786709582.1733658,
-    "ast_hash": "b12b829bcffd27310556044de46714af",
-    "semantic_hash": ""
-  },
-  "apps/web/components/ui/StatsScopeToggle.vue": {
-    "mtime": 1786527852.709399,
-    "ast_hash": "fd933866f28903b261c84cee068b98c5",
-    "semantic_hash": "fd933866f28903b261c84cee068b98c5"
-  },
-  "apps/web/components/ui/ThemeSwitcher.vue": {
-    "mtime": 1786709582.1754067,
-    "ast_hash": "95e38a17f9b399f1f93cd6b124fc2b01",
-    "semantic_hash": ""
-  },
-  "apps/web/components/ui/TopHeroesTop3.vue": {
-    "mtime": 1786709582.1764116,
-    "ast_hash": "1b96edfe2d392392351f41189ca56a7b",
-    "semantic_hash": ""
-  },
-  "apps/web/composables/useApiFetch.ts": {
-    "mtime": 1786460876.7620559,
-    "ast_hash": "15a8b7385b1551693b966f67ee8ac63a",
-    "semantic_hash": "15a8b7385b1551693b966f67ee8ac63a"
-  },
-  "apps/web/composables/useAuth.ts": {
-    "mtime": 1786639416.4787614,
-    "ast_hash": "fffd06fbd61721ada717de1c21fce4ca",
-    "semantic_hash": ""
-  },
-  "apps/web/composables/useDraftStream.ts": {
-    "mtime": 1786527852.710398,
-    "ast_hash": "d7fc1ee5a322675e7d83e95a0ff28599",
-    "semantic_hash": "d7fc1ee5a322675e7d83e95a0ff28599"
-  },
-  "apps/web/composables/useFormat.ts": {
-    "mtime": 1786709582.1794846,
-    "ast_hash": "e0a5545e39bc29675776ae7a7d885420",
-    "semantic_hash": ""
-  },
-  "apps/web/composables/useHeroStatsScope.ts": {
-    "mtime": 1786527852.7123985,
-    "ast_hash": "63c58573d300e8296285c604c88ad525",
-    "semantic_hash": "63c58573d300e8296285c604c88ad525"
-  },
-  "apps/web/composables/usePagination.ts": {
-    "mtime": 1786527852.7123985,
-    "ast_hash": "cd88e25fdd3ca64c9d66c734b54c8598",
-    "semantic_hash": "cd88e25fdd3ca64c9d66c734b54c8598"
-  },
-  "apps/web/composables/useSortState.ts": {
-    "mtime": 1786527852.7134008,
-    "ast_hash": "567d0d36ff5dfb400515c38f7224f4d2",
-    "semantic_hash": "567d0d36ff5dfb400515c38f7224f4d2"
-  },
-  "apps/web/layouts/blank.vue": {
-    "mtime": 1786460876.764056,
-    "ast_hash": "f08aae0d30a95db33bbc4f535521c8ed",
-    "semantic_hash": "f08aae0d30a95db33bbc4f535521c8ed"
-  },
-  "apps/web/layouts/default.vue": {
-    "mtime": 1786709582.1824906,
-    "ast_hash": "aec08e9bf2dd3ab23b4a1c01b11aa4c8",
-    "semantic_hash": ""
-  },
-  "apps/web/layouts/public-profile.vue": {
-    "mtime": 1786527852.7153986,
-    "ast_hash": "50dacacfc4ea7982a7dd86d05afb28f4",
-    "semantic_hash": "50dacacfc4ea7982a7dd86d05afb28f4"
-  },
-  "apps/web/middleware/auth.ts": {
-    "mtime": 1786460876.765592,
-    "ast_hash": "0df11e3cb5c61546097bc20c67940150",
-    "semantic_hash": "0df11e3cb5c61546097bc20c67940150"
-  },
   "apps/web/nuxt.config.ts": {
-    "mtime": 1786709582.1834898,
-    "ast_hash": "9ba25af289ca5381e3a018c5de7b93a0",
+    "mtime": 1786806434.0685983,
+    "ast_hash": "815deaa00685138be656e96d3ddb36d9",
     "semantic_hash": ""
   },
   "apps/web/package.json": {
-    "mtime": 1786709582.1834898,
-    "ast_hash": "490fc08846f30bbc5e3caf9f7b310540",
-    "semantic_hash": ""
-  },
-  "apps/web/pages/draft/index.vue": {
-    "mtime": 1786647302.9663367,
-    "ast_hash": "939cc28f1a3e8dbebaa7bcfb01cd8efc",
-    "semantic_hash": ""
-  },
-  "apps/web/pages/friends/[userId].vue": {
-    "mtime": 1786709582.1865194,
-    "ast_hash": "6e59d6044dda6d18094a457803c5b209",
-    "semantic_hash": ""
-  },
-  "apps/web/pages/friends/index.vue": {
-    "mtime": 1786658905.9370923,
-    "ast_hash": "501184fff967c4920d2cf3c3a9b27fe7",
-    "semantic_hash": ""
-  },
-  "apps/web/pages/heroes/[slug].vue": {
-    "mtime": 1786709582.1880274,
-    "ast_hash": "c4811e6f87732ba794eb2b3931a55969",
-    "semantic_hash": ""
-  },
-  "apps/web/pages/heroes/index.vue": {
-    "mtime": 1786709582.189034,
-    "ast_hash": "a6e692c2b417b608ee8a09a6586de38c",
-    "semantic_hash": ""
-  },
-  "apps/web/pages/index.vue": {
-    "mtime": 1786709582.189034,
-    "ast_hash": "37a5518a0df8b7ebfeff2a83d0448070",
-    "semantic_hash": ""
-  },
-  "apps/web/pages/login.vue": {
-    "mtime": 1786639416.4797595,
-    "ast_hash": "4ae9a753af207abb98a382d0b4ef66b6",
-    "semantic_hash": ""
-  },
-  "apps/web/pages/matches/[id].vue": {
-    "mtime": 1786709582.1920314,
-    "ast_hash": "00ac0052410fe3f0a9aa63ae53e9e0ac",
-    "semantic_hash": ""
-  },
-  "apps/web/pages/matches/index.vue": {
-    "mtime": 1786709582.1930282,
-    "ast_hash": "86e71b6782cd1af0a96e9ffb76ebf95c",
-    "semantic_hash": ""
-  },
-  "apps/web/pages/players/[battletag].vue": {
-    "mtime": 1786658905.9376218,
-    "ast_hash": "4607024e7def174d5800c3f074363599",
-    "semantic_hash": ""
-  },
-  "apps/web/pages/players/index.vue": {
-    "mtime": 1786709582.1930282,
-    "ast_hash": "f632a85a3181181f25f0a438f591fece",
-    "semantic_hash": ""
-  },
-  "apps/web/pages/settings/index.vue": {
-    "mtime": 1786709582.1945322,
-    "ast_hash": "86aef3d0d7b2053cd079d94ae498e494",
-    "semantic_hash": ""
-  },
-  "apps/web/pages/u/[handle].vue": {
-    "mtime": 1786709582.1960394,
-    "ast_hash": "6c202553cbbb46458cd58f2762f9c693",
+    "mtime": 1786806434.0696216,
+    "ast_hash": "852f70a77b02a02c1c521eb20d193dcf",
     "semantic_hash": ""
   },
   "apps/web/scripts/generate-og.ts": {
-    "mtime": 1786604166.6573951,
-    "ast_hash": "98f954991a92d30add8f395c4df827da",
-    "semantic_hash": ""
-  },
-  "apps/web/tailwind.config.ts": {
-    "mtime": 1786709582.3185732,
-    "ast_hash": "9baef1c8d0e5ac465d73b027f7745afa",
+    "mtime": 1786806434.1388917,
+    "ast_hash": "4afd9ed8ef4d1707c39ad745ee48c01c",
     "semantic_hash": ""
   },
   "apps/web/tsconfig.json": {
     "mtime": 1786460876.7730732,
     "ast_hash": "b61197ae61c788e0325a972c6fc055d9",
     "semantic_hash": "b61197ae61c788e0325a972c6fc055d9"
-  },
-  "apps/web/types/analytics.ts": {
-    "mtime": 1786709582.319579,
-    "ast_hash": "6949b0fccbc240a0ee0dc4bdd373c658",
-    "semantic_hash": ""
-  },
-  "apps/web/types/draft.ts": {
-    "mtime": 1786604166.6583965,
-    "ast_hash": "0387fd6d98d492c69ab18277797c3ae8",
-    "semantic_hash": ""
-  },
-  "apps/web/types/friends.ts": {
-    "mtime": 1786527852.7269504,
-    "ast_hash": "5be0a6187b2517e1ee5c978926f19b9d",
-    "semantic_hash": "5be0a6187b2517e1ee5c978926f19b9d"
-  },
-  "apps/web/types/matches.ts": {
-    "mtime": 1786625437.5735948,
-    "ast_hash": "8bcec932c71608ba68e9857e37a7c8d7",
-    "semantic_hash": ""
-  },
-  "apps/web/utils/slugify.ts": {
-    "mtime": 1786472464.363819,
-    "ast_hash": "cd7eab2e73b1e4eaa38c62d51079aa53",
-    "semantic_hash": "cd7eab2e73b1e4eaa38c62d51079aa53"
   },
   "daemon-python/assets/generate_icons.py": {
     "mtime": 1786473692.349091,
@@ -430,8 +230,8 @@
     "semantic_hash": "83c505bd862f99a04ccc8d730a3fa28a"
   },
   "daemon-python/pyproject.toml": {
-    "mtime": 1786709582.3235786,
-    "ast_hash": "ae6cbf4f005e2726897003c9ea9f1a86",
+    "mtime": 1786901468.3548594,
+    "ast_hash": "93a597416e8ddaf5673d425324d8a39f",
     "semantic_hash": ""
   },
   "daemon-python/run.py": {
@@ -455,13 +255,13 @@
     "semantic_hash": "dc50b00bfcfbf810c174eaac0879b7a7"
   },
   "daemon-python/src/api_client.py": {
-    "mtime": 1786571393.2446682,
-    "ast_hash": "3a6c9cbcd7ecade82a2172d953665894",
-    "semantic_hash": "3a6c9cbcd7ecade82a2172d953665894"
+    "mtime": 1786901468.356861,
+    "ast_hash": "7ce011d3110c22ace1ac3e87a0b022ac",
+    "semantic_hash": ""
   },
   "daemon-python/src/app.py": {
-    "mtime": 1786621339.40024,
-    "ast_hash": "d44091705787b13f4ae5119b3ede0a04",
+    "mtime": 1786901468.3578658,
+    "ast_hash": "25bebb86be220093f0d014ab62613157",
     "semantic_hash": ""
   },
   "daemon-python/src/autostart.py": {
@@ -475,8 +275,8 @@
     "semantic_hash": "8c430066a5e715ddff8bfcd3cf9ad00e"
   },
   "daemon-python/src/constants.py": {
-    "mtime": 1786709582.3255856,
-    "ast_hash": "8809e6b38c5c0f52750040d03ff5b130",
+    "mtime": 1786901468.3578658,
+    "ast_hash": "43ccbed729515991490e05904c255b07",
     "semantic_hash": ""
   },
   "daemon-python/src/draft_capture.py": {
@@ -510,14 +310,14 @@
     "semantic_hash": "416fb0e2f0b10420012cb098ad1f657b"
   },
   "daemon-python/src/ingestion.py": {
-    "mtime": 1786621339.4037473,
-    "ast_hash": "27c2c83a4cc2782b49bf83dc3452a82e",
+    "mtime": 1786901468.3593702,
+    "ast_hash": "f7357af001a07777d0c7f0670a88b8e3",
     "semantic_hash": ""
   },
   "daemon-python/src/main.py": {
-    "mtime": 1786527852.739418,
-    "ast_hash": "cab1949ec2b6bb2357f5a089f2f83655",
-    "semantic_hash": "cab1949ec2b6bb2357f5a089f2f83655"
+    "mtime": 1786901468.3593702,
+    "ast_hash": "a5533376aee07df3b3d76827ab6ea193",
+    "semantic_hash": ""
   },
   "daemon-python/src/ocr.py": {
     "mtime": 1786576658.7503026,
@@ -525,8 +325,8 @@
     "semantic_hash": "7d5a024332a3e2ccd1391c14aae9dbea"
   },
   "daemon-python/src/parser.py": {
-    "mtime": 1786709582.32659,
-    "ast_hash": "cc806f999a897d8e9ce0faa523ad5e5b",
+    "mtime": 1786873817.42955,
+    "ast_hash": "d3cc07c120457846b2830612dc57ca56",
     "semantic_hash": ""
   },
   "daemon-python/src/screen_capture.py": {
@@ -545,8 +345,8 @@
     "semantic_hash": ""
   },
   "daemon-python/src/sync_state.py": {
-    "mtime": 1786621339.4067523,
-    "ast_hash": "682f094356fbcd2191cb9be365e6b9f1",
+    "mtime": 1786901468.3608744,
+    "ast_hash": "9c5d8a96f9c01814a812e85a7cb93386",
     "semantic_hash": ""
   },
   "daemon-python/src/tray.py": {
@@ -570,12 +370,12 @@
     "semantic_hash": "cba4c43aa2c8af2c00cb6fbb4a934e5a"
   },
   "daemon-python/tests/test_api_client.py": {
-    "mtime": 1786571393.2547417,
-    "ast_hash": "d6a372c9724b34b9e9df8d033fa6c6a1",
-    "semantic_hash": "d6a372c9724b34b9e9df8d033fa6c6a1"
+    "mtime": 1786873817.4305575,
+    "ast_hash": "4cb31267020e6c0467e7fc00715b2b56",
+    "semantic_hash": ""
   },
   "daemon-python/tests/test_app.py": {
-    "mtime": 1786571393.255748,
+    "mtime": 1786901468.3618824,
     "ast_hash": "2cfaa22bd64f0bc86c7f9f593f1f9238",
     "semantic_hash": "2cfaa22bd64f0bc86c7f9f593f1f9238"
   },
@@ -615,8 +415,8 @@
     "semantic_hash": "ff722fa2dae5f5d8374de5750a6562aa"
   },
   "daemon-python/tests/test_ingestion.py": {
-    "mtime": 1786621339.4082584,
-    "ast_hash": "9e6702cd8eea05343239d094fa13aa63",
+    "mtime": 1786901468.3628886,
+    "ast_hash": "b2aee4977eb906b973afbba3e5026895",
     "semantic_hash": ""
   },
   "daemon-python/tests/test_ocr.py": {
@@ -625,8 +425,8 @@
     "semantic_hash": "dcec65bbfeaf9bbcaf4d03649cd79043"
   },
   "daemon-python/tests/test_parser.py": {
-    "mtime": 1786709582.3280919,
-    "ast_hash": "1cd18d42901473c076d1c56ce19fe050",
+    "mtime": 1786873817.433599,
+    "ast_hash": "35b90d1b9fac8c311886e052883ff697",
     "semantic_hash": ""
   },
   "daemon-python/tests/test_screen_capture.py": {
@@ -645,8 +445,8 @@
     "semantic_hash": ""
   },
   "daemon-python/tests/test_sync_state.py": {
-    "mtime": 1786621339.410272,
-    "ast_hash": "376e39318a873b4ac0dee7a71538dbd4",
+    "mtime": 1786901468.363894,
+    "ast_hash": "6e1ad45ab7e7f9115e40c0a70ec4b1af",
     "semantic_hash": ""
   },
   "daemon-python/tests/test_updater.py": {
@@ -665,14 +465,14 @@
     "semantic_hash": "f448e5a2d9291c437b5fd8a1f6a23343"
   },
   "package.json": {
-    "mtime": 1786527852.7532048,
-    "ast_hash": "e00a6d8774286a619dccf0f2880a4392",
-    "semantic_hash": "e00a6d8774286a619dccf0f2880a4392"
+    "mtime": 1786873817.4351037,
+    "ast_hash": "75e5fa6f507624e0dddecd651bea9b93",
+    "semantic_hash": ""
   },
   "packages/config/tsconfig-base/base.json": {
-    "mtime": 1786460876.7902672,
-    "ast_hash": "7148e33cfef80d157faa1eda1e3cd131",
-    "semantic_hash": "7148e33cfef80d157faa1eda1e3cd131"
+    "mtime": 1786782496.9541676,
+    "ast_hash": "b3e0049bad2be3028888a324bb313303",
+    "semantic_hash": ""
   },
   "packages/db/drizzle.config.ts": {
     "mtime": 1786460876.7912672,
@@ -750,24 +550,24 @@
     "semantic_hash": "c4b65a90e8ebde8e0bda78e8d13d0349"
   },
   "packages/db/drizzle/meta/_journal.json": {
-    "mtime": 1786660246.0838447,
-    "ast_hash": "e003201932ac041844ac964deed7f523",
+    "mtime": 1786873817.4446793,
+    "ast_hash": "de0e09382e8b467a6c18560fffd51850",
     "semantic_hash": ""
   },
   "packages/db/package.json": {
-    "mtime": 1786527852.76027,
-    "ast_hash": "edddde6f5f178c270bd8dbe72a65f41b",
-    "semantic_hash": "edddde6f5f178c270bd8dbe72a65f41b"
+    "mtime": 1786782496.9551673,
+    "ast_hash": "2a97cfa68f653ac81f30d1a97f12afc3",
+    "semantic_hash": ""
   },
   "packages/db/src/client.ts": {
-    "mtime": 1786460876.793774,
-    "ast_hash": "188a5d9e2af3c692878c3809b0332f90",
-    "semantic_hash": "188a5d9e2af3c692878c3809b0332f90"
+    "mtime": 1786873817.4461906,
+    "ast_hash": "6594e48ae3e5aba67c1649acbd9eeebe",
+    "semantic_hash": ""
   },
   "packages/db/src/index.ts": {
-    "mtime": 1786460876.793774,
-    "ast_hash": "9af7c90fefee02aa77c8fe18e5931ab2",
-    "semantic_hash": "9af7c90fefee02aa77c8fe18e5931ab2"
+    "mtime": 1786873817.4471972,
+    "ast_hash": "e3546ff6192ad1bd18a5598c2bc17546",
+    "semantic_hash": ""
   },
   "packages/db/src/migrate.ts": {
     "mtime": 1786460876.795305,
@@ -795,8 +595,8 @@
     "semantic_hash": "012ab6a039952c4351f727e99b678459"
   },
   "packages/db/src/schema/index.ts": {
-    "mtime": 1786647302.9854453,
-    "ast_hash": "b38e18055306b2533f0a818fdba0e6bf",
+    "mtime": 1786873817.4481964,
+    "ast_hash": "9daf0e7d35108ed6209e3a5aa53a78c5",
     "semantic_hash": ""
   },
   "packages/db/src/schema/maps.ts": {
@@ -810,9 +610,9 @@
     "semantic_hash": ""
   },
   "packages/db/src/schema/matches.ts": {
-    "mtime": 1786460876.7973096,
-    "ast_hash": "33c4f905788a22f8dcddec8d748eb0c5",
-    "semantic_hash": "33c4f905788a22f8dcddec8d748eb0c5"
+    "mtime": 1786873817.4507074,
+    "ast_hash": "c0fe2e445e707e2a3c7f960ed307c812",
+    "semantic_hash": ""
   },
   "packages/db/src/schema/quarantine.ts": {
     "mtime": 1786527852.7632773,
@@ -830,14 +630,14 @@
     "semantic_hash": "2baf6a01f5364cdc42f03d9cf53474f6"
   },
   "packages/db/src/schema/users.ts": {
-    "mtime": 1786639416.4832726,
-    "ast_hash": "48aa327638b69019d772d287050817e1",
+    "mtime": 1786873817.4517114,
+    "ast_hash": "9fa58e1923017ca2f5b3b2991b4d32cf",
     "semantic_hash": ""
   },
   "packages/db/src/seed.ts": {
-    "mtime": 1786527852.765277,
-    "ast_hash": "44b4ffbc056fb738acdac6354f9b1e04",
-    "semantic_hash": "44b4ffbc056fb738acdac6354f9b1e04"
+    "mtime": 1786806434.145159,
+    "ast_hash": "979ab872e8e369570d6d1e3194269c71",
+    "semantic_hash": ""
   },
   "packages/db/tsconfig.json": {
     "mtime": 1786460876.799309,
@@ -845,9 +645,9 @@
     "semantic_hash": "2774b543ff8c28a822a8a1e7bc90a394"
   },
   "packages/shared-types/package.json": {
-    "mtime": 1786460876.800381,
-    "ast_hash": "c4526b2c43c62f54965a9d6e10ae48e5",
-    "semantic_hash": "c4526b2c43c62f54965a9d6e10ae48e5"
+    "mtime": 1786782496.9551673,
+    "ast_hash": "e0dfd82b757f6ab42a2fce69e3dec5a5",
+    "semantic_hash": ""
   },
   "packages/shared-types/src/daemon-error.ts": {
     "mtime": 1786551201.7627325,
@@ -860,18 +660,18 @@
     "semantic_hash": ""
   },
   "packages/shared-types/src/index.ts": {
-    "mtime": 1786647302.9889538,
-    "ast_hash": "73167c1ea16aa8b3355722a241294a5e",
+    "mtime": 1786873817.4532213,
+    "ast_hash": "bc5982c3e000a76535ab6af38d072465",
     "semantic_hash": ""
   },
   "packages/shared-types/src/replay-payload.ts": {
-    "mtime": 1786473692.362258,
-    "ast_hash": "a78b5b1d508dc5d6d6f10d8c9b801cdb",
-    "semantic_hash": "a78b5b1d508dc5d6d6f10d8c9b801cdb"
+    "mtime": 1786873817.4547274,
+    "ast_hash": "45974ff1b92ebdb7f9966d49cd2b8cd3",
+    "semantic_hash": ""
   },
   "packages/shared-types/src/stats.ts": {
-    "mtime": 1786709582.329095,
-    "ast_hash": "3034379b0a455c6558ac73cb51d6169f",
+    "mtime": 1786901468.3674042,
+    "ast_hash": "1a27d6f6382e2cbdb5ed115b8250e643",
     "semantic_hash": ""
   },
   "packages/shared-types/tsconfig.json": {
@@ -890,8 +690,8 @@
     "semantic_hash": "dd3e73160f2a7b48a0b43db79a71e0c9"
   },
   "DEPLOYMENT.md": {
-    "mtime": 1786639416.4732437,
-    "ast_hash": "defe0ad128c41be2c18511c941403585",
+    "mtime": 1786883751.1665292,
+    "ast_hash": "b44f98283f783c22756d5e34805c6c7e",
     "semantic_hash": ""
   },
   "README.md": {
@@ -905,8 +705,8 @@
     "semantic_hash": ""
   },
   "docker-compose.backend.yml": {
-    "mtime": 1786639607.1815543,
-    "ast_hash": "b16acc0ce7fc0f77b31f752135ffdee1",
+    "mtime": 1786883751.1675334,
+    "ast_hash": "a0fe7b9df8b156aae5b5d1dd726da74f",
     "semantic_hash": ""
   },
   "docker-compose.dev.yml": {
@@ -920,8 +720,8 @@
     "semantic_hash": "c82b3fa1d915964ef2f4de2e29b782f9"
   },
   "tasks/README.md": {
-    "mtime": 1786709582.329095,
-    "ast_hash": "af2d9b243f555786e6d11cb84c959442",
+    "mtime": 1786873817.4577374,
+    "ast_hash": "56f7f64cb278c73838e47c3fa165a5a5",
     "semantic_hash": ""
   },
   "tasks/daemon-audit-2026-08-12.md": {
@@ -1034,154 +834,19 @@
     "ast_hash": "2101ce1184748d90cc4ceabfa81cb779",
     "semantic_hash": ""
   },
-  "apps/web/components/draft/DraftTeamThreats.vue": {
-    "mtime": 1786709582.1572886,
-    "ast_hash": "0abc1124fd292c2f66fe35da23c52312",
-    "semantic_hash": ""
-  },
-  "apps/web/components/ui/MapWinrateList.vue": {
-    "mtime": 1786709582.172365,
-    "ast_hash": "aba769ca4e4332b1f2c01bfdd681336f",
-    "semantic_hash": ""
-  },
-  "apps/web/components/ui/Panel.vue": {
-    "mtime": 1786621339.3811843,
-    "ast_hash": "52b1979ca0eda21065721841067073c5",
-    "semantic_hash": ""
-  },
-  "apps/web/pages/analysis/index.vue": {
-    "mtime": 1786709582.185001,
-    "ast_hash": "cd833aa5670ef743989514b0c2d4c7b7",
-    "semantic_hash": ""
-  },
-  "apps/web/plugins/pinia-persistedstate.client.ts": {
-    "mtime": 1786621339.3892112,
-    "ast_hash": "fa0055af4199c46b6ee6df306d148eb1",
-    "semantic_hash": ""
-  },
-  "apps/web/stores/filterSortStore.ts": {
-    "mtime": 1786621339.3902156,
-    "ast_hash": "e1f160a38398273df0244ad163750681",
-    "semantic_hash": ""
-  },
-  "apps/web/stores/useHeroesFiltersStore.ts": {
-    "mtime": 1786621339.391216,
-    "ast_hash": "9f5cb98d5fdea0bf8fde066244fdf195",
-    "semantic_hash": ""
-  },
-  "apps/web/stores/useMatchesFiltersStore.ts": {
-    "mtime": 1786621339.3922164,
-    "ast_hash": "838c5f3cbc9e1254e495075f0c2bba7e",
-    "semantic_hash": ""
-  },
-  "apps/web/stores/usePlayersFiltersStore.ts": {
-    "mtime": 1786621339.3922164,
-    "ast_hash": "cb8f902d64bd6587295e767a88e7939a",
-    "semantic_hash": ""
-  },
-  "apps/web/types/weaknesses.ts": {
-    "mtime": 1786621339.3937216,
-    "ast_hash": "f3469338f44d36061ddb6f7d63c7548c",
-    "semantic_hash": ""
-  },
-  "apps/web/utils/weaknesses.ts": {
-    "mtime": 1786621339.394726,
-    "ast_hash": "60915d7e22d9adebdb8fd32894890add",
-    "semantic_hash": ""
-  },
   "daemon-python/scripts/diagnose_hero_mapping.py": {
     "mtime": 1786709582.3250823,
     "ast_hash": "b5d471ec02472f52f25808ded6c1c832",
     "semantic_hash": ""
   },
   "apps/api/src/services/uploads-diagnostics.service.ts": {
-    "mtime": 1786625437.5585518,
-    "ast_hash": "c6a4ba473c87e678decd23f927ee1c42",
-    "semantic_hash": ""
-  },
-  "apps/web/components/charts/BarChart.vue": {
-    "mtime": 1786625437.5595546,
-    "ast_hash": "2b2803895431fb2fd4499466ebf0f529",
-    "semantic_hash": ""
-  },
-  "apps/web/components/charts/ChartModal.vue": {
-    "mtime": 1786709582.1542199,
-    "ast_hash": "17f1ee6fbf50bb49bd9a7aa928f50d2e",
-    "semantic_hash": ""
-  },
-  "apps/web/components/charts/DoughnutChart.vue": {
-    "mtime": 1786625437.5615554,
-    "ast_hash": "f57ba49cdd8052155fd790ba805304ec",
-    "semantic_hash": ""
-  },
-  "apps/web/components/charts/LineChart.vue": {
-    "mtime": 1786625437.5615554,
-    "ast_hash": "4dbd6cbcb6f25bb2ab62951624e4f639",
-    "semantic_hash": ""
-  },
-  "apps/web/components/charts/MapResultsModal.vue": {
-    "mtime": 1786625437.562555,
-    "ast_hash": "639802a21e9574450ec315a6a7a7f7da",
-    "semantic_hash": ""
-  },
-  "apps/web/components/charts/PerformanceRadarModal.vue": {
-    "mtime": 1786625437.5630577,
-    "ast_hash": "6bdfbe79a70403681be6c3581c5b9394",
-    "semantic_hash": ""
-  },
-  "apps/web/components/charts/RadarChart.vue": {
-    "mtime": 1786625437.5630577,
-    "ast_hash": "b9840baff9f331835ab62fcceb749903",
-    "semantic_hash": ""
-  },
-  "apps/web/components/charts/RolePlaytimeModal.vue": {
-    "mtime": 1786625437.564561,
-    "ast_hash": "26b2a81a401b37f4ab41c1ca03c6dbfc",
-    "semantic_hash": ""
-  },
-  "apps/web/components/stats/ChartLauncherGroup.vue": {
-    "mtime": 1786709582.1643476,
-    "ast_hash": "07d5f51f81eacf2f430d2a97849ef2be",
-    "semantic_hash": ""
-  },
-  "apps/web/components/stats/Dashboard.vue": {
-    "mtime": 1786625437.5665648,
-    "ast_hash": "5c2c9e24c1f0870bcfcf6f093447e32d",
-    "semantic_hash": ""
-  },
-  "apps/web/components/stats/MiniStat.vue": {
-    "mtime": 1786709582.16736,
-    "ast_hash": "384973c1605550bc6358f1aa1c705bb1",
-    "semantic_hash": ""
-  },
-  "apps/web/components/stats/RankBadgeList.vue": {
-    "mtime": 1786709582.16736,
-    "ast_hash": "72e7b3cdcc3da56d9199489d04e452ef",
-    "semantic_hash": ""
-  },
-  "apps/web/components/stats/StatCard.vue": {
-    "mtime": 1786625437.569078,
-    "ast_hash": "dd72e0c5c14346682026b15533d3a276",
-    "semantic_hash": ""
-  },
-  "apps/web/composables/useChartTheme.ts": {
-    "mtime": 1786709582.1784856,
-    "ast_hash": "da4803225e01d1267e2af4f3db2bbbdb",
-    "semantic_hash": ""
-  },
-  "apps/web/utils/heroRoleVisuals.ts": {
-    "mtime": 1786625437.5745938,
-    "ast_hash": "9713f783a332b771573dfb16fadbbf9f",
-    "semantic_hash": ""
-  },
-  "apps/web/utils/initials.ts": {
-    "mtime": 1786625437.5745938,
-    "ast_hash": "09f44fe6bfa14ef968c9988f4920621f",
+    "mtime": 1786873817.3549857,
+    "ast_hash": "0b578e7685738a1639af0cf215658cb0",
     "semantic_hash": ""
   },
   "apps/api/src/routes/compare.ts": {
-    "mtime": 1786658905.9258697,
-    "ast_hash": "5cfbccaf64346d0f6ff19e38b079ed07",
+    "mtime": 1786806433.9929671,
+    "ast_hash": "73ff560329016e28fc64d4bbcb12db7e",
     "semantic_hash": ""
   },
   "apps/api/src/services/account-linking.service.ts": {
@@ -1190,93 +855,13 @@
     "semantic_hash": ""
   },
   "apps/api/src/services/face-a-face.service.ts": {
-    "mtime": 1786658905.9286413,
-    "ast_hash": "f8de4f7769735fa4cc80b1f7313cbbd8",
+    "mtime": 1786806434.0014808,
+    "ast_hash": "be95ab5a30b2ebb4c54e9448718d9470",
     "semantic_hash": ""
   },
   "apps/api/src/services/player-annotations.service.ts": {
     "mtime": 1786658905.9302428,
     "ast_hash": "284865c2df84de6ceed083d591f5a57d",
-    "semantic_hash": ""
-  },
-  "apps/web/components/face-a-face/MatchupPanel.vue": {
-    "mtime": 1786709582.1572886,
-    "ast_hash": "1bec0f34cb72edc2b121a2caae5e6936",
-    "semantic_hash": ""
-  },
-  "apps/web/components/face-a-face/PlaystyleRadar.vue": {
-    "mtime": 1786647302.9582999,
-    "ast_hash": "ceb9e6084ca374ee4625beb2c64690f8",
-    "semantic_hash": ""
-  },
-  "apps/web/components/face-a-face/RoleDistributionBars.vue": {
-    "mtime": 1786647302.9592998,
-    "ast_hash": "bd08a7ce419817d175f4fa82e1f56834",
-    "semantic_hash": ""
-  },
-  "apps/web/components/face-a-face/SignatureHeroes.vue": {
-    "mtime": 1786709582.1583388,
-    "ast_hash": "3b79e0a660b7596c93ea40bff1f47780",
-    "semantic_hash": ""
-  },
-  "apps/web/components/face-a-face/SynergyPanel.vue": {
-    "mtime": 1786709582.1593425,
-    "ast_hash": "d62acf7248d307b616cadf4dba4ad29f",
-    "semantic_hash": ""
-  },
-  "apps/web/components/face-a-face/TaleOfTheTape.vue": {
-    "mtime": 1786647302.9612997,
-    "ast_hash": "1ab311db100b39c79746dff790b4622a",
-    "semantic_hash": ""
-  },
-  "apps/web/components/face-a-face/VersusHeader.vue": {
-    "mtime": 1786647302.9623318,
-    "ast_hash": "1656448e1d1ec4ceb3808a1ead877a00",
-    "semantic_hash": ""
-  },
-  "apps/web/components/players/AnnotationBadges.vue": {
-    "mtime": 1786658905.9323416,
-    "ast_hash": "d2541d5e4f9177ad75ecc8c9ee7d8800",
-    "semantic_hash": ""
-  },
-  "apps/web/components/players/ProfileDetail.vue": {
-    "mtime": 1786709582.1623437,
-    "ast_hash": "e2d0b4d029455bde0d6104c63e92e922",
-    "semantic_hash": ""
-  },
-  "apps/web/components/players/ProfileModal.vue": {
-    "mtime": 1786658905.93392,
-    "ast_hash": "35e8d11d958809c8006f0be9eef04af3",
-    "semantic_hash": ""
-  },
-  "apps/web/components/ui/StarRating.vue": {
-    "mtime": 1786658905.9344447,
-    "ast_hash": "beba72134d083328cf08db63f81f512b",
-    "semantic_hash": ""
-  },
-  "apps/web/composables/useBattletagSuggestion.ts": {
-    "mtime": 1786647302.9643364,
-    "ast_hash": "a144a8cff3ebc994188e22826a341b48",
-    "semantic_hash": ""
-  },
-  "apps/web/pages/face-a-face/[battletag].vue": {
-    "mtime": 1786709582.1855083,
-    "ast_hash": "bbb65a591bbbe02bce95392dbc16b5a5",
-    "semantic_hash": ""
-  },
-  "apps/web/plugins/battletag-suggestion.client.ts": {
-    "mtime": 1786647302.9745924,
-    "ast_hash": "0ce6d69d52dc5c01ee7a3943b08457af",
-    "semantic_hash": ""
-  },
-  "apps/web/stores/usePlayerAnnotationsStore.ts": {
-    "mtime": 1786658905.940935,
-    "ast_hash": "7390dbe1dff4529ea7f3dfb261af95d7",
-    "semantic_hash": ""
-  },
-  "apps/web/types/face-a-face.ts": {
-    "mtime": 1786658905.9425101,
-    "ast_hash": "2e0e25057ad33c4045a0918ec26d5f1d",
     "semantic_hash": ""
   },
   "packages/db/drizzle/0007_cute_screwball.sql": {
@@ -1337,6 +922,2126 @@
   "packages/shared-types/src/player-annotation.ts": {
     "mtime": 1786658905.9520757,
     "ast_hash": "2b4e78e5610b60b4902acdcca71d9113",
+    "semantic_hash": ""
+  },
+  "apps/api/scripts/promote-admin.ts": {
+    "mtime": 1786873817.336873,
+    "ast_hash": "c970f45f4d12579791b4b0481ee9051a",
+    "semantic_hash": ""
+  },
+  "apps/api/src/lib/ensure-map.ts": {
+    "mtime": 1786873817.338873,
+    "ast_hash": "00cf0b31469ec4c89dd47f2ca299eb74",
+    "semantic_hash": ""
+  },
+  "apps/api/src/lib/game-fingerprint.ts": {
+    "mtime": 1786873817.3398728,
+    "ast_hash": "d305237963cd05318ec9da854e693d95",
+    "semantic_hash": ""
+  },
+  "apps/api/src/lib/normal-cdf.ts": {
+    "mtime": 1786709582.145483,
+    "ast_hash": "2f9e5af0c13f670ad14af419d180651e",
+    "semantic_hash": ""
+  },
+  "apps/api/src/lib/wilson.ts": {
+    "mtime": 1786709582.145483,
+    "ast_hash": "2a828b40c6eabfc62bf418f1cc50aa96",
+    "semantic_hash": ""
+  },
+  "apps/api/src/middleware/require-admin.ts": {
+    "mtime": 1786873817.3403769,
+    "ast_hash": "c0221f27b00f4f0d20ca0d0b1665e590",
+    "semantic_hash": ""
+  },
+  "apps/api/src/routes/admin-spatial.ts": {
+    "mtime": 1786901468.3393142,
+    "ast_hash": "433ee7c7ecb94a11bce7825bc69a6034",
+    "semantic_hash": ""
+  },
+  "apps/api/src/routes/maps.ts": {
+    "mtime": 1786873817.3448975,
+    "ast_hash": "ff09b4500899825a382358926779d2a4",
+    "semantic_hash": ""
+  },
+  "apps/api/src/routes/spatial-aggregate.ts": {
+    "mtime": 1786873817.3469138,
+    "ast_hash": "7e78de752ebed78a58c0023875580599",
+    "semantic_hash": ""
+  },
+  "apps/api/src/routes/spatial.ts": {
+    "mtime": 1786873817.3479106,
+    "ast_hash": "0fe7c4f26d40bf27c6757e6f551afa2e",
+    "semantic_hash": ""
+  },
+  "apps/api/src/routes/talent-analyzer.ts": {
+    "mtime": 1786806433.9994812,
+    "ast_hash": "20a3275bfb128609795fc71decbdcded",
+    "semantic_hash": ""
+  },
+  "apps/api/src/routes/uploads.ts": {
+    "mtime": 1786901468.3408184,
+    "ast_hash": "2e231666afc7e713d8ddfe13e7bdd8aa",
+    "semantic_hash": ""
+  },
+  "apps/api/src/services/admin.service.ts": {
+    "mtime": 1786873817.3479106,
+    "ast_hash": "b612c5342f731e3381485a96e22f1dbc",
+    "semantic_hash": ""
+  },
+  "apps/api/src/services/hero-matchups.service.ts": {
+    "mtime": 1786806434.0029857,
+    "ast_hash": "58094c04b7ce7396add6481cc57d3258",
+    "semantic_hash": ""
+  },
+  "apps/api/src/services/maps.service.ts": {
+    "mtime": 1786901468.3418236,
+    "ast_hash": "801278f3d747baebe3fb03787b9a4739",
+    "semantic_hash": ""
+  },
+  "apps/api/src/services/replay-ingest.service.ts": {
+    "mtime": 1786806434.0059903,
+    "ast_hash": "23d96b00426009e659c2005ddd9810cb",
+    "semantic_hash": ""
+  },
+  "apps/api/src/services/spatial-aggregate.service.ts": {
+    "mtime": 1786873817.3524745,
+    "ast_hash": "969a9b9b043b0a8280c7e84bec04c734",
+    "semantic_hash": ""
+  },
+  "apps/api/src/services/spatial-calibration.service.ts": {
+    "mtime": 1786901468.3438337,
+    "ast_hash": "0241f97d76d6eb08d83a7f9fb7e23344",
+    "semantic_hash": ""
+  },
+  "apps/api/src/services/spatial-rollup.service.ts": {
+    "mtime": 1786873817.3534822,
+    "ast_hash": "cf65b738e438dfea32f10f21e86fe5d1",
+    "semantic_hash": ""
+  },
+  "apps/api/src/services/talent-analyzer.service.ts": {
+    "mtime": 1786806434.0069902,
+    "ast_hash": "cfd2bb7ce6cb5b72a1d7a6a28334fce7",
+    "semantic_hash": ""
+  },
+  "apps/replay-parser/main.py": {
+    "mtime": 1786901468.3448334,
+    "ast_hash": "6520f8e42cb59aad104be19086997782",
+    "semantic_hash": ""
+  },
+  "apps/web/app/app.config.ts": {
+    "mtime": 1786806434.0140078,
+    "ast_hash": "4cc84a3f03743783b3bee0746204b529",
+    "semantic_hash": ""
+  },
+  "apps/web/app/app.vue": {
+    "mtime": 1786782496.8789897,
+    "ast_hash": "062b40acf394944cae89c603dcfeb019",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/admin/CalibrationCanvas.vue": {
+    "mtime": 1786901468.3458328,
+    "ast_hash": "25185ece7cbf18e9a7d23d3516c130f1",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/charts/BarChart.vue": {
+    "mtime": 1786782496.880992,
+    "ast_hash": "2b2803895431fb2fd4499466ebf0f529",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/charts/BuildFlowDiagram.vue": {
+    "mtime": 1786806434.0160081,
+    "ast_hash": "bb3ad2b7e947ec6894d7aa436bc8c6ce",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/charts/ChartModal.vue": {
+    "mtime": 1786873817.3569982,
+    "ast_hash": "6ab20c6332eb9596df2d65bb3859b52e",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/charts/DoughnutChart.vue": {
+    "mtime": 1786782496.8829918,
+    "ast_hash": "f57ba49cdd8052155fd790ba805304ec",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/charts/FormTrackerModal.vue": {
+    "mtime": 1786782496.8829918,
+    "ast_hash": "aac31b33b99362338a4b8566f1bdd929",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/charts/LineChart.vue": {
+    "mtime": 1786782496.8839943,
+    "ast_hash": "4dbd6cbcb6f25bb2ab62951624e4f639",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/charts/MapResultsModal.vue": {
+    "mtime": 1786806434.0170083,
+    "ast_hash": "4b801ed1a82f17b3193235e2c6462e5f",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/charts/PerformanceRadarModal.vue": {
+    "mtime": 1786806434.0170083,
+    "ast_hash": "84f645329bf71b75d63366d24d5e0b29",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/charts/RadarChart.vue": {
+    "mtime": 1786782496.8849914,
+    "ast_hash": "b9840baff9f331835ab62fcceb749903",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/charts/RolePlaytimeModal.vue": {
+    "mtime": 1786806434.018513,
+    "ast_hash": "c8183f990189be212958f75525d076b9",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/charts/WinrateTrendModal.vue": {
+    "mtime": 1786782496.8862097,
+    "ast_hash": "4fa47e745050f5a15150e4598b409d24",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/coach/HeatmapsPlaceholder.vue": {
+    "mtime": 1786901468.3468332,
+    "ast_hash": "0303155797310bb4bba35919d865fc78",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/coach/InsightCard.vue": {
+    "mtime": 1786806434.020517,
+    "ast_hash": "7b72c1c00b025b7398fdda45ad39fd2b",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/coach/InsightsModal.vue": {
+    "mtime": 1786873817.357999,
+    "ast_hash": "8c93adc96174e7b0a16bda39c4621c37",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/coach/PlayerSwitcher.vue": {
+    "mtime": 1786806434.0215178,
+    "ast_hash": "0982a00e68f9867a1efc99a3502b001e",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/coach/PlayerTalents.vue": {
+    "mtime": 1786806434.0215178,
+    "ast_hash": "53567b5457f1defef180a9c1633be5ae",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/coach/ScoreboardTable.vue": {
+    "mtime": 1786873817.3595047,
+    "ast_hash": "3ffb889ca0f6733041dbd9d83548f467",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/coach/TeamTotalsBar.vue": {
+    "mtime": 1786806434.0230215,
+    "ast_hash": "92cc0083000262148e257eda3f71fdd3",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/draft/DraftPlayerStats.vue": {
+    "mtime": 1786873817.3605113,
+    "ast_hash": "cb66a977d0bca8061fcd8230027e94dc",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/draft/DraftTeamColumn.vue": {
+    "mtime": 1786806434.0250576,
+    "ast_hash": "b2be7e38e6f361ab1c6828b20b94d207",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/draft/DraftTeamThreats.vue": {
+    "mtime": 1786873817.3620183,
+    "ast_hash": "db6821c853772cf44b8bce353fb8b0f4",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/face-a-face/MatchupPanel.vue": {
+    "mtime": 1786873817.3625753,
+    "ast_hash": "379f12c60d76d312a324b05bb2e1ff08",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/face-a-face/PlaystyleRadar.vue": {
+    "mtime": 1786806434.0270283,
+    "ast_hash": "3a170148155a69a181abd91433de57b8",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/face-a-face/RoleDistributionBars.vue": {
+    "mtime": 1786806434.0270283,
+    "ast_hash": "47b24b4f0ea65d8d9f2ba0260b70ae20",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/face-a-face/SignatureHeroes.vue": {
+    "mtime": 1786782496.891209,
+    "ast_hash": "3b79e0a660b7596c93ea40bff1f47780",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/face-a-face/SynergyPanel.vue": {
+    "mtime": 1786873817.3645835,
+    "ast_hash": "80163a252b95305b12b70a2e917b032d",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/face-a-face/TaleOfTheTape.vue": {
+    "mtime": 1786782496.8922083,
+    "ast_hash": "1ab311db100b39c79746dff790b4622a",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/face-a-face/VersusHeader.vue": {
+    "mtime": 1786873817.365088,
+    "ast_hash": "d2a642c176cec9bb0242ca58a4c7db59",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/heroes/HeroAvatar.vue": {
+    "mtime": 1786782496.8942106,
+    "ast_hash": "e8a733b15b24803bea4ef4210d9413e4",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/heroes/HeroMatchupList.vue": {
+    "mtime": 1786782496.8942106,
+    "ast_hash": "d5c42fbbf40948e81cb6ba7e8fec11e5",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/heroes/HeroMatchupSearch.vue": {
+    "mtime": 1786873817.3660955,
+    "ast_hash": "513522d8ce5ec6649b85445fda274ed5",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/maps/MapImage.vue": {
+    "mtime": 1786806434.0295405,
+    "ast_hash": "e3fac32ec43c8d6a5405424cfde59680",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/players/AnnotationBadges.vue": {
+    "mtime": 1786873817.367105,
+    "ast_hash": "d68b030fb11b71331c3b35392c7e09bd",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/players/BehaviorBadges.vue": {
+    "mtime": 1786873817.368102,
+    "ast_hash": "a87ea1a021d5bca667ce512039ad9d0a",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/players/FriendshipBadge.vue": {
+    "mtime": 1786873817.368102,
+    "ast_hash": "24ca7b02e77d6a17d953bf1571b9c7d6",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/players/NoteModal.vue": {
+    "mtime": 1786873817.3696067,
+    "ast_hash": "ea024a88cde248cd8bcb298818bfeb50",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/players/NotesButton.vue": {
+    "mtime": 1786873817.3696067,
+    "ast_hash": "5452a3857534952285ed5ed8492a0d35",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/players/PlayerAvatar.vue": {
+    "mtime": 1786873817.3706136,
+    "ast_hash": "cf0577441965843024a61a8bb8e1f210",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/players/ProfileDetail.vue": {
+    "mtime": 1786873817.3716125,
+    "ast_hash": "72214708b18b17ec180130ad7cffcb82",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/players/ProfileModal.vue": {
+    "mtime": 1786806434.0315387,
+    "ast_hash": "172fda3e18ab85966c5d663faea9ef30",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/spatial/SpatialAggregateSlot.vue": {
+    "mtime": 1786873817.372655,
+    "ast_hash": "8194d574c14915b8e8cb5b700bf145cc",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/spatial/SpatialCanvasLayer.vue": {
+    "mtime": 1786873817.372655,
+    "ast_hash": "26ea7dc7f1414dc515867a4debfa81d2",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/spatial/SpatialHeatmapView.vue": {
+    "mtime": 1786873817.3736615,
+    "ast_hash": "cbd2b0c4caf812d48db62a80f4fd12f9",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/spatial/SpatialMatchSlot.vue": {
+    "mtime": 1786873817.3751652,
+    "ast_hash": "bce2dbd97f20b6cae53ab47f45775d92",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/stats/AccountSummaryStats.vue": {
+    "mtime": 1786873817.3761714,
+    "ast_hash": "1fc82ef838ba0b54095fed98c533e806",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/stats/ChartLauncherGroup.vue": {
+    "mtime": 1786782496.898248,
+    "ast_hash": "07d5f51f81eacf2f430d2a97849ef2be",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/stats/Dashboard.vue": {
+    "mtime": 1786782496.8992505,
+    "ast_hash": "5c2c9e24c1f0870bcfcf6f093447e32d",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/stats/FormTrackerWidget.vue": {
+    "mtime": 1786873817.3761714,
+    "ast_hash": "5a6bc03c671f7238a60881401096b7ce",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/stats/MiniStat.vue": {
+    "mtime": 1786782496.9002495,
+    "ast_hash": "384973c1605550bc6358f1aa1c705bb1",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/stats/RankBadgeList.vue": {
+    "mtime": 1786782496.9012494,
+    "ast_hash": "72e7b3cdcc3da56d9199489d04e452ef",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/stats/StatCard.vue": {
+    "mtime": 1786873817.377175,
+    "ast_hash": "3081beeab7d97ea9b7ef0999b242b9ec",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/stats/TopComboList.vue": {
+    "mtime": 1786782496.902248,
+    "ast_hash": "6ad90973b76dfa57fb0939702c9bfaca",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/ui/ArrowLink.vue": {
+    "mtime": 1786873817.3781757,
+    "ast_hash": "1f08e9b2cfe6c15ca79679dcc308b058",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/ui/BackLink.vue": {
+    "mtime": 1786873817.3796806,
+    "ast_hash": "8e92e73754503f2600b3d70b7173e0d5",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/ui/ComparisonColumn.vue": {
+    "mtime": 1786782496.902248,
+    "ast_hash": "8c03f3a9a16a9c33fab66dff39d275a6",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/ui/ConfirmModal.vue": {
+    "mtime": 1786873817.3796806,
+    "ast_hash": "83f99f10a9e33adfb3d47993a2f76d8a",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/ui/DataTable.vue": {
+    "mtime": 1786806434.0330427,
+    "ast_hash": "460967ea996768619d2ce0534eadaf20",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/ui/ErrorState.vue": {
+    "mtime": 1786873817.3806872,
+    "ast_hash": "169b0b7a4a2a79db2c155c944d7aafe2",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/ui/FilterBar.vue": {
+    "mtime": 1786782496.9042494,
+    "ast_hash": "4613e51832d166fc51cac15f565ba562",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/ui/FilterResetActions.vue": {
+    "mtime": 1786782496.905249,
+    "ast_hash": "9e169bf40adf0c035bdca6197d8764af",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/ui/GameModeFilter.vue": {
+    "mtime": 1786873817.3827407,
+    "ast_hash": "814b9f972ce22f8837398f01f0ff3087",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/ui/GlobalScopeBadge.vue": {
+    "mtime": 1786782496.905249,
+    "ast_hash": "57b6a9dd0fda7f754687aa3592eb062c",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/ui/MapWinrateList.vue": {
+    "mtime": 1786782496.905249,
+    "ast_hash": "aba769ca4e4332b1f2c01bfdd681336f",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/ui/NavCard.vue": {
+    "mtime": 1786901468.3478384,
+    "ast_hash": "7edcb6ba9089bcbe8a1730ee924eb320",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/ui/Panel.vue": {
+    "mtime": 1786782496.9062922,
+    "ast_hash": "52b1979ca0eda21065721841067073c5",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/ui/PillTabs.vue": {
+    "mtime": 1786782496.9062922,
+    "ast_hash": "6b0b3252ba65f41a5cca68984fbaed4f",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/ui/SearchInput.vue": {
+    "mtime": 1786873817.3827407,
+    "ast_hash": "7eac6725cac563c2a157b98973efc0e7",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/ui/SkeletonBlock.vue": {
+    "mtime": 1786873817.383748,
+    "ast_hash": "3eeea9e3494598db2ad67e8dd1adc788",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/ui/StarRating.vue": {
+    "mtime": 1786806434.0350802,
+    "ast_hash": "ff4c49775a69b89d524970c5b8f338f8",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/ui/StarRatingAverage.vue": {
+    "mtime": 1786873817.3847482,
+    "ast_hash": "32679aacf6d527cdac35c97022768caf",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/ui/StatTile.vue": {
+    "mtime": 1786806434.0360527,
+    "ast_hash": "c8201416edeea84af9ab0200968d82cf",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/ui/StateCard.vue": {
+    "mtime": 1786873817.385254,
+    "ast_hash": "9bed11510de64c5792ad5e008db6baa7",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/ui/StatsScopeToggle.vue": {
+    "mtime": 1786873817.3862607,
+    "ast_hash": "daa5a8d64e95d1fd995bfcc5c104625c",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/ui/TableScrollPanel.vue": {
+    "mtime": 1786806434.0370834,
+    "ast_hash": "d8fad90a1f453090f202f78b71c14ee6",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/ui/TeaserLink.vue": {
+    "mtime": 1786873817.3872669,
+    "ast_hash": "51885485ea414ae4a80f4f73b245ad96",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/ui/ThemeSwitcher.vue": {
+    "mtime": 1786782496.9097993,
+    "ast_hash": "95e38a17f9b399f1f93cd6b124fc2b01",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/ui/TopHeroesTop3.vue": {
+    "mtime": 1786782496.9103453,
+    "ast_hash": "1b96edfe2d392392351f41189ca56a7b",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/ui/WinrateBar.vue": {
+    "mtime": 1786782496.9103453,
+    "ast_hash": "0915227f906603987f72298d2382df4f",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/upload/DaemonOnboarding.vue": {
+    "mtime": 1786806434.038587,
+    "ast_hash": "6e7afd6d43c15c4eec74813b820de1be",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/upload/Dropzone.vue": {
+    "mtime": 1786806434.038587,
+    "ast_hash": "53c8c1b72f42a81ecf07a0d095f77803",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/upload/TokenCard.vue": {
+    "mtime": 1786806434.0395944,
+    "ast_hash": "9c7078f973bed55075eba84986aaa61f",
+    "semantic_hash": ""
+  },
+  "apps/web/app/components/upload/TokenManager.vue": {
+    "mtime": 1786873817.3882663,
+    "ast_hash": "62b7e98b1fe60fe97ebd65cdc1bd64c9",
+    "semantic_hash": ""
+  },
+  "apps/web/app/composables/useApiFetch.ts": {
+    "mtime": 1786806434.0405934,
+    "ast_hash": "2f5e4c13715a19afaedf3c14d98d2d3d",
+    "semantic_hash": ""
+  },
+  "apps/web/app/composables/useAsyncResource.ts": {
+    "mtime": 1786782496.912351,
+    "ast_hash": "b0489840c4777e4fa80fefe1a8266a02",
+    "semantic_hash": ""
+  },
+  "apps/web/app/composables/useAuth.ts": {
+    "mtime": 1786873817.3882663,
+    "ast_hash": "f9a6006e080c37128a892c44ce82f0ef",
+    "semantic_hash": ""
+  },
+  "apps/web/app/composables/useBattletagSuggestion.ts": {
+    "mtime": 1786782496.9143562,
+    "ast_hash": "a9060d1799c93532aed96268e19fb70a",
+    "semantic_hash": ""
+  },
+  "apps/web/app/composables/useChartTheme.ts": {
+    "mtime": 1786806434.0415902,
+    "ast_hash": "c1956f1c0fb70e085c4d7f583a1db3be",
+    "semantic_hash": ""
+  },
+  "apps/web/app/composables/useDraftStream.ts": {
+    "mtime": 1786806434.042591,
+    "ast_hash": "9513e628ddf0e04e77a5e6cb7f122d20",
+    "semantic_hash": ""
+  },
+  "apps/web/app/composables/useEngagementWatchers.ts": {
+    "mtime": 1786873817.3897722,
+    "ast_hash": "2415a9ca180a45e13a4987e1018f67f8",
+    "semantic_hash": ""
+  },
+  "apps/web/app/composables/useFormat.ts": {
+    "mtime": 1786806434.0438766,
+    "ast_hash": "6bb2c322704f864e8a70d6c8f9265472",
+    "semantic_hash": ""
+  },
+  "apps/web/app/composables/useHeroStatsScope.ts": {
+    "mtime": 1786782496.9163861,
+    "ast_hash": "63c58573d300e8296285c604c88ad525",
+    "semantic_hash": ""
+  },
+  "apps/web/app/composables/usePagination.ts": {
+    "mtime": 1786782496.9173865,
+    "ast_hash": "cd88e25fdd3ca64c9d66c734b54c8598",
+    "semantic_hash": ""
+  },
+  "apps/web/app/composables/useReplayUpload.ts": {
+    "mtime": 1786806434.0448823,
+    "ast_hash": "6c3987c40a0c4161546b3995fb01cb69",
+    "semantic_hash": ""
+  },
+  "apps/web/app/composables/useSavableField.ts": {
+    "mtime": 1786782496.9183881,
+    "ast_hash": "157a4cdec51ecce21e7251457d03980e",
+    "semantic_hash": ""
+  },
+  "apps/web/app/composables/useSortState.ts": {
+    "mtime": 1786782496.9183881,
+    "ast_hash": "567d0d36ff5dfb400515c38f7224f4d2",
+    "semantic_hash": ""
+  },
+  "apps/web/app/composables/useSortedList.ts": {
+    "mtime": 1786782496.919387,
+    "ast_hash": "6fd01ceac199bf92b73713e8b9dfd7af",
+    "semantic_hash": ""
+  },
+  "apps/web/app/composables/useTokens.ts": {
+    "mtime": 1786806434.0448823,
+    "ast_hash": "1cc5a904009b82c9259938b72255dffc",
+    "semantic_hash": ""
+  },
+  "apps/web/app/composables/useWinrateTrend.ts": {
+    "mtime": 1786806434.0458822,
+    "ast_hash": "03fed5adbfb9bcf0d56cb2786f961e1a",
+    "semantic_hash": ""
+  },
+  "apps/web/app/layouts/blank.vue": {
+    "mtime": 1786782496.9203856,
+    "ast_hash": "f08aae0d30a95db33bbc4f535521c8ed",
+    "semantic_hash": ""
+  },
+  "apps/web/app/layouts/default.vue": {
+    "mtime": 1786901468.3488376,
+    "ast_hash": "72fb5243f67407a7e1ff2c4ccdfa5fa7",
+    "semantic_hash": ""
+  },
+  "apps/web/app/layouts/public-profile.vue": {
+    "mtime": 1786782496.9213848,
+    "ast_hash": "50dacacfc4ea7982a7dd86d05afb28f4",
+    "semantic_hash": ""
+  },
+  "apps/web/app/middleware/admin.ts": {
+    "mtime": 1786873817.3907783,
+    "ast_hash": "2f0a8fdae966c22c20624510a05d474c",
+    "semantic_hash": ""
+  },
+  "apps/web/app/middleware/auth.ts": {
+    "mtime": 1786782496.9223843,
+    "ast_hash": "0df11e3cb5c61546097bc20c67940150",
+    "semantic_hash": ""
+  },
+  "apps/web/app/pages/admin/calibrate.vue": {
+    "mtime": 1786901468.3493416,
+    "ast_hash": "1160532776fb5f5dca456f569263bd55",
+    "semantic_hash": ""
+  },
+  "apps/web/app/pages/admin/index.vue": {
+    "mtime": 1786901468.3493416,
+    "ast_hash": "a23ca248eca7235a56c5ece8b285f475",
+    "semantic_hash": ""
+  },
+  "apps/web/app/pages/analysis/index.vue": {
+    "mtime": 1786873817.3927903,
+    "ast_hash": "4ee9889886284ca28b2c8f2b635b1f2a",
+    "semantic_hash": ""
+  },
+  "apps/web/app/pages/draft/index.vue": {
+    "mtime": 1786782496.9243846,
+    "ast_hash": "939cc28f1a3e8dbebaa7bcfb01cd8efc",
+    "semantic_hash": ""
+  },
+  "apps/web/app/pages/face-a-face/[battletag].vue": {
+    "mtime": 1786873817.3932955,
+    "ast_hash": "f45d12775ed09a87a75ce066be79fa06",
+    "semantic_hash": ""
+  },
+  "apps/web/app/pages/friends/[userId].vue": {
+    "mtime": 1786873817.3948016,
+    "ast_hash": "89d362bff8c24f59059d6890fb67bac8",
+    "semantic_hash": ""
+  },
+  "apps/web/app/pages/friends/index.vue": {
+    "mtime": 1786873817.3963647,
+    "ast_hash": "15ba9c358caeb2476620e977b3240656",
+    "semantic_hash": ""
+  },
+  "apps/web/app/pages/heroes/[slug].vue": {
+    "mtime": 1786873817.3973725,
+    "ast_hash": "6de10f453dcf471c179c525f34ab89a9",
+    "semantic_hash": ""
+  },
+  "apps/web/app/pages/heroes/index.vue": {
+    "mtime": 1786873817.3983703,
+    "ast_hash": "8829a9c60bf484cde10f25595b5feb62",
+    "semantic_hash": ""
+  },
+  "apps/web/app/pages/index.vue": {
+    "mtime": 1786901468.3508456,
+    "ast_hash": "9bb65615afa7540fe6421c7d06df79c8",
+    "semantic_hash": ""
+  },
+  "apps/web/app/pages/login.vue": {
+    "mtime": 1786782496.9296112,
+    "ast_hash": "cbe2de640b9c5e2233d2692403d0f24b",
+    "semantic_hash": ""
+  },
+  "apps/web/app/pages/maps/[mapId].vue": {
+    "mtime": 1786901468.3518512,
+    "ast_hash": "8be32958e48491448ae659d209b9c55d",
+    "semantic_hash": ""
+  },
+  "apps/web/app/pages/maps/index.vue": {
+    "mtime": 1786873817.4018867,
+    "ast_hash": "8a90c8a9b9c163137e5c961ece77fc93",
+    "semantic_hash": ""
+  },
+  "apps/web/app/pages/matches/[id].vue": {
+    "mtime": 1786901468.3528552,
+    "ast_hash": "041474db5710740e02964a141480d030",
+    "semantic_hash": ""
+  },
+  "apps/web/app/pages/matches/index.vue": {
+    "mtime": 1786901468.3538597,
+    "ast_hash": "35b4e11fd211acf5b199e41e86466a8f",
+    "semantic_hash": ""
+  },
+  "apps/web/app/pages/players/[battletag].vue": {
+    "mtime": 1786873817.404904,
+    "ast_hash": "d96c0a2cd39f6ba450093e819c30c50b",
+    "semantic_hash": ""
+  },
+  "apps/web/app/pages/players/index.vue": {
+    "mtime": 1786873817.4059112,
+    "ast_hash": "8bf3ec946aa0430ae86db2496a2b6b10",
+    "semantic_hash": ""
+  },
+  "apps/web/app/pages/settings/index.vue": {
+    "mtime": 1786873817.4059112,
+    "ast_hash": "86bde42238ce463326220ad6bd8ed7e5",
+    "semantic_hash": ""
+  },
+  "apps/web/app/pages/talents/index.vue": {
+    "mtime": 1786873817.4069164,
+    "ast_hash": "4e1b10bcddb21ea79e4626497589588c",
+    "semantic_hash": ""
+  },
+  "apps/web/app/pages/u/[handle].vue": {
+    "mtime": 1786873817.4079158,
+    "ast_hash": "047b5a1f85104033261abfc3613b8e69",
+    "semantic_hash": ""
+  },
+  "apps/web/app/pages/upload.vue": {
+    "mtime": 1786806434.0598705,
+    "ast_hash": "61689a5fc36421df7c7e7f584844d743",
+    "semantic_hash": ""
+  },
+  "apps/web/app/plugins/01.pinia-persistedstate.client.ts": {
+    "mtime": 1786806434.0608714,
+    "ast_hash": "fa0055af4199c46b6ee6df306d148eb1",
+    "semantic_hash": ""
+  },
+  "apps/web/app/plugins/battletag-suggestion.client.ts": {
+    "mtime": 1786782496.937124,
+    "ast_hash": "0ce6d69d52dc5c01ee7a3943b08457af",
+    "semantic_hash": ""
+  },
+  "apps/web/app/stores/filterSortStore.ts": {
+    "mtime": 1786782496.9381235,
+    "ast_hash": "e1f160a38398273df0244ad163750681",
+    "semantic_hash": ""
+  },
+  "apps/web/app/stores/useEngagementStore.ts": {
+    "mtime": 1786806434.0608714,
+    "ast_hash": "2055d7ed71e13ff1fe3f9d740b6c6454",
+    "semantic_hash": ""
+  },
+  "apps/web/app/stores/useFormTrackerStore.ts": {
+    "mtime": 1786782496.9381235,
+    "ast_hash": "19142ce734e8824b5d106bcd68f1b7a9",
+    "semantic_hash": ""
+  },
+  "apps/web/app/stores/useGameModeStore.ts": {
+    "mtime": 1786806434.06187,
+    "ast_hash": "b68a1439c059bcd8d666cc08f487caed",
+    "semantic_hash": ""
+  },
+  "apps/web/app/stores/useGameVersionFilterStore.ts": {
+    "mtime": 1786873817.4079158,
+    "ast_hash": "af840e3ca7aef6767433c9b00b75d37b",
+    "semantic_hash": ""
+  },
+  "apps/web/app/stores/useHeroesFiltersStore.ts": {
+    "mtime": 1786806434.0628712,
+    "ast_hash": "56debf4f8d93c5e57f605b4a8abce3dd",
+    "semantic_hash": ""
+  },
+  "apps/web/app/stores/useMatchesFiltersStore.ts": {
+    "mtime": 1786806434.0628712,
+    "ast_hash": "cfb5e29b90b17a8bb3813550633c38bc",
+    "semantic_hash": ""
+  },
+  "apps/web/app/stores/usePlayerAnnotationsStore.ts": {
+    "mtime": 1786782496.940123,
+    "ast_hash": "7390dbe1dff4529ea7f3dfb261af95d7",
+    "semantic_hash": ""
+  },
+  "apps/web/app/stores/usePlayersFiltersStore.ts": {
+    "mtime": 1786873817.4094205,
+    "ast_hash": "81ea441cae8e8fef2885c0b565430eb9",
+    "semantic_hash": ""
+  },
+  "apps/web/app/types/analytics.ts": {
+    "mtime": 1786782496.9411244,
+    "ast_hash": "6949b0fccbc240a0ee0dc4bdd373c658",
+    "semantic_hash": ""
+  },
+  "apps/web/app/types/coach.ts": {
+    "mtime": 1786873817.4104254,
+    "ast_hash": "a097ecfe8c7df8a61c075dc42db65208",
+    "semantic_hash": ""
+  },
+  "apps/web/app/types/draft.ts": {
+    "mtime": 1786782496.9421241,
+    "ast_hash": "0387fd6d98d492c69ab18277797c3ae8",
+    "semantic_hash": ""
+  },
+  "apps/web/app/types/face-a-face.ts": {
+    "mtime": 1786782496.9421241,
+    "ast_hash": "2e0e25057ad33c4045a0918ec26d5f1d",
+    "semantic_hash": ""
+  },
+  "apps/web/app/types/friends.ts": {
+    "mtime": 1786782496.9431238,
+    "ast_hash": "5be0a6187b2517e1ee5c978926f19b9d",
+    "semantic_hash": ""
+  },
+  "apps/web/app/types/maps.ts": {
+    "mtime": 1786782496.9431238,
+    "ast_hash": "908fe436af0561b6c9d3aab35f91bdcf",
+    "semantic_hash": ""
+  },
+  "apps/web/app/types/matches.ts": {
+    "mtime": 1786901468.3538597,
+    "ast_hash": "a1cba1ed0fcf896ff0d21baad36721c6",
+    "semantic_hash": ""
+  },
+  "apps/web/app/types/spatial.ts": {
+    "mtime": 1786873817.4124486,
+    "ast_hash": "b3420d41390adb99eeca5401bded6096",
+    "semantic_hash": ""
+  },
+  "apps/web/app/types/talent-analyzer.ts": {
+    "mtime": 1786782496.9441235,
+    "ast_hash": "3123e0f76204aeb597070ebdcedbfbe2",
+    "semantic_hash": ""
+  },
+  "apps/web/app/types/weaknesses.ts": {
+    "mtime": 1786782496.9451246,
+    "ast_hash": "f3469338f44d36061ddb6f7d63c7548c",
+    "semantic_hash": ""
+  },
+  "apps/web/app/utils/coachAnalysis.ts": {
+    "mtime": 1786806434.0660641,
+    "ast_hash": "fa404b415486b79d420ba882caf93d9c",
+    "semantic_hash": ""
+  },
+  "apps/web/app/utils/gameModeTags.ts": {
+    "mtime": 1786806434.0660641,
+    "ast_hash": "05df85b0992895100ecb7190bf3ae474",
+    "semantic_hash": ""
+  },
+  "apps/web/app/utils/hero-role-color.ts": {
+    "mtime": 1786782496.9461572,
+    "ast_hash": "6c95e90d746c1e221b1b49dec28a2cc8",
+    "semantic_hash": ""
+  },
+  "apps/web/app/utils/heroRoleVisuals.ts": {
+    "mtime": 1786782496.9461572,
+    "ast_hash": "9713f783a332b771573dfb16fadbbf9f",
+    "semantic_hash": ""
+  },
+  "apps/web/app/utils/initials.ts": {
+    "mtime": 1786782496.947163,
+    "ast_hash": "09f44fe6bfa14ef968c9988f4920621f",
+    "semantic_hash": ""
+  },
+  "apps/web/app/utils/mapProjection.ts": {
+    "mtime": 1786873817.4134555,
+    "ast_hash": "5753526ab6d2c704529338e25efc298c",
+    "semantic_hash": ""
+  },
+  "apps/web/app/utils/rank.ts": {
+    "mtime": 1786782496.947163,
+    "ast_hash": "2dba535467804f1c4c1c62a737e9114a",
+    "semantic_hash": ""
+  },
+  "apps/web/app/utils/slugify.ts": {
+    "mtime": 1786782496.9481685,
+    "ast_hash": "cd7eab2e73b1e4eaa38c62d51079aa53",
+    "semantic_hash": ""
+  },
+  "apps/web/app/utils/tone.ts": {
+    "mtime": 1786806434.0670671,
+    "ast_hash": "a83b1c944e726cc4cb9adf160fdd84e3",
+    "semantic_hash": ""
+  },
+  "apps/web/app/utils/weaknesses.ts": {
+    "mtime": 1786782496.9491675,
+    "ast_hash": "60915d7e22d9adebdb8fd32894890add",
+    "semantic_hash": ""
+  },
+  "apps/web/app/utils/wilson.ts": {
+    "mtime": 1786806434.0670671,
+    "ast_hash": "141b04e0f76f033ece9d7ba35735ca9f",
+    "semantic_hash": ""
+  },
+  "apps/web/scripts/mirror-hero-images.ts": {
+    "mtime": 1786709582.317566,
+    "ast_hash": "bcf23dbdb236da1195ba8436a1db0f90",
+    "semantic_hash": ""
+  },
+  "packages/db/drizzle/0012_deep_vulture.sql": {
+    "mtime": 1786873817.436111,
+    "ast_hash": "a4c3235b9b170da15d653934ba12fc7b",
+    "semantic_hash": ""
+  },
+  "packages/db/drizzle/0013_thankful_squirrel_girl.sql": {
+    "mtime": 1786873817.437118,
+    "ast_hash": "781f295b10384be5a1550b759c2ab32a",
+    "semantic_hash": ""
+  },
+  "packages/db/drizzle/0014_add_game_fingerprint.sql": {
+    "mtime": 1786873817.437118,
+    "ast_hash": "1084c00e6b3d0f0012c52e13ea5f266c",
+    "semantic_hash": ""
+  },
+  "packages/db/drizzle/0015_fix_game_fingerprint_drop_duration.sql": {
+    "mtime": 1786873817.438118,
+    "ast_hash": "01750d766790de24b9debe59308ae4a8",
+    "semantic_hash": ""
+  },
+  "packages/db/drizzle/0016_demonic_gorilla_man.sql": {
+    "mtime": 1786873817.438118,
+    "ast_hash": "e88121944e61953da6058fc86070dbfb",
+    "semantic_hash": ""
+  },
+  "packages/db/drizzle/0017_right_blue_marvel.sql": {
+    "mtime": 1786873817.438118,
+    "ast_hash": "3fdfe0bd4d8f488402747d93dfb4079d",
+    "semantic_hash": ""
+  },
+  "packages/db/drizzle/meta/0012_snapshot.json": {
+    "mtime": 1786873817.439623,
+    "ast_hash": "f44b734485b26f4c723aace3916b39a8",
+    "semantic_hash": ""
+  },
+  "packages/db/drizzle/meta/0013_snapshot.json": {
+    "mtime": 1786873817.4406278,
+    "ast_hash": "024696de94ca7a35b26355ec9a32e375",
+    "semantic_hash": ""
+  },
+  "packages/db/drizzle/meta/0014_snapshot.json": {
+    "mtime": 1786873817.4406278,
+    "ast_hash": "50d57256245befc7a67008c8ac374918",
+    "semantic_hash": ""
+  },
+  "packages/db/drizzle/meta/0015_snapshot.json": {
+    "mtime": 1786873817.4421337,
+    "ast_hash": "0fdca037b81579da0c7321054d238105",
+    "semantic_hash": ""
+  },
+  "packages/db/drizzle/meta/0016_snapshot.json": {
+    "mtime": 1786873817.4426725,
+    "ast_hash": "80ff3e40ff661f443405e77d1858d6c3",
+    "semantic_hash": ""
+  },
+  "packages/db/drizzle/meta/0017_snapshot.json": {
+    "mtime": 1786873817.4436796,
+    "ast_hash": "7a846d7be40d6d6a2e1447e29798c5c4",
+    "semantic_hash": ""
+  },
+  "packages/db/src/schema/hero-map-spatial-rollup.ts": {
+    "mtime": 1786873817.4471972,
+    "ast_hash": "c93859c901ce885368185fd01ade051d",
+    "semantic_hash": ""
+  },
+  "packages/db/src/schema/match-deaths.ts": {
+    "mtime": 1786873817.4481964,
+    "ast_hash": "90200d53dea5fc5bd84b4a75edfbcd2b",
+    "semantic_hash": ""
+  },
+  "packages/db/src/schema/match-level-snapshots.ts": {
+    "mtime": 1786873817.4497018,
+    "ast_hash": "6c49a424b00640be11c2fc1e76351ac2",
+    "semantic_hash": ""
+  },
+  "packages/db/src/schema/match-spatial-grids.ts": {
+    "mtime": 1786873817.4497018,
+    "ast_hash": "068b4667925d5b2e68ce89a09a084bc1",
+    "semantic_hash": ""
+  },
+  "packages/db/src/schema/spatial-calibration.ts": {
+    "mtime": 1786901468.3663971,
+    "ast_hash": "a733c1d2a6a23083e4a15a62393ae71d",
+    "semantic_hash": ""
+  },
+  "packages/shared-types/src/match-filters.ts": {
+    "mtime": 1786873817.4532213,
+    "ast_hash": "8670a686eea84e239e0638d5c4ac5f5a",
+    "semantic_hash": ""
+  },
+  "packages/shared-types/src/spatial-calibration.ts": {
+    "mtime": 1786901468.3674042,
+    "ast_hash": "3360c5cb4c9fab2a441f20e4493199bb",
+    "semantic_hash": ""
+  },
+  "packages/shared-types/src/spatial-grid.ts": {
+    "mtime": 1786873817.4557335,
+    "ast_hash": "a332469d6443da3f0e4d293df026c96e",
+    "semantic_hash": ""
+  },
+  "apps/replay-parser/README.md": {
+    "mtime": 1786806434.0104988,
+    "ast_hash": "df84933fb0ee10a920731b0e9307269c",
+    "semantic_hash": ""
+  },
+  "apps/replay-parser/requirements.txt": {
+    "mtime": 1786806434.0114977,
+    "ast_hash": "79f26431ae6dc122e4b6a72031f82ee6",
+    "semantic_hash": ""
+  },
+  "tasks/epic-10-analyse-spatiale.md": {
+    "mtime": 1786873817.4577374,
+    "ast_hash": "68071f92d6db0edcacd7dfa19fc5487b",
+    "semantic_hash": ""
+  },
+  "tasks/epic-9-hero-matchups.md": {
+    "mtime": 1786709582.3321047,
+    "ast_hash": "87096c7f4b563bf46c38b63642f85857",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/abathur.png": {
+    "mtime": 1786709582.198585,
+    "ast_hash": "8d597c6075976ac91506793f2ba3ab45",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/alarak.png": {
+    "mtime": 1786709582.198585,
+    "ast_hash": "b600edeaf646dd9da6c116837bc52dec",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/alexstrasza.png": {
+    "mtime": 1786709582.1995542,
+    "ast_hash": "24f9cb4a1112bef313f9cf025b63c728",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/ana.png": {
+    "mtime": 1786709582.2005541,
+    "ast_hash": "514f76c29245736f400627f94e9d3735",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/anduin.png": {
+    "mtime": 1786709582.2005541,
+    "ast_hash": "d710a15fc87c52e3525a5dab3787c01d",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/anub-arak.png": {
+    "mtime": 1786709582.2015529,
+    "ast_hash": "7313458ffe1038b6e3fbe348eb0d6a48",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/artanis.png": {
+    "mtime": 1786709582.2025523,
+    "ast_hash": "53b0d7ef810ea2bc4f2e0f7b01cb702b",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/arthas.png": {
+    "mtime": 1786709582.2025523,
+    "ast_hash": "4c2812e29846c096b2ab8b8946ce0f47",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/auriel.png": {
+    "mtime": 1786709582.2035518,
+    "ast_hash": "534c25e0b5d4afa0482fce35fefe4a91",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/azmodan.png": {
+    "mtime": 1786709582.2035518,
+    "ast_hash": "aee3dfc51263ee7c9dcc9d16ec52aa34",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/blaze.png": {
+    "mtime": 1786709582.204553,
+    "ast_hash": "07fe6b914071e35ae49ac78b85a35a39",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/brightwing.png": {
+    "mtime": 1786709582.204553,
+    "ast_hash": "2abcde8826cd0b79e235529427d52ecd",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/cassia.png": {
+    "mtime": 1786709582.20593,
+    "ast_hash": "3984f50aa3296e5d90ea0fbd091f41be",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/chen.png": {
+    "mtime": 1786709582.20593,
+    "ast_hash": "0070b1482b81016bb186c28c86e4c9cb",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/cho.png": {
+    "mtime": 1786709582.20593,
+    "ast_hash": "c513841f3ec9de06ae5b9f2e6ce59f2d",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/chromie.png": {
+    "mtime": 1786709582.2074575,
+    "ast_hash": "1e031475232ad37bffb1715958c540a5",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/d-va.png": {
+    "mtime": 1786709582.2084641,
+    "ast_hash": "95c6014b23453c51a267fbd04220e403",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/deathwing.png": {
+    "mtime": 1786709582.2084641,
+    "ast_hash": "fdb08224c2188425925ebc13835831c6",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/deckard.png": {
+    "mtime": 1786709582.2094638,
+    "ast_hash": "43cf04c7a7c0b175646aaed398ef9dd9",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/dehaka.png": {
+    "mtime": 1786709582.2094638,
+    "ast_hash": "bc527262ec028ea50bb3121c625d1354",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/diablo.png": {
+    "mtime": 1786709582.2104626,
+    "ast_hash": "55d38c2bc585e2123d661a80656c6946",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/e-t-c.png": {
+    "mtime": 1786709582.2114632,
+    "ast_hash": "6c7a9c80eb9db2064dbd5888e74a0ca6",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/falstad.png": {
+    "mtime": 1786709582.2114632,
+    "ast_hash": "ebec4064c6614f8283f184e0f019023f",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/fenix.png": {
+    "mtime": 1786709582.2114632,
+    "ast_hash": "ca791532d241b269f7cf21aafe8e30aa",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/gall.png": {
+    "mtime": 1786709582.2129683,
+    "ast_hash": "fd5760e2166e95d15cd2aaa0f996d90c",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/garrosh.png": {
+    "mtime": 1786709582.2129683,
+    "ast_hash": "ac0167e8a78bc554ef1559c372204f92",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/gazlowe.png": {
+    "mtime": 1786709582.2155318,
+    "ast_hash": "4ae71b0d94ae9553c2d71f2d8cacd316",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/genji.png": {
+    "mtime": 1786709582.2155318,
+    "ast_hash": "3d6967064f053a4c7e0a94710b5d3510",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/greymane.png": {
+    "mtime": 1786709582.216666,
+    "ast_hash": "f4af4d61cad1bc7e718e4f8153765ea2",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/gul-dan.png": {
+    "mtime": 1786709582.2171712,
+    "ast_hash": "1f41c3e41a153cadd3f25a341f7c6e8a",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/hanzo.png": {
+    "mtime": 1786709582.2171712,
+    "ast_hash": "5f266f85bb098eb95c32c47a3fcc5e1b",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/hogger.png": {
+    "mtime": 1786709582.2181766,
+    "ast_hash": "ebb65d95fd4b40f5751a8221fdf8055e",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/illidan.png": {
+    "mtime": 1786709582.219178,
+    "ast_hash": "9b3bcd93b0a9d5ab20a73d56c29fcab2",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/imperius.png": {
+    "mtime": 1786709582.219178,
+    "ast_hash": "5245be01be95dc51111b7803f41ed65d",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/jaina.png": {
+    "mtime": 1786709582.2201774,
+    "ast_hash": "2b506645f51c3731f452b4a241a8ff6c",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/johanna.png": {
+    "mtime": 1786709582.2211797,
+    "ast_hash": "e47d3cd382481fd529fc4b3395b2ac12",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/junkrat.png": {
+    "mtime": 1786709582.2211797,
+    "ast_hash": "c21fd9ac7f94a6da69ceff539774bcc5",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/kael-thas.png": {
+    "mtime": 1786709582.2221766,
+    "ast_hash": "7385e0fa22b9922c39d30ce6a4e113ba",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/kel-thuzad.png": {
+    "mtime": 1786709582.2221766,
+    "ast_hash": "096ec141c575fffd7543062528c58100",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/kerrigan.png": {
+    "mtime": 1786709582.2231777,
+    "ast_hash": "ddc2b6551fdeaf9fdceda5525a3b03c7",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/kharazim.png": {
+    "mtime": 1786709582.2241776,
+    "ast_hash": "92d3f5ad60b7fdff4b8a02b7098726e2",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/leoric.png": {
+    "mtime": 1786709582.2241776,
+    "ast_hash": "68e414f9f5b32137bd99ab0d5f21bbef",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/li-li.png": {
+    "mtime": 1786709582.2252195,
+    "ast_hash": "51bdbf40890701d3b0c15fbac00d888c",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/li-ming.png": {
+    "mtime": 1786709582.226226,
+    "ast_hash": "c9067b741c89d5fef9b650f69846c1d6",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/lt-morales.png": {
+    "mtime": 1786709582.226226,
+    "ast_hash": "589b1d5dc2a84cbf51a44e3dfedae5cb",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/lucio.png": {
+    "mtime": 1786709582.2272267,
+    "ast_hash": "093b65d1b7ba137fb5a599258302494e",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/lunara.png": {
+    "mtime": 1786709582.2272267,
+    "ast_hash": "d44941222175402cb310e6cbf7ea9c1f",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/maiev.png": {
+    "mtime": 1786709582.2283263,
+    "ast_hash": "7faed284c9f6f56f57b50382c818f6be",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/mal-ganis.png": {
+    "mtime": 1786709582.2293348,
+    "ast_hash": "da4c0712d5b564a4d5a8bcdf165fbe38",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/malfurion.png": {
+    "mtime": 1786709582.2293348,
+    "ast_hash": "5e816b994d6046889c7d13848cc6306a",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/malthael.png": {
+    "mtime": 1786709582.2303329,
+    "ast_hash": "dc29d509b0db20e4c272981c767a4108",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/medivh.png": {
+    "mtime": 1786709582.231333,
+    "ast_hash": "ce9657ee48ea1731c906f8695ae79a33",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/mei.png": {
+    "mtime": 1786709582.2323346,
+    "ast_hash": "7a2a7f5597f03e189f7e753444f879e0",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/mephisto.png": {
+    "mtime": 1786709582.2323346,
+    "ast_hash": "2f082bb2bb52e742bc8f39ec2b7b65b9",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/muradin.png": {
+    "mtime": 1786709582.2333333,
+    "ast_hash": "bcadaf505ff141824fd6f277870d971b",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/murky.png": {
+    "mtime": 1786709582.234332,
+    "ast_hash": "90cddd7bb808fdd951ba20e279cd835a",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/nazeebo.png": {
+    "mtime": 1786709582.234332,
+    "ast_hash": "f97b0fde896aa2917c9799af984e3337",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/nova.png": {
+    "mtime": 1786709582.2353787,
+    "ast_hash": "8fa7f364dff97500328f7f057d9aa537",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/orphea.png": {
+    "mtime": 1786709582.2353787,
+    "ast_hash": "97e58fe2deb4038631d440270ba201bb",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/probius.png": {
+    "mtime": 1786709582.236383,
+    "ast_hash": "0c9af473ebc1e327933045d284ea2669",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/qhira.png": {
+    "mtime": 1786709582.237386,
+    "ast_hash": "2a61a90a0dd51adf1a27653b6bd5c06d",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/ragnaros.png": {
+    "mtime": 1786709582.237386,
+    "ast_hash": "8a54f50721700e7b8c994533e50a6df2",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/raynor.png": {
+    "mtime": 1786709582.2384768,
+    "ast_hash": "41b4a484c8f9a5ba01c405ea004ce60c",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/rehgar.png": {
+    "mtime": 1786709582.2384768,
+    "ast_hash": "0eca8ab04588ecda3931297592815c90",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/rexxar.png": {
+    "mtime": 1786709582.2394743,
+    "ast_hash": "aa48ccff72a947d1278f11e68495addd",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/samuro.png": {
+    "mtime": 1786709582.2404747,
+    "ast_hash": "282941ca3e57928d8ab6261de66a4374",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/sgt-hammer.png": {
+    "mtime": 1786709582.2404747,
+    "ast_hash": "9061f6cd2d5143c2e45c32b2932f6e28",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/sonya.png": {
+    "mtime": 1786709582.2414765,
+    "ast_hash": "8b810ab0f833d5aabf5b45a4b85b4b5a",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/stitches.png": {
+    "mtime": 1786709582.2414765,
+    "ast_hash": "14e52549577fd44c7025b0c349b77345",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/stukov.png": {
+    "mtime": 1786709582.2424755,
+    "ast_hash": "ff98399657c3a02b0deb2340cc819db9",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/sylvanas.png": {
+    "mtime": 1786709582.2434754,
+    "ast_hash": "af85882a728a2e2735658a6bbc398b92",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/tassadar.png": {
+    "mtime": 1786709582.2434754,
+    "ast_hash": "476225afd27d7b227459cb724efaa822",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/the-butcher.png": {
+    "mtime": 1786709582.244477,
+    "ast_hash": "ef4aece0be4f32c77b59d0deafee4350",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/the-lost-vikings.png": {
+    "mtime": 1786709582.244477,
+    "ast_hash": "0a92cc8f905e19bf3329d2146c1e4953",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/thrall.png": {
+    "mtime": 1786709582.2455442,
+    "ast_hash": "4c7cc8be7f489015802d059793c03540",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/tracer.png": {
+    "mtime": 1786709582.2465496,
+    "ast_hash": "7c18af9beb2cea3c50175b9af2580c81",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/tychus.png": {
+    "mtime": 1786709582.2475529,
+    "ast_hash": "d4c6526e25bad08b183adccf8f80958d",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/tyrael.png": {
+    "mtime": 1786709582.2475529,
+    "ast_hash": "93d5e9d00fadc4801dc52ccc7b57f3f5",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/tyrande.png": {
+    "mtime": 1786709582.2489731,
+    "ast_hash": "43040f05cb2ca128edf7eb0c52a406ee",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/uther.png": {
+    "mtime": 1786709582.2489731,
+    "ast_hash": "3d382ab626bed2fd96c2f9784f6a444d",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/valeera.png": {
+    "mtime": 1786709582.249975,
+    "ast_hash": "c7a55f67f20f5b8b6522e3f943324ad1",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/valla.png": {
+    "mtime": 1786709582.249975,
+    "ast_hash": "3734fa3590eab3d5e0fa94b95cd1203a",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/varian.png": {
+    "mtime": 1786709582.250975,
+    "ast_hash": "d25f2638d1ccc0d200054188dd59d3c6",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/whitemane.png": {
+    "mtime": 1786709582.2519774,
+    "ast_hash": "d57fbb7594da62b1ca0d00ea6dac6863",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/xul.png": {
+    "mtime": 1786709582.2529738,
+    "ast_hash": "a97977b9e6dddbdf7f391aa6b01d290a",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/yrel.png": {
+    "mtime": 1786709582.2529738,
+    "ast_hash": "71cb5fd0b51c54196c8eb5540a51b5db",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/zagara.png": {
+    "mtime": 1786709582.2529738,
+    "ast_hash": "d68c298950c5a340b35817cdc96548c6",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/zarya.png": {
+    "mtime": 1786709582.2544818,
+    "ast_hash": "17ed4ea0f85601018fa808ce7c30e4e7",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/zeratul.png": {
+    "mtime": 1786709582.255487,
+    "ast_hash": "25fce29995e46b477dbd62f72ee40cc5",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/circular/zul-jin.png": {
+    "mtime": 1786709582.255487,
+    "ast_hash": "4473260ee1811309f4ac35a6189436c3",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/abathur.png": {
+    "mtime": 1786709582.2575676,
+    "ast_hash": "a418a92ff54982d15458f19579f3732d",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/alarak.png": {
+    "mtime": 1786709582.2575676,
+    "ast_hash": "d2a66a60724073c2877cf77c6b013686",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/alexstrasza.png": {
+    "mtime": 1786709582.2575676,
+    "ast_hash": "a9b44af9fa0dbdcd0a22774f643f70ad",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/ana.png": {
+    "mtime": 1786709582.2588806,
+    "ast_hash": "975ff8c5beca78664d3313cb60049e99",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/anduin.png": {
+    "mtime": 1786709582.259877,
+    "ast_hash": "901105e5781adc81c49315acb3e6b4db",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/anub-arak.png": {
+    "mtime": 1786709582.259877,
+    "ast_hash": "f925559212d33533e5b0c73abe7de3de",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/artanis.png": {
+    "mtime": 1786709582.2608776,
+    "ast_hash": "f7e8696e0a2096e339ab2c8cf9b7955e",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/arthas.png": {
+    "mtime": 1786709582.2618783,
+    "ast_hash": "1705c4879bf5c66f95f189d5594c0035",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/auriel.png": {
+    "mtime": 1786709582.2618783,
+    "ast_hash": "59e39dcf290094dd384c808e5c66fc76",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/azmodan.png": {
+    "mtime": 1786709582.2628767,
+    "ast_hash": "81b13a97f612f08fe2ed00aa0e49427a",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/blaze.png": {
+    "mtime": 1786709582.2628767,
+    "ast_hash": "5e6e6d37924d5f17d8af024971ef8cd2",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/brightwing.png": {
+    "mtime": 1786709582.2643824,
+    "ast_hash": "f2f5f8c69d8e911b2dcb0cce457e0656",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/cassia.png": {
+    "mtime": 1786709582.2653942,
+    "ast_hash": "b58f2ce79bd2a61390642db117c58cfd",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/chen.png": {
+    "mtime": 1786709582.2653942,
+    "ast_hash": "f80627c47390285b652d1ea6aaa3403a",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/cho.png": {
+    "mtime": 1786709582.2666354,
+    "ast_hash": "af96c479a137840335696dfd6018d630",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/chromie.png": {
+    "mtime": 1786709582.2666354,
+    "ast_hash": "66c24d1cfca57c5ffa58d5a4e70273d8",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/d-va.png": {
+    "mtime": 1786709582.2676334,
+    "ast_hash": "9d812f70798f1039f84fa5522d1c9fb9",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/deathwing.png": {
+    "mtime": 1786709582.268677,
+    "ast_hash": "30992fd24024db0c1d0cb066f9c44718",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/deckard.png": {
+    "mtime": 1786709582.268677,
+    "ast_hash": "5ba98d0f360961f0fe7accf0fe25c886",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/dehaka.png": {
+    "mtime": 1786709582.269675,
+    "ast_hash": "9586b90f9367c31d53401185f1943f2d",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/diablo.png": {
+    "mtime": 1786709582.269675,
+    "ast_hash": "85fa9e5ddf03e49f44c26cfdbb5ef9a9",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/e-t-c.png": {
+    "mtime": 1786709582.2706766,
+    "ast_hash": "c6c66728f6ec99560becf1cc4c1f40b5",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/falstad.png": {
+    "mtime": 1786709582.2716758,
+    "ast_hash": "3efdcb5bd2ea083b44c30f3c58b3f846",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/fenix.png": {
+    "mtime": 1786709582.2716758,
+    "ast_hash": "66ebefdf34a9c737b999afabf4ba5611",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/gall.png": {
+    "mtime": 1786709582.272677,
+    "ast_hash": "064bb4c53bc5f83b226a4732703e89b5",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/garrosh.png": {
+    "mtime": 1786709582.272677,
+    "ast_hash": "2b12f48b3b451c88c398d6e27a9ac9ae",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/gazlowe.png": {
+    "mtime": 1786709582.272677,
+    "ast_hash": "664430f9175409353a3856bb1a9f13bf",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/genji.png": {
+    "mtime": 1786709582.2741852,
+    "ast_hash": "e8c15b774cfe65873ecc5ed654ac96e6",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/greymane.png": {
+    "mtime": 1786709582.2741852,
+    "ast_hash": "7463232a970cac0fa3875a225e507e82",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/gul-dan.png": {
+    "mtime": 1786709582.2751906,
+    "ast_hash": "9fe6e52bcb40656151a352786e5b02b9",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/hanzo.png": {
+    "mtime": 1786709582.2751906,
+    "ast_hash": "412ddbb90c82ac4d89c186e06c535f3f",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/hogger.png": {
+    "mtime": 1786709582.2751906,
+    "ast_hash": "fa53565251a7906b04a0306db517c785",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/illidan.png": {
+    "mtime": 1786709582.276513,
+    "ast_hash": "ca472026a430485eb8b79146b2232167",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/imperius.png": {
+    "mtime": 1786709582.2775133,
+    "ast_hash": "f9b02dc2d3120c4f3ee6ed746777395d",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/jaina.png": {
+    "mtime": 1786709582.2775133,
+    "ast_hash": "d6b295cfd067a4f29419fa2844299545",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/johanna.png": {
+    "mtime": 1786709582.2786498,
+    "ast_hash": "1dc215cce527b304b544e08877fbf9a4",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/junkrat.png": {
+    "mtime": 1786709582.2786498,
+    "ast_hash": "6852acb837c721c7253b6b8e84c8508e",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/kael-thas.png": {
+    "mtime": 1786709582.2796526,
+    "ast_hash": "9e60a5e5cf5c83d0f5c4000cfef82deb",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/kel-thuzad.png": {
+    "mtime": 1786709582.2806523,
+    "ast_hash": "2690731d0c320eb621d16e875d15431d",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/kerrigan.png": {
+    "mtime": 1786709582.2816527,
+    "ast_hash": "9840727449f5006f4ba9c0aa79a411db",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/kharazim.png": {
+    "mtime": 1786709582.2816527,
+    "ast_hash": "2b94fe2d449e70df06ed5be52c59c0c7",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/leoric.png": {
+    "mtime": 1786709582.2826538,
+    "ast_hash": "650182605dbb3ca41305bf789d473927",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/li-li.png": {
+    "mtime": 1786709582.2826538,
+    "ast_hash": "cf06c0c77a1da62beeabe5de575fcfd0",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/li-ming.png": {
+    "mtime": 1786709582.2841582,
+    "ast_hash": "d0cc02e4276d3fec4bfc85aa1bfc97d1",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/lt-morales.png": {
+    "mtime": 1786709582.285164,
+    "ast_hash": "5f04ba4b346d70508c16695b9f056620",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/lucio.png": {
+    "mtime": 1786709582.285164,
+    "ast_hash": "f98b18fb139bc604dd398dddb8cc9117",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/lunara.png": {
+    "mtime": 1786709582.2862194,
+    "ast_hash": "59110f3584f99b62194de58d8c3ac5a9",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/maiev.png": {
+    "mtime": 1786709582.2872195,
+    "ast_hash": "4e72d35ec29552324300691c158c80f8",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/mal-ganis.png": {
+    "mtime": 1786709582.2872195,
+    "ast_hash": "e09f88b39617ec7a57395ec91b19746f",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/malfurion.png": {
+    "mtime": 1786709582.2885027,
+    "ast_hash": "cd68e1d8f2fd6e9085727baacd4fccf9",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/malthael.png": {
+    "mtime": 1786709582.2895029,
+    "ast_hash": "d77725b003f8d0001345d58a1ab59f89",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/medivh.png": {
+    "mtime": 1786709582.2895029,
+    "ast_hash": "a6021829bed107468c1eed8c911ac473",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/mei.png": {
+    "mtime": 1786709582.2905016,
+    "ast_hash": "2ba2df92bcb7c183550184a656e8eade",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/mephisto.png": {
+    "mtime": 1786709582.2905016,
+    "ast_hash": "5fbcc7252db3239ad8a31848994c2da4",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/muradin.png": {
+    "mtime": 1786709582.2915025,
+    "ast_hash": "8cc45503c8890414ef4491f90b860475",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/murky.png": {
+    "mtime": 1786709582.2915025,
+    "ast_hash": "1c03ea2abd59fe3c12f17c96aa5f9c16",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/nazeebo.png": {
+    "mtime": 1786709582.2925026,
+    "ast_hash": "9177eddd240495e01f4b31f1cb3cea76",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/nova.png": {
+    "mtime": 1786709582.2925026,
+    "ast_hash": "62d533ce66f6647faca5ab28aaa352f2",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/orphea.png": {
+    "mtime": 1786709582.2935016,
+    "ast_hash": "f750ea26dcd357f04f319baf716f24ba",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/probius.png": {
+    "mtime": 1786709582.2945015,
+    "ast_hash": "48304c5a5ff0fdf277fe3b9c1a5d5085",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/qhira.png": {
+    "mtime": 1786709582.2945015,
+    "ast_hash": "ad877004dca747097e4593d4d40e261a",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/ragnaros.png": {
+    "mtime": 1786709582.2956064,
+    "ast_hash": "6c57ec091a7dfbd38936b15b113d8e51",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/raynor.png": {
+    "mtime": 1786709582.2956064,
+    "ast_hash": "f661a8977de3aeb4fce85c0df1f09909",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/rehgar.png": {
+    "mtime": 1786709582.2966142,
+    "ast_hash": "e3b3927751881c380f4f00679f13b60d",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/rexxar.png": {
+    "mtime": 1786709582.2976148,
+    "ast_hash": "2c47c0216fca36246a72e64ae6b9b232",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/samuro.png": {
+    "mtime": 1786709582.2987955,
+    "ast_hash": "7617aa185bbb5ae0c10813b8dc63c5b9",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/sgt-hammer.png": {
+    "mtime": 1786709582.2998037,
+    "ast_hash": "ce9d16b1ed956256b2e24cf214f95dc7",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/sonya.png": {
+    "mtime": 1786709582.3007998,
+    "ast_hash": "1fef751281951c9df8ed85f8a966af34",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/stitches.png": {
+    "mtime": 1786709582.3017983,
+    "ast_hash": "f4122d9f5b3413a38a0eecaf7f16772a",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/stukov.png": {
+    "mtime": 1786709582.3017983,
+    "ast_hash": "291077559c1dda59746e540ff16b7167",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/sylvanas.png": {
+    "mtime": 1786709582.3027942,
+    "ast_hash": "95a73bb8235e51d8993998bfb0cb682e",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/tassadar.png": {
+    "mtime": 1786709582.3027942,
+    "ast_hash": "2789fe12bb2d625fb593b378b7526512",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/the-butcher.png": {
+    "mtime": 1786709582.304303,
+    "ast_hash": "25bda6d766b50faca5f6fb30f669fc93",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/the-lost-vikings.png": {
+    "mtime": 1786709582.3053093,
+    "ast_hash": "7978ba8025e5f640cc00e21d403c4835",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/thrall.png": {
+    "mtime": 1786709582.3064225,
+    "ast_hash": "621628c27282731a27f2d68cebcac982",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/tracer.png": {
+    "mtime": 1786709582.3074222,
+    "ast_hash": "d9c2fa73e8c97c98a591dc1a6cc950fb",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/tychus.png": {
+    "mtime": 1786709582.3074222,
+    "ast_hash": "bdbd0d00a8882602f328a90909a54d72",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/tyrael.png": {
+    "mtime": 1786709582.3085046,
+    "ast_hash": "841a78d3855daa690f44abeb7900ec29",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/tyrande.png": {
+    "mtime": 1786709582.3085046,
+    "ast_hash": "b3660b955b163041539db178b060abdc",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/uther.png": {
+    "mtime": 1786709582.309506,
+    "ast_hash": "07c3e19e8fd3676dc0404b13a87788d7",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/valeera.png": {
+    "mtime": 1786709582.3105054,
+    "ast_hash": "8f129f0dcddad51cafab2461011dbcca",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/valla.png": {
+    "mtime": 1786709582.3115046,
+    "ast_hash": "7ab5ada385b6aa348acd91fe5be55fb2",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/varian.png": {
+    "mtime": 1786709582.3115046,
+    "ast_hash": "6eeffab87250d7df2c577285d951a42b",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/whitemane.png": {
+    "mtime": 1786709582.3130107,
+    "ast_hash": "f154b8ca56456566ee519d2b418735ea",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/xul.png": {
+    "mtime": 1786709582.3130107,
+    "ast_hash": "71756cd63c8162c408baa269a436e084",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/yrel.png": {
+    "mtime": 1786709582.3130107,
+    "ast_hash": "0147afc57ef8ab36e26b78f0d932bd81",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/zagara.png": {
+    "mtime": 1786709582.31455,
+    "ast_hash": "4bc3964c36ca2a42c74e9d54a07093cc",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/zarya.png": {
+    "mtime": 1786709582.3155568,
+    "ast_hash": "5ba0a1df75b5c58ddfbcccf314d7cd85",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/zeratul.png": {
+    "mtime": 1786709582.316062,
+    "ast_hash": "2f02eb7837ea625ea19820007622904d",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/heroes/square/zul-jin.png": {
+    "mtime": 1786709582.316062,
+    "ast_hash": "83a57dffbbe1baac018242967ecbb0d3",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/original/alterac-pass.jpg": {
+    "mtime": 1786806434.074736,
+    "ast_hash": "8851781c05f9778617e242f0a1a168dc",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/original/battlefield-of-eternity.jpg": {
+    "mtime": 1786806434.0777361,
+    "ast_hash": "57c2b055d56ebd28d6483e95d8ee24b2",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/original/blackheart-s-bay.jpg": {
+    "mtime": 1786806434.0800133,
+    "ast_hash": "e510511939ed94a3cba4e497dc6749d9",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/original/braxis-holdout.jpg": {
+    "mtime": 1786806434.0835412,
+    "ast_hash": "f98ea02f55dda86b0965221286cc97ad",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/original/braxis-outpost.jpg": {
+    "mtime": 1786806434.0845437,
+    "ast_hash": "5460def6b94204667ae7b7d76d85cba8",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/original/cursed-hollow.jpg": {
+    "mtime": 1786806434.0875692,
+    "ast_hash": "9260a4e8e7de8b2510582a1297e190fc",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/original/dragon-shire.jpg": {
+    "mtime": 1786806434.0917406,
+    "ast_hash": "beecdbb3e7caedebf67bd354cc9c343a",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/original/garden-of-terror.jpg": {
+    "mtime": 1786806434.0942352,
+    "ast_hash": "8b60ab2e06a090bffb54149015fa790f",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/original/hanamura-temple.jpg": {
+    "mtime": 1786806434.0987356,
+    "ast_hash": "dcacbcacc90043e15d0973307b3a9b66",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/original/haunted-mines-bottom.jpg": {
+    "mtime": 1786873817.4159675,
+    "ast_hash": "8f659d528a3bf00d2f5174be8ee82b66",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/original/haunted-mines.jpg": {
+    "mtime": 1786873817.4204824,
+    "ast_hash": "b6a5f6175718b59f01ed8e918b606bf1",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/original/industrial-district.jpg": {
+    "mtime": 1786806434.10074,
+    "ast_hash": "210068817673ac31366bfa16759df952",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/original/infernal-shrines.jpg": {
+    "mtime": 1786806434.1043067,
+    "ast_hash": "ec0964100862a7b4214a8fe0a18ee96f",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/original/lost-cavern.jpg": {
+    "mtime": 1786806434.1052992,
+    "ast_hash": "5754fb056e13abdd8e3aeef317cde2ea",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/original/silver-city.jpg": {
+    "mtime": 1786806434.1052992,
+    "ast_hash": "7ee0101edb2f1020bb36a962005f3b3b",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/original/sky-temple.jpg": {
+    "mtime": 1786806434.109807,
+    "ast_hash": "9b79d900636c934ed768ca1cbbacb2e7",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/original/tomb-of-the-spider-queen.jpg": {
+    "mtime": 1786806434.1118073,
+    "ast_hash": "3563ca1e0b90b8049f0fd00f2b4b3ed6",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/original/towers-of-doom.jpg": {
+    "mtime": 1786806434.114848,
+    "ast_hash": "81c6dea30a0d0f3c0be92cbcff6d8dcf",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/original/volskaya-foundry.jpg": {
+    "mtime": 1786806434.1188488,
+    "ast_hash": "cbdf495448fca6f911097f0de43f727a",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/original/warhead-junction.jpg": {
+    "mtime": 1786806434.1231196,
+    "ast_hash": "1fda36d996d13c44b783cc56baf29f3f",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/thumb/alterac-pass.webp": {
+    "mtime": 1786806434.124621,
+    "ast_hash": "f620d0f158a47bd0a32dff924223bfc3",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/thumb/battlefield-of-eternity.webp": {
+    "mtime": 1786806434.124621,
+    "ast_hash": "cf86dde784a7287eb3d787b14301e225",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/thumb/blackheart-s-bay.webp": {
+    "mtime": 1786806434.1256106,
+    "ast_hash": "2a45a7598b1f233b6a0b4fa313ce051d",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/thumb/braxis-holdout.webp": {
+    "mtime": 1786806434.1266105,
+    "ast_hash": "481ebfd597f0dd688405f0aafca3cee1",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/thumb/braxis-outpost.webp": {
+    "mtime": 1786806434.1266105,
+    "ast_hash": "de7a31e3390b64855da9280af19b992a",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/thumb/cursed-hollow.webp": {
+    "mtime": 1786806434.1276112,
+    "ast_hash": "d6da4f501291c11fb3c8e5aeef78472d",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/thumb/dragon-shire.webp": {
+    "mtime": 1786806434.1286106,
+    "ast_hash": "bda1d6a781af99be411665702504bdf8",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/thumb/garden-of-terror.webp": {
+    "mtime": 1786806434.1286106,
+    "ast_hash": "dfeb9e82bd1b22f754ffed36c52e9d30",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/thumb/hanamura-temple.webp": {
+    "mtime": 1786806434.1297355,
+    "ast_hash": "af1ce7ca389c0bc6272f2cf7b2287589",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/thumb/haunted-mines.webp": {
+    "mtime": 1786873817.4214816,
+    "ast_hash": "f9e653545b3466585c0707b651ced574",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/thumb/industrial-district.webp": {
+    "mtime": 1786806434.1307404,
+    "ast_hash": "960622f9aaa68f1d8ff92d89809a8555",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/thumb/infernal-shrines.webp": {
+    "mtime": 1786806434.1317403,
+    "ast_hash": "22bc16641bd626b6dcd5c7ac8ca77d21",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/thumb/lost-cavern.webp": {
+    "mtime": 1786806434.1327393,
+    "ast_hash": "141c40d951fab0b885edb522dc1e4f3b",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/thumb/silver-city.webp": {
+    "mtime": 1786806434.1327393,
+    "ast_hash": "5eb53a4d72d873753c9d900ca6c14f9e",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/thumb/sky-temple.webp": {
+    "mtime": 1786806434.1348915,
+    "ast_hash": "dab130fd1681c0565914d36e16c48b3f",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/thumb/tomb-of-the-spider-queen.webp": {
+    "mtime": 1786806434.1348915,
+    "ast_hash": "faa2d2d3b246e03b295c6a4d8c3b9374",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/thumb/towers-of-doom.webp": {
+    "mtime": 1786806434.1358912,
+    "ast_hash": "5584613e6942ee80a85453d7e9206e53",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/thumb/volskaya-foundry.webp": {
+    "mtime": 1786806434.1368923,
+    "ast_hash": "264c8a2e7a7b59554d7bab7e13c26dcd",
+    "semantic_hash": ""
+  },
+  "apps/web/public/images/maps/thumb/warhead-junction.webp": {
+    "mtime": 1786806434.1378913,
+    "ast_hash": "7ec2da4caa419b1d8a81fc1d7ee3b255",
     "semantic_hash": ""
   }
 }
