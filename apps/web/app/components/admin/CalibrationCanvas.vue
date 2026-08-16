@@ -4,7 +4,7 @@ import type { MapBoundsInput } from "~/utils/mapProjection";
 
 const props = defineProps<{
   mapId: string;
-  points: { x: number; y: number }[];
+  points: { x: number; y: number; kind?: "spawn" }[];
   bounds: MapBoundsInput;
 }>();
 
@@ -80,14 +80,19 @@ function redraw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawGrid(ctx, canvas.width, canvas.height);
 
-  // Static red, matching the app's --color-danger family, kept literal
-  // (canvas can't read CSS custom properties) -- larger radius + a dark
-  // outline than the original 3px so points stay visible over light map art.
-  ctx.fillStyle = "rgba(239, 68, 68, 0.85)";
+  // Static colors, kept literal (canvas can't read CSS custom properties).
+  // Regular points: red, matching the app's --color-danger family. "spawn"
+  // points (only ever set by the synthetic example generator's dense
+  // corner cluster, see generateExampleSample) render in gold instead, as a
+  // recognizable calibration landmark -- several heroes always start a
+  // match bunched together at a spawn, so a real sample's densest tight
+  // cluster is worth eyeballing the same way once you know what one looks
+  // like here.
   ctx.strokeStyle = "rgba(15, 23, 42, 0.6)";
   ctx.lineWidth = 1;
   for (const point of props.points) {
     const { pxX, pxY } = projectRawPoint(point, props.bounds, canvas.width, canvas.height);
+    ctx.fillStyle = point.kind === "spawn" ? "rgba(234, 179, 8, 0.9)" : "rgba(239, 68, 68, 0.85)";
     ctx.beginPath();
     ctx.arc(pxX, pxY, 5, 0, Math.PI * 2);
     ctx.fill();

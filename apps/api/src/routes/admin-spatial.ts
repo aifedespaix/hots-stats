@@ -6,6 +6,7 @@ import { requireAdmin } from "../middleware/require-admin";
 import {
   generateExampleSample,
   getPendingSample,
+  listCalibratedMaps,
   listPendingMapIds,
   saveCalibration,
 } from "../services/spatial-calibration.service";
@@ -19,7 +20,8 @@ type Env = { Variables: { user?: User } };
  */
 export const adminSpatialRoute = new Hono<Env>()
   .use("*", authSession, requireUser, requireAdmin)
-  .get("/pending-maps", async (c) => c.json({ mapIds: await listPendingMapIds() }))
+  .get("/pending-maps", async (c) => c.json({ maps: await listPendingMapIds() }))
+  .get("/calibrated-maps", async (c) => c.json({ maps: await listCalibratedMaps() }))
   .get("/samples/:mapId", async (c) => {
     const sample = await getPendingSample(c.req.param("mapId"));
     if (!sample) {

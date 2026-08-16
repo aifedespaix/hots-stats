@@ -6,38 +6,133 @@ useSeoMeta({ title: "Calibration spatiale", robots: "noindex, nofollow" });
 const config = useRuntimeConfig();
 const toast = useToast();
 
-const { data: pendingMaps, refresh: refreshPendingMaps } = await useApiFetch<{ mapIds: string[] }>(
+interface PendingMapEntry {
+  mapId: string;
+  mapName: string;
+  pointCount: number;
+}
+interface CalibratedMapEntry {
+  mapId: string;
+  mapName: string;
+  bounds: { minX: number; maxX: number; minY: number; maxY: number };
+  updatedAt: string;
+}
+
+const { data: pendingMaps, refresh: refreshPendingMaps } = await useApiFetch<{ maps: PendingMapEntry[] }>(
   "/admin/spatial/pending-maps",
   { withGameMode: false },
 );
-const mapItems = computed(() => (pendingMaps.value?.mapIds ?? []).map((id) => ({ label: id, value: id })));
+const { data: calibratedMaps, refresh: refreshCalibratedMaps } = await useApiFetch<{ maps: CalibratedMapEntry[] }>(
+  "/admin/spatial/calibrated-maps",
+  { withGameMode: false },
+);
+
+async function refreshMapLists() {
+  await Promise.all([refreshPendingMaps(), refreshCalibratedMaps()]);
+}
+
+// One unified picker for every map the tool knows about, so there's a
+// single always-correct "what am I looking at" state -- the previous design
+// had two independent dropdowns (the real pending-map list, and a separate
+// one for picking which map to generate an example for), where choosing a
+// map in the second one didn't touch what the canvas showed until you
+// clicked "Générer", which looked exactly like selection silently failing.
+interface MapOption {
+  label: string;
+  value: string;
+  status: "pending" | "calibrated";
+}
+const mapOptions = computed<MapOption[]>(() => [
+  ...(pendingMaps.value?.maps ?? []).map((m) => ({
+    label: `${m.mapName} — à calibrer (${m.pointCount} points)`,
+    value: m.mapId,
+    status: "pending" as const,
+  })),
+  ...(calibratedMaps.value?.maps ?? []).map((m) => ({
+    label: `${m.mapName} — déjà calibrée`,
+    value: m.mapId,
+    status: "calibrated" as const,
+  })),
+]);
 
 const selectedMapId = ref<string | undefined>(undefined);
-const points = ref<{ x: number; y: number }[]>([]);
+const selectedOption = computed(() => mapOptions.value.find((m) => m.value === selectedMapId.value) ?? null);
+const points = ref<{ x: number; y: number; kind?: "spawn" }[]>([]);
+const hasSpawnLandmark = computed(() => points.value.some((p) => p.kind === "spawn"));
 const loadingSample = ref(false);
+
+const minX = ref(0);
+const maxX = ref(1);
+const minY = ref(0);
+const maxY = ref(1);
+const bounds = computed(() => ({ minX: minX.value, maxX: maxX.value, minY: minY.value, maxY: maxY.value }));
 
 watch(selectedMapId, async (mapId) => {
   points.value = [];
+  minX.value = 0;
+  maxX.value = 1;
+  minY.value = 0;
+  maxY.value = 1;
   if (!mapId) return;
+
+  // Editing an already-calibrated map starts from its saved bounds, not
+  // 0..1 -- "Auto-ajuster aux points" is still there to reset from scratch
+  // if the existing calibration turns out to be badly wrong.
+  const existing = calibratedMaps.value?.maps.find((m) => m.mapId === mapId);
+  if (existing) {
+    minX.value = existing.bounds.minX;
+    maxX.value = existing.bounds.maxX;
+    minY.value = existing.bounds.minY;
+    maxY.value = existing.bounds.maxY;
+  }
+
   loadingSample.value = true;
   try {
-    const sample = await $fetch<{ mapId: string; points: { x: number; y: number }[] }>(
+    const sample = await $fetch<{ mapId: string; points: { x: number; y: number; kind?: "spawn" }[] }>(
       `/admin/spatial/samples/${mapId}`,
       { baseURL: config.public.apiBase, credentials: "include" },
     );
     points.value = sample.points;
-  } catch {
-    toast.add({ title: "Impossible de charger l'échantillon", color: "error" });
+  } catch (err) {
+    // An already-calibrated map calibrated before this tool started keeping
+    // samples past calibration (or whose sample was never re-uploaded
+    // since) legitimately has none -- not a failure, just an empty canvas
+    // to eyeball the existing bounds against blind.
+    if (!(existing && (err as { statusCode?: number })?.statusCode === 404)) {
+      toast.add({ title: "Impossible de charger l'échantillon", color: "error" });
+    }
   } finally {
     loadingSample.value = false;
   }
 });
 
-// Curated slugs confirmed to have a real image at
-// /images/maps/original/<slug>.jpg -- purely a testing convenience so an
-// admin can exercise this tool without a real daemon replay upload. See
-// generateExampleSample() in apps/api/src/services/spatial-calibration.service.ts.
-const EXAMPLE_MAP_IDS = ["dragon-shire", "cursed-hollow", "battlefield-of-eternity", "sky-temple", "towers-of-doom"];
+// Every map slug confirmed to have a real image at
+// /images/maps/original/<slug>.jpg -- lets the example generator offer any
+// real HotS map for testing, not an arbitrary subset. Purely a testing
+// convenience; see generateExampleSample() in
+// apps/api/src/services/spatial-calibration.service.ts.
+const EXAMPLE_MAP_IDS = [
+  "alterac-pass",
+  "battlefield-of-eternity",
+  "blackheart-s-bay",
+  "braxis-holdout",
+  "braxis-outpost",
+  "cursed-hollow",
+  "dragon-shire",
+  "garden-of-terror",
+  "hanamura-temple",
+  "haunted-mines",
+  "haunted-mines-bottom",
+  "industrial-district",
+  "infernal-shrines",
+  "lost-cavern",
+  "silver-city",
+  "sky-temple",
+  "tomb-of-the-spider-queen",
+  "towers-of-doom",
+  "volskaya-foundry",
+  "warhead-junction",
+];
 const exampleMapId = ref(EXAMPLE_MAP_IDS[0]!);
 const generatingExample = ref(false);
 
@@ -49,7 +144,10 @@ async function generateExample() {
       baseURL: config.public.apiBase,
       credentials: "include",
     });
-    await refreshPendingMaps();
+    await refreshMapLists();
+    // Now the one true selector -- picking it here is what actually loads
+    // the fresh points into the canvas below, same as picking any other
+    // entry in the list.
     selectedMapId.value = exampleMapId.value;
     toast.add({
       title: "Exemple généré",
@@ -62,12 +160,6 @@ async function generateExample() {
     generatingExample.value = false;
   }
 }
-
-const minX = ref(0);
-const maxX = ref(1);
-const minY = ref(0);
-const maxY = ref(1);
-const bounds = computed(() => ({ minX: minX.value, maxX: maxX.value, minY: minY.value, maxY: maxY.value }));
 
 // Fraction of the raw points' own bounding-box span added as margin on
 // each side, so points don't sit flush against the canvas edge.
@@ -108,13 +200,8 @@ async function save() {
   const calibratedMapId = selectedMapId.value;
   selectedMapId.value = undefined;
   points.value = [];
-  await refreshPendingMaps();
-  if (pendingMaps.value?.mapIds.includes(calibratedMapId)) {
-    // Defensive: the API deletes the pending sample on a successful
-    // calibration, so this shouldn't happen -- but never leave a
-    // just-calibrated map looking selectable again if it somehow does.
-    pendingMaps.value.mapIds = pendingMaps.value.mapIds.filter((id) => id !== calibratedMapId);
-  }
+  await refreshMapLists();
+  selectedMapId.value = calibratedMapId;
 }
 </script>
 
@@ -122,26 +209,26 @@ async function save() {
   <div class="space-y-6">
     <h1 class="font-heading text-2xl font-semibold">Calibration spatiale</h1>
     <p class="max-w-2xl text-sm text-muted">
-      Choisis une carte en attente de calibration (ou génère un exemple ci-dessous pour tester l'outil), clique
-      "Auto-ajuster aux points" pour partir d'une estimation raisonnable, affine les 4 bornes jusqu'à ce que les
-      points rouges se superposent correctement à la carte, puis sauvegarde.
+      Choisis une carte ci-dessous -- en attente de calibration, déjà calibrée (pour corriger une erreur), ou génère
+      un exemple si aucune vraie donnée n'est encore disponible -- clique "Auto-ajuster aux points" pour partir d'une
+      estimation raisonnable, affine les 4 bornes jusqu'à ce que les points rouges se superposent correctement à la
+      carte, puis sauvegarde.
     </p>
 
     <section class="space-y-4 rounded-lg border border-border p-4 sm:p-6">
       <h2 class="font-heading text-lg">Carte</h2>
-      <USelectMenu
-        v-model="selectedMapId"
-        value-key="value"
-        :items="mapItems"
-        placeholder="Choisir une carte en attente…"
-      />
-      <p v-if="mapItems.length === 0" class="text-sm text-muted">Aucune carte en attente de calibration.</p>
+      <USelectMenu v-model="selectedMapId" value-key="value" :items="mapOptions" placeholder="Choisir une carte…" />
+      <p v-if="mapOptions.length === 0" class="text-sm text-muted">
+        Aucune carte en attente ni calibrée pour l'instant -- génère un exemple ci-dessous pour tester l'outil.
+      </p>
 
       <div class="rounded-md border border-dashed border-border p-3">
         <p class="mb-2 text-xs text-muted">
           Pas de vraie donnée sous la main ? Génère un échantillon synthétique pour tester l'outil de bout en bout
           (les points n'ont aucun rapport avec la vraie géométrie de la carte — ne calibre jamais une carte en
-          production à partir d'un exemple).
+          production à partir d'un exemple). Le générer pour une carte déjà calibrée est sans risque : ça ne fait
+          que rafraîchir ses points d'exemple, la calibration existante n'est pas modifiée tant que tu ne cliques pas
+          "Sauvegarder".
         </p>
         <div class="flex flex-wrap items-center gap-2">
           <USelectMenu
@@ -169,10 +256,20 @@ async function save() {
       <div class="space-y-2">
         <AdminCalibrationCanvas :map-id="selectedMapId" :points="points" :bounds="bounds" />
         <p class="text-xs text-muted">{{ points.length }} point(s) chargé(s)</p>
+        <p v-if="hasSpawnLandmark" class="flex items-center gap-1.5 text-xs text-muted">
+          <span class="inline-block h-2.5 w-2.5 rounded-full" style="background: rgba(234, 179, 8, 0.9)" />
+          Points dorés = zone de spawn de l'exemple (plusieurs héros groupés) -- un repère utile pour caler
+          précisément la calibration, y compris sur une vraie donnée.
+        </p>
       </div>
 
       <section class="space-y-4 rounded-lg border border-border p-4 sm:p-6">
-        <h2 class="font-heading text-lg">Bornes du monde</h2>
+        <h2 class="font-heading text-lg">
+          Bornes du monde
+          <UBadge v-if="selectedOption?.status === 'calibrated'" color="neutral" variant="subtle" size="sm">
+            Modification
+          </UBadge>
+        </h2>
         <p class="text-xs text-muted">
           Coordonnées brutes du jeu (pas des pixels) délimitant la zone jouable. Elles doivent englober tous les
           points affichés sans être beaucoup plus grandes que nécessaire.
