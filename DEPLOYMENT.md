@@ -138,27 +138,31 @@ docker exec $(docker ps -qf "name=hots-stats-backend.*postgres") \
 À planifier en cron régulièrement, et à copier hors du Pi (le SD/SSD d'un Pi
 n'est pas un stockage de confiance à long terme).
 
-## Accès UI à la base de données (Drizzle Studio)
+## Accès UI à la base de données (Adminer, LAN uniquement)
 
-`docker-compose.backend.yml` publie Postgres sur `127.0.0.1:5432` du Pi
-uniquement (pas de bind `0.0.0.0`, pas de domaine Dokploy) : il reste
-inaccessible depuis le LAN ou internet, mais joignable via un tunnel SSH.
+`docker-compose.backend.yml` inclut un service `adminer` (UI web légère
+pour Postgres : parcourir/éditer les tables, lancer du SQL). Il parle à
+`postgres` via le réseau interne du compose -- Postgres lui-même n'est
+jamais publié, ni sur le LAN ni sur internet.
 
-Drizzle Studio n'a pas de compte propre -- il se connecte avec les
-identifiants Postgres eux-mêmes (`POSTGRES_USER` / `POSTGRES_PASSWORD` /
-`POSTGRES_DB`, les mêmes que dans les variables d'env Dokploy du service
-`postgres`). Depuis ta machine, avec un accès SSH au Pi :
+Adminer, lui, est publié sur le port `8080` du Pi
+(`http://<ip-lan-du-pi>:8080`). Ça reste **local au réseau** tant que :
 
-```bash
-SSH_HOST=user@raspberrypi.local \
-POSTGRES_USER=... POSTGRES_PASSWORD=... POSTGRES_DB=... \
-bun run --filter @hots-stats/db studio:remote
-```
+- **aucun domaine Dokploy** n'est créé pour ce service (pas d'onglet
+  Domains sur `adminer`) ;
+- **aucune entrée n'est ajoutée dans la config du tunnel Cloudflare**
+  (`cloudflared` ne route que les hostnames explicitement déclarés dans son
+  `config.yml`/dashboard -- tant que `8080`/`adminer` n'y figure pas, le
+  tunnel ne l'expose pas, même si le port écoute sur `0.0.0.0`) ;
+- pas de redirection de port sur ta box/routeur vers `8080`.
 
-Le script (`packages/db/scripts/studio-remote.sh`) ouvre le tunnel SSH vers
-le port loopback du Pi, lance `drizzle-kit studio` dessus, puis ferme le
-tunnel en quittant (Ctrl+C). L'UI s'ouvre sur `https://local.drizzle.studio`
-et donne un accès lecture/écriture complet aux tables.
+Le seul chemin d'accès reste donc "être sur le même réseau que le Pi" (WiFi
+maison, ou VPN vers ce réseau). Pour se connecter dans Adminer : système
+`PostgreSQL`, serveur `postgres` (déjà pré-rempli via
+`ADMINER_DEFAULT_SERVER`), puis les mêmes `POSTGRES_USER` /
+`POSTGRES_PASSWORD` / `POSTGRES_DB` que dans les variables d'env Dokploy du
+service `postgres` -- Adminer n'a pas de compte propre, comme Drizzle
+Studio.
 
 ## Notes spécifiques Raspberry Pi
 
