@@ -62,6 +62,78 @@ export async function getUploadsDiagnostics() {
 }
 
 /**
+ * `GET /_internal/diagnostics/parser-versions` -- how many matches are still
+ * stored under each `parserVersion`. Every parser-shape fix (see
+ * `PARSER_VERSION`'s changelog in daemon-python/src/constants.py) only
+ * self-heals a match once its owning player's daemon re-syncs it, which
+ * needs the replay file still present locally and the daemon actually
+ * having run since the fix shipped -- so this is the honest measure of "how
+ * much of the DB is still on a build with a known parsing bug" instead of
+ * assuming a deploy alone fixed everything.
+ */
+export async function getParserVersionOverview() {
+  return db
+    .select({
+      parserVersion: matches.parserVersion,
+      matchCount: sql<number>`count(*)::int`,
+      oldestPlayedAt: sql<string>`min(${matches.playedAt})`,
+      newestPlayedAt: sql<string>`max(${matches.playedAt})`,
+    })
+    .from(matches)
+    .groupBy(matches.parserVersion)
+    .orderBy(desc(sql`count(*)`));
+}
+
+/**
+ * `GET /_internal/diagnostics/match/:matchId` -- raw per-player stats for
+ * one match, for spot-checking a specific report ("this match's stats look
+ * wrong") against what's actually stored, without needing a session/being a
+ * participant (unlike `GET /matches/:id`, which is access-controlled).
+ */
+export async function getMatchDiagnostics(matchId: string) {
+  const [match] = await db
+    .select({
+      id: matches.id,
+      playedAt: matches.playedAt,
+      durationSeconds: matches.durationSeconds,
+      gameMode: matches.gameMode,
+      mapName: maps.name,
+      parserVersion: matches.parserVersion,
+      gameVersion: matches.gameVersion,
+    })
+    .from(matches)
+    .innerJoin(maps, eq(maps.id, matches.mapId))
+    .where(eq(matches.id, matchId))
+    .limit(1);
+
+  if (!match) return null;
+
+  const players = await db
+    .select({
+      battletag: matchPlayers.battletag,
+      heroId: matchPlayers.heroId,
+      heroName: heroes.name,
+      team: matchPlayers.team,
+      winner: matchPlayers.winner,
+      kills: matchPlayers.kills,
+      deaths: matchPlayers.deaths,
+      assists: matchPlayers.assists,
+      heroDamage: matchPlayers.heroDamage,
+      siegeDamage: matchPlayers.siegeDamage,
+      healing: matchPlayers.healing,
+      selfHealing: matchPlayers.selfHealing,
+      damageTaken: matchPlayers.damageTaken,
+      experienceContribution: matchPlayers.experienceContribution,
+    })
+    .from(matchPlayers)
+    .innerJoin(heroes, eq(heroes.id, matchPlayers.heroId))
+    .where(eq(matchPlayers.matchId, matchId))
+    .orderBy(matchPlayers.team);
+
+  return { match, players };
+}
+
+/**
  * `GET /_internal/diagnostics/zero-kda` -- investigates reports of a player
  * row showing 0 kills/deaths/assists despite a normal-looking game
  * (non-zero damage/healing, plausible duration). All three should be

@@ -67,7 +67,19 @@ from __future__ import annotations
 # like heroDamage/healing that only ever get one push happened to read
 # correctly, since `[0] == [-1]` when there's just one entry). Now reads
 # `values[-1]` (the most recent entry) instead.
-# 1.7: adds an optional per-match `spatial` block (hero presence grid, plus
+# 1.7: `_apply_score_event` derived a player's index into
+# `SScoreResultEvent.m_instanceList[].m_values[]` (positional, one slot per
+# tracker id) by counting only *non-empty* slots seen so far -- meant to
+# skip bot/open lobby seats, but a real player's genuinely untouched stat
+# (a healer's 0 SiegeDamage, an ARAM support's 0 ExperienceContribution --
+# anything Blizzard never pushed even a baseline entry for) is *also* an
+# empty slot, and skipping it without still advancing the position desynced
+# every following real player's index by one. Confirmed against a real
+# match where this produced siege damage stuck at 0 for all 10 players and
+# an identical experience-contribution value duplicated across a whole
+# team. Now derives the index from the slot's own position (`enumerate`)
+# instead of a count that silently drops out of sync.
+# 1.8: adds an optional per-match `spatial` block (hero presence grid, plus
 # `x`/`y`/`killers`/`killType` enriched onto each `timeline.deaths` entry)
 # built from `SUnitPositionsEvent`, normalized against a per-map world-bounds
 # calibration fetched from `GET /spatial/calibrations` (see `app.py`'s
@@ -92,9 +104,9 @@ from __future__ import annotations
 # reparses and re-uploads it. Whenever this changes, also bump
 # apps/api/src/constants.ts's MIN_PARSER_VERSION to the same value --
 # they're meant to move together (see that constant's docstring) -- except
-# for an additive-only change like 1.7 above, where doing so would only
+# for an additive-only change like 1.8 above, where doing so would only
 # force wasted resyncs on daemons that can't yet benefit from it.
-PARSER_VERSION = "1.7"
+PARSER_VERSION = "1.8"
 
 # Resolution of the sparse presence grid in `spatial.presence[]` (see
 # tasks/epic-10-analyse-spatiale.md Livrable 1 for the sizing rationale --
@@ -125,7 +137,7 @@ SPATIAL_MAX_INTERPOLATION_SPEED_NORMALIZED = 0.10
 CALIBRATION_SAMPLE_TARGET = 1000
 
 # Shown in the settings window. Bump alongside `[project].version` in pyproject.toml.
-APP_VERSION = "1.0.33"
+APP_VERSION = "1.0.34"
 
 # HotS talent tiers are always at these character levels, in pick order.
 TALENT_TIER_LEVELS = (1, 4, 7, 10, 13, 16, 20)

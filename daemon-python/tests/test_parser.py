@@ -416,6 +416,51 @@ def test_build_payload_reads_the_latest_score_snapshot_not_the_first():
     assert players_by_tag["Bar#2222"]["kills"] == 6
 
 
+def test_build_payload_a_players_untouched_stat_does_not_desync_the_next_players_index():
+    """`m_values` is positional -- slot i corresponds to tracker id i, and is
+    an empty list when that player never touched the stat at all (not just
+    for a bot/open lobby slot). The previous approach only advanced its
+    position counter on a non-empty slot, so a real player's genuinely
+    untouched stat (an assassin's 0 SiegeDamage, a specialist's 0 healing,
+    ...) desynced every following player's index by one, attributing their
+    value to the *previous* player instead. Confirmed against a real match
+    where this produced siege damage stuck at 0 for every single player and
+    an identical experience-contribution value duplicated across a whole
+    team."""
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=[
+            *_base_tracker_events()[:3],
+            {
+                "_event": "NNet.Replay.Tracker.SScoreResultEvent",
+                "m_instanceList": [
+                    {"m_name": name.encode(), "m_values": [[{"m_value": v}] for v in values]}
+                    for name, values in REQUIRED_STATS.items()
+                ]
+                + [
+                    {
+                        "m_name": b"CreepDamage",
+                        "m_values": [
+                            [],  # Foo (index 1): never touched this stat.
+                            [{"m_value": 4200}],  # Bar (index 2): the real value.
+                        ],
+                    }
+                ],
+            },
+            *_base_tracker_events()[4:],
+        ],
+        attributes_events=_base_attributes_events(),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+    )
+
+    players_by_tag = {p["battletag"]: p for p in payload["players"]}
+    assert "creepDamage" not in players_by_tag["Foo#1111"]
+    assert players_by_tag["Bar#2222"]["creepDamage"] == 4200
+
+
 def test_build_payload_unknown_map_falls_back_to_prettified_slug():
     """Regression test: a map internal name not yet in
     constants.MAP_DISPLAY_NAMES (a new battleground) must not produce a

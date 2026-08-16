@@ -4,7 +4,12 @@ import { internalSecret } from "../middleware/internal-secret";
 import { verifyQuarantinedBuild } from "../services/build-verification.service";
 import { getDaemonErrorGroups, markDaemonErrorsResolved } from "../services/daemon-errors.service";
 import { getQuarantineOverview, getQuarantineSamples } from "../services/quarantine.service";
-import { getUploadsDiagnostics, getZeroKdaDiagnostics } from "../services/uploads-diagnostics.service";
+import {
+  getMatchDiagnostics,
+  getParserVersionOverview,
+  getUploadsDiagnostics,
+  getZeroKdaDiagnostics,
+} from "../services/uploads-diagnostics.service";
 
 const paramsSchema = z.object({
   buildId: z.coerce.number().int().nonnegative(),
@@ -20,6 +25,10 @@ const errorsQuerySchema = z.object({
 
 const zeroKdaQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(200).default(50),
+});
+
+const matchIdParamsSchema = z.object({
+  matchId: z.string().uuid(),
 });
 
 const resolveErrorsSchema = z.object({
@@ -93,4 +102,18 @@ export const internalRoute = new Hono()
       return c.json({ error: query.error.flatten() }, 400);
     }
     return c.json(await getZeroKdaDiagnostics(query.data.limit));
+  })
+  .get("/diagnostics/parser-versions", async (c) => {
+    return c.json({ versions: await getParserVersionOverview() });
+  })
+  .get("/diagnostics/match/:matchId", async (c) => {
+    const params = matchIdParamsSchema.safeParse(c.req.param());
+    if (!params.success) {
+      return c.json({ error: params.error.flatten() }, 400);
+    }
+    const result = await getMatchDiagnostics(params.data.matchId);
+    if (!result) {
+      return c.json({ error: "Match not found" }, 404);
+    }
+    return c.json(result);
   });
