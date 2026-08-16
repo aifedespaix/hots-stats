@@ -57,7 +57,14 @@ CREATE TABLE IF NOT EXISTS replays (
     -- with a plain `ALTER TABLE ADD COLUMN` migration (see `_open`) instead
     -- of one that rebuilds the table to widen a CHECK constraint already
     -- baked into every database an installed daemon has on disk.
-    skip_reason TEXT
+    skip_reason TEXT,
+    -- How many consecutive times `mark_parse_error` has recorded this replay
+    -- failing at `attempt_parser_version` (reset to 1 whenever that version
+    -- changes -- see `mark_parse_error` and `parse_retry_budget_exhausted`).
+    -- Only ever written by `mark_parse_error`; `mark_error` (the other 5
+    -- error call sites in ingestion.py) leaves it untouched.
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    attempt_parser_version TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_replays_status ON replays(status);
 
@@ -101,6 +108,25 @@ def _ensure_skip_reason_column(conn: sqlite3.Connection) -> None:
     except sqlite3.OperationalError as err:
         if "duplicate column" not in str(err).lower():
             raise
+
+
+def _ensure_attempt_tracking_columns(conn: sqlite3.Connection) -> None:
+    """Adds `replays.attempt_count` / `attempt_parser_version` to a database
+    created before the parse-retry budget existed (see `mark_parse_error` /
+    `parse_retry_budget_exhausted`). Same `ALTER TABLE ADD COLUMN` + ignore
+    "duplicate column" pattern as `_ensure_skip_reason_column` above, for the
+    same reason (safe on a live table; SQLite's own `ADD COLUMN IF NOT
+    EXISTS` isn't guaranteed available)."""
+    for ddl in (
+        "ALTER TABLE replays ADD COLUMN attempt_count INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE replays ADD COLUMN attempt_parser_version TEXT",
+    ):
+        try:
+            conn.execute(ddl)
+            conn.commit()
+        except sqlite3.OperationalError as err:
+            if "duplicate column" not in str(err).lower():
+                raise
 
 
 def sync_state_file_path() -> Path:
@@ -179,6 +205,7 @@ class SyncState:
             conn.execute("PRAGMA journal_mode=WAL")
             conn.executescript(_SCHEMA)
         _ensure_skip_reason_column(conn)
+        _ensure_attempt_tracking_columns(conn)
         return conn
 
     # -- sync status ----------------------------------------------------
@@ -307,6 +334,73 @@ class SyncState:
                 (replay_hash, file_path, now, error_message, error_log),
             )
             self._conn.commit()
+
+    def mark_parse_error(
+        self,
+        replay_hash: str,
+        file_path: str,
+        error_message: str,
+        error_log: str | None,
+        parser_version: str,
+    ) -> None:
+        """Like `mark_error`, but for `parser.ReplayParseError` specifically:
+        a corrupt/incomplete archive is a pure function of the file's bytes
+        and this build's parsing code, so unlike a transient auth/server/
+        validation failure it can never fix itself without a code change.
+        Tracks `attempt_count` at `parser_version` (reset to 1 the first time
+        a *different* version records an attempt, since a parser fix could
+        legitimately make a previously-broken file parse) so
+        `parse_retry_budget_exhausted` can tell `ingest_file` to stop
+        reparsing and re-reporting a file that will never succeed at this
+        build.
+        """
+        now = _now()
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO replays
+                    (replay_hash, file_path, status, parser_version, api_version,
+                     match_id, synced_at, last_attempt_at, error_message, error_log,
+                     file_exists, attempt_count, attempt_parser_version)
+                VALUES (?, ?, 'error', NULL, NULL, NULL, NULL, ?, ?, ?, 1, 1, ?)
+                ON CONFLICT(replay_hash) DO UPDATE SET
+                    file_path = excluded.file_path,
+                    status = 'error',
+                    last_attempt_at = excluded.last_attempt_at,
+                    error_message = excluded.error_message,
+                    error_log = excluded.error_log,
+                    file_exists = 1,
+                    skip_reason = NULL,
+                    attempt_count = CASE
+                        WHEN replays.attempt_parser_version IS excluded.attempt_parser_version
+                        THEN replays.attempt_count + 1
+                        ELSE 1
+                    END,
+                    attempt_parser_version = excluded.attempt_parser_version
+                """,
+                (replay_hash, file_path, now, error_message, error_log, parser_version),
+            )
+            self._conn.commit()
+
+    def parse_retry_budget_exhausted(self, replay_hash: str, parser_version: str, max_attempts: int) -> bool:
+        """True once `mark_parse_error` has recorded `max_attempts` (or more)
+        consecutive failures for `replay_hash` at `parser_version` -- lets
+        `ingest_file` skip reparsing a file that's already proven it will
+        never succeed at this build, instead of retrying it every sync cycle
+        forever. Only ever true for rows written by `mark_parse_error`: a
+        version change or a later `mark_synced`/`mark_error` call resets or
+        bypasses it, since only a parse error is treated as unrecoverable
+        without a code change.
+        """
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT status, attempt_count, attempt_parser_version FROM replays WHERE replay_hash = ?",
+                (replay_hash,),
+            ).fetchone()
+        if row is None:
+            return False
+        status, attempt_count, attempt_parser_version = row
+        return status == "error" and attempt_parser_version == parser_version and attempt_count >= max_attempts
 
     # -- API-version-driven resync ---------------------------------------
 

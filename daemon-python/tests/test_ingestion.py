@@ -347,6 +347,54 @@ def test_ingest_file_reports_error_to_api_when_sync_state_present(tmp_path):
     assert report["daemonVersion"] == constants.APP_VERSION
 
 
+def test_ingest_file_stops_reparsing_after_max_parse_retry_attempts(tmp_path):
+    """A structurally corrupt replay fails the same way every time -- once
+    it's failed `constants.MAX_PARSE_RETRY_ATTEMPTS` times at the same
+    PARSER_VERSION, further `ingest_file` calls must skip it entirely (no
+    reparse, no repeated `/ingest/errors` report) instead of retrying
+    forever."""
+    from src import parser as replay_parser
+
+    client = api_client.ApiClient(_config(tmp_path))
+    bad_file = tmp_path / "not-a-replay.StormReplay"
+    bad_file.write_bytes(b"not an mpq archive")
+    sync_state = SyncState(tmp_path / "synced.json")
+
+    with (
+        patch.object(client, "post_ingest_error") as post_ingest_error,
+        patch.object(replay_parser, "parse_replay", wraps=replay_parser.parse_replay) as parse_replay,
+    ):
+        outcomes = [ingest_file(client, bad_file, sync_state) for _ in range(constants.MAX_PARSE_RETRY_ATTEMPTS + 3)]
+
+    statuses = [o.status for o in outcomes]
+    assert statuses[: constants.MAX_PARSE_RETRY_ATTEMPTS] == ["error"] * constants.MAX_PARSE_RETRY_ATTEMPTS
+    assert statuses[constants.MAX_PARSE_RETRY_ATTEMPTS :] == ["skipped"] * 3
+    assert parse_replay.call_count == constants.MAX_PARSE_RETRY_ATTEMPTS
+    assert post_ingest_error.call_count == constants.MAX_PARSE_RETRY_ATTEMPTS
+
+
+def test_ingest_file_parser_version_bump_resets_parse_retry_budget(tmp_path):
+    """A daemon update (new PARSER_VERSION) must give an exhausted replay
+    one more real attempt -- a parser fix could legitimately make a
+    previously-unparseable file succeed."""
+    client = api_client.ApiClient(_config(tmp_path))
+    bad_file = tmp_path / "not-a-replay.StormReplay"
+    bad_file.write_bytes(b"not an mpq archive")
+    sync_state = SyncState(tmp_path / "synced.json")
+
+    with patch.object(client, "post_ingest_error") as post_ingest_error:
+        for _ in range(constants.MAX_PARSE_RETRY_ATTEMPTS):
+            ingest_file(client, bad_file, sync_state)
+        exhausted_outcome = ingest_file(client, bad_file, sync_state)
+
+        with patch.object(constants, "PARSER_VERSION", "999.0"):
+            bumped_outcome = ingest_file(client, bad_file, sync_state)
+
+    assert exhausted_outcome.status == "skipped"
+    assert bumped_outcome.status == "error"
+    assert post_ingest_error.call_count == constants.MAX_PARSE_RETRY_ATTEMPTS + 1
+
+
 def test_ingest_file_does_not_report_error_to_api_without_sync_state(tmp_path):
     """A bare `ingest_file(client, path)` call (no `sync_state`) is not the
     real background daemon / `--resync` flow -- see `_report_error`'s

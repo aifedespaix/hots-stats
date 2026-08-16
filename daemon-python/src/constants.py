@@ -108,6 +108,17 @@ from __future__ import annotations
 # force wasted resyncs on daemons that can't yet benefit from it.
 PARSER_VERSION = "1.8"
 
+# How many times a single replay is allowed to fail with a parse error (a
+# corrupt/incomplete archive -- see parser.ReplayParseError) at the *same*
+# PARSER_VERSION before the daemon stops reparsing and reporting it: such a
+# failure is a pure function of the file's bytes and this build's parsing
+# code, so retrying it forever on every sync cycle only burns CPU and spams
+# the API with an identical report each time (see sync_state.py's
+# `mark_parse_error` / `parse_retry_budget_exhausted`). A PARSER_VERSION bump
+# resets the budget, since a parser fix could legitimately make a
+# previously-unparseable file succeed.
+MAX_PARSE_RETRY_ATTEMPTS = 5
+
 # Resolution of the sparse presence grid in `spatial.presence[]` (see
 # tasks/epic-10-analyse-spatiale.md Livrable 1 for the sizing rationale --
 # payload cost grows linearly with resolution, not quadratically, so the

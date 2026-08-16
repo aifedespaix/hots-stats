@@ -324,3 +324,100 @@ def test_meta_roundtrip(tmp_path):
 
     state.set_meta("api_version", "1.3.0")
     assert state.get_meta("api_version") == "1.3.0"
+
+
+def test_open_migrates_pre_existing_database_missing_attempt_columns(tmp_path):
+    """A `sync_state.db` created before the parse-retry budget existed
+    doesn't get `attempt_count`/`attempt_parser_version` from `CREATE TABLE
+    IF NOT EXISTS` -- `_ensure_attempt_tracking_columns` must add them on
+    open, or `mark_parse_error` would raise `OperationalError: no such
+    column` for every player with a pre-existing sync_state.db."""
+    path = tmp_path / "sync_state.db"
+    conn = sqlite3.connect(str(path))
+    conn.executescript(
+        """
+        CREATE TABLE replays (
+            replay_hash TEXT PRIMARY KEY,
+            file_path TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL CHECK (status IN ('synced', 'error')),
+            parser_version TEXT,
+            api_version TEXT,
+            match_id TEXT,
+            synced_at TEXT,
+            last_attempt_at TEXT NOT NULL,
+            error_message TEXT,
+            error_log TEXT,
+            file_exists INTEGER NOT NULL DEFAULT 1,
+            skip_reason TEXT
+        );
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    state = SyncState(path)
+    state.mark_parse_error("abc", "C:\\replays\\a.StormReplay", "boom", "Traceback: ...", "1.8")
+
+    assert state.parse_retry_budget_exhausted("abc", "1.8", 1) is True
+
+
+def test_mark_parse_error_increments_attempt_count_at_the_same_version(tmp_path):
+    state = SyncState(tmp_path / "sync_state.db")
+    state.mark_parse_error("abc", "path", "boom", None, "1.8")
+    state.mark_parse_error("abc", "path", "boom", None, "1.8")
+    state.mark_parse_error("abc", "path", "boom", None, "1.8")
+
+    assert state.parse_retry_budget_exhausted("abc", "1.8", 3) is True
+    assert state.parse_retry_budget_exhausted("abc", "1.8", 4) is False
+
+
+def test_mark_parse_error_resets_attempt_count_on_parser_version_change(tmp_path):
+    """A daemon update that bumps PARSER_VERSION must give a previously
+    exhausted replay a fresh budget -- a parser fix could legitimately make
+    a file that failed on the old build succeed (or at least deserve one
+    more real attempt) on the new one."""
+    state = SyncState(tmp_path / "sync_state.db")
+    for _ in range(5):
+        state.mark_parse_error("abc", "path", "boom", None, "1.8")
+    assert state.parse_retry_budget_exhausted("abc", "1.8", 5) is True
+
+    state.mark_parse_error("abc", "path", "boom", None, "1.9")
+
+    assert state.parse_retry_budget_exhausted("abc", "1.9", 5) is False
+    assert state.parse_retry_budget_exhausted("abc", "1.9", 1) is True
+
+
+def test_parse_retry_budget_not_exhausted_below_threshold(tmp_path):
+    state = SyncState(tmp_path / "sync_state.db")
+    state.mark_parse_error("abc", "path", "boom", None, "1.8")
+
+    assert state.parse_retry_budget_exhausted("abc", "1.8", 5) is False
+
+
+def test_parse_retry_budget_not_exhausted_for_unknown_hash(tmp_path):
+    state = SyncState(tmp_path / "sync_state.db")
+    assert state.parse_retry_budget_exhausted("never-seen", "1.8", 1) is False
+
+
+def test_mark_synced_after_parse_error_clears_the_budget(tmp_path):
+    """If a replay's parse error is somehow followed by a successful sync
+    (e.g. a resync with a fixed build in between attempts), it must no
+    longer read as exhausted -- `status` flips away from `'error'`."""
+    state = SyncState(tmp_path / "sync_state.db")
+    for _ in range(5):
+        state.mark_parse_error("abc", "path", "boom", None, "1.8")
+    state.mark_synced("abc", "1.8", file_path="path")
+
+    assert state.parse_retry_budget_exhausted("abc", "1.8", 5) is False
+    assert state.is_up_to_date("abc", "1.8") is True
+
+
+def test_mark_error_does_not_affect_parse_retry_budget(tmp_path):
+    """The 5 other error call sites (auth/quarantine/validation/server/
+    unexpected) keep using plain `mark_error`, which must never trip the
+    parse-specific budget -- those failures are meant to retry forever."""
+    state = SyncState(tmp_path / "sync_state.db")
+    for _ in range(10):
+        state.mark_error("abc", "path", "boom")
+
+    assert state.parse_retry_budget_exhausted("abc", "1.8", 1) is False

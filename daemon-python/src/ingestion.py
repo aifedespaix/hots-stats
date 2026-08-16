@@ -98,6 +98,12 @@ def ingest_file(
     full traceback instead -- shown in the Debug window (gui.py) -- and
     retried on the next call, since fixing the underlying issue (a code
     update, a reachable API) is exactly what should make it sync next time.
+    The one exception is a parse error (`replay_parser.ReplayParseError`):
+    once it's failed `constants.MAX_PARSE_RETRY_ATTEMPTS` times at the same
+    `PARSER_VERSION`, it's a corrupt/incomplete file that will never parse
+    at this build, so it's skipped without reparsing or re-reporting until a
+    future PARSER_VERSION bump gives it a fresh budget (see sync_state.py's
+    `mark_parse_error` / `parse_retry_budget_exhausted`).
     A replay that's intentionally excluded rather than broken (currently:
     it includes an AI player -- `replay_parser.ReplaySkipped`) is recorded
     separately via `sync_state.mark_skipped`, gated by `parser_version` the
@@ -154,6 +160,19 @@ def ingest_file(
             logger.debug("Skipping %s: already synced", path)
             return IngestOutcome("skipped", "already synced")
 
+        if replay_hash is not None and sync_state.parse_retry_budget_exhausted(
+            replay_hash, constants.PARSER_VERSION, constants.MAX_PARSE_RETRY_ATTEMPTS
+        ):
+            # Already failed to parse `constants.MAX_PARSE_RETRY_ATTEMPTS`
+            # times at this exact PARSER_VERSION -- a parse error is a pure
+            # function of the file's bytes and this build's parsing code, so
+            # retrying it again would just reproduce the same failure. Skips
+            # both the CPU cost of reparsing and another identical
+            # `/ingest/errors` report; a future PARSER_VERSION bump resets
+            # the budget (see `mark_parse_error`).
+            logger.debug("Skipping %s: parse retry budget exhausted for this parser version", path)
+            return IngestOutcome("skipped", "parse retry budget exhausted")
+
     payload: dict | None = None
     try:
         payload = replay_parser.parse_replay(path, calibrations=calibrations)
@@ -181,7 +200,9 @@ def ingest_file(
     except replay_parser.ReplayParseError as err:
         logger.warning("Skipping %s: %s", path, err)
         if sync_state is not None and replay_hash is not None:
-            sync_state.mark_error(replay_hash, str(path), str(err), traceback.format_exc())
+            sync_state.mark_parse_error(
+                replay_hash, str(path), str(err), traceback.format_exc(), constants.PARSER_VERSION
+            )
         _report_error(
             client, sync_state, error_type="parse", replay_hash=replay_hash, base_build=None, message=str(err)
         )
