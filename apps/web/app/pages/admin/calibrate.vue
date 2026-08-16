@@ -57,8 +57,7 @@ const mapOptions = computed<MapOption[]>(() => [
 
 const selectedMapId = ref<string | undefined>(undefined);
 const selectedOption = computed(() => mapOptions.value.find((m) => m.value === selectedMapId.value) ?? null);
-const points = ref<{ x: number; y: number; kind?: "spawn" }[]>([]);
-const hasSpawnLandmark = computed(() => points.value.some((p) => p.kind === "spawn"));
+const points = ref<{ x: number; y: number }[]>([]);
 const loadingSample = ref(false);
 
 const minX = ref(0);
@@ -88,7 +87,7 @@ watch(selectedMapId, async (mapId) => {
 
   loadingSample.value = true;
   try {
-    const sample = await $fetch<{ mapId: string; points: { x: number; y: number; kind?: "spawn" }[] }>(
+    const sample = await $fetch<{ mapId: string; points: { x: number; y: number }[] }>(
       `/admin/spatial/samples/${mapId}`,
       { baseURL: config.public.apiBase, credentials: "include" },
     );
@@ -224,11 +223,12 @@ async function save() {
 
       <div class="rounded-md border border-dashed border-border p-3">
         <p class="mb-2 text-xs text-muted">
-          Pas de vraie donnée sous la main ? Génère un échantillon synthétique pour tester l'outil de bout en bout
-          (les points n'ont aucun rapport avec la vraie géométrie de la carte — ne calibre jamais une carte en
-          production à partir d'un exemple). Le générer pour une carte déjà calibrée est sans risque : ça ne fait
-          que rafraîchir ses points d'exemple, la calibration existante n'est pas modifiée tant que tu ne cliques pas
-          "Sauvegarder".
+          Pas de vraie donnée sous la main ? Génère un échantillon <strong>entièrement inventé</strong> (positions
+          aléatoires, sans aucun rapport avec la vraie géométrie de la carte) pour vérifier que l'outil lui-même
+          fonctionne -- affichage, projection, sauvegarde. Ça ne sert qu'à ça : ces points ne doivent jamais servir à
+          calibrer une carte en production, quel que soit leur agencement à l'écran. Le générer pour une carte déjà
+          calibrée est sans risque : ça ne fait que rafraîchir ses points d'exemple, la calibration existante n'est
+          pas modifiée tant que tu ne cliques pas "Sauvegarder".
         </p>
         <div class="flex flex-wrap items-center gap-2">
           <USelectMenu
@@ -256,11 +256,6 @@ async function save() {
       <div class="space-y-2">
         <AdminCalibrationCanvas :map-id="selectedMapId" :points="points" :bounds="bounds" />
         <p class="text-xs text-muted">{{ points.length }} point(s) chargé(s)</p>
-        <p v-if="hasSpawnLandmark" class="flex items-center gap-1.5 text-xs text-muted">
-          <span class="inline-block h-2.5 w-2.5 rounded-full" style="background: rgba(234, 179, 8, 0.9)" />
-          Points dorés = zone de spawn de l'exemple (plusieurs héros groupés) -- un repère utile pour caler
-          précisément la calibration, y compris sur une vraie donnée.
-        </p>
       </div>
 
       <section class="space-y-4 rounded-lg border border-border p-4 sm:p-6">

@@ -19,7 +19,7 @@ export async function getAllCalibrations(): Promise<Record<string, MapBounds>> {
  * guards against the Daemon reporting a brand new map slug before it's ever
  * been through POST /ingest (see lib/ensure-map.ts).
  */
-export async function upsertRawSamples(mapId: string, points: { x: number; y: number; kind?: "spawn" }[]): Promise<void> {
+export async function upsertRawSamples(mapId: string, points: { x: number; y: number }[]): Promise<void> {
   await ensureMapExists(mapId);
   await db
     .insert(rawMapSamples)
@@ -52,23 +52,23 @@ function randomInRange(min: number, max: number): number {
  * Generates a synthetic raw sample for `mapId` and stores it exactly like a
  * real daemon upload would (via `upsertRawSamples`) -- lets an admin test
  * the calibration tool's canvas/projection/save flow against a real map
- * image without needing an actual replay. Not real spatial data: never
- * calibrate a map for production use from this, only to verify the tool
- * itself works.
+ * image without needing an actual replay. Not real spatial data, and not a
+ * calibration aid: the whole point cloud lives inside an arbitrary fixed
+ * rectangle (`EXAMPLE_WORLD_BOUNDS`) that has no relationship whatsoever to
+ * any real map's actual coordinate system, so nothing in it -- including
+ * the denser corner cluster below -- corresponds to any real in-game
+ * location. Only ever use this to verify the tool itself renders and saves
+ * correctly, never to calibrate a map for production use.
  *
  * The point cloud is deliberately asymmetric: most points scattered evenly
- * across an inset rectangle, plus a denser "spawn" cluster near the
- * `(minX, minY)` corner, tagged `kind: "spawn"` so the calibration canvas
- * renders it in a distinct color -- once calibrated, that cluster should
- * visibly land at the *bottom-left* of the canvas (a concrete, checkable
- * confirmation that the Y-axis inversion in `utils/mapProjection.ts` is
- * behaving as intended), and doubles as a worked example of what a real
- * hero spawn (several players landing in a tight group) looks like in a
- * genuine sample, which is a useful calibration landmark there too.
+ * across an inset rectangle, plus a denser cluster near the `(minX, minY)`
+ * corner -- once calibrated, that cluster should visibly land at the
+ * *bottom-left* of the canvas, a concrete, checkable confirmation that the
+ * Y-axis inversion in `utils/mapProjection.ts` is behaving as intended, not
+ * just "some points appeared somewhere". That's its only purpose: it is
+ * *not* a stand-in for a real hero spawn, and must not be presented as one.
  */
-export async function generateExampleSample(
-  mapId: string,
-): Promise<{ mapId: string; points: { x: number; y: number; kind?: "spawn" }[] }> {
+export async function generateExampleSample(mapId: string): Promise<{ mapId: string; points: { x: number; y: number }[] }> {
   const { minX, maxX, minY, maxY } = EXAMPLE_WORLD_BOUNDS;
   const insetX = (maxX - minX) * EXAMPLE_INSET_RATIO;
   const insetY = (maxY - minY) * EXAMPLE_INSET_RATIO;
@@ -84,7 +84,6 @@ export async function generateExampleSample(
   const clustered = Array.from({ length: EXAMPLE_CLUSTER_COUNT }, () => ({
     x: randomInRange(minX + insetX, minX + insetX + (maxX - minX) / 4),
     y: randomInRange(minY + insetY, minY + insetY + (maxY - minY) / 4),
-    kind: "spawn" as const,
   }));
 
   const points = [...scattered, ...clustered];
