@@ -12,7 +12,6 @@ Threading model:
 
 from __future__ import annotations
 
-import json
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -21,7 +20,7 @@ from typing import Callable
 
 from . import api_client, draft_capture, draft_layout, hotkey, ocr, single_instance
 from .config import Config, ConfigError, config_exists, is_auto_update_enabled, load_config
-from .ingestion import ingest_file
+from .ingestion import ingest_file, sync_spatial_calibrations
 from .status import StatusTracker
 from .sync_state import SyncState
 from .updater import AvailableUpdate, UpdateStatusTracker, watch_for_updates
@@ -183,42 +182,6 @@ def _sync_api_version(config: Config, sync_state: SyncState) -> str | None:
     return api_version
 
 
-_SPATIAL_CALIBRATIONS_META_KEY = "spatial_calibrations"
-
-
-def _sync_spatial_calibrations(config: Config, sync_state: SyncState) -> dict[str, dict]:
-    """Called once per daemon start/batch, alongside `_sync_api_version`:
-    fetches the current map-bounds calibration dictionary (`GET
-    /spatial/calibrations`) and caches it in `SyncState`'s `meta` table so
-    `parser.build_payload` can normalize a known map's positions into a
-    `spatial` block (see that function's docstring and
-    tasks/epic-10-analyse-spatiale.md).
-
-    Best-effort like `_sync_api_version`: if the API can't be reached, falls
-    back to the last successfully-cached dictionary rather than treating
-    every map as uncalibrated -- an offline blip must not make every replay
-    parsed during it needlessly re-POST a calibration sample for maps that
-    are, in fact, already calibrated.
-    """
-    calibrations = api_client.fetch_calibrations(config.api_base_url, config.access_token)
-    if calibrations is None:
-        logger.info("Could not reach the API to fetch spatial calibrations; using last known values.")
-        cached = sync_state.get_meta(_SPATIAL_CALIBRATIONS_META_KEY)
-        if not cached:
-            return {}
-        try:
-            return json.loads(cached)
-        except (TypeError, ValueError):
-            # Guards against a corrupted/unexpected local cache value (e.g. a
-            # pre-upgrade meta row, or a mocked SyncState in tests) -- worst
-            # case is the same as no cache at all: every map is treated as
-            # uncalibrated for this run.
-            return {}
-
-    sync_state.set_meta(_SPATIAL_CALIBRATIONS_META_KEY, json.dumps(calibrations))
-    return calibrations
-
-
 class _DaemonRunner:
     """Starts/stops the background replay-watcher thread, one instance at a time."""
 
@@ -359,7 +322,7 @@ class _DaemonRunner:
 
         def _run() -> None:
             api_version_box["value"] = _sync_api_version(config, sync_state)
-            calibrations_box["value"] = _sync_spatial_calibrations(config, sync_state)
+            calibrations_box["value"] = sync_spatial_calibrations(config, sync_state)
             _run_sync_loop(
                 config.replays_dir,
                 _ingest_and_track,

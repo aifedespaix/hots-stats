@@ -234,12 +234,17 @@ def fetch_version(base_url: str, access_token: str, timeout: float = 5.0) -> dic
 
 def fetch_calibrations(base_url: str, access_token: str, timeout: float = 5.0) -> dict[str, dict] | None:
     """Best-effort `GET {base_url}/spatial/calibrations` fetch: `{mapId:
-    {minX, maxX, minY, maxY}}` for every calibrated map. Called once per
-    daemon run/batch (see app.py's `_sync_spatial_calibrations`) and cached
-    in `SyncState`'s `meta` table so a temporarily-unreachable API falls back
-    to the last known calibrations instead of treating every map as
-    uncalibrated. Returns None on any failure -- callers must treat that as
-    "unknown", not "nothing is calibrated"."""
+    {minX, maxX, minY, maxY, updatedAt}}` for every calibrated map.
+    `updatedAt` is used (not by `parser.build_payload`'s normalization math,
+    which only reads the 4 bound keys) to detect a map that's new or was
+    just recalibrated since the last run -- see app.py's
+    `_sync_spatial_calibrations`, which diffs against the previous run's
+    cached dict and invalidates that map's already-synced replays so they
+    get reparsed. Cached in `SyncState`'s `meta` table so a
+    temporarily-unreachable API falls back to the last known calibrations
+    instead of treating every map as uncalibrated. Returns None on any
+    failure -- callers must treat that as "unknown", not "nothing is
+    calibrated"."""
     try:
         response = requests.get(
             f"{base_url.rstrip('/')}/spatial/calibrations",

@@ -26,15 +26,11 @@ export type NewMapCalibration = typeof mapCalibrations.$inferInsert;
 // calibration tool always has *something* to render when re-opening an
 // already-calibrated map to fix a mistake -- "pending" is decided by
 // whether a `map_calibrations` row exists, not by whether this row exists.
-// `kind` is only ever set by the tool's synthetic example generator
-// (`generateExampleSample`), tagging its dense corner cluster as "spawn" so
-// the calibration UI can render it distinctly as a calibration landmark --
-// a real daemon-uploaded sample never sets it.
 export const rawMapSamples = pgTable("raw_map_samples", {
   mapId: text("map_id")
     .primaryKey()
     .references(() => maps.id, { onDelete: "cascade" }),
-  rawPoints: jsonb("raw_points").notNull().$type<{ x: number; y: number; kind?: "spawn" }[]>(),
+  rawPoints: jsonb("raw_points").notNull().$type<{ x: number; y: number }[]>(),
   receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

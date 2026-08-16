@@ -7,6 +7,7 @@ becoming a circular import.
 
 from __future__ import annotations
 
+import json
 import logging
 import traceback
 from dataclasses import dataclass
@@ -15,6 +16,7 @@ from typing import Literal
 
 from . import api_client, constants
 from . import parser as replay_parser
+from .config import Config
 from .hasher import hash_replay_file
 from .sync_state import SyncState
 
@@ -295,6 +297,7 @@ def ingest_file(
                 file_path=str(path),
                 api_version=api_version,
                 match_id=result.match_id,
+                map_slug=payload.get("map"),
             )
         except Exception:
             # The upload itself already succeeded server-side (`result` is
@@ -341,3 +344,72 @@ def resync(
     logger.info(
         "Resync complete: %d uploaded, %d already up to date, %d failed", uploaded, skipped, failed
     )
+
+
+_SPATIAL_CALIBRATIONS_META_KEY = "spatial_calibrations"
+
+
+def _previously_cached_calibrations(sync_state: SyncState) -> dict[str, dict]:
+    cached = sync_state.get_meta(_SPATIAL_CALIBRATIONS_META_KEY)
+    if not cached:
+        return {}
+    try:
+        return json.loads(cached)
+    except (TypeError, ValueError):
+        # Guards against a corrupted/unexpected local cache value (e.g. a
+        # pre-upgrade meta row, or a mocked SyncState in tests) -- worst
+        # case is the same as no cache at all: every map is treated as
+        # uncalibrated / never-before-seen for this run.
+        return {}
+
+
+def sync_spatial_calibrations(config: Config, sync_state: SyncState) -> dict[str, dict]:
+    """Called once per parse batch -- the tray daemon's startup/periodic
+    resync (app.py's `_run_sync_loop`) and a headless `--resync` (main.py)
+    alike, same as `resync()`/`ingest_file()` above are shared by both: it
+    fetches the current map-bounds calibration dictionary (`GET
+    /spatial/calibrations`) and caches it in `SyncState`'s `meta` table so
+    `parser.build_payload` can normalize a known map's positions into a
+    `spatial` block (see that function's docstring and
+    tasks/epic-10-analyse-spatiale.md).
+
+    Also the *only* place that makes calibrating a map retroactive: a map
+    whose `updatedAt` is new or newer than what was cached last run has had
+    its replays' "already synced" record dropped via
+    `SyncState.invalidate_stale_for_maps`, so they get reparsed (now with a
+    `spatial` block) and re-uploaded on this run instead of being skipped
+    forever -- without this diff, a map calibrated *after* its matches were
+    already ingested would never unlock heatmaps for them, since
+    `is_up_to_date` only ever compares parser versions, never calibration
+    state.
+
+    Best-effort like `app.py`'s `_sync_api_version`: if the API can't be
+    reached, falls back to the last successfully-cached dictionary rather
+    than treating every map as uncalibrated -- an offline blip must not make
+    every replay parsed during it needlessly re-POST a calibration sample
+    for maps that are, in fact, already calibrated. No invalidation happens
+    in that case either, for the same reason: nothing has actually changed.
+    """
+    calibrations = api_client.fetch_calibrations(config.api_base_url, config.access_token)
+    if calibrations is None:
+        logger.info("Could not reach the API to fetch spatial calibrations; using last known values.")
+        return _previously_cached_calibrations(sync_state)
+
+    previous = _previously_cached_calibrations(sync_state)
+    changed_maps = {
+        map_slug
+        for map_slug, bounds in calibrations.items()
+        if map_slug not in previous or previous[map_slug].get("updatedAt") != bounds.get("updatedAt")
+    }
+    if changed_maps:
+        invalidated = sync_state.invalidate_stale_for_maps(changed_maps)
+        if invalidated:
+            logger.info(
+                "%d map(s) newly or re-calibrated (%s): %d previously-synced replay(s) will be resynced.",
+                len(changed_maps),
+                ", ".join(sorted(changed_maps)),
+                invalidated,
+            )
+
+    sync_state.set_meta(_SPATIAL_CALIBRATIONS_META_KEY, json.dumps(calibrations))
+    return calibrations

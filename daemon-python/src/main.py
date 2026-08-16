@@ -14,7 +14,7 @@ from pathlib import Path
 
 from . import api_client
 from .config import ConfigError, load_config
-from .ingestion import resync
+from .ingestion import resync, sync_spatial_calibrations
 from .sync_state import SyncState
 
 logger = logging.getLogger(__name__)
@@ -42,12 +42,14 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         client = api_client.ApiClient(config)
         target_dir = Path(args.resync) if isinstance(args.resync, str) else config.replays_dir
-        # A `--resync` batch is exactly "start of a parse batch" in the same
-        # sense app.py's `_sync_spatial_calibrations` fetches for the tray
-        # daemon's startup -- fetch fresh calibrations once up front rather
-        # than parsing the whole backlog with none at all.
-        calibrations = api_client.fetch_calibrations(config.api_base_url, config.access_token) or {}
-        resync(client, target_dir, SyncState(), calibrations=calibrations)
+        sync_state = SyncState()
+        # Reuses the same calibration sync as the tray daemon's startup
+        # (ingestion.sync_spatial_calibrations) instead of a bare fetch, so
+        # a manual --resync also invalidates (and thus reparses) any map
+        # that was newly or re-calibrated since the last run, not just
+        # fetch calibrations for parsing replays that were already pending.
+        calibrations = sync_spatial_calibrations(config, sync_state)
+        resync(client, target_dir, sync_state, calibrations=calibrations)
         return 0
 
     # Default (no flags): the tray app — settings window on first run (or

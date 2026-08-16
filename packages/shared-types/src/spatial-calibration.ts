@@ -8,23 +8,17 @@ export const mapBoundsSchema = z.object({
 });
 export type MapBounds = z.infer<typeof mapBoundsSchema>;
 
-/** GET /spatial/calibrations response body: mapId -> world bounds. */
-export const spatialCalibrationsResponseSchema = z.record(z.string(), mapBoundsSchema);
+/**
+ * GET /spatial/calibrations response body: mapId -> world bounds, with
+ * `updatedAt` so the Daemon can detect a map that's new or was just
+ * recalibrated since it last checked (see app.py's
+ * `_sync_spatial_calibrations`).
+ */
+export const spatialCalibrationsResponseSchema = z.record(z.string(), mapBoundsSchema.extend({ updatedAt: z.string() }));
 export type SpatialCalibrationsResponse = z.infer<typeof spatialCalibrationsResponseSchema>;
 
 export const rawMapPointSchema = z.object({ x: z.number(), y: z.number() });
 export type RawMapPoint = z.infer<typeof rawMapPointSchema>;
-
-/**
- * A raw sample point as stored/displayed by the admin calibration tool --
- * `kind: "spawn"` only ever appears on the synthetic example generator's
- * dense corner cluster (see `generateExampleSample`), never on a real
- * daemon-uploaded point, and tells `CalibrationCanvas.vue` to render it as
- * a distinct calibration landmark instead of a plain scatter point.
- */
-export interface StoredMapPoint extends RawMapPoint {
-  kind?: "spawn";
-}
 
 /**
  * POST /spatial/samples body -- the daemon's ~1000-point subsample of raw,
