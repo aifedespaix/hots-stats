@@ -137,7 +137,7 @@ SPATIAL_MAX_INTERPOLATION_SPEED_NORMALIZED = 0.10
 CALIBRATION_SAMPLE_TARGET = 1000
 
 # Shown in the settings window. Bump alongside `[project].version` in pyproject.toml.
-APP_VERSION = "1.0.34"
+APP_VERSION = "1.0.35"
 
 # HotS talent tiers are always at these character levels, in pick order.
 TALENT_TIER_LEVELS = (1, 4, 7, 10, 13, 16, 20)
