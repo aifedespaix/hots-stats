@@ -64,7 +64,14 @@ CREATE TABLE IF NOT EXISTS replays (
     -- Only ever written by `mark_parse_error`; `mark_error` (the other 5
     -- error call sites in ingestion.py) leaves it untouched.
     attempt_count INTEGER NOT NULL DEFAULT 0,
-    attempt_parser_version TEXT
+    attempt_parser_version TEXT,
+    -- The map this replay was played on, as of its last successful sync
+    -- (`payload["map"]`, see `mark_synced`) -- lets `invalidate_stale_for_maps`
+    -- drop only the replays for a specific (newly or re-) calibrated map
+    -- instead of every synced replay, so calibrating one map doesn't force a
+    -- full-library reparse. NULL for replays synced before this column
+    -- existed, or never synced at all (errored/skipped).
+    map_slug TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_replays_status ON replays(status);
 
@@ -127,6 +134,19 @@ def _ensure_attempt_tracking_columns(conn: sqlite3.Connection) -> None:
         except sqlite3.OperationalError as err:
             if "duplicate column" not in str(err).lower():
                 raise
+
+
+def _ensure_map_slug_column(conn: sqlite3.Connection) -> None:
+    """Adds `replays.map_slug` to a database created before per-map
+    calibration invalidation existed (see `mark_synced` /
+    `invalidate_stale_for_maps`). Same pattern as the other `_ensure_*`
+    migrations above."""
+    try:
+        conn.execute("ALTER TABLE replays ADD COLUMN map_slug TEXT")
+        conn.commit()
+    except sqlite3.OperationalError as err:
+        if "duplicate column" not in str(err).lower():
+            raise
 
 
 def sync_state_file_path() -> Path:
@@ -206,6 +226,7 @@ class SyncState:
             conn.executescript(_SCHEMA)
         _ensure_skip_reason_column(conn)
         _ensure_attempt_tracking_columns(conn)
+        _ensure_map_slug_column(conn)
         return conn
 
     # -- sync status ----------------------------------------------------
@@ -229,6 +250,7 @@ class SyncState:
         file_path: str = "",
         api_version: str | None = None,
         match_id: str | None = None,
+        map_slug: str | None = None,
     ) -> None:
         now = _now()
         with self._lock:
@@ -236,8 +258,8 @@ class SyncState:
                 """
                 INSERT INTO replays
                     (replay_hash, file_path, status, parser_version, api_version,
-                     match_id, synced_at, last_attempt_at, error_message, error_log, file_exists)
-                VALUES (?, ?, 'synced', ?, ?, ?, ?, ?, NULL, NULL, 1)
+                     match_id, synced_at, last_attempt_at, error_message, error_log, file_exists, map_slug)
+                VALUES (?, ?, 'synced', ?, ?, ?, ?, ?, NULL, NULL, 1, ?)
                 ON CONFLICT(replay_hash) DO UPDATE SET
                     file_path = excluded.file_path,
                     status = 'synced',
@@ -249,9 +271,10 @@ class SyncState:
                     error_message = NULL,
                     error_log = NULL,
                     file_exists = 1,
-                    skip_reason = NULL
+                    skip_reason = NULL,
+                    map_slug = excluded.map_slug
                 """,
-                (replay_hash, file_path, parser_version, api_version, match_id, now, now),
+                (replay_hash, file_path, parser_version, api_version, match_id, now, now, map_slug),
             )
             self._conn.commit()
 
@@ -421,6 +444,36 @@ class SyncState:
                 "SELECT replay_hash, parser_version FROM replays WHERE status = 'synced'"
             ).fetchall()
             stale = [row[0] for row in rows if row[1] is None or not _version_gte(row[1], min_parser_version)]
+            if stale:
+                self._conn.executemany(
+                    "DELETE FROM replays WHERE replay_hash = ?", [(h,) for h in stale]
+                )
+                self._conn.commit()
+        return len(stale)
+
+    def invalidate_stale_for_maps(self, map_slugs: set[str]) -> int:
+        """Drops the "synced" record for every replay played on one of
+        `map_slugs`, so it's reparsed and re-uploaded on the next pass
+        instead of being skipped as already up to date. Returns how many
+        were invalidated.
+
+        This is what makes calibrating a map (or fixing a mistake in an
+        existing calibration) actually retroactive: without it, a replay
+        already marked synced at the current PARSER_VERSION is skipped
+        forever regardless of calibration state, since `is_up_to_date` only
+        ever compares parser versions -- a map getting calibrated *after*
+        its matches were already ingested would otherwise never unlock
+        their heatmaps. See `app.py`'s `_sync_spatial_calibrations`, which
+        calls this only for maps whose calibration is new or has a newer
+        `updatedAt` than what was cached from the previous run.
+        """
+        if not map_slugs:
+            return 0
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT replay_hash, map_slug FROM replays WHERE status = 'synced'"
+            ).fetchall()
+            stale = [row[0] for row in rows if row[1] in map_slugs]
             if stale:
                 self._conn.executemany(
                     "DELETE FROM replays WHERE replay_hash = ?", [(h,) for h in stale]

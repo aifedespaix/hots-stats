@@ -8,8 +8,13 @@ export const mapBoundsSchema = z.object({
 });
 export type MapBounds = z.infer<typeof mapBoundsSchema>;
 
-/** GET /spatial/calibrations response body: mapId -> world bounds. */
-export const spatialCalibrationsResponseSchema = z.record(z.string(), mapBoundsSchema);
+/**
+ * GET /spatial/calibrations response body: mapId -> world bounds, with
+ * `updatedAt` so the Daemon can detect a map that's new or was just
+ * recalibrated since it last checked (see app.py's
+ * `_sync_spatial_calibrations`).
+ */
+export const spatialCalibrationsResponseSchema = z.record(z.string(), mapBoundsSchema.extend({ updatedAt: z.string() }));
 export type SpatialCalibrationsResponse = z.infer<typeof spatialCalibrationsResponseSchema>;
 
 export const rawMapPointSchema = z.object({ x: z.number(), y: z.number() });

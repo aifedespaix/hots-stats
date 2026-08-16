@@ -7,10 +7,20 @@ function toBounds(row: MapCalibration): MapBounds {
   return { minX: row.minX, maxX: row.maxX, minY: row.minY, maxY: row.maxY };
 }
 
-/** GET /spatial/calibrations -- the Daemon's full in-memory cache, refreshed once per run/batch. */
-export async function getAllCalibrations(): Promise<Record<string, MapBounds>> {
+/**
+ * GET /spatial/calibrations -- the Daemon's full in-memory cache, refreshed
+ * once per run/batch. `updatedAt` rides along with each map's bounds (the
+ * normalization math in parser.py only ever reads the 4 bound keys, so this
+ * is harmless to it) so the Daemon can tell a map it already knew about
+ * apart from one that's brand new or was just recalibrated -- see
+ * app.py's `_sync_spatial_calibrations`, which diffs against the
+ * previously-cached value to invalidate only replays for maps that
+ * actually changed, instead of a map's calibration silently never
+ * retroactively unlocking heatmaps for matches already ingested before it.
+ */
+export async function getAllCalibrations(): Promise<Record<string, MapBounds & { updatedAt: string }>> {
   const rows = await db.select().from(mapCalibrations);
-  return Object.fromEntries(rows.map((row) => [row.mapId, toBounds(row)]));
+  return Object.fromEntries(rows.map((row) => [row.mapId, { ...toBounds(row), updatedAt: row.updatedAt.toISOString() }]));
 }
 
 /**

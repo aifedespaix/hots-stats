@@ -208,27 +208,33 @@ async function save() {
   <div class="space-y-6">
     <h1 class="font-heading text-2xl font-semibold">Calibration spatiale</h1>
     <p class="max-w-2xl text-sm text-muted">
-      Choisis une carte ci-dessous -- en attente de calibration, déjà calibrée (pour corriger une erreur), ou génère
-      un exemple si aucune vraie donnée n'est encore disponible -- clique "Auto-ajuster aux points" pour partir d'une
-      estimation raisonnable, affine les 4 bornes jusqu'à ce que les points rouges se superposent correctement à la
-      carte, puis sauvegarde.
+      Choisis une carte ci-dessous -- en attente de calibration (données réelles envoyées par des daemons) ou déjà
+      calibrée (pour corriger une erreur) -- clique "Auto-ajuster aux points" pour partir d'une estimation
+      raisonnable, affine les 4 bornes jusqu'à ce que les points rouges se superposent correctement à la carte, puis
+      sauvegarde. Répète pour chaque carte listée.
     </p>
 
     <section class="space-y-4 rounded-lg border border-border p-4 sm:p-6">
       <h2 class="font-heading text-lg">Carte</h2>
       <USelectMenu v-model="selectedMapId" value-key="value" :items="mapOptions" placeholder="Choisir une carte…" />
       <p v-if="mapOptions.length === 0" class="text-sm text-muted">
-        Aucune carte en attente ni calibrée pour l'instant -- génère un exemple ci-dessous pour tester l'outil.
+        Aucune carte en attente ni calibrée pour l'instant. Une carte apparaît ici une fois qu'un daemon a envoyé de
+        vraies positions de joueurs pour elle (parties déjà jouées et uploadées) -- rien à faire de plus que
+        d'attendre, ou de tester l'outil ci-dessous en attendant.
       </p>
+    </section>
 
-      <div class="rounded-md border border-dashed border-border p-3">
-        <p class="mb-2 text-xs text-muted">
-          Pas de vraie donnée sous la main ? Génère un échantillon <strong>entièrement inventé</strong> (positions
-          aléatoires, sans aucun rapport avec la vraie géométrie de la carte) pour vérifier que l'outil lui-même
-          fonctionne -- affichage, projection, sauvegarde. Ça ne sert qu'à ça : ces points ne doivent jamais servir à
-          calibrer une carte en production, quel que soit leur agencement à l'écran. Le générer pour une carte déjà
-          calibrée est sans risque : ça ne fait que rafraîchir ses points d'exemple, la calibration existante n'est
-          pas modifiée tant que tu ne cliques pas "Sauvegarder".
+    <details class="rounded-lg border border-dashed border-border p-4 text-sm sm:p-6">
+      <summary class="cursor-pointer font-heading text-sm text-muted">
+        Tester l'outil avec des données factices (sans rapport avec une vraie carte)
+      </summary>
+      <div class="mt-3 space-y-3">
+        <p class="text-xs text-muted">
+          Génère un échantillon <strong>entièrement inventé</strong> (positions aléatoires) pour vérifier que l'outil
+          lui-même fonctionne -- affichage, projection, sauvegarde. Ça ne sert qu'à ça : ces points ne doivent
+          <strong>jamais</strong> servir à calibrer une carte en production, quel que soit leur agencement à l'écran
+          une fois affichés. Le générer pour une carte déjà calibrée est sans risque : ça ne fait que rafraîchir ses
+          points d'exemple, la calibration existante n'est pas modifiée tant que tu ne cliques pas "Sauvegarder".
         </p>
         <div class="flex flex-wrap items-center gap-2">
           <USelectMenu
@@ -250,7 +256,7 @@ async function save() {
           </UButton>
         </div>
       </div>
-    </section>
+    </details>
 
     <div v-if="selectedMapId" class="grid gap-6 lg:grid-cols-[3fr_2fr]">
       <div class="space-y-2">

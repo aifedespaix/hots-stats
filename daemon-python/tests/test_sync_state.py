@@ -106,6 +106,37 @@ def test_mark_synced_stores_file_path_api_version_and_match_id(tmp_path):
     assert state.get_error_records() == []
 
 
+def test_invalidate_stale_for_maps_drops_only_matching_map_slugs(tmp_path):
+    state = SyncState(tmp_path / "sync_state.db")
+    state.mark_synced("dragon-shire-replay", "1.0", file_path="a", map_slug="dragon-shire")
+    state.mark_synced("cursed-hollow-replay", "1.0", file_path="b", map_slug="cursed-hollow")
+
+    invalidated = state.invalidate_stale_for_maps({"dragon-shire"})
+
+    assert invalidated == 1
+    assert state.is_up_to_date("dragon-shire-replay", "1.0") is False
+    assert state.is_up_to_date("cursed-hollow-replay", "1.0") is True
+
+
+def test_invalidate_stale_for_maps_is_a_noop_for_an_empty_set(tmp_path):
+    state = SyncState(tmp_path / "sync_state.db")
+    state.mark_synced("abc", "1.0", file_path="a", map_slug="dragon-shire")
+
+    assert state.invalidate_stale_for_maps(set()) == 0
+    assert state.is_up_to_date("abc", "1.0") is True
+
+
+def test_invalidate_stale_for_maps_ignores_replays_with_no_map_slug(tmp_path):
+    """A replay synced before `map_slug` existed (or with no map info at
+    all) must not match any invalidation set -- `None` is never `in` a set
+    of real map slugs, so it's simply left alone rather than crashing."""
+    state = SyncState(tmp_path / "sync_state.db")
+    state.mark_synced("abc", "1.0", file_path="a")
+
+    assert state.invalidate_stale_for_maps({"dragon-shire"}) == 0
+    assert state.is_up_to_date("abc", "1.0") is True
+
+
 def test_mark_error_then_appears_in_error_records(tmp_path):
     state = SyncState(tmp_path / "sync_state.db")
     state.mark_error("abc", "C:\\replays\\a.StormReplay", "boom", "Traceback: ...")
