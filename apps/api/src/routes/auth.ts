@@ -34,6 +34,7 @@ function toPublicUser(user: User) {
     battletag: user.battletag,
     publicHandle: user.publicHandle,
     heroStatsScope: user.heroStatsScope,
+    role: user.role,
   };
 }
 

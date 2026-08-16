@@ -5,6 +5,12 @@ import { pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 // ever recorded by the app, across all players ("global").
 export const heroStatsScopeEnum = pgEnum("hero_stats_scope", ["personal", "global"]);
 
+// Gates access to admin-only tooling (currently: the spatial calibration
+// tool, see spatial-calibration.ts). Promoted via `bun run promote-admin
+// <identifier>` (apps/api/scripts/promote-admin.ts) -- never through
+// seed.ts, which runs automatically in every environment.
+export const userRoleEnum = pgEnum("user_role", ["user", "admin"]);
+
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   // Exactly one of googleId/battlenetId is set, depending on which provider
@@ -21,6 +27,7 @@ export const users = pgTable("users", {
   battletag: text("battletag").unique(),
   publicHandle: text("public_handle").unique(),
   heroStatsScope: heroStatsScopeEnum("hero_stats_scope").notNull().default("personal"),
+  role: userRoleEnum("role").notNull().default("user"),
   // Bumped by POST /auth/me/reset-data whenever the user wipes their own
   // matches (see services/data-reset.service.ts). Surfaced to the daemon via
   // GET /ingest/version's `dataResetAt` so it knows to forget its local

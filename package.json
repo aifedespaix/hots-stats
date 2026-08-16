@@ -16,6 +16,7 @@
     "db:seed": "bun run --filter './packages/db' seed",
     "db:studio": "bun run --filter './packages/db' studio",
     "check-build": "bun run --filter './apps/api' check-build",
+    "promote-admin": "bun run --filter './apps/api' promote-admin",
     "typecheck": "bun run --filter '*' typecheck",
     "docker:dev:up": "docker compose -f docker-compose.dev.yml up -d",
     "docker:dev:down": "docker compose -f docker-compose.dev.yml down"

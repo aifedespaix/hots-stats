@@ -2,12 +2,14 @@ import datetime as dt
 
 import pytest
 
+from src import constants
 from src._protocol_versions import KNOWN_PROTOCOL_BUILDS
 from src.parser import (
     ReplayParseError,
     ReplaySkipped,
     _attribute_scope_by_player_list_index,
     _build_protocol,
+    _collect_calibration_samples,
     _extract_deaths,
     _extract_level_snapshots,
     _game_version,
@@ -17,6 +19,7 @@ from src.parser import (
     _hero_from_unit_spawn_by_toon,
     _hero_from_unit_type_name,
     _hero_unit_tags_by_toon,
+    _iter_unit_positions,
     _protocol_module,
     _read_archive_file,
     _slugify,
@@ -175,6 +178,25 @@ def _unit_died_event(unit_tag_index: int, gameloop: int, *, unit_tag_recycle: in
         "m_unitTagIndex": unit_tag_index,
         "m_unitTagRecycle": unit_tag_recycle,
         "_gameloop": gameloop,
+    }
+
+
+def _unit_positions_event(gameloop: int, positions: list[tuple[int, float, float]]) -> dict:
+    """`positions` is `(unit_tag_index, x, y)` in *absolute* tag-index terms
+    -- encoded here into the delta-encoded `m_items` flat list
+    `_iter_unit_positions` expects (see that function's docstring for why
+    this shape is a hypothesis, not a confirmed one, pending a real
+    replay)."""
+    items: list[float] = []
+    previous_tag = 0
+    for tag_index, x, y in positions:
+        items.extend([tag_index - previous_tag, x, y])
+        previous_tag = tag_index
+    return {
+        "_event": "NNet.Replay.Tracker.SUnitPositionsEvent",
+        "_gameloop": gameloop,
+        "m_firstUnitIndex": 0,
+        "m_items": items,
     }
 
 
@@ -1043,3 +1065,117 @@ def test_build_payload_timeline_defaults_to_empty_lists():
     )
 
     assert payload["timeline"] == {"deaths": [], "levelSnapshots": []}
+
+
+def test_iter_unit_positions_decodes_delta_encoded_tags():
+    events = [_unit_positions_event(100, [(5, 1.0, 2.0), (7, 3.0, 4.0), (5, 5.0, 6.0)])]
+
+    assert list(_iter_unit_positions(events)) == [
+        (100, 5, 1.0, 2.0),
+        (100, 7, 3.0, 4.0),
+        (100, 5, 5.0, 6.0),
+    ]
+
+
+def test_collect_calibration_samples_returns_empty_without_position_events():
+    assert _collect_calibration_samples(_base_tracker_events()) == []
+
+
+def test_collect_calibration_samples_subsamples_evenly_above_target():
+    points = [(float(i), float(i)) for i in range(10)]
+    events = [_unit_positions_event(100, [(i + 1, x, y) for i, (x, y) in enumerate(points)])]
+
+    sampled = _collect_calibration_samples(events, target_count=5)
+
+    assert len(sampled) == 5
+    # Spread across the whole range, not front-loaded from the first 5 points.
+    assert sampled[0]["x"] == 0.0
+    assert sampled[-1]["x"] == 8.0
+
+
+def test_collect_calibration_samples_returns_every_point_below_target():
+    events = [_unit_positions_event(100, [(1, 1.0, 1.0), (2, 2.0, 2.0)])]
+
+    sampled = _collect_calibration_samples(events, target_count=1000)
+
+    assert sampled == [{"x": 1.0, "y": 1.0}, {"x": 2.0, "y": 2.0}]
+
+
+def test_build_payload_includes_spatial_block_for_calibrated_map():
+    events = [
+        *_base_tracker_events(),
+        _unit_born_event(1, "HeroLiMing"),
+        _unit_born_event(2, "HeroMalfurion"),
+        _unit_positions_event(610, [(1, 10.0, 10.0), (2, 90.0, 90.0)]),
+        _unit_positions_event(610 + 16 * 10, [(1, 10.0, 10.0), (2, 90.0, 90.0)]),
+    ]
+
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=events,
+        attributes_events=_base_attributes_events(),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+        calibrations={"cursed-hollow": {"minX": 0.0, "maxX": 100.0, "minY": 0.0, "maxY": 100.0}},
+    )
+
+    assert "_pendingSpatialSample" not in payload
+    spatial = payload["spatial"]
+    assert spatial["schemaVersion"] == constants.SPATIAL_SCHEMA_VERSION
+    assert spatial["grid"] == {"cols": constants.SPATIAL_GRID_COLS, "rows": constants.SPATIAL_GRID_ROWS}
+
+    presence_by_tag = {p["battletag"]: p for p in spatial["presence"]}
+    foo = presence_by_tag["Foo#1111"]
+    assert foo["heroId"] == "li-ming"
+    assert foo["layer"] is None
+    # Both samples land in the same grid cell -- one cell, 10s between them.
+    assert foo["cellIndex"] == sorted(foo["cellIndex"])
+    assert len(foo["cellIndex"]) == 1
+    assert foo["secondsInCell"] == pytest.approx([10.0])
+
+
+def test_build_payload_collects_calibration_sample_for_unmapped_map():
+    events = [
+        *_base_tracker_events(),
+        _unit_born_event(1, "HeroLiMing"),
+        _unit_born_event(2, "HeroMalfurion"),
+        _unit_positions_event(610, [(1, 10.0, 10.0), (2, 90.0, 90.0)]),
+    ]
+
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=events,
+        attributes_events=_base_attributes_events(),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+        calibrations={},  # no entry for "cursed-hollow"
+    )
+
+    assert "spatial" not in payload
+    pending = payload["_pendingSpatialSample"]
+    assert pending["mapId"] == "cursed-hollow"
+    assert {"x": 10.0, "y": 10.0} in pending["points"]
+    assert {"x": 90.0, "y": 90.0} in pending["points"]
+
+
+def test_build_payload_omits_spatial_without_any_position_events():
+    # No `calibrations` passed at all, and no SUnitPositionsEvent in the
+    # fixture -- an older-build daemon calling `build_payload` the old way,
+    # or any replay this event just doesn't exist in. Neither key should
+    # appear; this must never be an error.
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=_base_tracker_events(),
+        attributes_events=_base_attributes_events(),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+    )
+
+    assert "spatial" not in payload
+    assert "_pendingSpatialSample" not in payload

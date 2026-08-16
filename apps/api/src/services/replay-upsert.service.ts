@@ -1,26 +1,12 @@
-import { db, heroes, matchDeaths, matchLevelSnapshots, matchPlayers, matches, maps, talentPicks, users } from "@hots-stats/db";
+import { db, heroes, matchDeaths, matchLevelSnapshots, matchPlayers, matches, talentPicks, users } from "@hots-stats/db";
 import type { ReplayPayload } from "@hots-stats/shared-types";
 import { eq, inArray, or } from "drizzle-orm";
 import { computeGameFingerprint } from "../lib/game-fingerprint";
+import { displayNameFromSlug, ensureMapExists } from "../lib/ensure-map";
 
 export type UpsertResult =
   | { upserted: true; matchId: string }
   | { upserted: false; reason: "stale_version"; matchId: string };
-
-/**
- * Slug ("industrial-district") -> best-effort display name ("Industrial
- * District"), used to auto-create a placeholder row for a map/hero the
- * daemon reports that isn't in the DB yet (a new map/hero shipped in the
- * game before the seed list was updated). Good enough to be usable in the
- * UI immediately; can be corrected later with a real name/icon/role.
- */
-function displayNameFromSlug(slug: string): string {
-  return slug
-    .split("-")
-    .filter(Boolean)
-    .map((word) => word[0]!.toUpperCase() + word.slice(1))
-    .join(" ");
-}
 
 /** Simple numeric-segment comparison, e.g. "1.10" > "1.9". */
 function isVersionGreater(incoming: string, stored: string): boolean {
@@ -44,13 +30,7 @@ function isVersionGreater(incoming: string, stored: string): boolean {
  * created this way get a `null` role (unknown) — see schema/heroes.ts.
  */
 export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: string): Promise<UpsertResult> {
-  const [map] = await db.select({ id: maps.id }).from(maps).where(eq(maps.id, payload.map)).limit(1);
-  if (!map) {
-    await db
-      .insert(maps)
-      .values({ id: payload.map, name: displayNameFromSlug(payload.map) })
-      .onConflictDoNothing();
-  }
+  await ensureMapExists(payload.map);
 
   const heroIds = [...new Set(payload.players.map((p) => p.heroId))];
   const foundHeroes = await db.select({ id: heroes.id }).from(heroes).where(inArray(heroes.id, heroIds));

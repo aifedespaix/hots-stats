@@ -1,3 +1,4 @@
+import json
 import threading
 import time
 from unittest.mock import MagicMock, patch
@@ -7,6 +8,7 @@ from src.app import (
     _DaemonRunner,
     _run_sync_loop,
     _sync_api_version,
+    _sync_spatial_calibrations,
 )
 from src.config import Config
 from src.status import StatusTracker
@@ -205,6 +207,37 @@ def test_sync_api_version_does_not_rewipe_on_unchanged_data_reset_at(tmp_path):
         _sync_api_version(_config(tmp_path), sync_state)
 
     assert sync_state.is_up_to_date("current", "1.0") is True
+
+
+def test_sync_spatial_calibrations_caches_and_returns_the_fetched_dict(tmp_path):
+    sync_state = SyncState(tmp_path / "sync_state.db")
+    body = {"dragon-shire": {"minX": -100.0, "maxX": 100.0, "minY": -100.0, "maxY": 100.0}}
+
+    with patch("src.app.api_client.fetch_calibrations", return_value=body):
+        calibrations = _sync_spatial_calibrations(_config(tmp_path), sync_state)
+
+    assert calibrations == body
+    assert sync_state.get_meta("spatial_calibrations") == json.dumps(body)
+
+
+def test_sync_spatial_calibrations_falls_back_to_cache_when_api_unreachable(tmp_path):
+    sync_state = SyncState(tmp_path / "sync_state.db")
+    cached = {"dragon-shire": {"minX": -100.0, "maxX": 100.0, "minY": -100.0, "maxY": 100.0}}
+    sync_state.set_meta("spatial_calibrations", json.dumps(cached))
+
+    with patch("src.app.api_client.fetch_calibrations", return_value=None):
+        calibrations = _sync_spatial_calibrations(_config(tmp_path), sync_state)
+
+    assert calibrations == cached
+
+
+def test_sync_spatial_calibrations_returns_empty_dict_on_a_fresh_install_when_unreachable(tmp_path):
+    sync_state = SyncState(tmp_path / "sync_state.db")
+
+    with patch("src.app.api_client.fetch_calibrations", return_value=None):
+        calibrations = _sync_spatial_calibrations(_config(tmp_path), sync_state)
+
+    assert calibrations == {}
 
 
 def _wait_until(predicate, timeout: float = 2.0) -> None:

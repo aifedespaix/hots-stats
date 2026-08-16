@@ -12,3 +12,4 @@ export * from "./quarantine";
 export * from "./draft-pseudo-preferences";
 export * from "./daemon-ingest-errors";
 export * from "./player-annotations";
+export * from "./spatial-calibration";
