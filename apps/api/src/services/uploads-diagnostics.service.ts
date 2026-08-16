@@ -1,5 +1,5 @@
 import { db, heroes, matchPlayers, matches, maps, users } from "@hots-stats/db";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 
 /**
  * `GET /_internal/diagnostics/uploads` -- breaks down who actually owns the
@@ -207,6 +207,93 @@ export async function getZeroKdaDiagnostics(limit: number) {
     totals: totalsRow[0] ?? { totalMatchPlayers: 0, zeroKdaCount: 0 },
     byParserVersion,
     byHero,
+    samples,
+  };
+}
+
+/**
+ * `GET /_internal/diagnostics/all-zero-matches` -- unlike `zero-kda` above
+ * (per-player, and prone to false positives on a genuine low-fight
+ * blowout), this flags a *whole match* where every single player is 0 on
+ * every combat stat (kills/deaths/assists/damage/healing/experience) --
+ * essentially impossible for a real, concluded, non-trivial-length game
+ * (see `apps/api/src/lib/replay-plausibility.ts`'s `isAllZeroCombat`, the
+ * same check `GET /matches/:id` uses for `statsReliable`).
+ *
+ * Root-caused in production (2026-08) to `daemon-python/src/parser.py`'s
+ * `_build_protocol` falling back to the newest known `heroprotocol` decoder
+ * for a replay build newer than any it has one for -- `SScoreResultEvent`
+ * can decode without raising in that case, but with every player's stats
+ * stuck at each field's baseline-0 seed. Fixed going forward as of
+ * `PARSER_VERSION` 1.9 (raises `ReplayParseError` instead of silently
+ * ingesting), but doesn't recover already-stored matches -- they can only
+ * be recovered by an updated `heroprotocol` release with a real decoder for
+ * their build, which this endpoint's `byGameVersion` breakdown helps
+ * prioritize (the build(s) actually affecting real users).
+ */
+export async function getAllZeroMatchesDiagnostics(limit: number) {
+  const durationFloorSeconds = 180;
+
+  // Two round trips rather than one query with the group-by embedded as an
+  // `IN (subquery)` -- simpler to get right, and this is a low-traffic
+  // internal diagnostics endpoint, not a hot path worth the extra risk.
+  const allZeroRows = await db
+    .select({ matchId: matchPlayers.matchId })
+    .from(matchPlayers)
+    .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
+    .where(gte(matches.durationSeconds, durationFloorSeconds))
+    .groupBy(matchPlayers.matchId)
+    .having(
+      sql`bool_and(
+        ${matchPlayers.kills} = 0 and ${matchPlayers.deaths} = 0 and ${matchPlayers.assists} = 0 and
+        ${matchPlayers.heroDamage} = 0 and ${matchPlayers.siegeDamage} = 0 and
+        ${matchPlayers.healing} = 0 and ${matchPlayers.selfHealing} = 0 and ${matchPlayers.damageTaken} = 0
+      )`,
+    );
+  const allZeroMatchIds = allZeroRows.map((row) => row.matchId);
+
+  const [totalMatchesRow] = await db.select({ totalMatches: sql<number>`count(*)::int` }).from(matches);
+
+  if (allZeroMatchIds.length === 0) {
+    return {
+      totals: { totalMatches: totalMatchesRow?.totalMatches ?? 0, allZeroMatchCount: 0 },
+      byGameVersion: [],
+      samples: [],
+    };
+  }
+
+  const byGameVersion = await db
+    .select({
+      gameVersion: matches.gameVersion,
+      parserVersion: matches.parserVersion,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(matches)
+    .where(inArray(matches.id, allZeroMatchIds))
+    .groupBy(matches.gameVersion, matches.parserVersion)
+    .orderBy(desc(sql`count(*)`));
+
+  const samples = await db
+    .select({
+      matchId: matches.id,
+      playedAt: matches.playedAt,
+      mapName: maps.name,
+      gameMode: matches.gameMode,
+      parserVersion: matches.parserVersion,
+      gameVersion: matches.gameVersion,
+      durationSeconds: matches.durationSeconds,
+      uploadedByBattletag: users.battletag,
+    })
+    .from(matches)
+    .innerJoin(maps, eq(maps.id, matches.mapId))
+    .leftJoin(users, eq(users.id, matches.uploadedByUserId))
+    .where(inArray(matches.id, allZeroMatchIds))
+    .orderBy(desc(matches.playedAt))
+    .limit(limit);
+
+  return {
+    totals: { totalMatches: totalMatchesRow?.totalMatches ?? 0, allZeroMatchCount: allZeroMatchIds.length },
+    byGameVersion,
     samples,
   };
 }

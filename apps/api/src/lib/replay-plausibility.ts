@@ -47,23 +47,35 @@ const _MIN_DURATION_FOR_ZERO_CHECK_SECONDS = 180;
 // per-player integer with no reason to collide.
 const _DUPLICATE_VALUE_THRESHOLD = 5;
 
+type CombatStats = Record<(typeof _COMBAT_FIELDS)[number], number>;
+
+/**
+ * The all-zero half of `checkReplayPlausibility`, factored out so it can
+ * also run against *already-stored* `match_players` rows (see
+ * `isStoredMatchImplausible` below) -- not just incoming payloads. Found in
+ * production (2026-08) affecting matches already stored under the current
+ * `parserVersion`, not just old ones: a stale-protocol-decoder fallback
+ * (see `daemon-python/src/parser.py`'s `_build_protocol`) can produce this
+ * exact shape regardless of daemon build, so a match already in this state
+ * won't self-heal via a `parserVersion`-only resync check.
+ */
+export function isAllZeroCombat(players: readonly CombatStats[], durationSeconds: number): boolean {
+  if (durationSeconds < _MIN_DURATION_FOR_ZERO_CHECK_SECONDS) return false;
+  return players.every((player) => _COMBAT_FIELDS.every((field) => player[field] === 0));
+}
+
 /**
  * Returns a human-readable reason the payload looks structurally corrupt,
  * or `null` if it looks like a normal match. Only ever flags payloads that
  * would be *impossible* in a real completed game, not merely unusual ones.
  */
 export function checkReplayPlausibility(payload: ReplayPayload): string | null {
-  if (payload.durationSeconds >= _MIN_DURATION_FOR_ZERO_CHECK_SECONDS) {
-    const everyoneAllZero = payload.players.every((player) =>
-      _COMBAT_FIELDS.every((field) => player[field] === 0),
+  if (isAllZeroCombat(payload.players, payload.durationSeconds)) {
+    return (
+      `All ${payload.players.length} players show 0 on every combat stat ` +
+      `(kills/deaths/assists/damage/healing) in a ${payload.durationSeconds}s match -- ` +
+      "impossible for a completed game, almost certainly a parser bug rather than real data."
     );
-    if (everyoneAllZero) {
-      return (
-        `All ${payload.players.length} players show 0 on every combat stat ` +
-        `(kills/deaths/assists/damage/healing) in a ${payload.durationSeconds}s match -- ` +
-        "impossible for a completed game, almost certainly a parser bug rather than real data."
-      );
-    }
   }
 
   for (const field of ["heroDamage", "experienceContribution"] as const) {

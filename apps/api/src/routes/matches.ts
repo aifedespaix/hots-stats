@@ -19,6 +19,7 @@ import { z } from "zod";
 import { MIN_RELIABLE_STATS_PARSER_VERSION } from "../constants";
 import { gameModeListSchema, gameVersionListSchema } from "../lib/query";
 import { isVersionAtLeast } from "../lib/parser-version";
+import { isAllZeroCombat } from "../lib/replay-plausibility";
 import { authSession, requireUser } from "../middleware/auth-session";
 import { getFriendshipStatuses } from "../services/friendships.service";
 
@@ -489,12 +490,6 @@ export const matchesRoute = new Hono<Env>()
       return c.json({ error: "Match not found" }, 404);
     }
 
-    // See MIN_RELIABLE_STATS_PARSER_VERSION's docstring -- a match parsed
-    // before that version can have corrupted combat stats (whole columns
-    // stuck at 0, or one player's value duplicated onto others), and only
-    // self-heals once its owning player's daemon resyncs it.
-    const statsReliable = isVersionAtLeast(match.parserVersion, MIN_RELIABLE_STATS_PARSER_VERSION);
-
     const players = await db
       .select({
         id: matchPlayers.id,
@@ -533,6 +528,19 @@ export const matchesRoute = new Hono<Env>()
         return c.json({ error: "Match not found" }, 404);
       }
     }
+
+    // See MIN_RELIABLE_STATS_PARSER_VERSION's docstring for the first check
+    // (a match parsed before it can have corrupted combat stats, and only
+    // self-heals once its owning player's daemon resyncs it). The second
+    // check catches the same corruption shape on matches already stored
+    // under the *current* parserVersion -- a stale-protocol-decoder
+    // fallback (see daemon-python/src/parser.py's `_build_protocol`) can
+    // produce it regardless of daemon build, so it won't self-heal via
+    // resync at all until `heroprotocol` ships a real decoder for that
+    // replay's build.
+    const statsReliable =
+      isVersionAtLeast(match.parserVersion, MIN_RELIABLE_STATS_PARSER_VERSION) &&
+      !isAllZeroCombat(players, match.durationSeconds);
 
     const playerIds = players.map((p) => p.id);
     const talents =

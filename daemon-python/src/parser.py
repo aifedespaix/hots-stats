@@ -848,6 +848,24 @@ def _has_computer_player_attribute(attributes_events: dict) -> bool:
     return False
 
 
+# Below this, a real "everyone's stats are still 0" is plausible (game
+# abandoned/disconnected moments after loading in) -- not just a decoder
+# failure. See `_score_event_looks_corrupt`.
+_MIN_DURATION_FOR_ZERO_SCORE_CHECK_SECONDS = 180
+
+
+def _score_event_looks_corrupt(players: dict[str, dict[str, Any]], duration_seconds: int) -> bool:
+    """True if every player's `REQUIRED_SCORE_FIELDS` is 0 -- see the
+    `ReplayParseError` this gates in `build_payload` for why that's
+    essentially impossible in a real, concluded, non-trivial-length match."""
+    if duration_seconds < _MIN_DURATION_FOR_ZERO_SCORE_CHECK_SECONDS:
+        return False
+    return all(
+        all(player["stats"].get(field, 0) == 0 for field in constants.REQUIRED_SCORE_FIELDS)
+        for player in players.values()
+    )
+
+
 def _apply_score_event(tracker_events: list[dict], tracker_id_to_toon: dict[int, str], players: dict) -> None:
     for event in tracker_events:
         if event.get("_event") != "NNet.Replay.Tracker.SScoreResultEvent":
@@ -1147,6 +1165,10 @@ def build_payload(
 
     _apply_score_event(tracker_events, tracker_id_to_toon, players)
 
+    # Computed here (rather than down by the other payload fields below) so
+    # `_score_event_looks_corrupt` -- next -- can gate on it.
+    duration_seconds = max(0, round((header["m_elapsedGameLoops"] - gates_open_loop) / _GAMELOOPS_PER_SECOND))
+
     for player in players.values():
         if player["winner"] is None:
             # No `EndOfGameTalentChoices` for this player at all -- the game
@@ -1164,6 +1186,32 @@ def build_payload(
         if missing:
             raise ReplayParseError(f"Missing stats {missing} for player {player['battletag']!r}.")
 
+    if _score_event_looks_corrupt(players, duration_seconds):
+        # Every `REQUIRED_SCORE_FIELDS` entry present but literally 0 for
+        # every player on a real, concluded, >3-minute match -- impossible
+        # (even a total no-fight game still accrues non-zero
+        # `experienceContribution` for everyone from mere presence). Observed
+        # in practice on replays whose `m_baseBuild` is newer than
+        # `heroprotocol`'s newest known decoder (see `_build_protocol`'s
+        # fallback above): `SScoreResultEvent` still decodes *without
+        # raising*, but its `m_values` come back as nothing but each field's
+        # baseline `m_value: 0` seed, for every player -- silently
+        # indistinguishable, downstream of `_apply_score_event`, from every
+        # player's stat genuinely landing on 0. Confirmed against real
+        # ingested matches (2026-08) whose `gameVersion` build number was
+        # ahead of every entry in `_protocol_versions.KNOWN_PROTOCOL_BUILDS`.
+        # Raising here (instead of silently ingesting a payload of zeros, as
+        # this parser previously did) turns that into a loud, reported parse
+        # failure -- consistent with how ARAM hero resolution already treats
+        # an unreliable source as a hard failure rather than a wrong-but-
+        # silent answer (see PARSER_VERSION's 1.3 changelog entry).
+        raise ReplayParseError(
+            "SScoreResultEvent decoded to all-zero stats for every player in a "
+            f"{duration_seconds}s match -- almost certainly a stale-protocol-decoder "
+            "fallback (replay build newer than any known heroprotocol decoder) rather "
+            "than a real result; refusing to ingest corrupted stats."
+        )
+
     if map_internal_name is None:
         raise ReplayParseError("Could not determine the map played.")
     map_display_name = constants.MAP_DISPLAY_NAMES.get(map_internal_name)
@@ -1177,8 +1225,6 @@ def build_payload(
         )
 
     region = str(player_list[0]["m_toon"]["m_region"])
-
-    duration_seconds = max(0, round((header["m_elapsedGameLoops"] - gates_open_loop) / _GAMELOOPS_PER_SECOND))
 
     map_slug = _slugify(map_display_name)
     calibration = calibrations.get(map_slug) if calibrations else None

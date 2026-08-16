@@ -106,7 +106,25 @@ from __future__ import annotations
 # they're meant to move together (see that constant's docstring) -- except
 # for an additive-only change like 1.8 above, where doing so would only
 # force wasted resyncs on daemons that can't yet benefit from it.
-PARSER_VERSION = "1.8"
+# 1.9: `SScoreResultEvent` can decode *without raising* even when the
+# replay's `m_baseBuild` is newer than every entry in
+# `_protocol_versions.KNOWN_PROTOCOL_BUILDS` (`_build_protocol` falls back to
+# the newest known decoder for those, on the "wire format essentially never
+# changes between consecutive builds" assumption) -- but for some such
+# builds that assumption didn't hold for this specific event, and every
+# player's stats came back as nothing but each field's baseline `m_value: 0`
+# seed. Confirmed against real ingested matches (2026-08) that ended up with
+# every one of kills/deaths/assists/damage/healing/experienceContribution at
+# 0 for all 10 players despite being real, concluded, 5-27 minute games --
+# impossible for a genuine result. `build_payload` now raises
+# `ReplayParseError` in that shape (`_score_event_looks_corrupt`) instead of
+# silently producing a payload of zeros, so it shows up as a reported parse
+# failure instead of corrupted data quietly overwriting a match. Doesn't fix
+# the underlying decoder gap (needs an updated `heroprotocol` release with a
+# real decoder for the newer build), so a resync of an already-corrupted
+# match will fail loudly rather than recover real numbers -- there simply
+# isn't a way to get real numbers out of these specific replay files yet.
+PARSER_VERSION = "1.9"
 
 # How many times a single replay is allowed to fail with a parse error (a
 # corrupt/incomplete archive -- see parser.ReplayParseError) at the *same*

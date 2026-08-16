@@ -611,6 +611,47 @@ def test_build_payload_skips_incomplete_game():
     assert exc_info.value.reason == "incomplete_game"
 
 
+def test_build_payload_rejects_all_zero_score_event_as_corrupt():
+    """Regression test: a replay whose `m_baseBuild` is newer than every
+    known `heroprotocol` decoder can still decode `SScoreResultEvent`
+    without raising, but with every player's stats stuck at each field's
+    baseline 0 -- observed on real matches in 2026-08. Must fail loudly
+    instead of silently ingesting a payload of zeros."""
+    zero_stats = {name: [0, 0] for name in REQUIRED_STATS}
+    events = [e if e.get("_event") != "NNet.Replay.Tracker.SScoreResultEvent" else _score_event(zero_stats) for e in _base_tracker_events()]
+
+    with pytest.raises(ReplayParseError, match="all-zero"):
+        build_payload(
+            header=_header(610 + 16 * 600),
+            details=_details(),
+            initdata=_initdata(),
+            tracker_events=events,
+            attributes_events=_base_attributes_events(),
+            battletags=_battletags(),
+            replay_hash="a" * 64,
+        )
+
+
+def test_build_payload_allows_all_zero_score_event_below_the_duration_floor():
+    """A short match can legitimately end with every stat still at 0 (e.g.
+    abandoned moments after loading in) -- only gated above
+    `_MIN_DURATION_FOR_ZERO_SCORE_CHECK_SECONDS`."""
+    zero_stats = {name: [0, 0] for name in REQUIRED_STATS}
+    events = [e if e.get("_event") != "NNet.Replay.Tracker.SScoreResultEvent" else _score_event(zero_stats) for e in _base_tracker_events()]
+
+    payload = build_payload(
+        header=_header(610 + 16 * 60),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=events,
+        attributes_events=_base_attributes_events(),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+    )
+    assert payload["durationSeconds"] == 60
+    assert all(p["heroDamage"] == 0 for p in payload["players"])
+
+
 def test_build_payload_rejects_missing_battletag():
     with pytest.raises(ReplayParseError, match="battletag"):
         build_payload(
