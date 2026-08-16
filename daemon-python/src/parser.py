@@ -572,11 +572,26 @@ def _apply_score_event(tracker_events: list[dict], tracker_id_to_toon: dict[int,
             # camelCased), not just the ones the API currently reads -- see
             # constants.stat_field_name's docstring.
             field = constants.stat_field_name(_s(instance["m_name"]))
-            real_index = 0
-            for values in instance["m_values"]:
+            # `m_values` is positional: slot i (1-indexed, matching the
+            # tracker ids `tracker_id_to_toon` is keyed by) is this stat's
+            # history for player i, an *empty* list when that player never
+            # touched this stat at all (e.g. a healer's SiegeDamage) --
+            # not just when the slot is a bot/open lobby seat with no real
+            # player behind it. Skipping empty slots without still
+            # advancing the position (the previous approach, `real_index`
+            # incremented only on a non-empty `values`) desyncs every
+            # following real player's index by however many empty slots
+            # came before them, misattributing/dropping their stats --
+            # confirmed against a real match where this produced siege
+            # damage stuck at 0 for all 10 players and an identical
+            # experience-contribution value duplicated across one whole
+            # team. `enumerate` keeps position and "has no value to record
+            # here" independent, which any bot/open slot (absent from
+            # `tracker_id_to_toon`, see its `.get()` below) still safely
+            # falls through on regardless.
+            for real_index, values in enumerate(instance["m_values"], start=1):
                 if not values:
                     continue
-                real_index += 1
                 toon_handle = tracker_id_to_toon.get(real_index)
                 player = players.get(toon_handle) if toon_handle else None
                 if player is not None:

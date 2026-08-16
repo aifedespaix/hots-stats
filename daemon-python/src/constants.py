@@ -67,12 +67,24 @@ from __future__ import annotations
 # like heroDamage/healing that only ever get one push happened to read
 # correctly, since `[0] == [-1]` when there's just one entry). Now reads
 # `values[-1]` (the most recent entry) instead.
+# 1.7: `_apply_score_event` derived a player's index into
+# `SScoreResultEvent.m_instanceList[].m_values[]` (positional, one slot per
+# tracker id) by counting only *non-empty* slots seen so far -- meant to
+# skip bot/open lobby seats, but a real player's genuinely untouched stat
+# (a healer's 0 SiegeDamage, an ARAM support's 0 ExperienceContribution --
+# anything Blizzard never pushed even a baseline entry for) is *also* an
+# empty slot, and skipping it without still advancing the position desynced
+# every following real player's index by one. Confirmed against a real
+# match where this produced siege damage stuck at 0 for all 10 players and
+# an identical experience-contribution value duplicated across a whole
+# team. Now derives the index from the slot's own position (`enumerate`)
+# instead of a count that silently drops out of sync.
 # Bumping this flags every previously-ingested match as stale so the
 # daemon's API-driven resync (see sync_state.py's `invalidate_stale`)
 # reparses and re-uploads it. Whenever this changes, also bump
 # apps/api/src/constants.ts's MIN_PARSER_VERSION to the same value --
 # they're meant to move together (see that constant's docstring).
-PARSER_VERSION = "1.6"
+PARSER_VERSION = "1.7"
 
 # Shown in the settings window. Bump alongside `[project].version` in pyproject.toml.
 APP_VERSION = "1.0.32"
