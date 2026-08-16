@@ -72,6 +72,8 @@ export interface MatchDetailResponse {
    * `components/spatial/` and tasks/epic-10-analyse-spatiale.md.
    */
   spatial?: MatchSpatialData;
+  /** Whether an admin has calibrated this match's map (see /admin/calibrate) -- lets the UI tell "map not calibrated yet" apart from "this match has no spatial data" when `spatial` is absent. */
+  spatialCalibrated: boolean;
 }
 
 /** One filtered-vs-all-time-range metric powering a "Dashboard" radar chart axis. */

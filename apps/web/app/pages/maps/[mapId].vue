@@ -280,16 +280,21 @@ const teamImpactChartOptions = computed(() => ({
         <UIcon name="i-heroicons-viewfinder-circle" class="h-4 w-4 text-brand" />
         <h2 class="font-heading text-sm font-medium">Analyse spatiale</h2>
       </div>
-      <p class="mb-4 text-xs text-muted">
-        Heatmap de présence, kills et morts, agrégée sur les parties enregistrées pour cette carte. Certaines cartes
-        n'ont pas encore été calibrées côté serveur ; aucune donnée n'apparaît alors ci-dessous.
+      <p v-if="!data?.spatialCalibrated" class="mb-4 text-xs text-muted">
+        Cette carte n'a pas encore été calibrée par un admin (voir <code>/admin/calibrate</code>) : aucune donnée
+        spatiale ne peut être affichée pour elle pour le moment.
       </p>
-      <SpatialAggregateSlot
-        v-if="spatialHeroOptions.length > 0"
-        :map-id="mapId"
-        :hero-options="spatialHeroOptions"
-        :my-battletag="authData?.user?.battletag ?? null"
-      />
+      <template v-else>
+        <p class="mb-4 text-xs text-muted">
+          Heatmap de présence, kills et morts, agrégée sur les parties enregistrées pour cette carte.
+        </p>
+        <SpatialAggregateSlot
+          v-if="spatialHeroOptions.length > 0"
+          :map-id="mapId"
+          :hero-options="spatialHeroOptions"
+          :my-battletag="authData?.user?.battletag ?? null"
+        />
+      </template>
     </div>
   </div>
 </template>

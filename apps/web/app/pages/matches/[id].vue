@@ -196,7 +196,7 @@ const displayedInsights = computed(() =>
             :grid-rows="spatialGrid.rows"
             :heroes="spatialMatchHeroes"
           />
-          <CoachHeatmapsPlaceholder v-else />
+          <CoachHeatmapsPlaceholder v-else :calibrated="data.spatialCalibrated" />
         </div>
       </template>
     </UTabs>

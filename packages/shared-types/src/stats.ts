@@ -385,6 +385,8 @@ export interface MapDetailResponse {
   personalRanking: MapPersonalRanking;
   teamImpact: TeamImpactStats | null;
   soak: SoakWinrateStats | null;
+  /** Whether an admin has calibrated this map's world bounds (see /admin/calibrate) -- distinguishes "no spatial data yet because nobody's calibrated this map" from "calibrated, but no matches match the current filter". */
+  spatialCalibrated: boolean;
 }
 
 // --- Talent Analyzer (Mission 1 -- see "Talents & Terrain" design doc) ---

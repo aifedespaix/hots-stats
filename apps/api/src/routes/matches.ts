@@ -2,6 +2,7 @@ import {
   type User,
   db,
   heroes,
+  mapCalibrations,
   matchDeaths,
   matchLevelSnapshots,
   matchPlayers,
@@ -562,41 +563,50 @@ export const matchesRoute = new Hono<Env>()
     // `spatial` (match_spatial_grids) is separately gated on PARSER_VERSION
     // >= 1.7 *and* the map having had a calibration at ingestion time --
     // see spatial-rollup.service.ts / replay-upsert.service.ts.
-    const [deathRows, levelSnapshotRows, spatialGridRows] =
+    const [deathRows, levelSnapshotRows, spatialGridRows, calibrationRows] = await Promise.all([
       playerIds.length > 0
-        ? await Promise.all([
-            db
-              .select({
-                matchPlayerId: matchDeaths.matchPlayerId,
-                atSeconds: matchDeaths.atSeconds,
-                x: matchDeaths.x,
-                y: matchDeaths.y,
-                killers: matchDeaths.killers,
-                killType: matchDeaths.killType,
-              })
-              .from(matchDeaths)
-              .where(inArray(matchDeaths.matchPlayerId, playerIds)),
-            db
-              .select({
-                matchPlayerId: matchLevelSnapshots.matchPlayerId,
-                atSeconds: matchLevelSnapshots.atSeconds,
-                level: matchLevelSnapshots.level,
-              })
-              .from(matchLevelSnapshots)
-              .where(inArray(matchLevelSnapshots.matchPlayerId, playerIds)),
-            db
-              .select({
-                matchPlayerId: matchSpatialGrids.matchPlayerId,
-                gridCols: matchSpatialGrids.gridCols,
-                gridRows: matchSpatialGrids.gridRows,
-                presenceGrid: matchSpatialGrids.presenceGrid,
-                killsGrid: matchSpatialGrids.killsGrid,
-                deathsGrid: matchSpatialGrids.deathsGrid,
-              })
-              .from(matchSpatialGrids)
-              .where(inArray(matchSpatialGrids.matchPlayerId, playerIds)),
-          ])
-        : [[], [], []];
+        ? db
+            .select({
+              matchPlayerId: matchDeaths.matchPlayerId,
+              atSeconds: matchDeaths.atSeconds,
+              x: matchDeaths.x,
+              y: matchDeaths.y,
+              killers: matchDeaths.killers,
+              killType: matchDeaths.killType,
+            })
+            .from(matchDeaths)
+            .where(inArray(matchDeaths.matchPlayerId, playerIds))
+        : Promise.resolve([]),
+      playerIds.length > 0
+        ? db
+            .select({
+              matchPlayerId: matchLevelSnapshots.matchPlayerId,
+              atSeconds: matchLevelSnapshots.atSeconds,
+              level: matchLevelSnapshots.level,
+            })
+            .from(matchLevelSnapshots)
+            .where(inArray(matchLevelSnapshots.matchPlayerId, playerIds))
+        : Promise.resolve([]),
+      playerIds.length > 0
+        ? db
+            .select({
+              matchPlayerId: matchSpatialGrids.matchPlayerId,
+              gridCols: matchSpatialGrids.gridCols,
+              gridRows: matchSpatialGrids.gridRows,
+              presenceGrid: matchSpatialGrids.presenceGrid,
+              killsGrid: matchSpatialGrids.killsGrid,
+              deathsGrid: matchSpatialGrids.deathsGrid,
+            })
+            .from(matchSpatialGrids)
+            .where(inArray(matchSpatialGrids.matchPlayerId, playerIds))
+        : Promise.resolve([]),
+      // Independent of playerIds -- whether *the map* has ever been
+      // calibrated (see /admin/calibrate), regardless of whether this
+      // specific match has any spatial rows. Lets the frontend tell "this
+      // map isn't calibrated yet" apart from "this match predates spatial
+      // tracking", instead of one generic empty state for both.
+      db.select({ mapId: mapCalibrations.mapId }).from(mapCalibrations).where(eq(mapCalibrations.mapId, match.mapId)).limit(1),
+    ]);
 
     const playerById = new Map(players.map((p) => [p.id, p]));
     const timeline =
@@ -654,5 +664,6 @@ export const matchesRoute = new Hono<Env>()
       })),
       ...(timeline ? { timeline } : {}),
       ...(spatial ? { spatial } : {}),
+      spatialCalibrated: calibrationRows.length > 0,
     });
   });

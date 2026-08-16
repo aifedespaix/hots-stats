@@ -1,4 +1,4 @@
-import { db, heroRoleEnum, heroes, maps, matchPlayers, matches } from "@hots-stats/db";
+import { db, heroRoleEnum, heroes, mapCalibrations, maps, matchPlayers, matches } from "@hots-stats/db";
 import {
   DRAFT_RANKED_MODES,
   MAP_HUB_RECENT_FORM_WINDOW,
@@ -454,13 +454,23 @@ export async function getMapDetail(userId: string, mapId: string): Promise<MapDe
   const [mapRow] = await db.select({ id: maps.id, name: maps.name }).from(maps).where(eq(maps.id, mapId)).limit(1);
   if (!mapRow) return null;
 
-  const [metaHeroes, personalHeroes, personalRanking, teamImpact, soak] = await Promise.all([
+  const [metaHeroes, personalHeroes, personalRanking, teamImpact, soak, calibrationRows] = await Promise.all([
     getMapMetaHeroes(mapId),
     getMapPersonalHeroes(userId, mapId),
     getMapPersonalRanking(userId, mapId),
     getTeamImpactStats(userId, mapId),
     getSoakWinrate(userId, mapId),
+    db.select({ mapId: mapCalibrations.mapId }).from(mapCalibrations).where(eq(mapCalibrations.mapId, mapId)).limit(1),
   ]);
 
-  return { mapId: mapRow.id, mapName: mapRow.name, metaHeroes, personalHeroes, personalRanking, teamImpact, soak };
+  return {
+    mapId: mapRow.id,
+    mapName: mapRow.name,
+    metaHeroes,
+    personalHeroes,
+    personalRanking,
+    teamImpact,
+    soak,
+    spatialCalibrated: calibrationRows.length > 0,
+  };
 }
