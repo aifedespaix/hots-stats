@@ -84,6 +84,43 @@ mesuré le taux d'échantillonnage réel. Une résolution non uniforme (cases
 plus fines près des objectifs) est possible mais probablement une
 complexité inutile vu la marge déjà disponible avec une grille uniforme.
 
+**Interpolation spatiale — éviter l'effet "pointillés".** La formule
+ci-dessus suppose implicitement un chemin *continu*. Ce n'est pas ce que
+donnent les échantillons bruts : entre deux ticks de `SUnitPositionsEvent`
+espacés de 0,5-1 s, un héros rapide (monture, bottes, buffs de vitesse —
+Falstad, Dehaka, Zeratul...) peut franchir plusieurs cases sans qu'aucun
+échantillon ne tombe dedans. Sans traitement, la heatmap serait une suite de
+points isolés au lieu d'un tracé continu, sous-représentant les zones
+réellement traversées.
+
+- **Solution** : côté Daemon, avant de construire `spatial.presence`,
+  appliquer un algorithme de tracé de segment (type Bresenham/DDA, adapté à
+  des coordonnées flottantes normalisées plutôt qu'à une grille de pixels
+  entiers) entre chaque paire d'échantillons consécutifs `(t_i, x_i, y_i)` →
+  `(t_i+1, x_i+1, y_i+1)`, pour identifier toutes les cases traversées par le
+  segment. Le `Δt` entre les deux échantillons est ensuite réparti au
+  prorata de la portion du segment (en distance) tombant dans chaque case
+  traversée — pas juste "marquer visité", pour que la somme des
+  `secondsInCell` reste cohérente avec `durationSeconds` (garde-fou QA déjà
+  mentionné au Livrable 1).
+- **Ne pas interpoler à travers un vrai téléport.** Certaines capacités
+  déplacent un héros instantanément sur une grande distance (Blink, Warp,
+  Dash traversant un mur...). Interpoler bêtement entre deux échantillons
+  séparés par un tel déplacement tracerait un faux chemin à travers un
+  terrain jamais réellement parcouru (ex. à travers un mur ou toute la map).
+  **Seuil de détection** : ne remplir les cases intermédiaires que si la
+  vitesse implicite entre les deux échantillons (`distance / Δt`) reste sous
+  un plafond généreux (ex. ~2-3× la vitesse de déplacement maximale connue,
+  pour couvrir montures + bottes + buffs cumulés) — au-delà, traiter comme
+  une discontinuité et enregistrer seulement les deux points d'extrémité,
+  sans remplissage. C'est la même grandeur `vitesse_max × Δt_échantillonnage`
+  que le plancher de résolution ci-dessus, réutilisée ici comme seuil de
+  téléportation.
+- C'est cette interpolation qui rend valide, en pratique, l'hypothèse "la
+  présence suit un chemin continu" utilisée dans le calcul de budget
+  ci-dessus — sans elle, des échantillons bruts épars sous-compteraient
+  systématiquement la couverture réelle du terrain.
+
 ### 2. Compatibilité multi-builds (Daemon)
 
 - **Stabilité du tracker event** : vérifier que `SUnitPositionsEvent` est
@@ -140,6 +177,39 @@ Idée pertinente, à affiner sur 4 points avant implémentation :
    faire échouer ou ralentir le flux local du Daemon (log local toujours
    écrit, un seul essai d'upload, pas de file de retry qui grossit
    indéfiniment).
+6. **Circuit breaker — protection contre l'auto-DDoS.** Le daemon tourne en
+   local chez chaque utilisateur : si un patch HotS majeur casse
+   `heroprotocol`, **tous les clients échouent en même temps**, sur
+   potentiellement des dizaines de replays en attente chacun. Sans garde-fou,
+   ça se traduit par un pic massif et synchronisé sur l'API — un déni de
+   service accidentel auto-infligé, précisément au moment où l'infra encaisse
+   déjà un afflux de ré-ingestions légitimes. Deux mécanismes distincts,
+   complémentaires à la dédup d'agrégation (point 3, côté serveur) :
+   - **Dédup côté client, par empreinte** : n'envoyer **qu'un seul** rapport
+     par `(parserVersion, m_baseBuild, type d'exception)` par installation du
+     daemon — pas un par fichier replay en échec. Sans ça, un utilisateur
+     avec 50 replays en attente au moment du patch cassant génère 50 rapports
+     identiques au lieu d'un seul.
+   - **Coupe-circuit sur le canal télémétrique lui-même** : après N échecs
+     consécutifs (ex. 3) de l'envoi *lui-même* (timeout, 5xx, 429), arrêter
+     complètement les tentatives pour cette version tant qu'elle n'a pas
+     changé — protège une API déjà sous tension d'être en plus harcelée par
+     des clients qui insistent.
+   - État des deux mécanismes stocké localement (même mécanisme que
+     `SyncState`, Epic 8), **clé sur `parserVersion`** : dès qu'une nouvelle
+     version du parser corrige le problème, la clé change et le coupe-circuit
+     se réarme tout seul — aucune action manuelle requise côté utilisateur.
+   - **Défense en profondeur côté API** : ajouter un rate-limit (middleware
+     Hono, token-bucket par compte/IP) sur l'endpoint de télémétrie
+     lui-même. Nécessaire même avec un daemon bien élevé, car toutes les
+     installations en circulation n'auront pas immédiatement la version du
+     daemon qui contient ce coupe-circuit.
+   - Ce canal est distinct de la mise en quarantaine existante (Epic 7) :
+     la quarantaine gère le cas "le parse a réussi, mais référence un build
+     inconnu" (payload valide produit) ; la télémétrie couvre le cas plus en
+     amont où le daemon **plante avant même de produire un payload**. Un
+     patch cassant peut déclencher les deux simultanément — chacun a besoin
+     de sa propre protection contre l'afflux.
 
 ### 4. Cas particulier — maps multi-niveaux (ex. Mines Hantées)
 
@@ -171,6 +241,51 @@ a deux zones jouables distinctes (surface + sous-sol des mines). Un modèle
   récentes), mais le champ `layer` (cf. Livrable 1) doit être prévu dès le
   schéma pour ne pas tout casser si une map future a la même
   caractéristique.
+
+### 5. Agrégation multi-parties — éviter le goulot d'étranglement Postgres
+
+Sommer des JSONB à la volée pour chaque requête de `GET /spatial/aggregate`
+ne passe pas à l'échelle : un joueur avec 200 parties Healer sur Dragon
+Shire ferait sommer 200 blobs JSON par requête, potentiellement à chaque
+changement de filtre dans l'UI (Slot). Ce n'est **pas** un détail à reporter
+"si le besoin se présente" — la nature même de la fonctionnalité
+(comparaison Historique/Slot, cf. Livrable 3) en fait un chemin d'accès
+fréquent dès la v1. Design retenu, dérivé de la remarque sur le
+"goulot d'étranglement" :
+
+- **Table de rollup incrémental**, ex. `hero_map_spatial_rollup`, clé
+  `(mapId, heroId, layer, playerId, outcome)` avec `outcome ∈ {win, loss}`
+  (2 lignes, jamais une 3e "toutes issues" stockée à part) →
+  `presenceGrid`/`killsGrid`/`deathsGrid` (JSONB, même forme sparse que le
+  stockage par partie) + `matchCount`.
+- **Mise à jour à l'ingestion**, dans la même transaction que
+  `replay-upsert.service.ts` : pour chaque héros de la partie qui vient
+  d'être ingérée, **merge-add** (pas overwrite) sa grille dérivée dans la
+  ligne de rollup correspondante. Le merge de deux grilles sparse
+  `{cellIndex[], value[]}` est une simple fusion de map clé→valeur — fait en
+  TypeScript côté service, pas en fonction Postgres/PL-pgSQL (plus simple à
+  maintenir, cohérent avec le reste du service).
+- **Deux lignes maintenues par héros et par partie** : une ligne
+  `playerId = <uploader>` et une ligne `playerId = NULL` ("tous les
+  joueurs"), toutes deux incrémentées à l'ingestion. Résultat : la "moyenne
+  globale" (Hub des Cartes) est déjà en O(1) au moment de la lecture, jamais
+  un scan de toutes les parties de tous les utilisateurs.
+- **Lectures composées, jamais sur les parties brutes** :
+  - `Issue = toutes` → somme des 2 lignes win/loss pré-agrégées (coût
+    négligeable, pas 200 lignes brutes).
+  - `Héros/Rôle = un rôle` (ex. "tous les Tanks") → somme des lignes de
+    rollup **déjà agrégées** des ~10-15 héros de ce rôle pour le
+    map/joueur/issue demandés — toujours O(quelques lignes), jamais O(parties).
+- **`match_spatial_grids` (par partie) reste la source de vérité**, le
+  rollup n'est qu'un cache dérivé — nécessaire pour pouvoir le reconstruire
+  après un changement de résolution de grille (`spatial.schemaVersion`, cf.
+  point 1) : stocker ce `schemaVersion` sur les lignes de rollup et prévoir
+  un job de backfill qui les régénère depuis les grilles par partie plutôt
+  que de supposer une migration en place instantanée.
+- **Cache HTTP court** (quelques minutes) en complément devant
+  `GET /spatial/aggregate`, utile même une fois le rollup en place pour
+  absorber les changements de filtre rapides dans l'UI — mais ce n'est pas
+  un substitut au rollup : sans lui, même un cache MISS reste coûteux.
 
 ---
 
@@ -452,22 +567,27 @@ Le principe de couleur dépend du **nombre de Slots actifs** :
   `layer`).
 - `packages/db/src/schema/maps.ts` (+ table de calibration si fenêtre de
   validité par patch ou par niveau nécessaire), `packages/db/src/schema/match-deaths.ts`,
-  nouvelle table `match_spatial_grids` stockant `presenceGrid`/`killsGrid`/`deathsGrid`
-  par (match, héros, niveau) — JSONB, précédent déjà posé par
-  `raw_replays_quarantine` (Epic 7).
+  nouvelle table `match_spatial_grids` (source de vérité, par match/héros/niveau)
+  et nouvelle table `hero_map_spatial_rollup` (cache incrémental
+  `mapId/heroId/layer/playerId/outcome`, cf. section 5) — JSONB, précédent
+  déjà posé par `raw_replays_quarantine` (Epic 7).
 - `apps/api/src/services/replay-upsert.service.ts` (calcul des 3 grilles
-  dérivées à l'ingestion), `apps/api/src/routes/matches.ts`, **nouvel**
-  endpoint d'agrégation type `GET /spatial/aggregate?mapId=&heroId=|role=&playerId=&outcome=`
-  qui somme les grilles des matches correspondant aux filtres (calcul à la
-  volée en v1 — le volume par joueur/héros/map reste modeste ; envisager une
-  table de rollup incrémental seulement si le nombre de parties par filtre
-  devient trop grand), `apps/api/src/routes/ingest.ts`.
+  dérivées + merge-add dans le rollup, dans la même transaction
+  d'ingestion), `apps/api/src/routes/matches.ts`, **nouvel** endpoint
+  `GET /spatial/aggregate?mapId=&heroId=|role=&playerId=&outcome=` qui lit
+  et combine un petit nombre de lignes de rollup pré-agrégées (jamais les
+  grilles brutes par partie), `apps/api/src/routes/ingest.ts`, **nouveau**
+  script de backfill (sur le modèle de `bun run check-build`, Epic 7) pour
+  régénérer le rollup après un changement de `spatial.schemaVersion`.
 - `apps/web/app/components/coach/HeatmapsPlaceholder.vue` (à remplacer),
   `apps/web/app/pages/maps/[mapId].vue`, `apps/web/app/pages/matches/[id].vue`,
   nouveau composant `SpatialSlot.vue` (le "Slot" ci-dessus) instancié 1 ou 2
   fois selon le mode, nouveaux composants de rendu SVG/Canvas.
 - `raw_replays_quarantine` (Epic 7, déjà existant) — extension pour la
-  télémétrie d'erreurs de parsing.
+  télémétrie d'erreurs de parsing ; nouvel état local du daemon (sur le
+  modèle de `SyncState`, Epic 8) pour la dédup par empreinte et le
+  coupe-circuit décrits en section 3.6 ; nouveau middleware Hono de
+  rate-limit sur l'endpoint de télémétrie.
 
 ## Points à valider empiriquement avant/pendant l'implémentation
 
@@ -487,6 +607,18 @@ Le principe de couleur dépend du **nombre de Slots actifs** :
 - Vérifier que la couche Canvas (heatmap) et la couche SVG (marqueurs)
   restent alignées au pixel près après resize, y compris en cas de
   changement de layout sans resize fenêtre (test avec `ResizeObserver`).
-- Avec 2 Slots agrégés sur des dizaines de parties, vérifier le temps de
-  réponse de l'endpoint d'agrégation avant de décider si un rollup
-  pré-calculé devient nécessaire.
+- **Calibrer le seuil de détection de téléportation** (section 1,
+  interpolation) sur des replays contenant des capacités de déplacement
+  instantané connues (Blink, Warp, Dash traversant un obstacle...) — vérifier
+  visuellement que ces trajets ne sont pas interpolés à travers un mur/l'eau,
+  et à l'inverse qu'un déplacement monté rapide légitime n'est pas coupé à
+  tort.
+- Vérifier, une fois `hero_map_spatial_rollup` en place, que le temps de
+  réponse de `GET /spatial/aggregate` reste indépendant du nombre de parties
+  historiques d'un joueur (test avec un compte à 200+ parties sur une même
+  map/héros) — sinon la lecture retombe sur un scan des grilles brutes
+  quelque part dans le code, à corriger avant mise en prod.
+- Tester le coupe-circuit de télémétrie en simulant un build cassé sur
+  plusieurs replays d'affilée dans une même session daemon : confirmer qu'un
+  seul rapport part par empreinte, et que les tentatives s'arrêtent après le
+  nombre d'échecs consécutifs configuré.
