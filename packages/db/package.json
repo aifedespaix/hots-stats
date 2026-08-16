@@ -13,6 +13,7 @@
     "migrate": "bun run src/migrate.ts",
     "seed": "bun run src/seed.ts",
     "studio": "drizzle-kit studio",
+    "studio:remote": "bash scripts/studio-remote.sh",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

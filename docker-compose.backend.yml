@@ -8,6 +8,11 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      # Loopback-only: reachable from an SSH tunnel into the Pi (see
+      # `bun run studio:remote` in packages/db), never from the LAN or
+      # internet -- no Dokploy domain, no 0.0.0.0 bind.
+      - "127.0.0.1:5432:5432"
     volumes:
       - hots_stats_pgdata:/var/lib/postgresql/data
     healthcheck:

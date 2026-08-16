@@ -138,6 +138,28 @@ docker exec $(docker ps -qf "name=hots-stats-backend.*postgres") \
 À planifier en cron régulièrement, et à copier hors du Pi (le SD/SSD d'un Pi
 n'est pas un stockage de confiance à long terme).
 
+## Accès UI à la base de données (Drizzle Studio)
+
+`docker-compose.backend.yml` publie Postgres sur `127.0.0.1:5432` du Pi
+uniquement (pas de bind `0.0.0.0`, pas de domaine Dokploy) : il reste
+inaccessible depuis le LAN ou internet, mais joignable via un tunnel SSH.
+
+Drizzle Studio n'a pas de compte propre -- il se connecte avec les
+identifiants Postgres eux-mêmes (`POSTGRES_USER` / `POSTGRES_PASSWORD` /
+`POSTGRES_DB`, les mêmes que dans les variables d'env Dokploy du service
+`postgres`). Depuis ta machine, avec un accès SSH au Pi :
+
+```bash
+SSH_HOST=user@raspberrypi.local \
+POSTGRES_USER=... POSTGRES_PASSWORD=... POSTGRES_DB=... \
+bun run --filter @hots-stats/db studio:remote
+```
+
+Le script (`packages/db/scripts/studio-remote.sh`) ouvre le tunnel SSH vers
+le port loopback du Pi, lance `drizzle-kit studio` dessus, puis ferme le
+tunnel en quittant (Ctrl+C). L'UI s'ouvre sur `https://local.drizzle.studio`
+et donne un accès lecture/écriture complet aux tables.
+
 ## Notes spécifiques Raspberry Pi
 
 - Le Pi a des ressources limitées : évite de lancer `docker compose build`
