@@ -10,6 +10,9 @@ export interface AuthUser {
   battletag: string | null;
   publicHandle: string | null;
   heroStatsScope: HeroStatsScope;
+  // Gates access to admin-only tooling (currently: /admin/calibrate, see
+  // middleware/admin.ts). Set via `bun run promote-admin`, never through the UI.
+  role: "user" | "admin";
 }
 
 export interface AuthProviders {

@@ -9,6 +9,7 @@ from src.api_client import (
     AuthError,
     QuarantinedError,
     ValidationError,
+    fetch_calibrations,
     fetch_summary,
     fetch_version,
     ping_health,
@@ -151,6 +152,54 @@ def test_post_draft_snapshot_false_on_network_error_not_retried(tmp_path):
         assert client.post_draft_snapshot({"capturedAt": "now"}) is False
 
     post.assert_called_once()
+
+
+def test_post_samples_success(tmp_path):
+    client = ApiClient(_config(tmp_path))
+    ok_response = _response(202, {"status": "ok"})
+    points = [{"x": 1.0, "y": 2.0}]
+
+    with patch.object(client._session, "post", return_value=ok_response) as post:
+        assert client.post_samples("dragon-shire", points) is True
+
+    post.assert_called_once()
+    assert post.call_args.args[0] == "https://api.example.com/spatial/samples"
+    assert post.call_args.kwargs["json"] == {"mapId": "dragon-shire", "points": points}
+
+
+def test_post_samples_false_on_rejection(tmp_path):
+    client = ApiClient(_config(tmp_path))
+    bad_response = _response(400, {"error": "invalid"})
+
+    with patch.object(client._session, "post", return_value=bad_response):
+        assert client.post_samples("dragon-shire", [{"x": 1.0, "y": 2.0}]) is False
+
+
+def test_post_samples_false_on_network_error_not_retried(tmp_path):
+    client = ApiClient(_config(tmp_path))
+
+    with patch.object(client._session, "post", side_effect=requests.ConnectionError("offline")) as post:
+        assert client.post_samples("dragon-shire", [{"x": 1.0, "y": 2.0}]) is False
+
+    post.assert_called_once()
+
+
+def test_fetch_calibrations_returns_body_on_200():
+    body = {"dragon-shire": {"minX": -100.0, "maxX": 100.0, "minY": -100.0, "maxY": 100.0}}
+    with patch("src.api_client.requests.get", return_value=_response(200, body)) as get:
+        assert fetch_calibrations("https://api.example.com", "hots_pat_abc") == body
+    assert get.call_args.args[0] == "https://api.example.com/spatial/calibrations"
+    assert get.call_args.kwargs["headers"] == {"Authorization": "Bearer hots_pat_abc"}
+
+
+def test_fetch_calibrations_none_on_401():
+    with patch("src.api_client.requests.get", return_value=_response(401, {"error": "Invalid token"})):
+        assert fetch_calibrations("https://api.example.com", "bad-token") is None
+
+
+def test_fetch_calibrations_none_on_network_error():
+    with patch("src.api_client.requests.get", side_effect=requests.ConnectionError("offline")):
+        assert fetch_calibrations("https://api.example.com", "hots_pat_abc") is None
 
 
 def test_post_ingest_error_success(tmp_path):

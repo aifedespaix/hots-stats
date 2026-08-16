@@ -1,5 +1,6 @@
 import type { GameMode } from "@hots-stats/shared-types";
 import type { MatchTimelineData } from "./coach";
+import type { MatchSpatialData } from "./spatial";
 
 export interface MatchListItem {
   id: string;
@@ -62,13 +63,15 @@ export interface MatchDetailResponse {
     region: string;
   };
   teams: { team: number; players: MatchDetailPlayer[] }[];
-  /**
-   * Not sent by the API today (see `MatchTimelineData`'s doc comment) --
-   * declared optional so the Coach tab's timeline-dependent insights start
-   * working the day `GET /matches/:id` grows this field, with no front-end
-   * change required. Always read as `data.timeline ?? null`.
-   */
+  /** Absent for a match ingested before PARSER_VERSION 1.4. Always read as `data.timeline ?? null`. */
   timeline?: MatchTimelineData;
+  /**
+   * Per-hero presence/kills/deaths grids for this specific match -- absent
+   * when no hero in the match has one (an uncalibrated map at ingestion
+   * time, or a match ingested before PARSER_VERSION 1.7). See
+   * `components/spatial/` and tasks/epic-10-analyse-spatiale.md.
+   */
+  spatial?: MatchSpatialData;
 }
 
 /** One filtered-vs-all-time-range metric powering a "Dashboard" radar chart axis. */

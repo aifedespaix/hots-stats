@@ -8,7 +8,8 @@
     "start": "bun run src/index.ts",
     "build": "bun build src/index.ts --outdir dist --target bun",
     "typecheck": "tsc --noEmit",
-    "check-build": "bun run scripts/check-build.ts"
+    "check-build": "bun run scripts/check-build.ts",
+    "promote-admin": "bun run scripts/promote-admin.ts"
   },
   "dependencies": {
     "@hots-stats/db": "workspace:*",

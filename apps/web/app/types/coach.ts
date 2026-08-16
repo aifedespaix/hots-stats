@@ -2,19 +2,22 @@ import type { MatchDetailPlayer } from "./matches";
 
 /**
  * Event-level replay data every timeline-dependent Coach pillar needs
- * (outnumbered fights, talent delay, staggered deaths, first death).
- * `GET /matches/:id` does not send this yet -- `daemon-python/src/parser.py`
- * only forwards the end-of-game `SScoreResultEvent` (final box score), never
- * per-death timestamps or level-over-time snapshots. Modeled now so the
- * analyzer functions and cards in `utils/coachAnalysis.ts` are ready the
- * moment the ingestion pipeline grows a `timeline` field on the match
- * response -- see the Coach tab critique for the exact tracker events
- * (`SUnitDiedEvent`, periodic `SPlayerStatsEvent`) that would populate it.
+ * (outnumbered fights, talent delay, staggered deaths, first death) --
+ * `GET /matches/:id`'s `timeline` field, present for any match ingested
+ * with PARSER_VERSION >= 1.4 (`daemon-python/src/parser.py`'s
+ * `_extract_deaths`/`_extract_level_snapshots`), absent (not empty arrays)
+ * for older matches.
  */
 export interface MatchTimelineDeath {
   battletag: string;
   team: 0 | 1;
   atSeconds: number;
+  // Present only when the map had a spatial calibration at ingestion time
+  // (PARSER_VERSION >= 1.7) -- see tasks/epic-10-analyse-spatiale.md.
+  x?: number;
+  y?: number;
+  killers?: string[];
+  killType?: "hero" | "other";
 }
 
 export interface MatchTimelineLevelSnapshot {

@@ -135,6 +135,32 @@ class ApiClient:
             return False
         return True
 
+    def post_samples(self, map_id: str, points: list[dict], timeout: float = 10.0) -> bool:
+        """POSTs a map's raw calibration sample points to `/spatial/samples`.
+        Single best-effort attempt, same as `post_draft_snapshot`/
+        `post_ingest_error`: this is a diagnostic side-channel, not the real
+        replay upload -- a failure here must never turn a successful parse
+        into a reported ingestion failure (see ingestion.py's `ingest_file`,
+        the only caller). Logged at `debug`/`warning`, deliberately never
+        `error`, so it never reads like a real ingestion problem in the
+        Debug window."""
+        try:
+            response = self._session.post(
+                f"{self._base_url}/spatial/samples",
+                json={"mapId": map_id, "points": points},
+                timeout=timeout,
+            )
+        except requests.RequestException as err:
+            logger.debug("Failed to submit calibration sample for %r: %s", map_id, err)
+            return False
+
+        if response.status_code >= 400:
+            logger.warning(
+                "Calibration sample for %r rejected (%d): %s", map_id, response.status_code, _safe_json(response)
+            )
+            return False
+        return True
+
     def post_ingest_error(self, report: dict, timeout: float = 10.0) -> bool:
         """POSTs one local ingestion failure to `/ingest/errors`, so it's
         triageable centrally instead of only visible in this one player's own
@@ -193,6 +219,30 @@ def fetch_version(base_url: str, access_token: str, timeout: float = 5.0) -> dic
     try:
         response = requests.get(
             f"{base_url.rstrip('/')}/ingest/version",
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=timeout,
+        )
+    except requests.RequestException:
+        return None
+    if response.status_code != 200:
+        return None
+    try:
+        return response.json()
+    except ValueError:
+        return None
+
+
+def fetch_calibrations(base_url: str, access_token: str, timeout: float = 5.0) -> dict[str, dict] | None:
+    """Best-effort `GET {base_url}/spatial/calibrations` fetch: `{mapId:
+    {minX, maxX, minY, maxY}}` for every calibrated map. Called once per
+    daemon run/batch (see app.py's `_sync_spatial_calibrations`) and cached
+    in `SyncState`'s `meta` table so a temporarily-unreachable API falls back
+    to the last known calibrations instead of treating every map as
+    uncalibrated. Returns None on any failure -- callers must treat that as
+    "unknown", not "nothing is calibrated"."""
+    try:
+        response = requests.get(
+            f"{base_url.rstrip('/')}/spatial/calibrations",
             headers={"Authorization": f"Bearer {access_token}"},
             timeout=timeout,
         )

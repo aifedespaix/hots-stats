@@ -42,7 +42,12 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         client = api_client.ApiClient(config)
         target_dir = Path(args.resync) if isinstance(args.resync, str) else config.replays_dir
-        resync(client, target_dir, SyncState())
+        # A `--resync` batch is exactly "start of a parse batch" in the same
+        # sense app.py's `_sync_spatial_calibrations` fetches for the tray
+        # daemon's startup -- fetch fresh calibrations once up front rather
+        # than parsing the whole backlog with none at all.
+        calibrations = api_client.fetch_calibrations(config.api_base_url, config.access_token) or {}
+        resync(client, target_dir, SyncState(), calibrations=calibrations)
         return 0
 
     # Default (no flags): the tray app — settings window on first run (or

@@ -121,6 +121,57 @@ def test_ingest_file_uploaded(tmp_path):
     assert outcome == IngestOutcome("uploaded")
 
 
+def test_ingest_file_posts_pending_spatial_sample_and_strips_it_from_the_payload(tmp_path):
+    """When `parse_replay` returns a `_pendingSpatialSample` (map not yet
+    calibrated, see parser.py's `build_payload`), `ingest_file` must POST it
+    to `/spatial/samples` and strip it before `post_replay` -- the real
+    ingestion payload must never carry this internal key."""
+    client = api_client.ApiClient(_config(tmp_path))
+    replay = tmp_path / "game.StormReplay"
+    replay.write_bytes(b"")
+    payload = {
+        "replayHash": "abc",
+        "_pendingSpatialSample": {"mapId": "new-map", "points": [{"x": 1.0, "y": 2.0}]},
+    }
+
+    with patch("src.ingestion.replay_parser.parse_replay", return_value=payload):
+        with patch.object(client, "post_samples", return_value=True) as post_samples:
+            with patch.object(
+                client, "post_replay", return_value=api_client.IngestResult(upserted=True, match_id="m1")
+            ) as post_replay:
+                outcome = ingest_file(client, replay)
+
+    assert outcome == IngestOutcome("uploaded")
+    post_samples.assert_called_once_with("new-map", [{"x": 1.0, "y": 2.0}])
+    post_replay.assert_called_once_with({"replayHash": "abc"})
+
+
+def test_ingest_file_does_not_post_samples_without_a_pending_sample(tmp_path):
+    client = api_client.ApiClient(_config(tmp_path))
+    replay = tmp_path / "game.StormReplay"
+    replay.write_bytes(b"")
+
+    with patch("src.ingestion.replay_parser.parse_replay", return_value={"replayHash": "abc"}):
+        with patch.object(client, "post_samples") as post_samples:
+            with patch.object(client, "post_replay", return_value=api_client.IngestResult(upserted=True, match_id="m1")):
+                ingest_file(client, replay)
+
+    post_samples.assert_not_called()
+
+
+def test_ingest_file_passes_calibrations_through_to_parse_replay(tmp_path):
+    client = api_client.ApiClient(_config(tmp_path))
+    replay = tmp_path / "game.StormReplay"
+    replay.write_bytes(b"")
+    calibrations = {"dragon-shire": {"minX": 0.0, "maxX": 1.0, "minY": 0.0, "maxY": 1.0}}
+
+    with patch("src.ingestion.replay_parser.parse_replay", return_value={"replayHash": "abc"}) as parse:
+        with patch.object(client, "post_replay", return_value=api_client.IngestResult(upserted=True, match_id="m1")):
+            ingest_file(client, replay, calibrations=calibrations)
+
+    assert parse.call_args.kwargs["calibrations"] == calibrations
+
+
 def test_ingest_file_skipped_stale_version(tmp_path):
     client = api_client.ApiClient(_config(tmp_path))
     replay = tmp_path / "game.StormReplay"
@@ -451,8 +502,19 @@ def test_resync_logs_summary(tmp_path, caplog):
     (tmp_path / "b.StormReplay").write_bytes(b"")
 
     outcomes = iter([IngestOutcome("uploaded"), IngestOutcome("error", "boom")])
-    with patch("src.ingestion.ingest_file", side_effect=lambda _c, _p, _s=None: next(outcomes)):
+    with patch("src.ingestion.ingest_file", side_effect=lambda _c, _p, _s=None, **_kwargs: next(outcomes)):
         with caplog.at_level("INFO"):
             resync(client, tmp_path)
 
     assert "1 uploaded, 0 already up to date, 1 failed" in caplog.text
+
+
+def test_resync_passes_calibrations_through_to_ingest_file(tmp_path):
+    client = MagicMock()
+    (tmp_path / "a.StormReplay").write_bytes(b"")
+    calibrations = {"dragon-shire": {"minX": 0.0, "maxX": 1.0, "minY": 0.0, "maxY": 1.0}}
+
+    with patch("src.ingestion.ingest_file", return_value=IngestOutcome("uploaded")) as ingest:
+        resync(client, tmp_path, calibrations=calibrations)
+
+    assert ingest.call_args.kwargs["calibrations"] == calibrations

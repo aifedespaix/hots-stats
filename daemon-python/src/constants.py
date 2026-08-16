@@ -79,12 +79,62 @@ from __future__ import annotations
 # an identical experience-contribution value duplicated across a whole
 # team. Now derives the index from the slot's own position (`enumerate`)
 # instead of a count that silently drops out of sync.
+# 1.8: adds an optional per-match `spatial` block (hero presence grid, plus
+# `x`/`y`/`killers`/`killType` enriched onto each `timeline.deaths` entry)
+# built from `SUnitPositionsEvent`, normalized against a per-map world-bounds
+# calibration fetched from `GET /spatial/calibrations` (see `app.py`'s
+# `_sync_spatial_calibrations` and tasks/epic-10-analyse-spatiale.md). Only
+# present when the replay's map has a calibration cached locally; a map with
+# none yet has its raw positions instead POSTed to `/spatial/samples` for an
+# admin to calibrate, and gets no `spatial` block until it is.
+# Deliberately NOT paired with a bump to apps/api/src/constants.ts's
+# MIN_PARSER_VERSION this time, breaking the "move together" convention
+# below: that constant forces a *mass resync* of every already-synced replay
+# on every daemon that checks in, including ones still running an older
+# build that can't produce `spatial` data at all -- bumping it here would
+# burn their bandwidth/CPU re-uploading replays that would come back
+# byte-identical to what's already stored, for zero gain. A daemon that
+# *does* update to this build already resyncs its own previously-synced
+# replays automatically the moment it starts (see `is_up_to_date` below,
+# compared against *this* constant directly) -- no API-side signal needed
+# for that case.
+#
 # Bumping this flags every previously-ingested match as stale so the
 # daemon's API-driven resync (see sync_state.py's `invalidate_stale`)
 # reparses and re-uploads it. Whenever this changes, also bump
 # apps/api/src/constants.ts's MIN_PARSER_VERSION to the same value --
-# they're meant to move together (see that constant's docstring).
-PARSER_VERSION = "1.7"
+# they're meant to move together (see that constant's docstring) -- except
+# for an additive-only change like 1.8 above, where doing so would only
+# force wasted resyncs on daemons that can't yet benefit from it.
+PARSER_VERSION = "1.8"
+
+# Resolution of the sparse presence grid in `spatial.presence[]` (see
+# tasks/epic-10-analyse-spatiale.md Livrable 1 for the sizing rationale --
+# payload cost grows linearly with resolution, not quadratically, so the
+# real ceiling is SUnitPositionsEvent's sampling rate, not payload size).
+# Provisional: confirm against a real replay's actual sampling interval
+# before treating this as final.
+SPATIAL_SCHEMA_VERSION = 1
+SPATIAL_GRID_COLS = 128
+SPATIAL_GRID_ROWS = 128
+
+# Interpolation discontinuity ("teleport") threshold, expressed as a
+# fraction of the map's width/height crossed per second, rather than an
+# absolute world-units/sec speed -- sidesteps needing to know the real
+# world-unit-to-distance conversion (unconfirmed), since it's relative to
+# the calibrated bounds themselves. 0.10 means "crossing the whole map in
+# under ~10s is treated as a discontinuity (Blink/Dash/Warp), not legitimate
+# movement" -- a starting guess, not a measured value; tune once a real
+# replay confirms both SUnitPositionsEvent's sampling rate and typical
+# mounted/boosted traversal times (see
+# tasks/epic-10-analyse-spatiale.md section 1).
+SPATIAL_MAX_INTERPOLATION_SPEED_NORMALIZED = 0.10
+
+# Target number of raw (x, y) points collected and POSTed to
+# /spatial/samples for a map with no calibration yet -- evenly strided
+# across the whole match rather than front-loaded (see
+# `_collect_calibration_samples` in parser.py).
+CALIBRATION_SAMPLE_TARGET = 1000
 
 # Shown in the settings window. Bump alongside `[project].version` in pyproject.toml.
 APP_VERSION = "1.0.34"

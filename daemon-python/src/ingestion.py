@@ -77,6 +77,7 @@ def ingest_file(
     path: Path,
     sync_state: SyncState | None = None,
     api_version: str | None = None,
+    calibrations: dict[str, dict] | None = None,
 ) -> IngestOutcome:
     """Parses and uploads one replay.
 
@@ -102,6 +103,14 @@ def ingest_file(
     separately via `sync_state.mark_skipped`, gated by `parser_version` the
     same way a synced replay is (so it's not re-parsed every startup either)
     but kept out of the Debug report's error count.
+
+    `calibrations` (the Daemon's cached `GET /spatial/calibrations`
+    dictionary, see app.py's `_sync_spatial_calibrations`) is passed through
+    to `replay_parser.parse_replay`. When the parsed replay's map has no
+    calibration, its raw positions come back under the payload's internal
+    `_pendingSpatialSample` key instead of a `spatial` block -- popped here
+    and best-effort POSTed to `/spatial/samples` (never raises, never
+    affects this call's outcome either way) before the real replay upload.
 
     Never raises: every failure this function knows how to name (a bad
     replay file, a rejected/unreachable API call) gets a specific handler
@@ -147,7 +156,15 @@ def ingest_file(
 
     payload: dict | None = None
     try:
-        payload = replay_parser.parse_replay(path)
+        payload = replay_parser.parse_replay(path, calibrations=calibrations)
+        pending_sample = payload.pop("_pendingSpatialSample", None)
+        if pending_sample is not None:
+            client.post_samples(pending_sample["mapId"], pending_sample["points"])
+            logger.info(
+                "Map %r sent for calibration (%d sample point(s)).",
+                pending_sample["mapId"],
+                len(pending_sample["points"]),
+            )
         result = client.post_replay(payload)
     except replay_parser.ReplaySkipped as err:
         # Not a failure -- the replay was read fine, it's just intentionally
@@ -275,19 +292,25 @@ def ingest_file(
     return IngestOutcome("skipped", result.reason)
 
 
-def resync(client: api_client.ApiClient, replays_dir: Path, sync_state: SyncState | None = None) -> None:
+def resync(
+    client: api_client.ApiClient,
+    replays_dir: Path,
+    sync_state: SyncState | None = None,
+    calibrations: dict[str, dict] | None = None,
+) -> None:
     """Parses and (re-)uploads every replay in `replays_dir`.
 
     Safe to run repeatedly: the API upserts by `replayHash`, so re-posting
     an already-ingested replay is a no-op rather than a duplicate. Passing
     `sync_state` also skips replays already known to be up to date, instead
-    of reparsing and reposting all of them every time.
+    of reparsing and reposting all of them every time. `calibrations` is
+    passed through to `ingest_file` -- see its docstring.
     """
     replay_files = sorted(replays_dir.glob("*.StormReplay"))
     logger.info("Resyncing %d replay(s) from %s", len(replay_files), replays_dir)
     uploaded = skipped = failed = 0
     for path in replay_files:
-        outcome = ingest_file(client, path, sync_state)
+        outcome = ingest_file(client, path, sync_state, calibrations=calibrations)
         if outcome.status == "uploaded":
             uploaded += 1
         elif outcome.status == "skipped":

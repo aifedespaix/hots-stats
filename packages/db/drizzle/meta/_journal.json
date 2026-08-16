@@ -113,6 +113,20 @@
       "when": 1786830000000,
       "tag": "0015_fix_game_fingerprint_drop_duration",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1786869719872,
+      "tag": "0016_demonic_gorilla_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1786871229183,
+      "tag": "0017_right_blue_marvel",
+      "breakpoints": true
     }
   ]
 }
