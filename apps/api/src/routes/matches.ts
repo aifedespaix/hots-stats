@@ -4,9 +4,11 @@ import {
   heroes,
   mapCalibrations,
   matchDeaths,
+  matchHeroTrajectories,
   matchLevelSnapshots,
   matchPlayers,
   matchSpatialGrids,
+  matchStructureEvents,
   matches,
   maps,
   talentPicks,
@@ -580,7 +582,8 @@ export const matchesRoute = new Hono<Env>()
     // `spatial` (match_spatial_grids) is separately gated on PARSER_VERSION
     // >= 1.7 *and* the map having had a calibration at ingestion time --
     // see spatial-rollup.service.ts / replay-upsert.service.ts.
-    const [deathRows, levelSnapshotRows, spatialGridRows, calibrationRows] = await Promise.all([
+    const [deathRows, levelSnapshotRows, spatialGridRows, trajectoryRows, structureEventRows, calibrationRows] =
+      await Promise.all([
       playerIds.length > 0
         ? db
             .select({
@@ -617,6 +620,27 @@ export const matchesRoute = new Hono<Env>()
             .from(matchSpatialGrids)
             .where(inArray(matchSpatialGrids.matchPlayerId, playerIds))
         : Promise.resolve([]),
+      playerIds.length > 0
+        ? db
+            .select({
+              matchPlayerId: matchHeroTrajectories.matchPlayerId,
+              atSeconds: matchHeroTrajectories.atSeconds,
+              x: matchHeroTrajectories.x,
+              y: matchHeroTrajectories.y,
+            })
+            .from(matchHeroTrajectories)
+            .where(inArray(matchHeroTrajectories.matchPlayerId, playerIds))
+        : Promise.resolve([]),
+      // Match-wide, not gated on playerIds -- a structure belongs to a team,
+      // not to any one player row (see match-structure-events.ts).
+      db
+        .select({
+          team: matchStructureEvents.team,
+          atSeconds: matchStructureEvents.atSeconds,
+          structureType: matchStructureEvents.structureType,
+        })
+        .from(matchStructureEvents)
+        .where(eq(matchStructureEvents.matchId, match.id)),
       // Independent of playerIds -- whether *the map* has ever been
       // calibrated (see /admin/calibrate), regardless of whether this
       // specific match has any spatial rows. Lets the frontend tell "this
@@ -627,7 +651,7 @@ export const matchesRoute = new Hono<Env>()
 
     const playerById = new Map(players.map((p) => [p.id, p]));
     const timeline =
-      deathRows.length > 0 || levelSnapshotRows.length > 0
+      deathRows.length > 0 || levelSnapshotRows.length > 0 || structureEventRows.length > 0
         ? {
             deaths: deathRows.flatMap((d) => {
               const player = playerById.get(d.matchPlayerId);
@@ -646,6 +670,11 @@ export const matchesRoute = new Hono<Env>()
               const player = playerById.get(s.matchPlayerId);
               return player ? [{ battletag: player.battletag, atSeconds: s.atSeconds, level: s.level }] : [];
             }),
+            structureEvents: structureEventRows.map((e) => ({
+              team: e.team,
+              atSeconds: e.atSeconds,
+              structureType: e.structureType,
+            })),
           }
         : undefined;
 
@@ -670,6 +699,28 @@ export const matchesRoute = new Hono<Env>()
                 deaths: gridToWireArrays(row.deathsGrid as Grid),
               };
             }),
+            // Absent (not an empty array) when no hero in this match has a
+            // trajectory row -- a daemon build older than PARSER_VERSION
+            // 1.11 only ever wrote presence grids, never trajectories, even
+            // for a fully-calibrated match. See useHeatmapSync.ts (Pro
+            // Comparison View), the only consumer needing per-sample
+            // timestamps rather than the match-long presence aggregate above.
+            ...(trajectoryRows.length > 0
+              ? {
+                  trajectories: trajectoryRows.map((row) => {
+                    const player = playerById.get(row.matchPlayerId);
+                    return {
+                      matchPlayerId: row.matchPlayerId,
+                      battletag: player?.battletag ?? null,
+                      heroId: player?.heroId ?? null,
+                      team: player?.team ?? null,
+                      atSeconds: row.atSeconds,
+                      x: row.x,
+                      y: row.y,
+                    };
+                  }),
+                }
+              : {}),
           }
         : undefined;
 

@@ -15,3 +15,5 @@ export * from "./player-annotations";
 export * from "./spatial-calibration";
 export * from "./match-spatial-grids";
 export * from "./hero-map-spatial-rollup";
+export * from "./match-hero-trajectories";
+export * from "./match-structure-events";

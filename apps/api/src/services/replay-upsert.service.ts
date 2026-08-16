@@ -2,15 +2,19 @@ import {
   db,
   heroes,
   matchDeaths,
+  matchHeroTrajectories,
   matchLevelSnapshots,
   matchPlayers,
   matchSpatialGrids,
+  matchStructureEvents,
   matches,
   talentPicks,
   users,
 } from "@hots-stats/db";
 import {
   type Grid,
+  type MatchHeroTrajectory,
+  type MatchStructureEvent,
   type MatchTimelineDeath,
   type ReplayPayload,
   cellIndexForPosition,
@@ -172,6 +176,10 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
   const spatialContributionsByBattletag = new Map(
     (buildSpatialContributions(payload) ?? []).map((c) => [c.battletag, c]),
   );
+  const trajectoriesByBattletag = new Map<string, MatchHeroTrajectory>(
+    (payload.spatial?.trajectories ?? []).map((t) => [t.battletag, t]),
+  );
+  const structureEvents: MatchStructureEvent[] = payload.timeline?.structureEvents ?? [];
 
   return db.transaction(async (tx) => {
     let matchId: string;
@@ -232,8 +240,13 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
         })
         .where(eq(matches.id, matchId));
       // Replacing match_players cascades the delete to talent_picks,
-      // match_deaths, match_level_snapshots and match_spatial_grids.
+      // match_deaths, match_level_snapshots, match_spatial_grids and
+      // match_hero_trajectories (all FK'd on matchPlayerId). match_structure_events
+      // is FK'd on matchId directly instead (a structure belongs to the match,
+      // not to any one player row -- see match-structure-events.ts), so it
+      // isn't caught by that cascade and needs its own explicit re-ingest cleanup.
       await tx.delete(matchPlayers).where(eq(matchPlayers.matchId, matchId));
+      await tx.delete(matchStructureEvents).where(eq(matchStructureEvents.matchId, matchId));
     } else {
       const [created] = await tx
         .insert(matches)
@@ -341,6 +354,27 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
         };
         await applySpatialRollupDelta(tx, contribution, 1);
       }
+
+      const trajectory = trajectoriesByBattletag.get(player.battletag);
+      if (trajectory) {
+        await tx.insert(matchHeroTrajectories).values({
+          matchPlayerId: createdPlayer.id,
+          atSeconds: trajectory.atSeconds,
+          x: trajectory.x,
+          y: trajectory.y,
+        });
+      }
+    }
+
+    if (structureEvents.length > 0) {
+      await tx.insert(matchStructureEvents).values(
+        structureEvents.map((event) => ({
+          matchId,
+          team: event.team,
+          atSeconds: event.atSeconds,
+          structureType: event.structureType,
+        })),
+      );
     }
 
     return { upserted: true, matchId } as const;
