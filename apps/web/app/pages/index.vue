@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { MatchListResponse, StatsSummary } from "~/types/matches";
 import type { WeaknessesResponse } from "~/types/weaknesses";
+import type { NavCardColor } from "~/components/ui/NavCard.vue";
 
 definePageMeta({ middleware: "auth" });
 
@@ -18,6 +19,109 @@ useSeoMeta({
 });
 
 const { data: authData } = await useAuthUser();
+
+const engagement = useEngagementStore();
+const { snapshot: draftSnapshot } = useDraftStream();
+const isLiveDraftActive = computed(() => !isDraftSnapshotEmpty(draftSnapshot.value));
+
+interface NavCardConfig {
+  to: string;
+  icon: string;
+  title: string;
+  description: string;
+  color: NavCardColor;
+  chip?: { show: boolean; text?: string };
+}
+
+const quickActionCards: NavCardConfig[] = [
+  {
+    to: "/upload",
+    icon: "i-heroicons-cloud-arrow-up",
+    title: "Envoyer une partie",
+    description: "Ajoute tes derniers replays pour mettre à jour tes statistiques.",
+    color: "brand",
+  },
+  {
+    to: "/draft",
+    icon: "i-heroicons-bolt",
+    title: "Live Draft",
+    description: "Suis un draft en direct et reçois des conseils de pick en temps réel.",
+    color: "danger",
+  },
+];
+
+const statsCards = computed<NavCardConfig[]>(() => [
+  {
+    to: "/matches",
+    icon: "i-heroicons-clock",
+    title: "Historique",
+    description: "Retrouve et filtre toutes tes parties enregistrées.",
+    color: "info",
+    chip: {
+      show: engagement.newMatchesSinceVisit > 0,
+      text: engagement.newMatchesSinceVisit > 99 ? "99+" : String(engagement.newMatchesSinceVisit),
+    },
+  },
+  {
+    to: "/heroes",
+    icon: "i-heroicons-fire",
+    title: "Héros",
+    description: "Consulte les statistiques et builds de chaque héros.",
+    color: "role-melee",
+  },
+  {
+    to: "/maps",
+    icon: "i-heroicons-map",
+    title: "Cartes",
+    description: "Compare les win rates et stratégies par carte.",
+    color: "role-tank",
+  },
+  {
+    to: "/talents",
+    icon: "i-heroicons-sparkles",
+    title: "Talents",
+    description: "Explore les taux de sélection et de victoire des talents.",
+    color: "accent",
+  },
+  {
+    to: "/players",
+    icon: "i-heroicons-user-group",
+    title: "Joueurs",
+    description: "Recherche un joueur et analyse son profil.",
+    color: "role-support",
+  },
+]);
+
+const progressCards = computed<NavCardConfig[]>(() => [
+  {
+    to: "/analysis",
+    icon: "i-heroicons-chart-bar",
+    title: "Diagnostic",
+    description: "Identifie tes points forts et tes axes de progression.",
+    color: "role-healer",
+  },
+  {
+    to: "/friends",
+    icon: "i-heroicons-users",
+    title: "Amis",
+    description: "Gère ta liste d'amis et les demandes en attente.",
+    color: "role-bruiser",
+    chip: {
+      show: engagement.pendingFriendRequestCount > 0,
+      text: engagement.pendingFriendRequestCount > 99 ? "99+" : String(engagement.pendingFriendRequestCount),
+    },
+  },
+]);
+
+const accountCards: NavCardConfig[] = [
+  {
+    to: "/settings",
+    icon: "i-heroicons-cog-6-tooth",
+    title: "Paramètres",
+    description: "Personnalise ton compte et tes préférences.",
+    color: "role-ranged",
+  },
+];
 
 // Always personal: this page has no scope toggle, so it must never inherit
 // `heroStatsScope` (the account-wide personal/global preference set on the
@@ -84,6 +188,76 @@ function goToMatch(row: Record<string, unknown>) {
       >
         {{ topLeak.label }}
       </UiTeaserLink>
+    </div>
+
+    <div class="space-y-6">
+      <div>
+        <h2 class="font-heading text-lg font-medium">Navigation</h2>
+        <p class="mt-1 text-sm text-muted">Accède rapidement à toutes les pages de l'application.</p>
+      </div>
+
+      <div>
+        <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Actions rapides</h3>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <UiNavCard
+            v-for="card in quickActionCards"
+            :key="card.to"
+            :to="card.to"
+            :icon="card.icon"
+            :title="card.title"
+            :description="card.description"
+            :color="card.color"
+            :chip="card.to === '/draft' ? { show: isLiveDraftActive } : null"
+          />
+        </div>
+      </div>
+
+      <div>
+        <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Statistiques</h3>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <UiNavCard
+            v-for="card in statsCards"
+            :key="card.to"
+            :to="card.to"
+            :icon="card.icon"
+            :title="card.title"
+            :description="card.description"
+            :color="card.color"
+            :chip="card.chip"
+          />
+        </div>
+      </div>
+
+      <div>
+        <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Progression &amp; social</h3>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <UiNavCard
+            v-for="card in progressCards"
+            :key="card.to"
+            :to="card.to"
+            :icon="card.icon"
+            :title="card.title"
+            :description="card.description"
+            :color="card.color"
+            :chip="card.chip"
+          />
+        </div>
+      </div>
+
+      <div>
+        <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Compte</h3>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <UiNavCard
+            v-for="card in accountCards"
+            :key="card.to"
+            :to="card.to"
+            :icon="card.icon"
+            :title="card.title"
+            :description="card.description"
+            :color="card.color"
+          />
+        </div>
+      </div>
     </div>
 
     <div>
