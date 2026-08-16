@@ -694,6 +694,35 @@ def test_build_payload_resolves_aram_game_mode():
     assert players_by_tag["Bar#2222"]["heroId"] == "malfurion"
 
 
+def test_build_payload_resolves_aram_hero_with_no_name_relation_to_unit_type():
+    """Regression test (PARSER_VERSION 1.10): before `UNIT_TYPE_HERO_OVERRIDES`
+    gained Qhira ("HeroNexusHunter") and Lt. Morales ("HeroMedic"), an ARAM
+    replay with either of them failed outright with "Could not determine
+    hero" -- confirmed against real replays (see that override's changelog
+    entry) -- since talent ids don't match their display name either
+    ("NexusHunter.../Medic..."), and ARAM never falls back to the unreliable
+    `HeroAttributeId` (see `test_build_payload_aram_never_falls_back_to_hero_attribute`)."""
+    events = [
+        *_base_tracker_events(),
+        _unit_born_event(1, "HeroNexusHunter"),
+        _unit_born_event(2, "HeroMedic"),
+    ]
+
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(amm_id=50101),
+        tracker_events=events,
+        attributes_events=_base_attributes_events(),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+    )
+
+    players_by_tag = {p["battletag"]: p for p in payload["players"]}
+    assert players_by_tag["Foo#1111"]["heroId"] == "qhira"
+    assert players_by_tag["Bar#2222"]["heroId"] == "lt-morales"
+
+
 def test_build_payload_aram_never_falls_back_to_hero_attribute():
     """Regression test for the "Arthas" bug: ARAM's shuffle/reroll pick can
     leave `HeroAttributeId` pointing at a player's discarded first
@@ -921,6 +950,26 @@ def test_hero_from_unit_type_name_uses_overrides_for_pre_rename_internal_names()
     assert _hero_from_unit_type_name("HeroBaleog") == "The Lost Vikings"
     assert _hero_from_unit_type_name("HeroErik") == "The Lost Vikings"
     assert _hero_from_unit_type_name("HeroOlaf") == "The Lost Vikings"
+    assert _hero_from_unit_type_name("HeroLostVikingsController") == "The Lost Vikings"
+
+
+def test_hero_from_unit_type_name_uses_overrides_found_against_real_replays():
+    # Regression test (PARSER_VERSION 1.10): found by running the parser
+    # against ~70 real replays -- these six heroes' unit type name shares no
+    # prefix with their display name either, same shape as the pre-rename
+    # cases above but discovered later. Qhira/Cassia/Lunara/Lt. Morales's
+    # talent ids have the same mismatch (see `_hero_from_talent_prefix`),
+    # which made every ARAM replay containing one of them fail outright.
+    assert _hero_from_unit_type_name("HeroNexusHunter") == "Qhira"
+    assert _hero_from_unit_type_name("HeroAmazon") == "Cassia"
+    assert _hero_from_unit_type_name("HeroDryad") == "Lunara"
+    assert _hero_from_unit_type_name("HeroMedic") == "Lt. Morales"
+    assert _hero_from_unit_type_name("HeroFaerieDragon") == "Brightwing"
+    assert _hero_from_unit_type_name("HeroFirebat") == "Blaze"
+    # Gazlowe's talent ids already resolve him via the normal prefix match
+    # ("Gazlowe...") -- this only fixes his *unit-spawn* resolution
+    # specifically, which death-timeline attribution also depends on.
+    assert _hero_from_unit_type_name("HeroTinker") == "Gazlowe"
 
 
 def test_hero_from_unit_type_name_requires_the_hero_prefix():

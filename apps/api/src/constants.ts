@@ -15,7 +15,14 @@ export const API_VERSION = "1.1.0";
  * the next run instead of being skipped as already up to date. Leave
  * unchanged for a daemon release that doesn't touch the payload shape.
  */
-export const MIN_PARSER_VERSION = "1.7";
+// Bumped to 1.10 (2026-08): `UNIT_TYPE_HERO_OVERRIDES` was missing six
+// heroes whose internal codename shares no prefix with their display name
+// (see that constant's changelog entry) -- a non-ARAM match with one of
+// them could have silently stored the wrong hero via the less-reliable
+// `HeroAttributeId` fallback. Forces a resync of any already-stored match
+// that hit that path, for players whose daemon updates and still has the
+// replay file locally.
+export const MIN_PARSER_VERSION = "1.10";
 
 /**
  * Below this `parserVersion`, a stored match's combat stats
