@@ -1,6 +1,6 @@
-import { type MapCalibration, type RawMapSample, db, mapCalibrations, rawMapSamples } from "@hots-stats/db";
+import { type MapCalibration, type RawMapSample, db, mapCalibrations, maps, rawMapSamples } from "@hots-stats/db";
 import type { MapBounds } from "@hots-stats/shared-types";
-import { eq } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 import { ensureMapExists } from "../lib/ensure-map";
 
 function toBounds(row: MapCalibration): MapBounds {
@@ -19,7 +19,7 @@ export async function getAllCalibrations(): Promise<Record<string, MapBounds>> {
  * guards against the Daemon reporting a brand new map slug before it's ever
  * been through POST /ingest (see lib/ensure-map.ts).
  */
-export async function upsertRawSamples(mapId: string, points: { x: number; y: number }[]): Promise<void> {
+export async function upsertRawSamples(mapId: string, points: { x: number; y: number; kind?: "spawn" }[]): Promise<void> {
   await ensureMapExists(mapId);
   await db
     .insert(rawMapSamples)
@@ -57,13 +57,18 @@ function randomInRange(min: number, max: number): number {
  * itself works.
  *
  * The point cloud is deliberately asymmetric: most points scattered evenly
- * across an inset rectangle, plus a denser cluster near the `(minX, minY)`
- * corner -- once calibrated, that cluster should visibly land at the
- * *bottom-left* of the canvas, which is a concrete, checkable confirmation
- * that the Y-axis inversion (`utils/mapProjection.ts`) is behaving as
- * intended, not just "some points appeared somewhere."
+ * across an inset rectangle, plus a denser "spawn" cluster near the
+ * `(minX, minY)` corner, tagged `kind: "spawn"` so the calibration canvas
+ * renders it in a distinct color -- once calibrated, that cluster should
+ * visibly land at the *bottom-left* of the canvas (a concrete, checkable
+ * confirmation that the Y-axis inversion in `utils/mapProjection.ts` is
+ * behaving as intended), and doubles as a worked example of what a real
+ * hero spawn (several players landing in a tight group) looks like in a
+ * genuine sample, which is a useful calibration landmark there too.
  */
-export async function generateExampleSample(mapId: string): Promise<{ mapId: string; points: { x: number; y: number }[] }> {
+export async function generateExampleSample(
+  mapId: string,
+): Promise<{ mapId: string; points: { x: number; y: number; kind?: "spawn" }[] }> {
   const { minX, maxX, minY, maxY } = EXAMPLE_WORLD_BOUNDS;
   const insetX = (maxX - minX) * EXAMPLE_INSET_RATIO;
   const insetY = (maxY - minY) * EXAMPLE_INSET_RATIO;
@@ -79,6 +84,7 @@ export async function generateExampleSample(mapId: string): Promise<{ mapId: str
   const clustered = Array.from({ length: EXAMPLE_CLUSTER_COUNT }, () => ({
     x: randomInRange(minX + insetX, minX + insetX + (maxX - minX) / 4),
     y: randomInRange(minY + insetY, minY + insetY + (maxY - minY) / 4),
+    kind: "spawn" as const,
   }));
 
   const points = [...scattered, ...clustered];
@@ -86,10 +92,42 @@ export async function generateExampleSample(mapId: string): Promise<{ mapId: str
   return { mapId, points };
 }
 
-/** GET /admin/spatial/pending-maps -- populates the calibration tool's map picker. */
-export async function listPendingMapIds(): Promise<string[]> {
-  const rows = await db.select({ mapId: rawMapSamples.mapId }).from(rawMapSamples);
-  return rows.map((row) => row.mapId);
+/**
+ * GET /admin/spatial/pending-maps -- populates the calibration tool's "à
+ * calibrer" list: maps with a raw sample but *no* `map_calibrations` row
+ * yet. A map keeps its raw sample row after being calibrated (see
+ * `saveCalibration`), so "pending" is decided by the calibration join, not
+ * by row presence -- otherwise every already-calibrated map would still
+ * show up here forever.
+ */
+export async function listPendingMapIds(): Promise<{ mapId: string; mapName: string; pointCount: number }[]> {
+  const rows = await db
+    .select({ mapId: rawMapSamples.mapId, mapName: maps.name, rawPoints: rawMapSamples.rawPoints })
+    .from(rawMapSamples)
+    .innerJoin(maps, eq(maps.id, rawMapSamples.mapId))
+    .leftJoin(mapCalibrations, eq(mapCalibrations.mapId, rawMapSamples.mapId))
+    .where(isNull(mapCalibrations.mapId));
+  return rows.map((row) => ({ mapId: row.mapId, mapName: row.mapName, pointCount: row.rawPoints.length }));
+}
+
+/**
+ * GET /admin/spatial/calibrated-maps -- lets the tool offer already-
+ * calibrated maps for editing (see `saveCalibration`'s upsert), not just
+ * brand new ones.
+ */
+export async function listCalibratedMaps(): Promise<
+  { mapId: string; mapName: string; bounds: MapBounds; updatedAt: string }[]
+> {
+  const rows = await db
+    .select({ mapId: mapCalibrations.mapId, mapName: maps.name, calibration: mapCalibrations })
+    .from(mapCalibrations)
+    .innerJoin(maps, eq(maps.id, mapCalibrations.mapId));
+  return rows.map((row) => ({
+    mapId: row.mapId,
+    mapName: row.mapName,
+    bounds: toBounds(row.calibration),
+    updatedAt: row.calibration.updatedAt.toISOString(),
+  }));
 }
 
 /** GET /admin/spatial/samples/:mapId */
@@ -99,21 +137,20 @@ export async function getPendingSample(mapId: string): Promise<RawMapSample | nu
 }
 
 /**
- * POST /admin/spatial/calibrate -- saves (or updates) a map's world bounds
- * and clears its pending raw sample, atomically. Re-calibrating an
- * already-calibrated map (no pending sample left) is allowed: the delete is
- * a silent no-op in that case.
+ * POST /admin/spatial/calibrate -- saves (or updates) a map's world bounds.
+ * Its raw sample row (if any) is deliberately left in place -- unlike the
+ * tool's original design, which deleted it here -- so re-opening an
+ * already-calibrated map to fix a mistake still has points to render
+ * against instead of a blank canvas (see `listPendingMapIds`'s docstring
+ * for how "pending" is now decided instead).
  */
 export async function saveCalibration(mapId: string, bounds: MapBounds): Promise<void> {
   await ensureMapExists(mapId);
-  await db.transaction(async (tx) => {
-    await tx
-      .insert(mapCalibrations)
-      .values({ mapId, ...bounds })
-      .onConflictDoUpdate({
-        target: mapCalibrations.mapId,
-        set: { ...bounds, updatedAt: new Date() },
-      });
-    await tx.delete(rawMapSamples).where(eq(rawMapSamples.mapId, mapId));
-  });
+  await db
+    .insert(mapCalibrations)
+    .values({ mapId, ...bounds })
+    .onConflictDoUpdate({
+      target: mapCalibrations.mapId,
+      set: { ...bounds, updatedAt: new Date() },
+    });
 }
