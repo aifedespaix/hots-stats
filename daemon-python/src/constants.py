@@ -106,7 +106,39 @@ from __future__ import annotations
 # they're meant to move together (see that constant's docstring) -- except
 # for an additive-only change like 1.8 above, where doing so would only
 # force wasted resyncs on daemons that can't yet benefit from it.
-PARSER_VERSION = "1.8"
+# 1.9: `SScoreResultEvent` can decode *without raising* even when the
+# replay's `m_baseBuild` is newer than every entry in
+# `_protocol_versions.KNOWN_PROTOCOL_BUILDS` (`_build_protocol` falls back to
+# the newest known decoder for those, on the "wire format essentially never
+# changes between consecutive builds" assumption) -- but for some such
+# builds that assumption didn't hold for this specific event, and every
+# player's stats came back as nothing but each field's baseline `m_value: 0`
+# seed. Confirmed against real ingested matches (2026-08) that ended up with
+# every one of kills/deaths/assists/damage/healing/experienceContribution at
+# 0 for all 10 players despite being real, concluded, 5-27 minute games --
+# impossible for a genuine result. `build_payload` now raises
+# `ReplayParseError` in that shape (`_score_event_looks_corrupt`) instead of
+# silently producing a payload of zeros, so it shows up as a reported parse
+# failure instead of corrupted data quietly overwriting a match. Doesn't fix
+# the underlying decoder gap (needs an updated `heroprotocol` release with a
+# real decoder for the newer build), so a resync of an already-corrupted
+# match will fail loudly rather than recover real numbers -- there simply
+# isn't a way to get real numbers out of these specific replay files yet.
+# 1.10: `UNIT_TYPE_HERO_OVERRIDES` was missing six heroes (Qhira, Cassia,
+# Lunara, Lt. Morales, Brightwing, Blaze) whose `SUnitBornEvent`
+# `m_unitTypeName` -- and, for the first four, every one of their talent ids
+# too -- uses a design-era internal codename with no textual relationship to
+# the hero's current display name (e.g. Qhira's is "NexusHunter", Lt.
+# Morales's is "Medic"). Found (2026-08) by running this parser against ~70
+# real replays: an ARAM game with any of the first four failed outright
+# (`ReplayParseError`, since ARAM never falls back to `HeroAttributeId` --
+# see 1.3's changelog entry) instead of ingesting; a non-ARAM game with one
+# of the six didn't fail, but risked silently mislabeling that player's hero
+# via the less-reliable `HeroAttributeId` fallback. Bumping this resyncs
+# already-stored matches that hit the latter case (assuming the replay file
+# is still available locally), the same way 1.1-1.3 did for hero-resolution
+# fixes of their own.
+PARSER_VERSION = "1.10"
 
 # How many times a single replay is allowed to fail with a parse error (a
 # corrupt/incomplete archive -- see parser.ReplayParseError) at the *same*
@@ -201,6 +233,14 @@ MAP_DISPLAY_NAMES: dict[str, str] = {
     "BraxisHoldout": "Braxis Holdout",
     "Hanamura": "Hanamura Temple",
     "AlteracPass": "Alterac Pass",
+    # Found missing (2026-08) while triaging ~70 real replays with
+    # scripts/diagnose_replay_corpus.py -- harmless (the prettified-fallback
+    # path already produced the right name, e.g. "Braxis Outpost"), but
+    # curated here anyway to cut the log noise for future triage sessions.
+    "BraxisOutpost": "Braxis Outpost",
+    "SilverCity": "Silver City",
+    "LostCavern": "Lost Cavern",
+    "IndustrialDistrict": "Industrial District",
 }
 
 # `replay.attributes.events` attribute id 4002 ("Hero") value -> display hero
@@ -330,6 +370,38 @@ UNIT_TYPE_HERO_OVERRIDES: dict[str, str] = {
     "Baleog": "The Lost Vikings",
     "Erik": "The Lost Vikings",
     "Olaf": "The Lost Vikings",
+    "LostVikingsController": "The Lost Vikings",
+    # The six overrides below were found (2026-08) by running this parser
+    # against ~70 real replays: each of these heroes' `SUnitBornEvent`
+    # `m_unitTypeName` (after stripping the "Hero" prefix) -- and, other than
+    # Gazlowe/Tinker, every one of their talent ids too -- uses a design-era
+    # internal codename with zero textual relationship to the hero's current
+    # display name, so neither `_hero_from_name_prefix` path (talent-id
+    # prefix, tried first, or this override's own unit-type-name path)
+    # matches without an explicit entry -- unlike a name like "DemonHunter"
+    # above, which the normal prefix matching would still botch (too generic
+    # a word) even if you knew to look for it. Qhira/Cassia/Lunara/Lt.
+    # Morales's gap made every ARAM replay containing any of them fail
+    # outright (`ReplayParseError`, since ARAM never falls back to the
+    # unreliable `HeroAttributeId` -- see this constant's own 1.3 changelog
+    # entry): confirmed against real replays with e.g. "Could not determine
+    # hero for player ...\" errors that stopped reproducing once these were
+    # added. A non-ARAM replay with one of these heroes didn't fail outright
+    # (fell back to `HeroAttributeId`) but risked silently mislabeling that
+    # player's hero, since that attribute is the least reliable of the three
+    # resolution sources. Confirmed against real replay fixtures under
+    # `daemon-python/tests/fixtures/` -- see PARSER_VERSION's changelog.
+    "NexusHunter": "Qhira",
+    "Amazon": "Cassia",
+    "Dryad": "Lunara",
+    "Medic": "Lt. Morales",
+    "FaerieDragon": "Brightwing",
+    "Firebat": "Blaze",
+    # Talent-id prefix already resolves Gazlowe fine (his talent ids mostly
+    # use "Gazlowe", not his unit type name) -- this only fixes the
+    # *unit-spawn* path specifically, which `_hero_unit_tags_by_toon` (death
+    # timeline attribution) also depends on independently of talent ids.
+    "Tinker": "Gazlowe",
 }
 
 # NNet.Replay.Tracker.SScoreResultEvent m_instanceList[i].m_name values whose

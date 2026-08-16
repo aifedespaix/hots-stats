@@ -16,7 +16,10 @@ import { and, asc, desc, eq, exists, gte, ilike, inArray, isNull, lte, ne, or, s
 import { alias } from "drizzle-orm/pg-core";
 import { Hono } from "hono";
 import { z } from "zod";
+import { MIN_RELIABLE_STATS_PARSER_VERSION } from "../constants";
 import { gameModeListSchema, gameVersionListSchema } from "../lib/query";
+import { isVersionAtLeast } from "../lib/parser-version";
+import { isAllZeroCombat } from "../lib/replay-plausibility";
 import { authSession, requireUser } from "../middleware/auth-session";
 import { getFriendshipStatuses } from "../services/friendships.service";
 
@@ -476,6 +479,7 @@ export const matchesRoute = new Hono<Env>()
         mapId: matches.mapId,
         mapName: maps.name,
         region: matches.region,
+        parserVersion: matches.parserVersion,
       })
       .from(matches)
       .innerJoin(maps, eq(maps.id, matches.mapId))
@@ -524,6 +528,19 @@ export const matchesRoute = new Hono<Env>()
         return c.json({ error: "Match not found" }, 404);
       }
     }
+
+    // See MIN_RELIABLE_STATS_PARSER_VERSION's docstring for the first check
+    // (a match parsed before it can have corrupted combat stats, and only
+    // self-heals once its owning player's daemon resyncs it). The second
+    // check catches the same corruption shape on matches already stored
+    // under the *current* parserVersion -- a stale-protocol-decoder
+    // fallback (see daemon-python/src/parser.py's `_build_protocol`) can
+    // produce it regardless of daemon build, so it won't self-heal via
+    // resync at all until `heroprotocol` ships a real decoder for that
+    // replay's build.
+    const statsReliable =
+      isVersionAtLeast(match.parserVersion, MIN_RELIABLE_STATS_PARSER_VERSION) &&
+      !isAllZeroCombat(players, match.durationSeconds);
 
     const playerIds = players.map((p) => p.id);
     const talents =
@@ -658,6 +675,7 @@ export const matchesRoute = new Hono<Env>()
 
     return c.json({
       match,
+      statsReliable,
       teams: [0, 1].map((team) => ({
         team,
         players: playersWithTalents.filter((p) => p.team === team),

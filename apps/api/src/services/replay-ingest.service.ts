@@ -1,5 +1,6 @@
 import { DefaultAdapter, ReplayValidationError, resolveAdapter } from "../adapters";
 import type { ReplayAdapter } from "../adapters";
+import { checkReplayPlausibility } from "../lib/replay-plausibility";
 import { quarantineRawReplay } from "./quarantine.service";
 import type { UpsertResult } from "./replay-upsert.service";
 import { upsertReplay } from "./replay-upsert.service";
@@ -58,6 +59,15 @@ export async function ingestReplayPayload(
       return { status: "invalid", detail: err.zodError.flatten() };
     }
     throw err;
+  }
+
+  // Schema-valid but structurally impossible for a real match (see
+  // replay-plausibility.ts) -- caught here, before it ever reaches the DB,
+  // rather than relying solely on a `parserVersion` bump to notice after
+  // the fact.
+  const implausibilityReason = checkReplayPlausibility(parsed);
+  if (implausibilityReason !== null) {
+    return { status: "invalid", detail: implausibilityReason };
   }
 
   const result = await upsertReplay(parsed, userId);

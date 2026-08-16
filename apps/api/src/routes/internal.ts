@@ -5,6 +5,7 @@ import { verifyQuarantinedBuild } from "../services/build-verification.service";
 import { getDaemonErrorGroups, markDaemonErrorsResolved } from "../services/daemon-errors.service";
 import { getQuarantineOverview, getQuarantineSamples } from "../services/quarantine.service";
 import {
+  getAllZeroMatchesDiagnostics,
   getMatchDiagnostics,
   getParserVersionOverview,
   getUploadsDiagnostics,
@@ -102,6 +103,13 @@ export const internalRoute = new Hono()
       return c.json({ error: query.error.flatten() }, 400);
     }
     return c.json(await getZeroKdaDiagnostics(query.data.limit));
+  })
+  .get("/diagnostics/all-zero-matches", async (c) => {
+    const query = zeroKdaQuerySchema.safeParse(c.req.query());
+    if (!query.success) {
+      return c.json({ error: query.error.flatten() }, 400);
+    }
+    return c.json(await getAllZeroMatchesDiagnostics(query.data.limit));
   })
   .get("/diagnostics/parser-versions", async (c) => {
     return c.json({ versions: await getParserVersionOverview() });

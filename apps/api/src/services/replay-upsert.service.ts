@@ -20,23 +20,12 @@ import {
 import { eq, inArray, or } from "drizzle-orm";
 import { displayNameFromSlug, ensureMapExists } from "../lib/ensure-map";
 import { computeGameFingerprint } from "../lib/game-fingerprint";
+import { isVersionGreater } from "../lib/parser-version";
 import { type SpatialGridContribution, applySpatialRollupDelta } from "./spatial-rollup.service";
 
 export type UpsertResult =
   | { upserted: true; matchId: string }
   | { upserted: false; reason: "stale_version"; matchId: string };
-
-/** Simple numeric-segment comparison, e.g. "1.10" > "1.9". */
-function isVersionGreater(incoming: string, stored: string): boolean {
-  const a = incoming.split(".").map((n) => Number.parseInt(n, 10) || 0);
-  const b = stored.split(".").map((n) => Number.parseInt(n, 10) || 0);
-  for (let i = 0; i < Math.max(a.length, b.length); i++) {
-    const x = a[i] ?? 0;
-    const y = b[i] ?? 0;
-    if (x !== y) return x > y;
-  }
-  return false;
-}
 
 /**
  * True if `matchId` already has at least one `match_spatial_grids` row.

@@ -169,6 +169,15 @@ const displayedInsights = computed(() =>
       </p>
     </div>
 
+    <UAlert
+      v-if="!data.statsReliable"
+      color="warning"
+      variant="subtle"
+      icon="i-heroicons-exclamation-triangle"
+      title="Statistiques potentiellement incorrectes"
+      description="Cette partie a été analysée par une ancienne version du parseur, qui pouvait mal attribuer certaines stats de combat (dégâts, soins, XP figés à 0 ou dupliqués entre joueurs). Elle sera corrigée automatiquement à la prochaine synchronisation du daemon du joueur qui l'a envoyée, si le fichier de replay est encore présent sur son disque."
+    />
+
     <UTabs :items="tabItems" variant="pill" class="w-full">
       <template #scoreboard>
         <div class="mt-4 space-y-6">

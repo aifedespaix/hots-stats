@@ -62,6 +62,14 @@ export interface MatchDetailResponse {
     mapName: string;
     region: string;
   };
+  /**
+   * `false` when this match was parsed before a known stats-corrupting
+   * parser bug was fixed (see apps/api/src/constants.ts's
+   * `MIN_RELIABLE_STATS_PARSER_VERSION`) -- combat stats below may show
+   * columns stuck at 0 or a value duplicated across players. Only clears
+   * once the owning player's daemon resyncs this match.
+   */
+  statsReliable: boolean;
   teams: { team: number; players: MatchDetailPlayer[] }[];
   /** Absent for a match ingested before PARSER_VERSION 1.4. Always read as `data.timeline ?? null`. */
   timeline?: MatchTimelineData;
