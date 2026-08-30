@@ -112,6 +112,7 @@ async function loadSampleFor(mapId: string) {
 }
 
 watch(selectedOptionKey, async (key) => {
+  pendingNewLayer.value = null;
   points.value = [];
   minX.value = 0;
   maxX.value = 1;
