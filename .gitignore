@@ -26,5 +26,15 @@ daemon-python/.pytest_cache/
 apps/replay-parser/.venv/
 
 graphify-out/cache/
+# Machine-specific interpreter/scan-root pointers written by the graphify
+# skill/CLI (absolute local paths) - re-derived per machine, never portable.
+graphify-out/.graphify_python
+graphify-out/.graphify_root
+# Daily pre-overwrite snapshots (graphify's backup_if_protected) - redundant
+# with git history once committed; would otherwise grow the repo forever.
+graphify-out/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
 
 prompts
+
+# Claude Code local overrides (machine-specific paths/permissions)
+.claude/settings.local.json
