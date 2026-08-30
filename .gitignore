@@ -33,6 +33,11 @@ graphify-out/.graphify_root
 # Daily pre-overwrite snapshots (graphify's backup_if_protected) - redundant
 # with git history once committed; would otherwise grow the repo forever.
 graphify-out/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
+# Per-file scan bookkeeping (mtime/seen/hash) used to decide what graphify
+# needs to re-extract - the "seen" timestamp is rewritten for every file on
+# every run regardless of real changes, so tracking it just produces noise
+# commits. Re-derived locally on the next `graphify update .`.
+graphify-out/manifest.json
 
 prompts
 
