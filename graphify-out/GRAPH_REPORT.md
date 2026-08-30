@@ -1,16 +1,16 @@
-# Graph Report - hots-stats  (2026-08-16)
+# Graph Report - hots-stats  (2026-08-30)
 
 ## Corpus Check
-- 371 files · ~754,176 words
+- 388 files · ~772,633 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1468 nodes · 3061 edges · 92 communities (72 shown, 20 thin omitted)
+- 1475 nodes · 3067 edges · 93 communities (74 shown, 19 thin omitted)
 - Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 61 edges (avg confidence: 0.63)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `f5a519da`
+- Built from commit: `f60ace11`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -18,7 +18,7 @@
 - test_parser.py
 - draft_layout.py
 - dependencies
-- users
+- routes/matches.ts
 - SyncState
 - Config
 - OcrResult
@@ -26,7 +26,7 @@
 - api/src/index.ts
 - test_draft_capture.py
 - test_screen_capture.py
-- ingest.ts
+- internal.ts
 - watch_replays
 - api/package.json
 - test_api_client.py
@@ -41,26 +41,28 @@
 - daemon-python README
 - ._set_status
 - scripts
-- auth-token.ts
-- routes/matches.ts
+- db/src/index.ts
+- users.ts
 - _SettingsWindow
 - config_file_path
 - draft_capture.py
 - .__init__
 - gui.py
 - tray.py
-- ConfigError
+- config.py
 - find_update
 - test_updater.py
-- hash_replay_file
-- constants.py
+- parser.py
+- ingest.ts
 - test_app.py
-- _clear_env
+- main.py
 - players.service.ts
 - app.py
 - compilerOptions
 - draft.service.ts
 - shared-types/package.json
+- CLAUDE.md
+- open_path
 - ._build_ui
 - autostart.py
 - updater.py
@@ -80,7 +82,6 @@
 - HOTS Stats Favicon
 - str
 - sync_state_file_path
-- ReplayErrorRecord
 - db/tsconfig.json
 - api/tsconfig.json
 - shared-types/tsconfig.json
@@ -113,8 +114,8 @@
 4. `UpdateStatusTracker` - 40 edges
 5. `ingest_file()` - 31 edges
 6. `OcrResult` - 28 edges
-7. `StatusTracker` - 26 edges
-8. `_DaemonRunner` - 26 edges
+7. `_DaemonRunner` - 26 edges
+8. `StatusTracker` - 26 edges
 9. `AvailableUpdate` - 24 edges
 10. `build_payload()` - 24 edges
 
@@ -138,11 +139,11 @@
 - **Epics Roadmap Bundle** — tasks_readme_roadmap, tasks_epic_3_daemon_ingestion_brief, tasks_epic_4_daemon_cicd_brief, tasks_epic_5_web_core_brief, tasks_epic_6_web_analytics_brief [EXTRACTED 1.00]
 - **Daemon Hardening Audit Program** — daemon_python_readme_guide, tasks_daemon_audit_2026_08_12_report, concept_file_hash_cache, concept_initial_sync_threadpool, concept_proactive_tray_notifications [INFERRED 0.85]
 
-## Communities (92 total, 20 thin omitted)
+## Communities (93 total, 19 thin omitted)
 
 ### Community 0 - "test_parser.py"
 Cohesion: 0.07
-Nodes (71): Any, _apply_score_event(), _attribute_scope_by_player_list_index(), build_payload(), _build_protocol(), _extract_battletags(), _hero_attribute_code(), parse_replay() (+63 more)
+Nodes (72): Any, Tracker stat name (e.g. "HeroDamage") -> API payload field name (e.g.…, stat_field_name(), _apply_score_event(), _attribute_scope_by_player_list_index(), build_payload(), _build_protocol(), _extract_battletags() (+64 more)
 
 ### Community 1 - "draft_layout.py"
 Cohesion: 0.11
@@ -152,29 +153,29 @@ Nodes (41): _box_from_list(), _box_to_list(), crop_config_file_path(), _crop_rel
 Cohesion: 0.05
 Nodes (40): dependencies, chart.js, @hots-stats/shared-types, nuxt, @nuxt/fonts, @nuxt/ui, sharp, vue (+32 more)
 
-### Community 3 - "users"
-Cohesion: 0.06
-Nodes (36): daemonErrorStatusEnum, daemonErrorTypeEnum, DaemonIngestError, daemonIngestErrors, NewDaemonIngestError, DraftPseudoPreference, draftPseudoPreferences, NewDraftPseudoPreference (+28 more)
+### Community 3 - "routes/matches.ts"
+Cohesion: 0.08
+Nodes (33): requireUser, buildMatchConditions(), Env, filtersQuerySchema, listQuerySchema, matchesRoute, SORTABLE_COLUMNS, displayNameFromSlug() (+25 more)
 
 ### Community 4 - "SyncState"
-Cohesion: 0.07
-Nodes (36): _now(), Tracks, per replay (keyed by content hash), whether it's synced or errored, at…, True if `replay_hash` was already synced at `parser_version` or newer., Records a failed parse/upload attempt so it shows up in the Debug report. A…, Drops the "synced" record for every replay synced at a parser version older…, Drops every "synced"/"error" record, regardless of parser version -- unlike…, Updates `file_exists` for every tracked replay against the set of…, Returns the previously computed hash for `file_path`, but only if its size and… (+28 more)
+Cohesion: 0.06
+Nodes (40): _now(), Local persistence of "this replay is already synced" state, backed by SQLite…, Tracks, per replay (keyed by content hash), whether it's synced or errored, at…, True if `replay_hash` was already synced at `parser_version` or newer., Records a failed parse/upload attempt so it shows up in the Debug report. A…, Drops the "synced" record for every replay synced at a parser version older…, Drops every "synced"/"error" record, regardless of parser version -- unlike…, Updates `file_exists` for every tracked replay against the set of… (+32 more)
 
 ### Community 5 - "Config"
-Cohesion: 0.09
-Nodes (22): Top-level launcher used only for the compiled (Nuitka) build. Nuitka compiles…, ApiClientError, AuthError, Exception, QuarantinedError, Thin HTTP client for POSTing parsed replay payloads to the ingestion API., POSTs a live-draft snapshot. Unlike `post_replay`, this is time-sensitive --…, POSTs one local ingestion failure to `/ingest/errors`, so it's triageable… (+14 more)
+Cohesion: 0.14
+Nodes (16): ApiClientError, AuthError, Exception, QuarantinedError, Thin HTTP client for POSTing parsed replay payloads to the ingestion API., POSTs a live-draft snapshot. Unlike `post_replay`, this is time-sensitive --…, POSTs one local ingestion failure to `/ingest/errors`, so it's triageable…, Base class for ingestion API errors. (+8 more)
 
 ### Community 6 - "OcrResult"
 Cohesion: 0.22
 Nodes (22): OcrResult, Reads a single player-name crop. Returns `OcrResult(None, 0.0)` for a missing…, read_player_name(), _crop(), Image, The multilingual engine failing to build (a corrupted install, a bad Nuitka…, A packaging mistake that drops `src/models/en_PP-OCRv5_rec_mobile.onnx` must…, A native ~30px-tall crop gives the recognition models far less detail to work… (+14 more)
 
 ### Community 7 - "ApiClient"
-Cohesion: 0.15
-Nodes (38): ApiClient, IngestResult, ingest_file(), IngestOutcome, Path, Parses and (re-)uploads every replay in `replays_dir`. Safe to run repeatedly:…, Result of one `ingest_file` call, for callers that want to react to it: the…, Best-effort forwards one local ingestion failure to the API (`POST… (+30 more)
+Cohesion: 0.18
+Nodes (33): ApiClient, IngestResult, ingest_file(), IngestOutcome, Result of one `ingest_file` call, for callers that want to react to it: the…, Parses and uploads one replay. When `sync_state` is given, a replay already…, _config(), Mirrors sync_state's own local `mark_error` -- see `_report_error` in… (+25 more)
 
 ### Community 8 - "api/src/index.ts"
-Cohesion: 0.13
-Nodes (22): app, requireUser, healthRoute, Env, heroesRoute, listQuerySchema, publicRoute, Env (+14 more)
+Cohesion: 0.11
+Nodes (25): app, gameModeListSchema, healthRoute, Env, heroesRoute, listQuerySchema, publicRoute, Env (+17 more)
 
 ### Community 9 - "test_draft_capture.py"
 Cohesion: 0.14
@@ -184,9 +185,9 @@ Nodes (29): capture_and_submit(), DraftCaptureCoordinator, Runs one full capture
 Cohesion: 0.11
 Nodes (29): capture_foreground_window(), capture_game_window(), capture_window(), find_foreground_window(), find_game_window(), GameWindowNotFoundError, Exception, Image (+21 more)
 
-### Community 11 - "ingest.ts"
-Cohesion: 0.06
-Nodes (53): main(), DefaultAdapter, ReplayValidationError, CUSTOM_ADAPTERS, getCustomAdapter(), resolveAdapter(), ParsedReplayData, ReplayAdapter (+45 more)
+### Community 11 - "internal.ts"
+Cohesion: 0.07
+Nodes (38): main(), DefaultAdapter, ReplayValidationError, CUSTOM_ADAPTERS, getCustomAdapter(), resolveAdapter(), ParsedReplayData, ReplayAdapter (+30 more)
 
 ### Community 12 - "watch_replays"
 Cohesion: 0.13
@@ -201,8 +202,8 @@ Cohesion: 0.14
 Nodes (31): fetch_summary(), fetch_version(), ping_health(), True iff `GET {base_url}/health` responds 200. Used to validate the API Base…, Best-effort `GET {base_url}/ingest/version` fetch: `{"apiVersion": ...,…, Best-effort `GET {base_url}/ingest/summary` fetch, used to validate the Access…, _config(), _response() (+23 more)
 
 ### Community 15 - "routes/friends.ts"
-Cohesion: 0.16
-Nodes (26): Env, friendsRoute, matchesQuerySchema, scopeQuerySchema, searchQuerySchema, sendRequestSchema, areFriends(), cancelFriendRequest() (+18 more)
+Cohesion: 0.17
+Nodes (25): Env, friendsRoute, matchesQuerySchema, scopeQuerySchema, searchQuerySchema, sendRequestSchema, areFriends(), cancelFriendRequest() (+17 more)
 
 ### Community 16 - "TeamCropResult"
 Cohesion: 0.17
@@ -225,36 +226,36 @@ Cohesion: 0.16
 Nodes (17): env, envSchema, google, createSessionToken(), SESSION_COOKIE_MAX_AGE, SESSION_COOKIE_NAME, verifySessionToken(), authSession (+9 more)
 
 ### Community 21 - "UpdateStatusTracker"
-Cohesion: 0.16
-Nodes (24): AvailableUpdate, perform_update(), Thread-safe last-known-state of the updater, polled by the settings window (see…, Downloads and applies `update`, reporting progress on `status` throughout.…, Runs for the app's lifetime on a background thread: checks for a newer release…, UpdateStatusTracker, watch_for_updates(), `apply_update_and_exit` returning False means it aborted instead of exiting… (+16 more)
+Cohesion: 0.13
+Nodes (27): AvailableUpdate, perform_update(), Thread-safe last-known-state of the updater, polled by the settings window (see…, Downloads and applies `update`, reporting progress on `status` throughout.…, Runs for the app's lifetime on a background thread: checks for a newer release…, UpdateStatusTracker, watch_for_updates(), `apply_update_and_exit` returning False means it aborted instead of exiting… (+19 more)
 
 ### Community 22 - "test_config.py"
-Cohesion: 0.19
-Nodes (19): default_replays_dir(), load_config(), Writes the user-provided fields to the JSON config file, creating its parent…, Best-effort guess at the default HotS replays folder, e.g.…, save_config(), test_config_exists_false_before_save_true_after(), test_default_replays_dir_globs_account_folders(), test_default_replays_dir_prefers_account_with_replays() (+11 more)
+Cohesion: 0.20
+Nodes (17): default_replays_dir(), load_config(), Best-effort guess at the default HotS replays folder, e.g.…, _clear_env(), fixture, test_default_replays_dir_globs_account_folders(), test_default_replays_dir_prefers_account_with_replays(), test_default_replays_dir_returns_none_when_absent() (+9 more)
 
 ### Community 23 - "daemon-python README"
 Cohesion: 0.10
 Nodes (23): Auto-Update Self-Replace/Relaunch Handoff, Daemon pytest CI Job Kept Separate From Windows Release Build, Account Data Reset Wipes Local Sync Cache, file_hash_cache Table (skip re-hashing unchanged replays), Generation-Number Cooperative Capture Cancellation, ThreadPoolExecutor for Initial Sync Backlog, Live Draft Capture Feature, Nuitka Compilation Cache Persistence (+15 more)
 
 ### Community 24 - "._set_status"
-Cohesion: 0.16
+Cohesion: 0.14
 Nodes (6): Caps `text` at `max_chars`, replacing anything cut off with an ellipsis, so a…, Records a rebind by listening for the next real key combo instead of asking the…, Polled while the window is open (see `__init__`/`_on_close`) so a hotkey-…, _truncate(), Label, TestCaptureResult
 
 ### Community 25 - "scripts"
 Cohesion: 0.09
 Nodes (22): devDependencies, typescript, typescript, name, private, scripts, build, check-build (+14 more)
 
-### Community 26 - "auth-token.ts"
-Cohesion: 0.33
-Nodes (7): generatePersonalAccessToken(), hashToken(), authToken, Env, createTokenSchema, tokensRoute, User
+### Community 26 - "db/src/index.ts"
+Cohesion: 0.19
+Nodes (12): generatePersonalAccessToken(), hashToken(), authToken, Env, createTokenSchema, tokensRoute, Database, db (+4 more)
 
-### Community 27 - "routes/matches.ts"
-Cohesion: 0.16
-Nodes (12): gameModeListSchema, buildMatchConditions(), Env, filtersQuerySchema, listQuerySchema, matchesRoute, SORTABLE_COLUMNS, matchPlayers (+4 more)
+### Community 27 - "users.ts"
+Cohesion: 0.11
+Nodes (14): daemonErrorStatusEnum, daemonErrorTypeEnum, DaemonIngestError, NewDaemonIngestError, DraftPseudoPreference, draftPseudoPreferences, NewDraftPseudoPreference, Friendship (+6 more)
 
 ### Community 29 - "config_file_path"
-Cohesion: 0.17
-Nodes (11): config_file_path(), open_config_folder(), open_path(), Path, Path to the JSON config file, e.g. `%APPDATA%\\hots-analytics\\config.json`., Opens `path` (a file or a folder) with whatever the OS considers its default…, Opens `%APPDATA%\\hots-analytics\\` (config.json, sync_state.db, update.log,…, test_open_config_folder_creates_the_directory_if_missing() (+3 more)
+Cohesion: 0.23
+Nodes (12): config_file_path(), open_config_folder(), Writes the user-provided fields to the JSON config file, creating its parent…, Path to the JSON config file, e.g. `%APPDATA%\\hots-analytics\\config.json`., Opens `%APPDATA%\\hots-analytics\\` (config.json, sync_state.db, update.log,…, save_config(), test_config_exists_false_before_save_true_after(), test_open_config_folder_creates_the_directory_if_missing() (+4 more)
 
 ### Community 30 - "draft_capture.py"
 Cohesion: 0.11
@@ -272,33 +273,37 @@ Nodes (15): _apply_dark_style(), _format_update_status(), _ProgressBarDriver, Se
 Cohesion: 0.22
 Nodes (6): Base64-encoded tray icon PNG, generated from apps/web/public/favicon.svg (the…, _build_icon_image(), Image, System tray icon (pystray): reopen the settings window, or quit cleanly.…, Loads the app's icon (the web app's favicon, composited onto a small dark…, Lock
 
-### Community 34 - "ConfigError"
-Cohesion: 0.18
-Nodes (10): ConfigError, is_auto_update_enabled(), Exception, Reads just the `autoUpdateEnabled` preference, independent of the rest of…, Raised when required configuration is missing or invalid., Returns the raw JSON config as a dict, or `{}` if it doesn't exist yet. Used…, read_config_file(), test_is_auto_update_enabled_reads_saved_value() (+2 more)
+### Community 34 - "config.py"
+Cohesion: 0.20
+Nodes (11): ConfigError, is_auto_update_enabled(), Exception, Daemon configuration: API endpoint, access token, and replays folder.…, Reads just the `autoUpdateEnabled` preference, independent of the rest of…, Raised when required configuration is missing or invalid., Returns the raw JSON config as a dict, or `{}` if it doesn't exist yet. Used…, read_config_file() (+3 more)
 
 ### Community 35 - "find_update"
 Cohesion: 0.19
 Nodes (19): check_for_update(), find_update(), Pure decision logic, split out from `check_for_update` for testing: given a…, Best-effort check against GitHub's "latest release" API. Returns None on any…, _asset(), The asset itself is never versioned (see updater._ASSET_NAME) -- the release's…, Exact match, not a prefix/suffix check -- a differently-purposed asset that…, _release() (+11 more)
 
 ### Community 36 - "test_updater.py"
-Cohesion: 0.12
-Nodes (25): cleanup_stale_downloads(), downloads_dir(), parse_version(), _powershell_diagnostics(), Where a downloaded update build is staged before being handed off to the…, Clears `downloads_dir()` of anything left over from a previous run -- an update…, "v1.2.3" / "1.2.3" -> (1, 2, 3). None for anything that isn't a plain dotted-…, A best-effort environment fingerprint, logged right before every relaunch… (+17 more)
+Cohesion: 0.16
+Nodes (19): cleanup_stale_downloads(), parse_version(), _powershell_diagnostics(), Clears `downloads_dir()` of anything left over from a previous run -- an update…, "v1.2.3" / "1.2.3" -> (1, 2, 3). None for anything that isn't a plain dotted-…, A best-effort environment fingerprint, logged right before every relaunch…, _no_real_temp_cleanup(), fixture (+11 more)
 
-### Community 37 - "hash_replay_file"
-Cohesion: 0.33
-Nodes (8): hash_replay_file(), Path, Stable, content-based hashing of replay files. A HotS replay file is never…, Returns the SHA-256 hex digest of the replay file's contents., Path, test_hash_differs_for_different_content(), test_hash_matches_manual_sha256(), test_hash_stable_across_calls()
+### Community 37 - "parser.py"
+Cohesion: 0.17
+Nodes (13): Static lookup tables used to translate raw replay data into the API's payload…, hash_replay_file(), Path, Stable, content-based hashing of replay files. A HotS replay file is never…, Returns the SHA-256 hex digest of the replay file's contents., Turns a replay file on disk into an upload, shared by the CLI (`main.py`) and…, Best-effort forwards one local ingestion failure to the API (`POST…, _report_error() (+5 more)
 
-### Community 38 - "constants.py"
-Cohesion: 0.50
-Nodes (3): Static lookup tables used to translate raw replay data into the API's payload…, Tracker stat name (e.g. "HeroDamage") -> API payload field name (e.g.…, stat_field_name()
+### Community 38 - "ingest.ts"
+Cohesion: 0.17
+Nodes (13): API_VERSION, MIN_PARSER_VERSION, Env, extractBaseBuild(), ingestRoute, DaemonErrorGroup, recordDaemonError(), quarantineRawReplay() (+5 more)
 
 ### Community 39 - "test_app.py"
 Cohesion: 0.06
 Nodes (52): _DaemonRunner, Event, Path, Called once per daemon start: asks the API its version and, if it reports a…, Starts/stops the background replay-watcher thread, one instance at a time., Wires up `TrayController.notify` (message, title) so this runner can…, Checks the just-updated status and, the first time consecutive failures cross…, `announce_initial_scan`, when True, has the tray post a one-time "found N… (+44 more)
 
+### Community 40 - "main.py"
+Cohesion: 0.32
+Nodes (6): Top-level launcher used only for the compiled (Nuitka) build. Nuitka compiles…, Path, Parses and (re-)uploads every replay in `replays_dir`. Safe to run repeatedly:…, resync(), main(), Entrypoint for the HotS Analytics replay daemon. Usage: python -m src.main #…
+
 ### Community 41 - "players.service.ts"
-Cohesion: 0.15
-Nodes (17): Env, listQuerySchema, playersRoute, encounterBase(), getPlayerEncounter(), getPlayerHeroBreakdown(), listPlayerEncounters(), PlayerHeroBreakdown (+9 more)
+Cohesion: 0.23
+Nodes (13): Env, listQuerySchema, playersRoute, getFriendshipStatuses(), encounterBase(), getPlayerEncounter(), getPlayerHeroBreakdown(), listPlayerEncounters() (+5 more)
 
 ### Community 42 - "app.py"
 Cohesion: 0.15
@@ -316,6 +321,14 @@ Nodes (35): draftRoute, Env, DraftEventSink, getCurrentSnapshotForViewer(), getP
 Cohesion: 0.12
 Nodes (15): dependencies, zod, devDependencies, typescript, exports, typescript, zod, main (+7 more)
 
+### Community 46 - "CLAUDE.md"
+Cohesion: 0.29
+Nodes (5): Architecture: replay ingestion, adapters, and versioning, Auth, Commands, graphify, Project
+
+### Community 47 - "open_path"
+Cohesion: 0.33
+Nodes (3): open_path(), Path, Opens `path` (a file or a folder) with whatever the OS considers its default…
+
 ### Community 49 - "._build_ui"
 Cohesion: 0.21
 Nodes (6): BooleanVar, Checkbutton, A `Checkbutton` styled to match the dark ttk theme (plain `tk`, not `ttk`,…, Grids a label + entry + status indicator starting at `start_row`. Returns…, Frame, Notebook
@@ -325,8 +338,8 @@ Cohesion: 0.22
 Nodes (12): is_enabled(), is_supported(), Launch at Windows startup" toggle, backed by the current user's `Run` registry…, True only for the compiled .exe on Windows: there's no installed binary to…, Best-effort: a registry write can fail (permissions, a locked-down machine) but…, set_enabled(), Regression test: the Run key must point at `installed_exe_path()` (the real,…, test_is_enabled_false_when_not_supported() (+4 more)
 
 ### Community 51 - "updater.py"
-Cohesion: 0.13
-Nodes (21): _append_update_log_line(), installed_exe_path(), manual_fallback_exe_path(), manual_fallback_message(), Background self-update: checks GitHub Releases for a daemon build newer than…, The path of the .exe the user actually launched (double-clicked, or the…, Where a downloaded update ends up if the automatic swap+relaunch could never be…, Best-effort copy of the already-downloaded `new_exe` to… (+13 more)
+Cohesion: 0.12
+Nodes (24): _append_update_log_line(), downloads_dir(), installed_exe_path(), manual_fallback_exe_path(), manual_fallback_message(), Background self-update: checks GitHub Releases for a daemon build newer than…, The path of the .exe the user actually launched (double-clicked, or the…, Where a downloaded update ends up if the automatic swap+relaunch could never be… (+16 more)
 
 ### Community 56 - "TestChooseReading"
 Cohesion: 0.23
@@ -371,10 +384,6 @@ Nodes (6): prefers-color-scheme Dark Mode Adaptation, HOTS Stats Favicon, Styliz
 ### Community 85 - "sync_state_file_path"
 Cohesion: 0.40
 Nodes (4): Connection, Path, Path to the local sync-state database, next to `config.json`., sync_state_file_path()
-
-### Community 86 - "ReplayErrorRecord"
-Cohesion: 0.50
-Nodes (3): Every replay currently in an error state, most recent first -- backs the Debug…, One failed replay, as shown in the Debug window (gui.py)., ReplayErrorRecord
 
 ### Community 87 - "db/tsconfig.json"
 Cohesion: 0.33
@@ -421,24 +430,24 @@ Cohesion: 0.67
 Nodes (3): Hexagon Brand Logo (F monogram), User Profile OG Image, /u/[handle] Public Profile Page
 
 ## Knowledge Gaps
-- **236 isolated node(s):** `QuarantineVerificationResult`, `DaemonErrorGroup`, `Env`, `FriendRequest`, `FriendshipStatus` (+231 more)
+- **241 isolated node(s):** `Project`, `Commands`, `Architecture: replay ingestion, adapters, and versioning`, `Auth`, `graphify` (+236 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **20 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **19 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `SyncState` connect `SyncState` to `Config`, `ApiClient`, `test_app.py`, `app.py`, `sync_state_file_path`, `ReplayErrorRecord`?**
-  _High betweenness centrality (0.058) - this node is a cross-community bridge._
-- **Why does `_SettingsWindow` connect `_SettingsWindow` to `gui.py`, `guess_settings_url`, `ConfigError`, `._crop_to_photo`, `._build_ui`, `UpdateStatusTracker`, `._set_status`, `config_file_path`, `.__init__`?**
-  _High betweenness centrality (0.035) - this node is a cross-community bridge._
+- **Why does `SyncState` connect `SyncState` to `parser.py`, `ApiClient`, `main.py`, `test_app.py`, `app.py`, `sync_state_file_path`?**
+  _High betweenness centrality (0.064) - this node is a cross-community bridge._
+- **Why does `_SettingsWindow` connect `_SettingsWindow` to `gui.py`, `guess_settings_url`, `._crop_to_photo`, `open_path`, `._build_ui`, `UpdateStatusTracker`, `._set_status`, `config_file_path`, `.__init__`?**
+  _High betweenness centrality (0.047) - this node is a cross-community bridge._
 - **Why does `UpdateStatusTracker` connect `UpdateStatusTracker` to `gui.py`, `test_updater.py`, `_FakeStreamingResponse`, `test_app.py`, `app.py`, `trigger_manual_update`, `updater.py`, `_SettingsWindow`, `.__init__`?**
-  _High betweenness centrality (0.033) - this node is a cross-community bridge._
+  _High betweenness centrality (0.044) - this node is a cross-community bridge._
 - **Are the 2 inferred relationships involving `SyncState` (e.g. with `_DaemonRunner` and `IngestOutcome`) actually correct?**
   _`SyncState` has 2 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 3 inferred relationships involving `_SettingsWindow` (e.g. with `UpdatePhase` and `UpdateStatus`) actually correct?**
   _`_SettingsWindow` has 3 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 5 inferred relationships involving `UpdateStatusTracker` (e.g. with `_DaemonRunner` and `_ProgressBarDriver`) actually correct?**
   _`UpdateStatusTracker` has 5 INFERRED edges - model-reasoned connections that need verification._
-- **What connects `QuarantineVerificationResult`, `DaemonErrorGroup`, `Env` to the rest of the system?**
-  _236 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **What connects `Project`, `Commands`, `Architecture: replay ingestion, adapters, and versioning` to the rest of the system?**
+  _241 weakly-connected nodes found - possible documentation gaps or missing edges._

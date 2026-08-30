@@ -123,7 +123,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "replayvalidationerror",
       "id": "apps_api_src_adapters_default_adapter_replayvalidationerror"
     },
@@ -136,7 +136,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "parsedreplaydata",
       "id": "apps_api_src_adapters_types_parsedreplaydata"
     },
@@ -149,22 +149,9 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "replayadapter",
       "id": "apps_api_src_adapters_types_replayadapter"
-    },
-    {
-      "label": "Env",
-      "file_type": "code",
-      "source_file": "apps/api/src/routes/ingest.ts",
-      "source_location": "L13",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "ingest.ts",
-      "norm_label": "env",
-      "id": "apps_api_src_routes_ingest_env"
     },
     {
       "label": "QuarantineVerificationResult",
@@ -175,35 +162,9 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "quarantineverificationresult",
       "id": "apps_api_src_services_build_verification_service_quarantineverificationresult"
-    },
-    {
-      "label": "DaemonErrorGroup",
-      "file_type": "code",
-      "source_file": "apps/api/src/services/daemon-errors.service.ts",
-      "source_location": "L48",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "ingest.ts",
-      "norm_label": "daemonerrorgroup",
-      "id": "apps_api_src_services_daemon_errors_service_daemonerrorgroup"
-    },
-    {
-      "label": "UpsertResult",
-      "file_type": "code",
-      "source_file": "apps/api/src/services/replay-upsert.service.ts",
-      "source_location": "L5",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "ingest.ts",
-      "norm_label": "upsertresult",
-      "id": "apps_api_src_services_replay_upsert_service_upsertresult"
     },
     {
       "label": "KnownBuild",
@@ -214,7 +175,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "knownbuild",
       "id": "packages_db_src_schema_quarantine_knownbuild"
     },
@@ -227,7 +188,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "newknownbuild",
       "id": "packages_db_src_schema_quarantine_newknownbuild"
     },
@@ -240,7 +201,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "newrawreplayquarantine",
       "id": "packages_db_src_schema_quarantine_newrawreplayquarantine"
     },
@@ -253,48 +214,9 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "rawreplayquarantine",
       "id": "packages_db_src_schema_quarantine_rawreplayquarantine"
-    },
-    {
-      "label": "DaemonErrorReportInput",
-      "file_type": "code",
-      "source_file": "packages/shared-types/src/daemon-error.ts",
-      "source_location": "L23",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "ingest.ts",
-      "norm_label": "daemonerrorreportinput",
-      "id": "packages_shared_types_src_daemon_error_daemonerrorreportinput"
-    },
-    {
-      "label": "DaemonErrorType",
-      "file_type": "code",
-      "source_file": "packages/shared-types/src/daemon-error.ts",
-      "source_location": "L4",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "ingest.ts",
-      "norm_label": "daemonerrortype",
-      "id": "packages_shared_types_src_daemon_error_daemonerrortype"
-    },
-    {
-      "label": "GameMode",
-      "file_type": "code",
-      "source_file": "packages/shared-types/src/replay-payload.ts",
-      "source_location": "L13",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "ingest.ts",
-      "norm_label": "gamemode",
-      "id": "packages_shared_types_src_replay_payload_gamemode"
     },
     {
       "label": "ReplayPayload",
@@ -305,7 +227,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "replaypayload",
       "id": "packages_shared_types_src_replay_payload_replaypayload"
     },
@@ -318,7 +240,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "replayplayer",
       "id": "packages_shared_types_src_replay_payload_replayplayer"
     },
@@ -331,7 +253,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "talentpick",
       "id": "packages_shared_types_src_replay_payload_talentpick"
     },
@@ -526,9 +448,139 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 26,
-      "community_name": "auth-token.ts",
+      "community_name": "db/src/index.ts",
       "norm_label": "env",
       "id": "apps_api_src_middleware_auth_token_env"
+    },
+    {
+      "label": "Database",
+      "file_type": "code",
+      "source_file": "packages/db/src/client.ts",
+      "source_location": "L13",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 26,
+      "community_name": "db/src/index.ts",
+      "norm_label": "database",
+      "id": "packages_db_src_client_database"
+    },
+    {
+      "label": "NewPersonalAccessToken",
+      "file_type": "code",
+      "source_file": "packages/db/src/schema/tokens.ts",
+      "source_location": "L18",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 26,
+      "community_name": "db/src/index.ts",
+      "norm_label": "newpersonalaccesstoken",
+      "id": "packages_db_src_schema_tokens_newpersonalaccesstoken"
+    },
+    {
+      "label": "PersonalAccessToken",
+      "file_type": "code",
+      "source_file": "packages/db/src/schema/tokens.ts",
+      "source_location": "L17",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 26,
+      "community_name": "db/src/index.ts",
+      "norm_label": "personalaccesstoken",
+      "id": "packages_db_src_schema_tokens_personalaccesstoken"
+    },
+    {
+      "label": "DaemonIngestError",
+      "file_type": "code",
+      "source_file": "packages/db/src/schema/daemon-ingest-errors.ts",
+      "source_location": "L59",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "users.ts",
+      "norm_label": "daemoningesterror",
+      "id": "packages_db_src_schema_daemon_ingest_errors_daemoningesterror"
+    },
+    {
+      "label": "NewDaemonIngestError",
+      "file_type": "code",
+      "source_file": "packages/db/src/schema/daemon-ingest-errors.ts",
+      "source_location": "L60",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "users.ts",
+      "norm_label": "newdaemoningesterror",
+      "id": "packages_db_src_schema_daemon_ingest_errors_newdaemoningesterror"
+    },
+    {
+      "label": "DraftPseudoPreference",
+      "file_type": "code",
+      "source_file": "packages/db/src/schema/draft-pseudo-preferences.ts",
+      "source_location": "L31",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "users.ts",
+      "norm_label": "draftpseudopreference",
+      "id": "packages_db_src_schema_draft_pseudo_preferences_draftpseudopreference"
+    },
+    {
+      "label": "NewDraftPseudoPreference",
+      "file_type": "code",
+      "source_file": "packages/db/src/schema/draft-pseudo-preferences.ts",
+      "source_location": "L32",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "users.ts",
+      "norm_label": "newdraftpseudopreference",
+      "id": "packages_db_src_schema_draft_pseudo_preferences_newdraftpseudopreference"
+    },
+    {
+      "label": "Friendship",
+      "file_type": "code",
+      "source_file": "packages/db/src/schema/friendships.ts",
+      "source_location": "L32",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "users.ts",
+      "norm_label": "friendship",
+      "id": "packages_db_src_schema_friendships_friendship"
+    },
+    {
+      "label": "NewFriendship",
+      "file_type": "code",
+      "source_file": "packages/db/src/schema/friendships.ts",
+      "source_location": "L33",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "users.ts",
+      "norm_label": "newfriendship",
+      "id": "packages_db_src_schema_friendships_newfriendship"
+    },
+    {
+      "label": "NewUser",
+      "file_type": "code",
+      "source_file": "packages/db/src/schema/users.ts",
+      "source_location": "L30",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "users.ts",
+      "norm_label": "newuser",
+      "id": "packages_db_src_schema_users_newuser"
     },
     {
       "label": "User",
@@ -538,49 +590,10 @@
       "_callable": true,
       "_callable_class": true,
       "_origin": "ast",
-      "community": 26,
-      "community_name": "auth-token.ts",
+      "community": 27,
+      "community_name": "users.ts",
       "norm_label": "user",
       "id": "packages_db_src_schema_users_user"
-    },
-    {
-      "label": "Env",
-      "file_type": "code",
-      "source_file": "apps/api/src/routes/matches.ts",
-      "source_location": "L9",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 27,
-      "community_name": "routes/matches.ts",
-      "norm_label": "env",
-      "id": "apps_api_src_routes_matches_env"
-    },
-    {
-      "label": "NewTalentPick",
-      "file_type": "code",
-      "source_file": "packages/db/src/schema/talent-picks.ts",
-      "source_location": "L24",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 27,
-      "community_name": "routes/matches.ts",
-      "norm_label": "newtalentpick",
-      "id": "packages_db_src_schema_talent_picks_newtalentpick"
-    },
-    {
-      "label": "TalentPick",
-      "file_type": "code",
-      "source_file": "packages/db/src/schema/talent-picks.ts",
-      "source_location": "L23",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 27,
-      "community_name": "routes/matches.ts",
-      "norm_label": "talentpick",
-      "id": "packages_db_src_schema_talent_picks_talentpick"
     },
     {
       "label": "_SettingsWindow",
@@ -596,82 +609,30 @@
       "id": "daemon_python_src_gui_settingswindow"
     },
     {
-      "label": "DaemonIngestError",
+      "label": "Env",
       "file_type": "code",
-      "source_file": "packages/db/src/schema/daemon-ingest-errors.ts",
-      "source_location": "L59",
+      "source_file": "apps/api/src/routes/matches.ts",
+      "source_location": "L9",
       "_callable": true,
       "_callable_class": true,
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
-      "norm_label": "daemoningesterror",
-      "id": "packages_db_src_schema_daemon_ingest_errors_daemoningesterror"
+      "community_name": "routes/matches.ts",
+      "norm_label": "env",
+      "id": "apps_api_src_routes_matches_env"
     },
     {
-      "label": "NewDaemonIngestError",
+      "label": "UpsertResult",
       "file_type": "code",
-      "source_file": "packages/db/src/schema/daemon-ingest-errors.ts",
-      "source_location": "L60",
+      "source_file": "apps/api/src/services/replay-upsert.service.ts",
+      "source_location": "L5",
       "_callable": true,
       "_callable_class": true,
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
-      "norm_label": "newdaemoningesterror",
-      "id": "packages_db_src_schema_daemon_ingest_errors_newdaemoningesterror"
-    },
-    {
-      "label": "DraftPseudoPreference",
-      "file_type": "code",
-      "source_file": "packages/db/src/schema/draft-pseudo-preferences.ts",
-      "source_location": "L31",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "users",
-      "norm_label": "draftpseudopreference",
-      "id": "packages_db_src_schema_draft_pseudo_preferences_draftpseudopreference"
-    },
-    {
-      "label": "NewDraftPseudoPreference",
-      "file_type": "code",
-      "source_file": "packages/db/src/schema/draft-pseudo-preferences.ts",
-      "source_location": "L32",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "users",
-      "norm_label": "newdraftpseudopreference",
-      "id": "packages_db_src_schema_draft_pseudo_preferences_newdraftpseudopreference"
-    },
-    {
-      "label": "Friendship",
-      "file_type": "code",
-      "source_file": "packages/db/src/schema/friendships.ts",
-      "source_location": "L32",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "users",
-      "norm_label": "friendship",
-      "id": "packages_db_src_schema_friendships_friendship"
-    },
-    {
-      "label": "NewFriendship",
-      "file_type": "code",
-      "source_file": "packages/db/src/schema/friendships.ts",
-      "source_location": "L33",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "users",
-      "norm_label": "newfriendship",
-      "id": "packages_db_src_schema_friendships_newfriendship"
+      "community_name": "routes/matches.ts",
+      "norm_label": "upsertresult",
+      "id": "apps_api_src_services_replay_upsert_service_upsertresult"
     },
     {
       "label": "Hero",
@@ -682,7 +643,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
+      "community_name": "routes/matches.ts",
       "norm_label": "hero",
       "id": "packages_db_src_schema_heroes_hero"
     },
@@ -695,7 +656,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
+      "community_name": "routes/matches.ts",
       "norm_label": "newhero",
       "id": "packages_db_src_schema_heroes_newhero"
     },
@@ -708,7 +669,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
+      "community_name": "routes/matches.ts",
       "norm_label": "map",
       "id": "packages_db_src_schema_maps_map"
     },
@@ -721,7 +682,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
+      "community_name": "routes/matches.ts",
       "norm_label": "newmap",
       "id": "packages_db_src_schema_maps_newmap"
     },
@@ -734,7 +695,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
+      "community_name": "routes/matches.ts",
       "norm_label": "matchplayer",
       "id": "packages_db_src_schema_match_players_matchplayer"
     },
@@ -747,7 +708,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
+      "community_name": "routes/matches.ts",
       "norm_label": "newmatchplayer",
       "id": "packages_db_src_schema_match_players_newmatchplayer"
     },
@@ -760,7 +721,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
+      "community_name": "routes/matches.ts",
       "norm_label": "match",
       "id": "packages_db_src_schema_matches_match"
     },
@@ -773,48 +734,35 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
+      "community_name": "routes/matches.ts",
       "norm_label": "newmatch",
       "id": "packages_db_src_schema_matches_newmatch"
     },
     {
-      "label": "NewPersonalAccessToken",
+      "label": "NewTalentPick",
       "file_type": "code",
-      "source_file": "packages/db/src/schema/tokens.ts",
-      "source_location": "L18",
+      "source_file": "packages/db/src/schema/talent-picks.ts",
+      "source_location": "L24",
       "_callable": true,
       "_callable_class": true,
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
-      "norm_label": "newpersonalaccesstoken",
-      "id": "packages_db_src_schema_tokens_newpersonalaccesstoken"
+      "community_name": "routes/matches.ts",
+      "norm_label": "newtalentpick",
+      "id": "packages_db_src_schema_talent_picks_newtalentpick"
     },
     {
-      "label": "PersonalAccessToken",
+      "label": "TalentPick",
       "file_type": "code",
-      "source_file": "packages/db/src/schema/tokens.ts",
-      "source_location": "L17",
+      "source_file": "packages/db/src/schema/talent-picks.ts",
+      "source_location": "L23",
       "_callable": true,
       "_callable_class": true,
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
-      "norm_label": "personalaccesstoken",
-      "id": "packages_db_src_schema_tokens_personalaccesstoken"
-    },
-    {
-      "label": "NewUser",
-      "file_type": "code",
-      "source_file": "packages/db/src/schema/users.ts",
-      "source_location": "L30",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "users",
-      "norm_label": "newuser",
-      "id": "packages_db_src_schema_users_newuser"
+      "community_name": "routes/matches.ts",
+      "norm_label": "talentpick",
+      "id": "packages_db_src_schema_talent_picks_talentpick"
     },
     {
       "label": "HeroRole",
@@ -825,7 +773,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
+      "community_name": "routes/matches.ts",
       "norm_label": "herorole",
       "id": "packages_db_src_seed_herorole"
     },
@@ -929,9 +877,61 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 34,
-      "community_name": "ConfigError",
+      "community_name": "config.py",
       "norm_label": "configerror",
       "id": "daemon_python_src_config_configerror"
+    },
+    {
+      "label": "Env",
+      "file_type": "code",
+      "source_file": "apps/api/src/routes/ingest.ts",
+      "source_location": "L13",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 38,
+      "community_name": "ingest.ts",
+      "norm_label": "env",
+      "id": "apps_api_src_routes_ingest_env"
+    },
+    {
+      "label": "DaemonErrorGroup",
+      "file_type": "code",
+      "source_file": "apps/api/src/services/daemon-errors.service.ts",
+      "source_location": "L48",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 38,
+      "community_name": "ingest.ts",
+      "norm_label": "daemonerrorgroup",
+      "id": "apps_api_src_services_daemon_errors_service_daemonerrorgroup"
+    },
+    {
+      "label": "DaemonErrorReportInput",
+      "file_type": "code",
+      "source_file": "packages/shared-types/src/daemon-error.ts",
+      "source_location": "L23",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 38,
+      "community_name": "ingest.ts",
+      "norm_label": "daemonerrorreportinput",
+      "id": "packages_shared_types_src_daemon_error_daemonerrorreportinput"
+    },
+    {
+      "label": "DaemonErrorType",
+      "file_type": "code",
+      "source_file": "packages/shared-types/src/daemon-error.ts",
+      "source_location": "L4",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 38,
+      "community_name": "ingest.ts",
+      "norm_label": "daemonerrortype",
+      "id": "packages_shared_types_src_daemon_error_daemonerrortype"
     },
     {
       "label": "_DaemonRunner",
@@ -971,6 +971,19 @@
       "community_name": "test_app.py",
       "norm_label": "statustracker",
       "id": "daemon_python_src_status_statustracker"
+    },
+    {
+      "label": "ReplayErrorRecord",
+      "file_type": "code",
+      "source_file": "daemon-python/src/sync_state.py",
+      "source_location": "L96",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "SyncState",
+      "norm_label": "replayerrorrecord",
+      "id": "daemon_python_src_sync_state_replayerrorrecord"
     },
     {
       "label": "SyncState",
@@ -1036,58 +1049,6 @@
       "community_name": "players.service.ts",
       "norm_label": "sortdir",
       "id": "apps_api_src_services_players_service_sortdir"
-    },
-    {
-      "label": "HeroSummaryStats",
-      "file_type": "code",
-      "source_file": "packages/shared-types/src/stats.ts",
-      "source_location": "L7",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 41,
-      "community_name": "players.service.ts",
-      "norm_label": "herosummarystats",
-      "id": "packages_shared_types_src_stats_herosummarystats"
-    },
-    {
-      "label": "PlayerEncounterStats",
-      "file_type": "code",
-      "source_file": "packages/shared-types/src/stats.ts",
-      "source_location": "L28",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 41,
-      "community_name": "players.service.ts",
-      "norm_label": "playerencounterstats",
-      "id": "packages_shared_types_src_stats_playerencounterstats"
-    },
-    {
-      "label": "PlayerFriendshipStatus",
-      "file_type": "code",
-      "source_file": "packages/shared-types/src/stats.ts",
-      "source_location": "L26",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 41,
-      "community_name": "players.service.ts",
-      "norm_label": "playerfriendshipstatus",
-      "id": "packages_shared_types_src_stats_playerfriendshipstatus"
-    },
-    {
-      "label": "TalentTierStats",
-      "file_type": "code",
-      "source_file": "packages/shared-types/src/stats.ts",
-      "source_location": "L18",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 41,
-      "community_name": "players.service.ts",
-      "norm_label": "talenttierstats",
-      "id": "packages_shared_types_src_stats_talenttierstats"
     },
     {
       "label": "TrayController",
@@ -1454,17 +1415,17 @@
       "id": "apps_api_src_services_talents_service_herostatsrow"
     },
     {
-      "label": "Database",
+      "label": "GameMode",
       "file_type": "code",
-      "source_file": "packages/db/src/client.ts",
+      "source_file": "packages/shared-types/src/replay-payload.ts",
       "source_location": "L13",
       "_callable": true,
       "_callable_class": true,
       "_origin": "ast",
       "community": 8,
       "community_name": "api/src/index.ts",
-      "norm_label": "database",
-      "id": "packages_db_src_client_database"
+      "norm_label": "gamemode",
+      "id": "packages_shared_types_src_replay_payload_gamemode"
     },
     {
       "label": "HeroStatsScope",
@@ -1480,17 +1441,56 @@
       "id": "packages_shared_types_src_stats_herostatsscope"
     },
     {
-      "label": "ReplayErrorRecord",
+      "label": "HeroSummaryStats",
       "file_type": "code",
-      "source_file": "daemon-python/src/sync_state.py",
-      "source_location": "L96",
+      "source_file": "packages/shared-types/src/stats.ts",
+      "source_location": "L7",
       "_callable": true,
       "_callable_class": true,
       "_origin": "ast",
-      "community": 86,
-      "community_name": "ReplayErrorRecord",
-      "norm_label": "replayerrorrecord",
-      "id": "daemon_python_src_sync_state_replayerrorrecord"
+      "community": 8,
+      "community_name": "api/src/index.ts",
+      "norm_label": "herosummarystats",
+      "id": "packages_shared_types_src_stats_herosummarystats"
+    },
+    {
+      "label": "PlayerEncounterStats",
+      "file_type": "code",
+      "source_file": "packages/shared-types/src/stats.ts",
+      "source_location": "L28",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "api/src/index.ts",
+      "norm_label": "playerencounterstats",
+      "id": "packages_shared_types_src_stats_playerencounterstats"
+    },
+    {
+      "label": "PlayerFriendshipStatus",
+      "file_type": "code",
+      "source_file": "packages/shared-types/src/stats.ts",
+      "source_location": "L26",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "api/src/index.ts",
+      "norm_label": "playerfriendshipstatus",
+      "id": "packages_shared_types_src_stats_playerfriendshipstatus"
+    },
+    {
+      "label": "TalentTierStats",
+      "file_type": "code",
+      "source_file": "packages/shared-types/src/stats.ts",
+      "source_location": "L18",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "api/src/index.ts",
+      "norm_label": "talenttierstats",
+      "id": "packages_shared_types_src_stats_talenttierstats"
     },
     {
       "label": "DraftCaptureCoordinator",
@@ -1504,6 +1504,18 @@
       "community_name": "test_draft_capture.py",
       "norm_label": "draftcapturecoordinator",
       "id": "daemon_python_src_draft_capture_draftcapturecoordinator"
+    },
+    {
+      "label": "stat_field_name()",
+      "file_type": "code",
+      "source_file": "daemon-python/src/constants.py",
+      "source_location": "L197",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "test_parser.py",
+      "norm_label": "stat_field_name()",
+      "id": "daemon_python_src_constants_stat_field_name"
     },
     {
       "label": "_apply_score_event()",
@@ -2653,7 +2665,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "main()",
       "id": "apps_api_scripts_check_build_main"
     },
@@ -2665,7 +2677,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": ".constructor()",
       "id": "apps_api_src_adapters_default_adapter_replayvalidationerror_constructor"
     },
@@ -2677,7 +2689,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "getcustomadapter()",
       "id": "apps_api_src_adapters_registry_getcustomadapter"
     },
@@ -2689,7 +2701,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "resolveadapter()",
       "id": "apps_api_src_adapters_registry_resolveadapter"
     },
@@ -2701,21 +2713,9 @@
       "_callable": true,
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": ".parse()",
       "id": "apps_api_src_adapters_types_replayadapter_parse"
-    },
-    {
-      "label": "extractBaseBuild()",
-      "file_type": "code",
-      "source_file": "apps/api/src/routes/ingest.ts",
-      "source_location": "L16",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "ingest.ts",
-      "norm_label": "extractbasebuild()",
-      "id": "apps_api_src_routes_ingest_extractbasebuild"
     },
     {
       "label": "verifyQuarantinedBuild()",
@@ -2725,7 +2725,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "verifyquarantinedbuild()",
       "id": "apps_api_src_services_build_verification_service_verifyquarantinedbuild"
     },
@@ -2737,7 +2737,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "getdaemonerrorgroups()",
       "id": "apps_api_src_services_daemon_errors_service_getdaemonerrorgroups"
     },
@@ -2749,21 +2749,9 @@
       "_callable": true,
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "markdaemonerrorsresolved()",
       "id": "apps_api_src_services_daemon_errors_service_markdaemonerrorsresolved"
-    },
-    {
-      "label": "recordDaemonError()",
-      "file_type": "code",
-      "source_file": "apps/api/src/services/daemon-errors.service.ts",
-      "source_location": "L15",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "ingest.ts",
-      "norm_label": "recorddaemonerror()",
-      "id": "apps_api_src_services_daemon_errors_service_recorddaemonerror"
     },
     {
       "label": "getPendingQuarantinedReplays()",
@@ -2773,7 +2761,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "getpendingquarantinedreplays()",
       "id": "apps_api_src_services_quarantine_service_getpendingquarantinedreplays"
     },
@@ -2785,7 +2773,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "getquarantineoverview()",
       "id": "apps_api_src_services_quarantine_service_getquarantineoverview"
     },
@@ -2797,7 +2785,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "getquarantinesamples()",
       "id": "apps_api_src_services_quarantine_service_getquarantinesamples"
     },
@@ -2809,7 +2797,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "markbuildverified()",
       "id": "apps_api_src_services_quarantine_service_markbuildverified"
     },
@@ -2821,7 +2809,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "markquarantinefailed()",
       "id": "apps_api_src_services_quarantine_service_markquarantinefailed"
     },
@@ -2833,57 +2821,9 @@
       "_callable": true,
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "markquarantineprocessed()",
       "id": "apps_api_src_services_quarantine_service_markquarantineprocessed"
-    },
-    {
-      "label": "quarantineRawReplay()",
-      "file_type": "code",
-      "source_file": "apps/api/src/services/quarantine.service.ts",
-      "source_location": "L5",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "ingest.ts",
-      "norm_label": "quarantinerawreplay()",
-      "id": "apps_api_src_services_quarantine_service_quarantinerawreplay"
-    },
-    {
-      "label": "displayNameFromSlug()",
-      "file_type": "code",
-      "source_file": "apps/api/src/services/replay-upsert.service.ts",
-      "source_location": "L16",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "ingest.ts",
-      "norm_label": "displaynamefromslug()",
-      "id": "apps_api_src_services_replay_upsert_service_displaynamefromslug"
-    },
-    {
-      "label": "isVersionGreater()",
-      "file_type": "code",
-      "source_file": "apps/api/src/services/replay-upsert.service.ts",
-      "source_location": "L25",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "ingest.ts",
-      "norm_label": "isversiongreater()",
-      "id": "apps_api_src_services_replay_upsert_service_isversiongreater"
-    },
-    {
-      "label": "upsertReplay()",
-      "file_type": "code",
-      "source_file": "apps/api/src/services/replay-upsert.service.ts",
-      "source_location": "L45",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "ingest.ts",
-      "norm_label": "upsertreplay()",
-      "id": "apps_api_src_services_replay_upsert_service_upsertreplay"
     },
     {
       "label": "._crop_to_photo()",
@@ -3472,18 +3412,6 @@
       "community_name": "routes/friends.ts",
       "norm_label": "getfriendshipstatus()",
       "id": "apps_api_src_services_friendships_service_getfriendshipstatus"
-    },
-    {
-      "label": "getFriendshipStatuses()",
-      "file_type": "code",
-      "source_file": "apps/api/src/services/friendships.service.ts",
-      "source_location": "L46",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 15,
-      "community_name": "routes/friends.ts",
-      "norm_label": "getfriendshipstatuses()",
-      "id": "apps_api_src_services_friendships_service_getfriendshipstatuses"
     },
     {
       "label": "listFriends()",
@@ -4230,6 +4158,42 @@
       "id": "daemon_python_tests_test_updater_test_perform_update_skips_when_already_in_progress"
     },
     {
+      "label": "test_try_begin_fails_while_already_downloading()",
+      "file_type": "code",
+      "source_file": "daemon-python/tests/test_updater.py",
+      "source_location": "L315",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 21,
+      "community_name": "UpdateStatusTracker",
+      "norm_label": "test_try_begin_fails_while_already_downloading()",
+      "id": "daemon_python_tests_test_updater_test_try_begin_fails_while_already_downloading"
+    },
+    {
+      "label": "test_try_begin_fails_while_installing()",
+      "file_type": "code",
+      "source_file": "daemon-python/tests/test_updater.py",
+      "source_location": "L321",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 21,
+      "community_name": "UpdateStatusTracker",
+      "norm_label": "test_try_begin_fails_while_installing()",
+      "id": "daemon_python_tests_test_updater_test_try_begin_fails_while_installing"
+    },
+    {
+      "label": "test_try_begin_succeeds_when_idle()",
+      "file_type": "code",
+      "source_file": "daemon-python/tests/test_updater.py",
+      "source_location": "L306",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 21,
+      "community_name": "UpdateStatusTracker",
+      "norm_label": "test_try_begin_succeeds_when_idle()",
+      "id": "daemon_python_tests_test_updater_test_try_begin_succeeds_when_idle"
+    },
+    {
       "label": "test_watch_for_updates_cleans_up_stale_downloads_once_per_run()",
       "file_type": "code",
       "source_file": "daemon-python/tests/test_updater.py",
@@ -4326,28 +4290,16 @@
       "id": "daemon_python_src_config_load_config"
     },
     {
-      "label": "save_config()",
-      "file_type": "code",
-      "source_file": "daemon-python/src/config.py",
-      "source_location": "L104",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 22,
-      "community_name": "test_config.py",
-      "norm_label": "save_config()",
-      "id": "daemon_python_src_config_save_config"
-    },
-    {
-      "label": "test_config_exists_false_before_save_true_after()",
+      "label": "_clear_env()",
       "file_type": "code",
       "source_file": "daemon-python/tests/test_config.py",
-      "source_location": "L114",
+      "source_location": "L21",
       "_callable": true,
       "_origin": "ast",
       "community": 22,
       "community_name": "test_config.py",
-      "norm_label": "test_config_exists_false_before_save_true_after()",
-      "id": "daemon_python_tests_test_config_test_config_exists_false_before_save_true_after"
+      "norm_label": "_clear_env()",
+      "id": "daemon_python_tests_test_config_clear_env"
     },
     {
       "label": "test_default_replays_dir_globs_account_folders()",
@@ -4494,18 +4446,6 @@
       "id": "daemon_python_tests_test_config_test_save_and_load_config_round_trips_draft_fields"
     },
     {
-      "label": "test_save_config_strips_trailing_slash_from_api_base_url()",
-      "file_type": "code",
-      "source_file": "daemon-python/tests/test_config.py",
-      "source_location": "L133",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 22,
-      "community_name": "test_config.py",
-      "norm_label": "test_save_config_strips_trailing_slash_from_api_base_url()",
-      "id": "daemon_python_tests_test_config_test_save_config_strips_trailing_slash_from_api_base_url"
-    },
-    {
       "label": "._apply_api_status()",
       "file_type": "code",
       "source_file": "daemon-python/src/gui.py",
@@ -4614,6 +4554,18 @@
       "id": "daemon_python_src_gui_settingswindow_refresh_draft_capture_status"
     },
     {
+      "label": "._refresh_live_stats()",
+      "file_type": "code",
+      "source_file": "daemon-python/src/gui.py",
+      "source_location": "L1175",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 24,
+      "community_name": "._set_status",
+      "norm_label": "._refresh_live_stats()",
+      "id": "daemon_python_src_gui_settingswindow_refresh_live_stats"
+    },
+    {
       "label": "._set_status()",
       "file_type": "code",
       "source_file": "daemon-python/src/gui.py",
@@ -4624,6 +4576,18 @@
       "community_name": "._set_status",
       "norm_label": "._set_status()",
       "id": "daemon_python_src_gui_settingswindow_set_status"
+    },
+    {
+      "label": "._show_error()",
+      "file_type": "code",
+      "source_file": "daemon-python/src/gui.py",
+      "source_location": "L1762",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 24,
+      "community_name": "._set_status",
+      "norm_label": "._show_error()",
+      "id": "daemon_python_src_gui_settingswindow_show_error"
     },
     {
       "label": "._start_hotkey_capture()",
@@ -4657,7 +4621,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 26,
-      "community_name": "auth-token.ts",
+      "community_name": "db/src/index.ts",
       "norm_label": "generatepersonalaccesstoken()",
       "id": "apps_api_src_lib_tokens_generatepersonalaccesstoken"
     },
@@ -4669,21 +4633,9 @@
       "_callable": true,
       "_origin": "ast",
       "community": 26,
-      "community_name": "auth-token.ts",
+      "community_name": "db/src/index.ts",
       "norm_label": "hashtoken()",
       "id": "apps_api_src_lib_tokens_hashtoken"
-    },
-    {
-      "label": "buildMatchConditions()",
-      "file_type": "code",
-      "source_file": "apps/api/src/routes/matches.ts",
-      "source_location": "L43",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 27,
-      "community_name": "routes/matches.ts",
-      "norm_label": "buildmatchconditions()",
-      "id": "apps_api_src_routes_matches_buildmatchconditions"
     },
     {
       "label": "._after_if_open()",
@@ -4830,6 +4782,18 @@
       "id": "daemon_python_src_gui_settingswindow_on_replays_changed"
     },
     {
+      "label": "._open_data_folder()",
+      "file_type": "code",
+      "source_file": "daemon-python/src/gui.py",
+      "source_location": "L548",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 28,
+      "community_name": "_SettingsWindow",
+      "norm_label": "._open_data_folder()",
+      "id": "daemon_python_src_gui_settingswindow_open_data_folder"
+    },
+    {
       "label": "._open_debug_window()",
       "file_type": "code",
       "source_file": "daemon-python/src/gui.py",
@@ -4852,30 +4816,6 @@
       "community_name": "_SettingsWindow",
       "norm_label": "._prefill()",
       "id": "daemon_python_src_gui_settingswindow_prefill"
-    },
-    {
-      "label": "._save()",
-      "file_type": "code",
-      "source_file": "daemon-python/src/gui.py",
-      "source_location": "L1711",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 28,
-      "community_name": "_SettingsWindow",
-      "norm_label": "._save()",
-      "id": "daemon_python_src_gui_settingswindow_save"
-    },
-    {
-      "label": "._show_error()",
-      "file_type": "code",
-      "source_file": "daemon-python/src/gui.py",
-      "source_location": "L1762",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 28,
-      "community_name": "_SettingsWindow",
-      "norm_label": "._show_error()",
-      "id": "daemon_python_src_gui_settingswindow_show_error"
     },
     {
       "label": "._start_test_capture()",
@@ -4950,64 +4890,40 @@
       "id": "daemon_python_src_config_open_config_folder"
     },
     {
-      "label": "open_path()",
+      "label": "save_config()",
       "file_type": "code",
       "source_file": "daemon-python/src/config.py",
-      "source_location": "L56",
+      "source_location": "L104",
       "_callable": true,
       "_origin": "ast",
       "community": 29,
       "community_name": "config_file_path",
-      "norm_label": "open_path()",
-      "id": "daemon_python_src_config_open_path"
+      "norm_label": "save_config()",
+      "id": "daemon_python_src_config_save_config"
     },
     {
-      "label": "._open_data_folder()",
+      "label": "._save()",
       "file_type": "code",
       "source_file": "daemon-python/src/gui.py",
-      "source_location": "L548",
+      "source_location": "L1711",
       "_callable": true,
       "_origin": "ast",
       "community": 29,
       "community_name": "config_file_path",
-      "norm_label": "._open_data_folder()",
-      "id": "daemon_python_src_gui_settingswindow_open_data_folder"
+      "norm_label": "._save()",
+      "id": "daemon_python_src_gui_settingswindow_save"
     },
     {
-      "label": "._open_fallback_folder()",
+      "label": "test_config_exists_false_before_save_true_after()",
       "file_type": "code",
-      "source_file": "daemon-python/src/gui.py",
-      "source_location": "L1322",
+      "source_file": "daemon-python/tests/test_config.py",
+      "source_location": "L114",
       "_callable": true,
       "_origin": "ast",
       "community": 29,
       "community_name": "config_file_path",
-      "norm_label": "._open_fallback_folder()",
-      "id": "daemon_python_src_gui_settingswindow_open_fallback_folder"
-    },
-    {
-      "label": "._open_update_log()",
-      "file_type": "code",
-      "source_file": "daemon-python/src/gui.py",
-      "source_location": "L1319",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 29,
-      "community_name": "config_file_path",
-      "norm_label": "._open_update_log()",
-      "id": "daemon_python_src_gui_settingswindow_open_update_log"
-    },
-    {
-      "label": "._open_fallback_folder()",
-      "file_type": "code",
-      "source_file": "daemon-python/src/gui.py",
-      "source_location": "L303",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 29,
-      "community_name": "config_file_path",
-      "norm_label": "._open_fallback_folder()",
-      "id": "daemon_python_src_gui_updateprogresswindow_open_fallback_folder"
+      "norm_label": "test_config_exists_false_before_save_true_after()",
+      "id": "daemon_python_tests_test_config_test_config_exists_false_before_save_true_after"
     },
     {
       "label": "test_open_config_folder_creates_the_directory_if_missing()",
@@ -5058,6 +4974,66 @@
       "id": "daemon_python_tests_test_config_test_open_config_folder_uses_startfile_on_windows"
     },
     {
+      "label": "test_save_config_strips_trailing_slash_from_api_base_url()",
+      "file_type": "code",
+      "source_file": "daemon-python/tests/test_config.py",
+      "source_location": "L133",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 29,
+      "community_name": "config_file_path",
+      "norm_label": "test_save_config_strips_trailing_slash_from_api_base_url()",
+      "id": "daemon_python_tests_test_config_test_save_config_strips_trailing_slash_from_api_base_url"
+    },
+    {
+      "label": "buildMatchConditions()",
+      "file_type": "code",
+      "source_file": "apps/api/src/routes/matches.ts",
+      "source_location": "L43",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 3,
+      "community_name": "routes/matches.ts",
+      "norm_label": "buildmatchconditions()",
+      "id": "apps_api_src_routes_matches_buildmatchconditions"
+    },
+    {
+      "label": "displayNameFromSlug()",
+      "file_type": "code",
+      "source_file": "apps/api/src/services/replay-upsert.service.ts",
+      "source_location": "L16",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 3,
+      "community_name": "routes/matches.ts",
+      "norm_label": "displaynamefromslug()",
+      "id": "apps_api_src_services_replay_upsert_service_displaynamefromslug"
+    },
+    {
+      "label": "isVersionGreater()",
+      "file_type": "code",
+      "source_file": "apps/api/src/services/replay-upsert.service.ts",
+      "source_location": "L25",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 3,
+      "community_name": "routes/matches.ts",
+      "norm_label": "isversiongreater()",
+      "id": "apps_api_src_services_replay_upsert_service_isversiongreater"
+    },
+    {
+      "label": "upsertReplay()",
+      "file_type": "code",
+      "source_file": "apps/api/src/services/replay-upsert.service.ts",
+      "source_location": "L45",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 3,
+      "community_name": "routes/matches.ts",
+      "norm_label": "upsertreplay()",
+      "id": "apps_api_src_services_replay_upsert_service_upsertreplay"
+    },
+    {
       "label": "main()",
       "file_type": "code",
       "source_file": "packages/db/src/seed.ts",
@@ -5065,7 +5041,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
+      "community_name": "routes/matches.ts",
       "norm_label": "main()",
       "id": "packages_db_src_seed_main"
     },
@@ -5077,7 +5053,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
+      "community_name": "routes/matches.ts",
       "norm_label": "slugify()",
       "id": "packages_db_src_seed_slugify"
     },
@@ -5238,6 +5214,18 @@
       "id": "daemon_python_src_gui_settingswindow_init"
     },
     {
+      "label": "._load_stats()",
+      "file_type": "code",
+      "source_file": "daemon-python/src/gui.py",
+      "source_location": "L1475",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 31,
+      "community_name": ".__init__",
+      "norm_label": "._load_stats()",
+      "id": "daemon_python_src_gui_settingswindow_load_stats"
+    },
+    {
       "label": "._measure_worst_case_size()",
       "file_type": "code",
       "source_file": "daemon-python/src/gui.py",
@@ -5248,18 +5236,6 @@
       "community_name": ".__init__",
       "norm_label": "._measure_worst_case_size()",
       "id": "daemon_python_src_gui_settingswindow_measure_worst_case_size"
-    },
-    {
-      "label": "._refresh_live_stats()",
-      "file_type": "code",
-      "source_file": "daemon-python/src/gui.py",
-      "source_location": "L1175",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 31,
-      "community_name": ".__init__",
-      "norm_label": "._refresh_live_stats()",
-      "id": "daemon_python_src_gui_settingswindow_refresh_live_stats"
     },
     {
       "label": "_apply_dark_style()",
@@ -5437,7 +5413,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 34,
-      "community_name": "ConfigError",
+      "community_name": "config.py",
       "norm_label": "is_auto_update_enabled()",
       "id": "daemon_python_src_config_is_auto_update_enabled"
     },
@@ -5449,21 +5425,9 @@
       "_callable": true,
       "_origin": "ast",
       "community": 34,
-      "community_name": "ConfigError",
+      "community_name": "config.py",
       "norm_label": "read_config_file()",
       "id": "daemon_python_src_config_read_config_file"
-    },
-    {
-      "label": "._load_stats()",
-      "file_type": "code",
-      "source_file": "daemon-python/src/gui.py",
-      "source_location": "L1475",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 34,
-      "community_name": "ConfigError",
-      "norm_label": "._load_stats()",
-      "id": "daemon_python_src_gui_settingswindow_load_stats"
     },
     {
       "label": "test_is_auto_update_enabled_reads_saved_value()",
@@ -5473,7 +5437,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 34,
-      "community_name": "ConfigError",
+      "community_name": "config.py",
       "norm_label": "test_is_auto_update_enabled_reads_saved_value()",
       "id": "daemon_python_tests_test_config_test_is_auto_update_enabled_reads_saved_value"
     },
@@ -5485,7 +5449,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 34,
-      "community_name": "ConfigError",
+      "community_name": "config.py",
       "norm_label": "test_is_auto_update_enabled_true_on_unreadable_config()",
       "id": "daemon_python_tests_test_config_test_is_auto_update_enabled_true_on_unreadable_config"
     },
@@ -5497,7 +5461,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 34,
-      "community_name": "ConfigError",
+      "community_name": "config.py",
       "norm_label": "test_is_auto_update_enabled_true_when_no_config_file()",
       "id": "daemon_python_tests_test_config_test_is_auto_update_enabled_true_when_no_config_file"
     },
@@ -5694,18 +5658,6 @@
       "id": "daemon_python_src_updater_cleanup_stale_downloads"
     },
     {
-      "label": "downloads_dir()",
-      "file_type": "code",
-      "source_file": "daemon-python/src/updater.py",
-      "source_location": "L212",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 36,
-      "community_name": "test_updater.py",
-      "norm_label": "downloads_dir()",
-      "id": "daemon_python_src_updater_downloads_dir"
-    },
-    {
       "label": "parse_version()",
       "file_type": "code",
       "source_file": "daemon-python/src/updater.py",
@@ -5764,18 +5716,6 @@
       "community_name": "test_updater.py",
       "norm_label": "test_cleanup_stale_downloads_removes_leftover_files()",
       "id": "daemon_python_tests_test_updater_test_cleanup_stale_downloads_removes_leftover_files"
-    },
-    {
-      "label": "test_downloads_dir_is_under_the_system_temp_dir()",
-      "file_type": "code",
-      "source_file": "daemon-python/tests/test_updater.py",
-      "source_location": "L602",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 36,
-      "community_name": "test_updater.py",
-      "norm_label": "test_downloads_dir_is_under_the_system_temp_dir()",
-      "id": "daemon_python_tests_test_updater_test_downloads_dir_is_under_the_system_temp_dir"
     },
     {
       "label": "test_parse_version_none_for_dev_build()",
@@ -5886,42 +5826,6 @@
       "id": "daemon_python_tests_test_updater_test_powershell_diagnostics_reports_probe_output"
     },
     {
-      "label": "test_try_begin_fails_while_already_downloading()",
-      "file_type": "code",
-      "source_file": "daemon-python/tests/test_updater.py",
-      "source_location": "L315",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 36,
-      "community_name": "test_updater.py",
-      "norm_label": "test_try_begin_fails_while_already_downloading()",
-      "id": "daemon_python_tests_test_updater_test_try_begin_fails_while_already_downloading"
-    },
-    {
-      "label": "test_try_begin_fails_while_installing()",
-      "file_type": "code",
-      "source_file": "daemon-python/tests/test_updater.py",
-      "source_location": "L321",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 36,
-      "community_name": "test_updater.py",
-      "norm_label": "test_try_begin_fails_while_installing()",
-      "id": "daemon_python_tests_test_updater_test_try_begin_fails_while_installing"
-    },
-    {
-      "label": "test_try_begin_succeeds_when_idle()",
-      "file_type": "code",
-      "source_file": "daemon-python/tests/test_updater.py",
-      "source_location": "L306",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 36,
-      "community_name": "test_updater.py",
-      "norm_label": "test_try_begin_succeeds_when_idle()",
-      "id": "daemon_python_tests_test_updater_test_try_begin_succeeds_when_idle"
-    },
-    {
       "label": "hash_replay_file()",
       "file_type": "code",
       "source_file": "daemon-python/src/hasher.py",
@@ -5929,9 +5833,21 @@
       "_callable": true,
       "_origin": "ast",
       "community": 37,
-      "community_name": "hash_replay_file",
+      "community_name": "parser.py",
       "norm_label": "hash_replay_file()",
       "id": "daemon_python_src_hasher_hash_replay_file"
+    },
+    {
+      "label": "_report_error()",
+      "file_type": "code",
+      "source_file": "daemon-python/src/ingestion.py",
+      "source_location": "L34",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 37,
+      "community_name": "parser.py",
+      "norm_label": "_report_error()",
+      "id": "daemon_python_src_ingestion_report_error"
     },
     {
       "label": "test_hash_differs_for_different_content()",
@@ -5941,7 +5857,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 37,
-      "community_name": "hash_replay_file",
+      "community_name": "parser.py",
       "norm_label": "test_hash_differs_for_different_content()",
       "id": "daemon_python_tests_test_hasher_test_hash_differs_for_different_content"
     },
@@ -5953,7 +5869,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 37,
-      "community_name": "hash_replay_file",
+      "community_name": "parser.py",
       "norm_label": "test_hash_matches_manual_sha256()",
       "id": "daemon_python_tests_test_hasher_test_hash_matches_manual_sha256"
     },
@@ -5965,21 +5881,45 @@
       "_callable": true,
       "_origin": "ast",
       "community": 37,
-      "community_name": "hash_replay_file",
+      "community_name": "parser.py",
       "norm_label": "test_hash_stable_across_calls()",
       "id": "daemon_python_tests_test_hasher_test_hash_stable_across_calls"
     },
     {
-      "label": "stat_field_name()",
+      "label": "extractBaseBuild()",
       "file_type": "code",
-      "source_file": "daemon-python/src/constants.py",
-      "source_location": "L197",
+      "source_file": "apps/api/src/routes/ingest.ts",
+      "source_location": "L16",
       "_callable": true,
       "_origin": "ast",
       "community": 38,
-      "community_name": "constants.py",
-      "norm_label": "stat_field_name()",
-      "id": "daemon_python_src_constants_stat_field_name"
+      "community_name": "ingest.ts",
+      "norm_label": "extractbasebuild()",
+      "id": "apps_api_src_routes_ingest_extractbasebuild"
+    },
+    {
+      "label": "recordDaemonError()",
+      "file_type": "code",
+      "source_file": "apps/api/src/services/daemon-errors.service.ts",
+      "source_location": "L15",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 38,
+      "community_name": "ingest.ts",
+      "norm_label": "recorddaemonerror()",
+      "id": "apps_api_src_services_daemon_errors_service_recorddaemonerror"
+    },
+    {
+      "label": "quarantineRawReplay()",
+      "file_type": "code",
+      "source_file": "apps/api/src/services/quarantine.service.ts",
+      "source_location": "L5",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 38,
+      "community_name": "ingest.ts",
+      "norm_label": "quarantinerawreplay()",
+      "id": "apps_api_src_services_quarantine_service_quarantinerawreplay"
     },
     {
       "label": ".__init__()",
@@ -6570,6 +6510,18 @@
       "id": "daemon_python_src_sync_state_syncstate_cached_hash"
     },
     {
+      "label": ".get_error_records()",
+      "file_type": "code",
+      "source_file": "daemon-python/src/sync_state.py",
+      "source_location": "L285",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "SyncState",
+      "norm_label": ".get_error_records()",
+      "id": "daemon_python_src_sync_state_syncstate_get_error_records"
+    },
+    {
       "label": ".get_meta()",
       "file_type": "code",
       "source_file": "daemon-python/src/sync_state.py",
@@ -6954,16 +6906,40 @@
       "id": "daemon_python_tests_test_sync_state_test_wipe_all_is_noop_on_empty_state"
     },
     {
-      "label": "_clear_env()",
+      "label": "resync()",
       "file_type": "code",
-      "source_file": "daemon-python/tests/test_config.py",
-      "source_location": "L21",
+      "source_file": "daemon-python/src/ingestion.py",
+      "source_location": "L256",
       "_callable": true,
       "_origin": "ast",
       "community": 40,
-      "community_name": "_clear_env",
-      "norm_label": "_clear_env()",
-      "id": "daemon_python_tests_test_config_clear_env"
+      "community_name": "main.py",
+      "norm_label": "resync()",
+      "id": "daemon_python_src_ingestion_resync"
+    },
+    {
+      "label": "main()",
+      "file_type": "code",
+      "source_file": "daemon-python/src/main.py",
+      "source_location": "L23",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 40,
+      "community_name": "main.py",
+      "norm_label": "main()",
+      "id": "daemon_python_src_main_main"
+    },
+    {
+      "label": "getFriendshipStatuses()",
+      "file_type": "code",
+      "source_file": "apps/api/src/services/friendships.service.ts",
+      "source_location": "L46",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 41,
+      "community_name": "players.service.ts",
+      "norm_label": "getfriendshipstatuses()",
+      "id": "apps_api_src_services_friendships_service_getfriendshipstatuses"
     },
     {
       "label": "encounterBase()",
@@ -7290,6 +7266,54 @@
       "id": "apps_api_src_services_draft_service_toviewersnapshot"
     },
     {
+      "label": "open_path()",
+      "file_type": "code",
+      "source_file": "daemon-python/src/config.py",
+      "source_location": "L56",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 47,
+      "community_name": "open_path",
+      "norm_label": "open_path()",
+      "id": "daemon_python_src_config_open_path"
+    },
+    {
+      "label": "._open_fallback_folder()",
+      "file_type": "code",
+      "source_file": "daemon-python/src/gui.py",
+      "source_location": "L1322",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 47,
+      "community_name": "open_path",
+      "norm_label": "._open_fallback_folder()",
+      "id": "daemon_python_src_gui_settingswindow_open_fallback_folder"
+    },
+    {
+      "label": "._open_update_log()",
+      "file_type": "code",
+      "source_file": "daemon-python/src/gui.py",
+      "source_location": "L1319",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 47,
+      "community_name": "open_path",
+      "norm_label": "._open_update_log()",
+      "id": "daemon_python_src_gui_settingswindow_open_update_log"
+    },
+    {
+      "label": "._open_fallback_folder()",
+      "file_type": "code",
+      "source_file": "daemon-python/src/gui.py",
+      "source_location": "L303",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 47,
+      "community_name": "open_path",
+      "norm_label": "._open_fallback_folder()",
+      "id": "daemon_python_src_gui_updateprogresswindow_open_fallback_folder"
+    },
+    {
       "label": "._build_config_tab()",
       "file_type": "code",
       "source_file": "daemon-python/src/gui.py",
@@ -7470,18 +7494,6 @@
       "id": "daemon_python_src_api_client_validationerror_init"
     },
     {
-      "label": "main()",
-      "file_type": "code",
-      "source_file": "daemon-python/src/main.py",
-      "source_location": "L23",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "Config",
-      "norm_label": "main()",
-      "id": "daemon_python_src_main_main"
-    },
-    {
       "label": "is_enabled()",
       "file_type": "code",
       "source_file": "daemon-python/src/autostart.py",
@@ -7590,6 +7602,18 @@
       "id": "daemon_python_src_updater_append_update_log_line"
     },
     {
+      "label": "downloads_dir()",
+      "file_type": "code",
+      "source_file": "daemon-python/src/updater.py",
+      "source_location": "L212",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 51,
+      "community_name": "updater.py",
+      "norm_label": "downloads_dir()",
+      "id": "daemon_python_src_updater_downloads_dir"
+    },
+    {
       "label": "installed_exe_path()",
       "file_type": "code",
       "source_file": "daemon-python/src/updater.py",
@@ -7660,6 +7684,18 @@
       "community_name": "updater.py",
       "norm_label": "update_log_file_path()",
       "id": "daemon_python_src_updater_update_log_file_path"
+    },
+    {
+      "label": "test_downloads_dir_is_under_the_system_temp_dir()",
+      "file_type": "code",
+      "source_file": "daemon-python/tests/test_updater.py",
+      "source_location": "L602",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 51,
+      "community_name": "updater.py",
+      "norm_label": "test_downloads_dir_is_under_the_system_temp_dir()",
+      "id": "daemon_python_tests_test_updater_test_downloads_dir_is_under_the_system_temp_dir"
     },
     {
       "label": "test_installed_exe_path_falls_back_to_sys_executable()",
@@ -8286,30 +8322,6 @@
       "id": "daemon_python_src_ingestion_ingest_file"
     },
     {
-      "label": "_report_error()",
-      "file_type": "code",
-      "source_file": "daemon-python/src/ingestion.py",
-      "source_location": "L34",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 7,
-      "community_name": "ApiClient",
-      "norm_label": "_report_error()",
-      "id": "daemon_python_src_ingestion_report_error"
-    },
-    {
-      "label": "resync()",
-      "file_type": "code",
-      "source_file": "daemon-python/src/ingestion.py",
-      "source_location": "L256",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 7,
-      "community_name": "ApiClient",
-      "norm_label": "resync()",
-      "id": "daemon_python_src_ingestion_resync"
-    },
-    {
       "label": "_config()",
       "file_type": "code",
       "source_file": "daemon-python/tests/test_ingestion.py",
@@ -8874,18 +8886,6 @@
       "id": "daemon_python_src_sync_state_syncstate_open"
     },
     {
-      "label": ".get_error_records()",
-      "file_type": "code",
-      "source_file": "daemon-python/src/sync_state.py",
-      "source_location": "L285",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 86,
-      "community_name": "ReplayErrorRecord",
-      "norm_label": ".get_error_records()",
-      "id": "daemon_python_src_sync_state_syncstate_get_error_records"
-    },
-    {
       "label": "capture_and_submit()",
       "file_type": "code",
       "source_file": "daemon-python/src/draft_capture.py",
@@ -9149,17 +9149,6 @@
       "id": "any"
     },
     {
-      "label": "parser.py",
-      "file_type": "code",
-      "source_file": "daemon-python/src/parser.py",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "test_parser.py",
-      "norm_label": "parser.py",
-      "id": "daemon_python_src_parser"
-    },
-    {
       "label": "Exception",
       "file_type": "code",
       "source_file": "",
@@ -9215,15 +9204,15 @@
       "id": "mpqarchive"
     },
     {
-      "label": "Parses a `.StormReplay` file into a dict matching `replayPayloadSchema`. Built\u2026",
+      "label": "Tracker stat name (e.g. \"HeroDamage\") -> API payload field name (e.g.\u2026",
       "file_type": "rationale",
-      "source_file": "daemon-python/src/parser.py",
-      "source_location": "L1",
+      "source_file": "daemon-python/src/constants.py",
+      "source_location": "L198",
       "_origin": "ast",
       "community": 0,
       "community_name": "test_parser.py",
-      "norm_label": "parses a `.stormreplay` file into a dict matching `replaypayloadschema`. built...",
-      "id": "daemon_python_src_parser_rationale_1"
+      "norm_label": "tracker stat name (e.g. \"herodamage\") -> api payload field name (e.g....",
+      "id": "daemon_python_src_constants_rationale_198"
     },
     {
       "label": "Maps a player's toon handle -> full \"Name#1234\" battletag. `replay.details`\u2026",
@@ -9837,7 +9826,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "check-build.ts",
       "id": "apps_api_scripts_check_build"
     },
@@ -9848,7 +9837,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "default-adapter.ts",
       "id": "apps_api_src_adapters_default_adapter"
     },
@@ -9859,7 +9848,7 @@
       "source_location": "L19",
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "defaultadapter",
       "id": "apps_api_src_adapters_default_adapter_defaultadapter"
     },
@@ -9870,7 +9859,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "adapters/index.ts",
       "id": "apps_api_src_adapters_index"
     },
@@ -9881,7 +9870,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "registry.ts",
       "id": "apps_api_src_adapters_registry"
     },
@@ -9892,7 +9881,7 @@
       "source_location": "L17",
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "custom_adapters",
       "id": "apps_api_src_adapters_registry_custom_adapters"
     },
@@ -9903,64 +9892,20 @@
       "source_location": "L1",
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "types.ts",
       "id": "apps_api_src_adapters_types"
     },
     {
-      "label": "constants.ts",
+      "label": "internalSecret",
       "file_type": "code",
-      "source_file": "apps/api/src/constants.ts",
-      "source_location": "L1",
+      "source_file": "apps/api/src/middleware/internal-secret.ts",
+      "source_location": "L12",
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
-      "norm_label": "constants.ts",
-      "id": "apps_api_src_constants"
-    },
-    {
-      "label": "API_VERSION",
-      "file_type": "code",
-      "source_file": "apps/api/src/constants.ts",
-      "source_location": "L6",
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "ingest.ts",
-      "norm_label": "api_version",
-      "id": "apps_api_src_constants_api_version"
-    },
-    {
-      "label": "MIN_PARSER_VERSION",
-      "file_type": "code",
-      "source_file": "apps/api/src/constants.ts",
-      "source_location": "L18",
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "ingest.ts",
-      "norm_label": "min_parser_version",
-      "id": "apps_api_src_constants_min_parser_version"
-    },
-    {
-      "label": "ingest.ts",
-      "file_type": "code",
-      "source_file": "apps/api/src/routes/ingest.ts",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "ingest.ts",
-      "norm_label": "ingest.ts",
-      "id": "apps_api_src_routes_ingest"
-    },
-    {
-      "label": "ingestRoute",
-      "file_type": "code",
-      "source_file": "apps/api/src/routes/ingest.ts",
-      "source_location": "L27",
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "ingest.ts",
-      "norm_label": "ingestroute",
-      "id": "apps_api_src_routes_ingest_ingestroute"
+      "community_name": "internal.ts",
+      "norm_label": "internalsecret",
+      "id": "apps_api_src_middleware_internal_secret_internalsecret"
     },
     {
       "label": "internal.ts",
@@ -9969,7 +9914,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "internal.ts",
       "id": "apps_api_src_routes_internal"
     },
@@ -9980,7 +9925,7 @@
       "source_location": "L16",
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "errorsqueryschema",
       "id": "apps_api_src_routes_internal_errorsqueryschema"
     },
@@ -9991,7 +9936,7 @@
       "source_location": "L32",
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "internalroute",
       "id": "apps_api_src_routes_internal_internalroute"
     },
@@ -10002,7 +9947,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "paramsschema",
       "id": "apps_api_src_routes_internal_paramsschema"
     },
@@ -10013,7 +9958,7 @@
       "source_location": "L12",
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "queryschema",
       "id": "apps_api_src_routes_internal_queryschema"
     },
@@ -10024,7 +9969,7 @@
       "source_location": "L20",
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "resolveerrorsschema",
       "id": "apps_api_src_routes_internal_resolveerrorsschema"
     },
@@ -10035,20 +9980,9 @@
       "source_location": "L1",
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "build-verification.service.ts",
       "id": "apps_api_src_services_build_verification_service"
-    },
-    {
-      "label": "daemon-errors.service.ts",
-      "file_type": "code",
-      "source_file": "apps/api/src/services/daemon-errors.service.ts",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "ingest.ts",
-      "norm_label": "daemon-errors.service.ts",
-      "id": "apps_api_src_services_daemon_errors_service"
     },
     {
       "label": "quarantine.service.ts",
@@ -10057,20 +9991,9 @@
       "source_location": "L1",
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "quarantine.service.ts",
       "id": "apps_api_src_services_quarantine_service"
-    },
-    {
-      "label": "replay-upsert.service.ts",
-      "file_type": "code",
-      "source_file": "apps/api/src/services/replay-upsert.service.ts",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "ingest.ts",
-      "norm_label": "replay-upsert.service.ts",
-      "id": "apps_api_src_services_replay_upsert_service"
     },
     {
       "label": "quarantine.ts",
@@ -10079,7 +10002,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "quarantine.ts",
       "id": "packages_db_src_schema_quarantine"
     },
@@ -10090,7 +10013,7 @@
       "source_location": "L39",
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "knownbuilds",
       "id": "packages_db_src_schema_quarantine_knownbuilds"
     },
@@ -10101,7 +10024,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "quarantinestatusenum",
       "id": "packages_db_src_schema_quarantine_quarantinestatusenum"
     },
@@ -10112,53 +10035,9 @@
       "source_location": "L13",
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "rawreplaysquarantine",
       "id": "packages_db_src_schema_quarantine_rawreplaysquarantine"
-    },
-    {
-      "label": "daemon-error.ts",
-      "file_type": "code",
-      "source_file": "packages/shared-types/src/daemon-error.ts",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "ingest.ts",
-      "norm_label": "daemon-error.ts",
-      "id": "packages_shared_types_src_daemon_error"
-    },
-    {
-      "label": "daemonErrorReportInputSchema",
-      "file_type": "code",
-      "source_file": "packages/shared-types/src/daemon-error.ts",
-      "source_location": "L14",
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "ingest.ts",
-      "norm_label": "daemonerrorreportinputschema",
-      "id": "packages_shared_types_src_daemon_error_daemonerrorreportinputschema"
-    },
-    {
-      "label": "daemonErrorTypeSchema",
-      "file_type": "code",
-      "source_file": "packages/shared-types/src/daemon-error.ts",
-      "source_location": "L3",
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "ingest.ts",
-      "norm_label": "daemonerrortypeschema",
-      "id": "packages_shared_types_src_daemon_error_daemonerrortypeschema"
-    },
-    {
-      "label": "shared-types/src/index.ts",
-      "file_type": "code",
-      "source_file": "packages/shared-types/src/index.ts",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "ingest.ts",
-      "norm_label": "shared-types/src/index.ts",
-      "id": "packages_shared_types_src_index"
     },
     {
       "label": "replay-payload.ts",
@@ -10167,9 +10046,20 @@
       "source_location": "L1",
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "replay-payload.ts",
       "id": "packages_shared_types_src_replay_payload"
+    },
+    {
+      "label": "gameModeSchema",
+      "file_type": "code",
+      "source_file": "packages/shared-types/src/replay-payload.ts",
+      "source_location": "L3",
+      "_origin": "ast",
+      "community": 11,
+      "community_name": "internal.ts",
+      "norm_label": "gamemodeschema",
+      "id": "packages_shared_types_src_replay_payload_gamemodeschema"
     },
     {
       "label": "replayPayloadSchema",
@@ -10178,7 +10068,7 @@
       "source_location": "L63",
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "replaypayloadschema",
       "id": "packages_shared_types_src_replay_payload_replaypayloadschema"
     },
@@ -10189,7 +10079,7 @@
       "source_location": "L30",
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "replayplayerschema",
       "id": "packages_shared_types_src_replay_payload_replayplayerschema"
     },
@@ -10200,7 +10090,7 @@
       "source_location": "L15",
       "_origin": "ast",
       "community": 11,
-      "community_name": "ingest.ts",
+      "community_name": "internal.ts",
       "norm_label": "talentpickschema",
       "id": "packages_shared_types_src_replay_payload_talentpickschema"
     },
@@ -12108,17 +11998,6 @@
       "id": "apps_api_src_middleware_internal_secret"
     },
     {
-      "label": "internalSecret",
-      "file_type": "code",
-      "source_file": "apps/api/src/middleware/internal-secret.ts",
-      "source_location": "L12",
-      "_origin": "ast",
-      "community": 20,
-      "community_name": "routes/auth.ts",
-      "norm_label": "internalsecret",
-      "id": "apps_api_src_middleware_internal_secret_internalsecret"
-    },
-    {
       "label": "routes/auth.ts",
       "file_type": "code",
       "source_file": "apps/api/src/routes/auth.ts",
@@ -12161,6 +12040,28 @@
       "community_name": "routes/auth.ts",
       "norm_label": "updatemeschema",
       "id": "apps_api_src_routes_auth_updatemeschema"
+    },
+    {
+      "label": "data-reset.service.ts",
+      "file_type": "code",
+      "source_file": "apps/api/src/services/data-reset.service.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 20,
+      "community_name": "routes/auth.ts",
+      "norm_label": "data-reset.service.ts",
+      "id": "apps_api_src_services_data_reset_service"
+    },
+    {
+      "label": "users",
+      "file_type": "code",
+      "source_file": "packages/db/src/schema/users.ts",
+      "source_location": "L8",
+      "_origin": "ast",
+      "community": 20,
+      "community_name": "routes/auth.ts",
+      "norm_label": "users",
+      "id": "packages_db_src_schema_users_users"
     },
     {
       "label": "Event",
@@ -12262,15 +12163,15 @@
       "id": "daemon_python_tests_test_config"
     },
     {
-      "label": "Writes the user-provided fields to the JSON config file, creating its parent\u2026",
-      "file_type": "rationale",
-      "source_file": "daemon-python/src/config.py",
-      "source_location": "L112",
+      "label": "fixture",
+      "file_type": "code",
+      "source_file": "",
+      "source_location": "",
       "_origin": "ast",
       "community": 22,
       "community_name": "test_config.py",
-      "norm_label": "writes the user-provided fields to the json config file, creating its parent...",
-      "id": "daemon_python_src_config_rationale_112"
+      "norm_label": "fixture",
+      "id": "daemon_python_tests_test_config_py_fixture"
     },
     {
       "label": "Best-effort guess at the default HotS replays folder, e.g.\u2026",
@@ -12598,7 +12499,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "community": 26,
-      "community_name": "auth-token.ts",
+      "community_name": "db/src/index.ts",
       "norm_label": "lib/tokens.ts",
       "id": "apps_api_src_lib_tokens"
     },
@@ -12609,7 +12510,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "community": 26,
-      "community_name": "auth-token.ts",
+      "community_name": "db/src/index.ts",
       "norm_label": "auth-token.ts",
       "id": "apps_api_src_middleware_auth_token"
     },
@@ -12620,7 +12521,7 @@
       "source_location": "L9",
       "_origin": "ast",
       "community": 26,
-      "community_name": "auth-token.ts",
+      "community_name": "db/src/index.ts",
       "norm_label": "authtoken",
       "id": "apps_api_src_middleware_auth_token_authtoken"
     },
@@ -12631,7 +12532,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "community": 26,
-      "community_name": "auth-token.ts",
+      "community_name": "db/src/index.ts",
       "norm_label": "routes/tokens.ts",
       "id": "apps_api_src_routes_tokens"
     },
@@ -12642,7 +12543,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "community": 26,
-      "community_name": "auth-token.ts",
+      "community_name": "db/src/index.ts",
       "norm_label": "createtokenschema",
       "id": "apps_api_src_routes_tokens_createtokenschema"
     },
@@ -12653,130 +12554,185 @@
       "source_location": "L12",
       "_origin": "ast",
       "community": 26,
-      "community_name": "auth-token.ts",
+      "community_name": "db/src/index.ts",
       "norm_label": "tokensroute",
       "id": "apps_api_src_routes_tokens_tokensroute"
     },
     {
-      "label": "query.ts",
+      "label": "client.ts",
       "file_type": "code",
-      "source_file": "apps/api/src/lib/query.ts",
+      "source_file": "packages/db/src/client.ts",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 27,
-      "community_name": "routes/matches.ts",
-      "norm_label": "query.ts",
-      "id": "apps_api_src_lib_query"
+      "community": 26,
+      "community_name": "db/src/index.ts",
+      "norm_label": "client.ts",
+      "id": "packages_db_src_client"
     },
     {
-      "label": "gameModeListSchema",
+      "label": "db",
       "file_type": "code",
-      "source_file": "apps/api/src/lib/query.ts",
-      "source_location": "L14",
-      "_origin": "ast",
-      "community": 27,
-      "community_name": "routes/matches.ts",
-      "norm_label": "gamemodelistschema",
-      "id": "apps_api_src_lib_query_gamemodelistschema"
-    },
-    {
-      "label": "routes/matches.ts",
-      "file_type": "code",
-      "source_file": "apps/api/src/routes/matches.ts",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 27,
-      "community_name": "routes/matches.ts",
-      "norm_label": "routes/matches.ts",
-      "id": "apps_api_src_routes_matches"
-    },
-    {
-      "label": "filtersQuerySchema",
-      "file_type": "code",
-      "source_file": "apps/api/src/routes/matches.ts",
-      "source_location": "L21",
-      "_origin": "ast",
-      "community": 27,
-      "community_name": "routes/matches.ts",
-      "norm_label": "filtersqueryschema",
-      "id": "apps_api_src_routes_matches_filtersqueryschema"
-    },
-    {
-      "label": "listQuerySchema",
-      "file_type": "code",
-      "source_file": "apps/api/src/routes/matches.ts",
-      "source_location": "L31",
-      "_origin": "ast",
-      "community": 27,
-      "community_name": "routes/matches.ts",
-      "norm_label": "listqueryschema",
-      "id": "apps_api_src_routes_matches_listqueryschema"
-    },
-    {
-      "label": "matchesRoute",
-      "file_type": "code",
-      "source_file": "apps/api/src/routes/matches.ts",
-      "source_location": "L84",
-      "_origin": "ast",
-      "community": 27,
-      "community_name": "routes/matches.ts",
-      "norm_label": "matchesroute",
-      "id": "apps_api_src_routes_matches_matchesroute"
-    },
-    {
-      "label": "SORTABLE_COLUMNS",
-      "file_type": "code",
-      "source_file": "apps/api/src/routes/matches.ts",
+      "source_file": "packages/db/src/client.ts",
       "source_location": "L12",
       "_origin": "ast",
-      "community": 27,
-      "community_name": "routes/matches.ts",
-      "norm_label": "sortable_columns",
-      "id": "apps_api_src_routes_matches_sortable_columns"
+      "community": 26,
+      "community_name": "db/src/index.ts",
+      "norm_label": "db",
+      "id": "packages_db_src_client_db"
     },
     {
-      "label": "matchPlayers",
+      "label": "queryClient",
       "file_type": "code",
-      "source_file": "packages/db/src/schema/match-players.ts",
+      "source_file": "packages/db/src/client.ts",
+      "source_location": "L10",
+      "_origin": "ast",
+      "community": 26,
+      "community_name": "db/src/index.ts",
+      "norm_label": "queryclient",
+      "id": "packages_db_src_client_queryclient"
+    },
+    {
+      "label": "db/src/index.ts",
+      "file_type": "code",
+      "source_file": "packages/db/src/index.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 26,
+      "community_name": "db/src/index.ts",
+      "norm_label": "db/src/index.ts",
+      "id": "packages_db_src_index"
+    },
+    {
+      "label": "schema/tokens.ts",
+      "file_type": "code",
+      "source_file": "packages/db/src/schema/tokens.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 26,
+      "community_name": "db/src/index.ts",
+      "norm_label": "schema/tokens.ts",
+      "id": "packages_db_src_schema_tokens"
+    },
+    {
+      "label": "personalAccessTokens",
+      "file_type": "code",
+      "source_file": "packages/db/src/schema/tokens.ts",
+      "source_location": "L4",
+      "_origin": "ast",
+      "community": 26,
+      "community_name": "db/src/index.ts",
+      "norm_label": "personalaccesstokens",
+      "id": "packages_db_src_schema_tokens_personalaccesstokens"
+    },
+    {
+      "label": "daemon-ingest-errors.ts",
+      "file_type": "code",
+      "source_file": "packages/db/src/schema/daemon-ingest-errors.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "users.ts",
+      "norm_label": "daemon-ingest-errors.ts",
+      "id": "packages_db_src_schema_daemon_ingest_errors"
+    },
+    {
+      "label": "daemonErrorStatusEnum",
+      "file_type": "code",
+      "source_file": "packages/db/src/schema/daemon-ingest-errors.ts",
       "source_location": "L6",
       "_origin": "ast",
       "community": 27,
-      "community_name": "routes/matches.ts",
-      "norm_label": "matchplayers",
-      "id": "packages_db_src_schema_match_players_matchplayers"
+      "community_name": "users.ts",
+      "norm_label": "daemonerrorstatusenum",
+      "id": "packages_db_src_schema_daemon_ingest_errors_daemonerrorstatusenum"
     },
     {
-      "label": "talent-picks.ts",
+      "label": "daemonErrorTypeEnum",
       "file_type": "code",
-      "source_file": "packages/db/src/schema/talent-picks.ts",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 27,
-      "community_name": "routes/matches.ts",
-      "norm_label": "talent-picks.ts",
-      "id": "packages_db_src_schema_talent_picks"
-    },
-    {
-      "label": "talentPicks",
-      "file_type": "code",
-      "source_file": "packages/db/src/schema/talent-picks.ts",
+      "source_file": "packages/db/src/schema/daemon-ingest-errors.ts",
       "source_location": "L4",
       "_origin": "ast",
       "community": 27,
-      "community_name": "routes/matches.ts",
-      "norm_label": "talentpicks",
-      "id": "packages_db_src_schema_talent_picks_talentpicks"
+      "community_name": "users.ts",
+      "norm_label": "daemonerrortypeenum",
+      "id": "packages_db_src_schema_daemon_ingest_errors_daemonerrortypeenum"
     },
     {
-      "label": "gameModeSchema",
+      "label": "draft-pseudo-preferences.ts",
       "file_type": "code",
-      "source_file": "packages/shared-types/src/replay-payload.ts",
-      "source_location": "L3",
+      "source_file": "packages/db/src/schema/draft-pseudo-preferences.ts",
+      "source_location": "L1",
       "_origin": "ast",
       "community": 27,
-      "community_name": "routes/matches.ts",
-      "norm_label": "gamemodeschema",
-      "id": "packages_shared_types_src_replay_payload_gamemodeschema"
+      "community_name": "users.ts",
+      "norm_label": "draft-pseudo-preferences.ts",
+      "id": "packages_db_src_schema_draft_pseudo_preferences"
+    },
+    {
+      "label": "draftPseudoPreferences",
+      "file_type": "code",
+      "source_file": "packages/db/src/schema/draft-pseudo-preferences.ts",
+      "source_location": "L11",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "users.ts",
+      "norm_label": "draftpseudopreferences",
+      "id": "packages_db_src_schema_draft_pseudo_preferences_draftpseudopreferences"
+    },
+    {
+      "label": "friendships.ts",
+      "file_type": "code",
+      "source_file": "packages/db/src/schema/friendships.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "users.ts",
+      "norm_label": "friendships.ts",
+      "id": "packages_db_src_schema_friendships"
+    },
+    {
+      "label": "friendships",
+      "file_type": "code",
+      "source_file": "packages/db/src/schema/friendships.ts",
+      "source_location": "L10",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "users.ts",
+      "norm_label": "friendships",
+      "id": "packages_db_src_schema_friendships_friendships"
+    },
+    {
+      "label": "friendshipStatusEnum",
+      "file_type": "code",
+      "source_file": "packages/db/src/schema/friendships.ts",
+      "source_location": "L4",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "users.ts",
+      "norm_label": "friendshipstatusenum",
+      "id": "packages_db_src_schema_friendships_friendshipstatusenum"
+    },
+    {
+      "label": "users.ts",
+      "file_type": "code",
+      "source_file": "packages/db/src/schema/users.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "users.ts",
+      "norm_label": "users.ts",
+      "id": "packages_db_src_schema_users"
+    },
+    {
+      "label": "heroStatsScopeEnum",
+      "file_type": "code",
+      "source_file": "packages/db/src/schema/users.ts",
+      "source_location": "L6",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "users.ts",
+      "norm_label": "herostatsscopeenum",
+      "id": "packages_db_src_schema_users_herostatsscopeenum"
     },
     {
       "label": "`self._root.after(0, func, *args)`, but a no-op once the window has closed.\u2026",
@@ -12790,15 +12746,15 @@
       "id": "daemon_python_src_gui_rationale_552"
     },
     {
-      "label": "Path",
-      "file_type": "code",
-      "source_file": "",
-      "source_location": "",
+      "label": "Writes the user-provided fields to the JSON config file, creating its parent\u2026",
+      "file_type": "rationale",
+      "source_file": "daemon-python/src/config.py",
+      "source_location": "L112",
       "_origin": "ast",
       "community": 29,
       "community_name": "config_file_path",
-      "norm_label": "path",
-      "id": "daemon_python_src_config_py_path"
+      "norm_label": "writes the user-provided fields to the json config file, creating its parent...",
+      "id": "daemon_python_src_config_rationale_112"
     },
     {
       "label": "Path to the JSON config file, e.g. `%APPDATA%\\\\hots-analytics\\\\config.json`.",
@@ -12812,17 +12768,6 @@
       "id": "daemon_python_src_config_rationale_46"
     },
     {
-      "label": "Opens `path` (a file or a folder) with whatever the OS considers its default\u2026",
-      "file_type": "rationale",
-      "source_file": "daemon-python/src/config.py",
-      "source_location": "L57",
-      "_origin": "ast",
-      "community": 29,
-      "community_name": "config_file_path",
-      "norm_label": "opens `path` (a file or a folder) with whatever the os considers its default...",
-      "id": "daemon_python_src_config_rationale_57"
-    },
-    {
       "label": "Opens `%APPDATA%\\\\hots-analytics\\\\` (config.json, sync_state.db, update.log,\u2026",
       "file_type": "rationale",
       "source_file": "daemon-python/src/config.py",
@@ -12834,103 +12779,81 @@
       "id": "daemon_python_src_config_rationale_75"
     },
     {
-      "label": "daemon-ingest-errors.ts",
+      "label": "requireUser",
       "file_type": "code",
-      "source_file": "packages/db/src/schema/daemon-ingest-errors.ts",
+      "source_file": "apps/api/src/middleware/auth-session.ts",
+      "source_location": "L23",
+      "_origin": "ast",
+      "community": 3,
+      "community_name": "routes/matches.ts",
+      "norm_label": "requireuser",
+      "id": "apps_api_src_middleware_auth_session_requireuser"
+    },
+    {
+      "label": "routes/matches.ts",
+      "file_type": "code",
+      "source_file": "apps/api/src/routes/matches.ts",
       "source_location": "L1",
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
-      "norm_label": "daemon-ingest-errors.ts",
-      "id": "packages_db_src_schema_daemon_ingest_errors"
+      "community_name": "routes/matches.ts",
+      "norm_label": "routes/matches.ts",
+      "id": "apps_api_src_routes_matches"
     },
     {
-      "label": "daemonErrorStatusEnum",
+      "label": "filtersQuerySchema",
       "file_type": "code",
-      "source_file": "packages/db/src/schema/daemon-ingest-errors.ts",
-      "source_location": "L6",
+      "source_file": "apps/api/src/routes/matches.ts",
+      "source_location": "L21",
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
-      "norm_label": "daemonerrorstatusenum",
-      "id": "packages_db_src_schema_daemon_ingest_errors_daemonerrorstatusenum"
+      "community_name": "routes/matches.ts",
+      "norm_label": "filtersqueryschema",
+      "id": "apps_api_src_routes_matches_filtersqueryschema"
     },
     {
-      "label": "daemonErrorTypeEnum",
+      "label": "listQuerySchema",
       "file_type": "code",
-      "source_file": "packages/db/src/schema/daemon-ingest-errors.ts",
-      "source_location": "L4",
+      "source_file": "apps/api/src/routes/matches.ts",
+      "source_location": "L31",
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
-      "norm_label": "daemonerrortypeenum",
-      "id": "packages_db_src_schema_daemon_ingest_errors_daemonerrortypeenum"
+      "community_name": "routes/matches.ts",
+      "norm_label": "listqueryschema",
+      "id": "apps_api_src_routes_matches_listqueryschema"
     },
     {
-      "label": "daemonIngestErrors",
+      "label": "matchesRoute",
       "file_type": "code",
-      "source_file": "packages/db/src/schema/daemon-ingest-errors.ts",
-      "source_location": "L25",
+      "source_file": "apps/api/src/routes/matches.ts",
+      "source_location": "L84",
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
-      "norm_label": "daemoningesterrors",
-      "id": "packages_db_src_schema_daemon_ingest_errors_daemoningesterrors"
+      "community_name": "routes/matches.ts",
+      "norm_label": "matchesroute",
+      "id": "apps_api_src_routes_matches_matchesroute"
     },
     {
-      "label": "draft-pseudo-preferences.ts",
+      "label": "SORTABLE_COLUMNS",
       "file_type": "code",
-      "source_file": "packages/db/src/schema/draft-pseudo-preferences.ts",
+      "source_file": "apps/api/src/routes/matches.ts",
+      "source_location": "L12",
+      "_origin": "ast",
+      "community": 3,
+      "community_name": "routes/matches.ts",
+      "norm_label": "sortable_columns",
+      "id": "apps_api_src_routes_matches_sortable_columns"
+    },
+    {
+      "label": "replay-upsert.service.ts",
+      "file_type": "code",
+      "source_file": "apps/api/src/services/replay-upsert.service.ts",
       "source_location": "L1",
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
-      "norm_label": "draft-pseudo-preferences.ts",
-      "id": "packages_db_src_schema_draft_pseudo_preferences"
-    },
-    {
-      "label": "draftPseudoPreferences",
-      "file_type": "code",
-      "source_file": "packages/db/src/schema/draft-pseudo-preferences.ts",
-      "source_location": "L11",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "users",
-      "norm_label": "draftpseudopreferences",
-      "id": "packages_db_src_schema_draft_pseudo_preferences_draftpseudopreferences"
-    },
-    {
-      "label": "friendships.ts",
-      "file_type": "code",
-      "source_file": "packages/db/src/schema/friendships.ts",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "users",
-      "norm_label": "friendships.ts",
-      "id": "packages_db_src_schema_friendships"
-    },
-    {
-      "label": "friendships",
-      "file_type": "code",
-      "source_file": "packages/db/src/schema/friendships.ts",
-      "source_location": "L10",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "users",
-      "norm_label": "friendships",
-      "id": "packages_db_src_schema_friendships_friendships"
-    },
-    {
-      "label": "friendshipStatusEnum",
-      "file_type": "code",
-      "source_file": "packages/db/src/schema/friendships.ts",
-      "source_location": "L4",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "users",
-      "norm_label": "friendshipstatusenum",
-      "id": "packages_db_src_schema_friendships_friendshipstatusenum"
+      "community_name": "routes/matches.ts",
+      "norm_label": "replay-upsert.service.ts",
+      "id": "apps_api_src_services_replay_upsert_service"
     },
     {
       "label": "schema/heroes.ts",
@@ -12939,7 +12862,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
+      "community_name": "routes/matches.ts",
       "norm_label": "schema/heroes.ts",
       "id": "packages_db_src_schema_heroes"
     },
@@ -12950,7 +12873,7 @@
       "source_location": "L12",
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
+      "community_name": "routes/matches.ts",
       "norm_label": "heroes",
       "id": "packages_db_src_schema_heroes_heroes"
     },
@@ -12961,7 +12884,7 @@
       "source_location": "L3",
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
+      "community_name": "routes/matches.ts",
       "norm_label": "heroroleenum",
       "id": "packages_db_src_schema_heroes_heroroleenum"
     },
@@ -12972,7 +12895,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
+      "community_name": "routes/matches.ts",
       "norm_label": "schema/index.ts",
       "id": "packages_db_src_schema_index"
     },
@@ -12983,7 +12906,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
+      "community_name": "routes/matches.ts",
       "norm_label": "maps.ts",
       "id": "packages_db_src_schema_maps"
     },
@@ -12994,7 +12917,7 @@
       "source_location": "L3",
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
+      "community_name": "routes/matches.ts",
       "norm_label": "maps",
       "id": "packages_db_src_schema_maps_maps"
     },
@@ -13005,9 +12928,20 @@
       "source_location": "L1",
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
+      "community_name": "routes/matches.ts",
       "norm_label": "match-players.ts",
       "id": "packages_db_src_schema_match_players"
+    },
+    {
+      "label": "matchPlayers",
+      "file_type": "code",
+      "source_file": "packages/db/src/schema/match-players.ts",
+      "source_location": "L6",
+      "_origin": "ast",
+      "community": 3,
+      "community_name": "routes/matches.ts",
+      "norm_label": "matchplayers",
+      "id": "packages_db_src_schema_match_players_matchplayers"
     },
     {
       "label": "schema/matches.ts",
@@ -13016,7 +12950,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
+      "community_name": "routes/matches.ts",
       "norm_label": "schema/matches.ts",
       "id": "packages_db_src_schema_matches"
     },
@@ -13027,7 +12961,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
+      "community_name": "routes/matches.ts",
       "norm_label": "gamemodeenum",
       "id": "packages_db_src_schema_matches_gamemodeenum"
     },
@@ -13038,64 +12972,31 @@
       "source_location": "L16",
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
+      "community_name": "routes/matches.ts",
       "norm_label": "matches",
       "id": "packages_db_src_schema_matches_matches"
     },
     {
-      "label": "schema/tokens.ts",
+      "label": "talent-picks.ts",
       "file_type": "code",
-      "source_file": "packages/db/src/schema/tokens.ts",
+      "source_file": "packages/db/src/schema/talent-picks.ts",
       "source_location": "L1",
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
-      "norm_label": "schema/tokens.ts",
-      "id": "packages_db_src_schema_tokens"
+      "community_name": "routes/matches.ts",
+      "norm_label": "talent-picks.ts",
+      "id": "packages_db_src_schema_talent_picks"
     },
     {
-      "label": "personalAccessTokens",
+      "label": "talentPicks",
       "file_type": "code",
-      "source_file": "packages/db/src/schema/tokens.ts",
+      "source_file": "packages/db/src/schema/talent-picks.ts",
       "source_location": "L4",
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
-      "norm_label": "personalaccesstokens",
-      "id": "packages_db_src_schema_tokens_personalaccesstokens"
-    },
-    {
-      "label": "users.ts",
-      "file_type": "code",
-      "source_file": "packages/db/src/schema/users.ts",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "users",
-      "norm_label": "users.ts",
-      "id": "packages_db_src_schema_users"
-    },
-    {
-      "label": "heroStatsScopeEnum",
-      "file_type": "code",
-      "source_file": "packages/db/src/schema/users.ts",
-      "source_location": "L6",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "users",
-      "norm_label": "herostatsscopeenum",
-      "id": "packages_db_src_schema_users_herostatsscopeenum"
-    },
-    {
-      "label": "users",
-      "file_type": "code",
-      "source_file": "packages/db/src/schema/users.ts",
-      "source_location": "L8",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "users",
-      "norm_label": "users",
-      "id": "packages_db_src_schema_users_users"
+      "community_name": "routes/matches.ts",
+      "norm_label": "talentpicks",
+      "id": "packages_db_src_schema_talent_picks_talentpicks"
     },
     {
       "label": "seed.ts",
@@ -13104,7 +13005,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
+      "community_name": "routes/matches.ts",
       "norm_label": "seed.ts",
       "id": "packages_db_src_seed"
     },
@@ -13115,7 +13016,7 @@
       "source_location": "L56",
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
+      "community_name": "routes/matches.ts",
       "norm_label": "heroes",
       "id": "packages_db_src_seed_heroes"
     },
@@ -13126,7 +13027,7 @@
       "source_location": "L26",
       "_origin": "ast",
       "community": 3,
-      "community_name": "users",
+      "community_name": "routes/matches.ts",
       "norm_label": "map_names",
       "id": "packages_db_src_seed_map_names"
     },
@@ -13483,15 +13384,37 @@
       "id": "daemon_python_src_tray_rationale_31"
     },
     {
+      "label": "config.py",
+      "file_type": "code",
+      "source_file": "daemon-python/src/config.py",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 34,
+      "community_name": "config.py",
+      "norm_label": "config.py",
+      "id": "daemon_python_src_config"
+    },
+    {
       "label": "Exception",
       "file_type": "code",
       "source_file": "",
       "source_location": "",
       "_origin": "ast",
       "community": 34,
-      "community_name": "ConfigError",
+      "community_name": "config.py",
       "norm_label": "exception",
       "id": "daemon_python_src_config_py_exception"
+    },
+    {
+      "label": "Daemon configuration: API endpoint, access token, and replays folder.\u2026",
+      "file_type": "rationale",
+      "source_file": "daemon-python/src/config.py",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 34,
+      "community_name": "config.py",
+      "norm_label": "daemon configuration: api endpoint, access token, and replays folder....",
+      "id": "daemon_python_src_config_rationale_1"
     },
     {
       "label": "Reads just the `autoUpdateEnabled` preference, independent of the rest of\u2026",
@@ -13500,7 +13423,7 @@
       "source_location": "L201",
       "_origin": "ast",
       "community": 34,
-      "community_name": "ConfigError",
+      "community_name": "config.py",
       "norm_label": "reads just the `autoupdateenabled` preference, independent of the rest of...",
       "id": "daemon_python_src_config_rationale_201"
     },
@@ -13511,7 +13434,7 @@
       "source_location": "L25",
       "_origin": "ast",
       "community": 34,
-      "community_name": "ConfigError",
+      "community_name": "config.py",
       "norm_label": "raised when required configuration is missing or invalid.",
       "id": "daemon_python_src_config_rationale_25"
     },
@@ -13522,7 +13445,7 @@
       "source_location": "L90",
       "_origin": "ast",
       "community": 34,
-      "community_name": "ConfigError",
+      "community_name": "config.py",
       "norm_label": "returns the raw json config as a dict, or `{}` if it doesn't exist yet. used...",
       "id": "daemon_python_src_config_rationale_90"
     },
@@ -13593,17 +13516,6 @@
       "id": "daemon_python_tests_test_updater_py_fixture"
     },
     {
-      "label": "Where a downloaded update build is staged before being handed off to the\u2026",
-      "file_type": "rationale",
-      "source_file": "daemon-python/src/updater.py",
-      "source_location": "L213",
-      "_origin": "ast",
-      "community": 36,
-      "community_name": "test_updater.py",
-      "norm_label": "where a downloaded update build is staged before being handed off to the...",
-      "id": "daemon_python_src_updater_rationale_213"
-    },
-    {
       "label": "Clears `downloads_dir()` of anything left over from a previous run -- an update\u2026",
       "file_type": "rationale",
       "source_file": "daemon-python/src/updater.py",
@@ -13637,13 +13549,24 @@
       "id": "daemon_python_src_updater_rationale_606"
     },
     {
+      "label": "constants.py",
+      "file_type": "code",
+      "source_file": "daemon-python/src/constants.py",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 37,
+      "community_name": "parser.py",
+      "norm_label": "constants.py",
+      "id": "daemon_python_src_constants"
+    },
+    {
       "label": "hasher.py",
       "file_type": "code",
       "source_file": "daemon-python/src/hasher.py",
       "source_location": "L1",
       "_origin": "ast",
       "community": 37,
-      "community_name": "hash_replay_file",
+      "community_name": "parser.py",
       "norm_label": "hasher.py",
       "id": "daemon_python_src_hasher"
     },
@@ -13654,9 +13577,42 @@
       "source_location": "",
       "_origin": "ast",
       "community": 37,
-      "community_name": "hash_replay_file",
+      "community_name": "parser.py",
       "norm_label": "path",
       "id": "daemon_python_src_hasher_py_path"
+    },
+    {
+      "label": "ingestion.py",
+      "file_type": "code",
+      "source_file": "daemon-python/src/ingestion.py",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 37,
+      "community_name": "parser.py",
+      "norm_label": "ingestion.py",
+      "id": "daemon_python_src_ingestion"
+    },
+    {
+      "label": "__init__.py",
+      "file_type": "code",
+      "source_file": "daemon-python/src/__init__.py",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 37,
+      "community_name": "parser.py",
+      "norm_label": "__init__.py",
+      "id": "daemon_python_src_init"
+    },
+    {
+      "label": "parser.py",
+      "file_type": "code",
+      "source_file": "daemon-python/src/parser.py",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 37,
+      "community_name": "parser.py",
+      "norm_label": "parser.py",
+      "id": "daemon_python_src_parser"
     },
     {
       "label": "test_hasher.py",
@@ -13665,7 +13621,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "community": 37,
-      "community_name": "hash_replay_file",
+      "community_name": "parser.py",
       "norm_label": "test_hasher.py",
       "id": "daemon_python_tests_test_hasher"
     },
@@ -13676,9 +13632,20 @@
       "source_location": "",
       "_origin": "ast",
       "community": 37,
-      "community_name": "hash_replay_file",
+      "community_name": "parser.py",
       "norm_label": "path",
       "id": "daemon_python_tests_test_hasher_py_path"
+    },
+    {
+      "label": "Static lookup tables used to translate raw replay data into the API's payload\u2026",
+      "file_type": "rationale",
+      "source_file": "daemon-python/src/constants.py",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 37,
+      "community_name": "parser.py",
+      "norm_label": "static lookup tables used to translate raw replay data into the api's payload...",
+      "id": "daemon_python_src_constants_rationale_1"
     },
     {
       "label": "Stable, content-based hashing of replay files. A HotS replay file is never\u2026",
@@ -13687,7 +13654,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "community": 37,
-      "community_name": "hash_replay_file",
+      "community_name": "parser.py",
       "norm_label": "stable, content-based hashing of replay files. a hots replay file is never...",
       "id": "daemon_python_src_hasher_rationale_1"
     },
@@ -13698,42 +13665,152 @@
       "source_location": "L18",
       "_origin": "ast",
       "community": 37,
-      "community_name": "hash_replay_file",
+      "community_name": "parser.py",
       "norm_label": "returns the sha-256 hex digest of the replay file's contents.",
       "id": "daemon_python_src_hasher_rationale_18"
     },
     {
-      "label": "constants.py",
+      "label": "Turns a replay file on disk into an upload, shared by the CLI (`main.py`) and\u2026",
+      "file_type": "rationale",
+      "source_file": "daemon-python/src/ingestion.py",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 37,
+      "community_name": "parser.py",
+      "norm_label": "turns a replay file on disk into an upload, shared by the cli (`main.py`) and...",
+      "id": "daemon_python_src_ingestion_rationale_1"
+    },
+    {
+      "label": "Best-effort forwards one local ingestion failure to the API (`POST\u2026",
+      "file_type": "rationale",
+      "source_file": "daemon-python/src/ingestion.py",
+      "source_location": "L43",
+      "_origin": "ast",
+      "community": 37,
+      "community_name": "parser.py",
+      "norm_label": "best-effort forwards one local ingestion failure to the api (`post...",
+      "id": "daemon_python_src_ingestion_rationale_43"
+    },
+    {
+      "label": "Parses a `.StormReplay` file into a dict matching `replayPayloadSchema`. Built\u2026",
+      "file_type": "rationale",
+      "source_file": "daemon-python/src/parser.py",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 37,
+      "community_name": "parser.py",
+      "norm_label": "parses a `.stormreplay` file into a dict matching `replaypayloadschema`. built...",
+      "id": "daemon_python_src_parser_rationale_1"
+    },
+    {
+      "label": "constants.ts",
       "file_type": "code",
-      "source_file": "daemon-python/src/constants.py",
+      "source_file": "apps/api/src/constants.ts",
       "source_location": "L1",
       "_origin": "ast",
       "community": 38,
-      "community_name": "constants.py",
-      "norm_label": "constants.py",
-      "id": "daemon_python_src_constants"
+      "community_name": "ingest.ts",
+      "norm_label": "constants.ts",
+      "id": "apps_api_src_constants"
     },
     {
-      "label": "Static lookup tables used to translate raw replay data into the API's payload\u2026",
-      "file_type": "rationale",
-      "source_file": "daemon-python/src/constants.py",
+      "label": "API_VERSION",
+      "file_type": "code",
+      "source_file": "apps/api/src/constants.ts",
+      "source_location": "L6",
+      "_origin": "ast",
+      "community": 38,
+      "community_name": "ingest.ts",
+      "norm_label": "api_version",
+      "id": "apps_api_src_constants_api_version"
+    },
+    {
+      "label": "MIN_PARSER_VERSION",
+      "file_type": "code",
+      "source_file": "apps/api/src/constants.ts",
+      "source_location": "L18",
+      "_origin": "ast",
+      "community": 38,
+      "community_name": "ingest.ts",
+      "norm_label": "min_parser_version",
+      "id": "apps_api_src_constants_min_parser_version"
+    },
+    {
+      "label": "ingest.ts",
+      "file_type": "code",
+      "source_file": "apps/api/src/routes/ingest.ts",
       "source_location": "L1",
       "_origin": "ast",
       "community": 38,
-      "community_name": "constants.py",
-      "norm_label": "static lookup tables used to translate raw replay data into the api's payload...",
-      "id": "daemon_python_src_constants_rationale_1"
+      "community_name": "ingest.ts",
+      "norm_label": "ingest.ts",
+      "id": "apps_api_src_routes_ingest"
     },
     {
-      "label": "Tracker stat name (e.g. \"HeroDamage\") -> API payload field name (e.g.\u2026",
-      "file_type": "rationale",
-      "source_file": "daemon-python/src/constants.py",
-      "source_location": "L198",
+      "label": "ingestRoute",
+      "file_type": "code",
+      "source_file": "apps/api/src/routes/ingest.ts",
+      "source_location": "L27",
       "_origin": "ast",
       "community": 38,
-      "community_name": "constants.py",
-      "norm_label": "tracker stat name (e.g. \"herodamage\") -> api payload field name (e.g....",
-      "id": "daemon_python_src_constants_rationale_198"
+      "community_name": "ingest.ts",
+      "norm_label": "ingestroute",
+      "id": "apps_api_src_routes_ingest_ingestroute"
+    },
+    {
+      "label": "daemon-errors.service.ts",
+      "file_type": "code",
+      "source_file": "apps/api/src/services/daemon-errors.service.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 38,
+      "community_name": "ingest.ts",
+      "norm_label": "daemon-errors.service.ts",
+      "id": "apps_api_src_services_daemon_errors_service"
+    },
+    {
+      "label": "daemonIngestErrors",
+      "file_type": "code",
+      "source_file": "packages/db/src/schema/daemon-ingest-errors.ts",
+      "source_location": "L25",
+      "_origin": "ast",
+      "community": 38,
+      "community_name": "ingest.ts",
+      "norm_label": "daemoningesterrors",
+      "id": "packages_db_src_schema_daemon_ingest_errors_daemoningesterrors"
+    },
+    {
+      "label": "daemon-error.ts",
+      "file_type": "code",
+      "source_file": "packages/shared-types/src/daemon-error.ts",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 38,
+      "community_name": "ingest.ts",
+      "norm_label": "daemon-error.ts",
+      "id": "packages_shared_types_src_daemon_error"
+    },
+    {
+      "label": "daemonErrorReportInputSchema",
+      "file_type": "code",
+      "source_file": "packages/shared-types/src/daemon-error.ts",
+      "source_location": "L14",
+      "_origin": "ast",
+      "community": 38,
+      "community_name": "ingest.ts",
+      "norm_label": "daemonerrorreportinputschema",
+      "id": "packages_shared_types_src_daemon_error_daemonerrorreportinputschema"
+    },
+    {
+      "label": "daemonErrorTypeSchema",
+      "file_type": "code",
+      "source_file": "packages/shared-types/src/daemon-error.ts",
+      "source_location": "L3",
+      "_origin": "ast",
+      "community": 38,
+      "community_name": "ingest.ts",
+      "norm_label": "daemonerrortypeschema",
+      "id": "packages_shared_types_src_daemon_error_daemonerrortypeschema"
     },
     {
       "label": "Event",
@@ -13945,6 +14022,17 @@
       "id": "daemon_python_tests_test_status_rationale_60"
     },
     {
+      "label": "sync_state.py",
+      "file_type": "code",
+      "source_file": "daemon-python/src/sync_state.py",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "SyncState",
+      "norm_label": "sync_state.py",
+      "id": "daemon_python_src_sync_state"
+    },
+    {
       "label": "test_sync_state.py",
       "file_type": "code",
       "source_file": "daemon-python/tests/test_sync_state.py",
@@ -13954,6 +14042,17 @@
       "community_name": "SyncState",
       "norm_label": "test_sync_state.py",
       "id": "daemon_python_tests_test_sync_state"
+    },
+    {
+      "label": "Local persistence of \"this replay is already synced\" state, backed by SQLite\u2026",
+      "file_type": "rationale",
+      "source_file": "daemon-python/src/sync_state.py",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "SyncState",
+      "norm_label": "local persistence of \"this replay is already synced\" state, backed by sqlite...",
+      "id": "daemon_python_src_sync_state_rationale_1"
     },
     {
       "label": "Tracks, per replay (keyed by content hash), whether it's synced or errored, at\u2026",
@@ -14022,6 +14121,17 @@
       "id": "daemon_python_src_sync_state_rationale_267"
     },
     {
+      "label": "Every replay currently in an error state, most recent first -- backs the Debug\u2026",
+      "file_type": "rationale",
+      "source_file": "daemon-python/src/sync_state.py",
+      "source_location": "L286",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "SyncState",
+      "norm_label": "every replay currently in an error state, most recent first -- backs the debug...",
+      "id": "daemon_python_src_sync_state_rationale_286"
+    },
+    {
       "label": "Returns the previously computed hash for `file_path`, but only if its size and\u2026",
       "file_type": "rationale",
       "source_file": "daemon-python/src/sync_state.py",
@@ -14042,6 +14152,17 @@
       "community_name": "SyncState",
       "norm_label": "records `file_path`'s freshly computed hash alongside the size/mtime it was...",
       "id": "daemon_python_src_sync_state_rationale_329"
+    },
+    {
+      "label": "One failed replay, as shown in the Debug window (gui.py).",
+      "file_type": "rationale",
+      "source_file": "daemon-python/src/sync_state.py",
+      "source_location": "L97",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "SyncState",
+      "norm_label": "one failed replay, as shown in the debug window (gui.py).",
+      "id": "daemon_python_src_sync_state_rationale_97"
     },
     {
       "label": "A replay overwritten in place (same size, by coincidence) but with a newer\u2026",
@@ -14066,15 +14187,70 @@
       "id": "daemon_python_tests_test_sync_state_rationale_23"
     },
     {
-      "label": "fixture",
+      "label": "run.py",
+      "file_type": "code",
+      "source_file": "daemon-python/run.py",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 40,
+      "community_name": "main.py",
+      "norm_label": "run.py",
+      "id": "daemon_python_run"
+    },
+    {
+      "label": "Path",
       "file_type": "code",
       "source_file": "",
       "source_location": "",
       "_origin": "ast",
       "community": 40,
-      "community_name": "_clear_env",
-      "norm_label": "fixture",
-      "id": "daemon_python_tests_test_config_py_fixture"
+      "community_name": "main.py",
+      "norm_label": "path",
+      "id": "daemon_python_src_ingestion_py_path"
+    },
+    {
+      "label": "main.py",
+      "file_type": "code",
+      "source_file": "daemon-python/src/main.py",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 40,
+      "community_name": "main.py",
+      "norm_label": "main.py",
+      "id": "daemon_python_src_main"
+    },
+    {
+      "label": "Top-level launcher used only for the compiled (Nuitka) build. Nuitka compiles\u2026",
+      "file_type": "rationale",
+      "source_file": "daemon-python/run.py",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 40,
+      "community_name": "main.py",
+      "norm_label": "top-level launcher used only for the compiled (nuitka) build. nuitka compiles...",
+      "id": "daemon_python_run_rationale_1"
+    },
+    {
+      "label": "Parses and (re-)uploads every replay in `replays_dir`. Safe to run repeatedly:\u2026",
+      "file_type": "rationale",
+      "source_file": "daemon-python/src/ingestion.py",
+      "source_location": "L257",
+      "_origin": "ast",
+      "community": 40,
+      "community_name": "main.py",
+      "norm_label": "parses and (re-)uploads every replay in `replays_dir`. safe to run repeatedly:...",
+      "id": "daemon_python_src_ingestion_rationale_257"
+    },
+    {
+      "label": "Entrypoint for the HotS Analytics replay daemon. Usage: python -m src.main #\u2026",
+      "file_type": "rationale",
+      "source_file": "daemon-python/src/main.py",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 40,
+      "community_name": "main.py",
+      "norm_label": "entrypoint for the hots analytics replay daemon. usage: python -m src.main #...",
+      "id": "daemon_python_src_main_rationale_1"
     },
     {
       "label": "players.ts",
@@ -14130,28 +14306,6 @@
       "community_name": "players.service.ts",
       "norm_label": "sortcolumn",
       "id": "apps_api_src_services_players_service_sortcolumn"
-    },
-    {
-      "label": "src/stats.ts",
-      "file_type": "code",
-      "source_file": "packages/shared-types/src/stats.ts",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 41,
-      "community_name": "players.service.ts",
-      "norm_label": "src/stats.ts",
-      "id": "packages_shared_types_src_stats"
-    },
-    {
-      "label": "heroStatsScopeSchema",
-      "file_type": "code",
-      "source_file": "packages/shared-types/src/stats.ts",
-      "source_location": "L4",
-      "_origin": "ast",
-      "community": 41,
-      "community_name": "players.service.ts",
-      "norm_label": "herostatsscopeschema",
-      "id": "packages_shared_types_src_stats_herostatsscopeschema"
     },
     {
       "label": "app.py",
@@ -14748,6 +14902,112 @@
       "id": "packages_shared_types_package_json_zod"
     },
     {
+      "label": "CLAUDE.md",
+      "file_type": "document",
+      "node_kind": "page",
+      "source_file": "CLAUDE.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "claude",
+      "community": 46,
+      "community_name": "CLAUDE.md",
+      "norm_label": "claude.md"
+    },
+    {
+      "label": "Architecture: replay ingestion, adapters, and versioning",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "CLAUDE.md",
+      "source_location": "L65",
+      "_origin": "ast",
+      "id": "claude_architecture_replay_ingestion_adapters_and_versioning",
+      "community": 46,
+      "community_name": "CLAUDE.md",
+      "norm_label": "architecture: replay ingestion, adapters, and versioning"
+    },
+    {
+      "label": "Auth",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "CLAUDE.md",
+      "source_location": "L102",
+      "_origin": "ast",
+      "id": "claude_auth",
+      "community": 46,
+      "community_name": "CLAUDE.md",
+      "norm_label": "auth"
+    },
+    {
+      "label": "CLAUDE.md",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "CLAUDE.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "claude_claude_md",
+      "community": 46,
+      "community_name": "CLAUDE.md",
+      "norm_label": "claude.md"
+    },
+    {
+      "label": "Commands",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "CLAUDE.md",
+      "source_location": "L21",
+      "_origin": "ast",
+      "id": "claude_commands",
+      "community": 46,
+      "community_name": "CLAUDE.md",
+      "norm_label": "commands"
+    },
+    {
+      "label": "graphify",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "CLAUDE.md",
+      "source_location": "L108",
+      "_origin": "ast",
+      "id": "claude_graphify",
+      "community": 46,
+      "community_name": "CLAUDE.md",
+      "norm_label": "graphify"
+    },
+    {
+      "label": "Project",
+      "file_type": "document",
+      "node_kind": "heading",
+      "source_file": "CLAUDE.md",
+      "source_location": "L5",
+      "_origin": "ast",
+      "id": "claude_project",
+      "community": 46,
+      "community_name": "CLAUDE.md",
+      "norm_label": "project"
+    },
+    {
+      "label": "Path",
+      "file_type": "code",
+      "source_file": "",
+      "source_location": "",
+      "_origin": "ast",
+      "community": 47,
+      "community_name": "open_path",
+      "norm_label": "path",
+      "id": "daemon_python_src_config_py_path"
+    },
+    {
+      "label": "Opens `path` (a file or a folder) with whatever the OS considers its default\u2026",
+      "file_type": "rationale",
+      "source_file": "daemon-python/src/config.py",
+      "source_location": "L57",
+      "_origin": "ast",
+      "community": 47,
+      "community_name": "open_path",
+      "norm_label": "opens `path` (a file or a folder) with whatever the os considers its default...",
+      "id": "daemon_python_src_config_rationale_57"
+    },
+    {
       "label": "BooleanVar",
       "file_type": "code",
       "source_file": "",
@@ -14814,17 +15074,6 @@
       "id": "daemon_python_src_gui_rationale_661"
     },
     {
-      "label": "run.py",
-      "file_type": "code",
-      "source_file": "daemon-python/run.py",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "Config",
-      "norm_label": "run.py",
-      "id": "daemon_python_run"
-    },
-    {
       "label": "api_client.py",
       "file_type": "code",
       "source_file": "daemon-python/src/api_client.py",
@@ -14847,61 +15096,6 @@
       "id": "daemon_python_src_api_client_py_exception"
     },
     {
-      "label": "config.py",
-      "file_type": "code",
-      "source_file": "daemon-python/src/config.py",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "Config",
-      "norm_label": "config.py",
-      "id": "daemon_python_src_config"
-    },
-    {
-      "label": "ingestion.py",
-      "file_type": "code",
-      "source_file": "daemon-python/src/ingestion.py",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "Config",
-      "norm_label": "ingestion.py",
-      "id": "daemon_python_src_ingestion"
-    },
-    {
-      "label": "__init__.py",
-      "file_type": "code",
-      "source_file": "daemon-python/src/__init__.py",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "Config",
-      "norm_label": "__init__.py",
-      "id": "daemon_python_src_init"
-    },
-    {
-      "label": "main.py",
-      "file_type": "code",
-      "source_file": "daemon-python/src/main.py",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "Config",
-      "norm_label": "main.py",
-      "id": "daemon_python_src_main"
-    },
-    {
-      "label": "sync_state.py",
-      "file_type": "code",
-      "source_file": "daemon-python/src/sync_state.py",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "Config",
-      "norm_label": "sync_state.py",
-      "id": "daemon_python_src_sync_state"
-    },
-    {
       "label": "Response",
       "file_type": "code",
       "source_file": "",
@@ -14911,17 +15105,6 @@
       "community_name": "Config",
       "norm_label": "response",
       "id": "response"
-    },
-    {
-      "label": "Top-level launcher used only for the compiled (Nuitka) build. Nuitka compiles\u2026",
-      "file_type": "rationale",
-      "source_file": "daemon-python/run.py",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "Config",
-      "norm_label": "top-level launcher used only for the compiled (nuitka) build. nuitka compiles...",
-      "id": "daemon_python_run_rationale_1"
     },
     {
       "label": "Thin HTTP client for POSTing parsed replay payloads to the ingestion API.",
@@ -15010,50 +15193,6 @@
       "community_name": "Config",
       "norm_label": "posts a replay payload, retrying on network errors and 5xx responses. the...",
       "id": "daemon_python_src_api_client_rationale_67"
-    },
-    {
-      "label": "Daemon configuration: API endpoint, access token, and replays folder.\u2026",
-      "file_type": "rationale",
-      "source_file": "daemon-python/src/config.py",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "Config",
-      "norm_label": "daemon configuration: api endpoint, access token, and replays folder....",
-      "id": "daemon_python_src_config_rationale_1"
-    },
-    {
-      "label": "Turns a replay file on disk into an upload, shared by the CLI (`main.py`) and\u2026",
-      "file_type": "rationale",
-      "source_file": "daemon-python/src/ingestion.py",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "Config",
-      "norm_label": "turns a replay file on disk into an upload, shared by the cli (`main.py`) and...",
-      "id": "daemon_python_src_ingestion_rationale_1"
-    },
-    {
-      "label": "Entrypoint for the HotS Analytics replay daemon. Usage: python -m src.main #\u2026",
-      "file_type": "rationale",
-      "source_file": "daemon-python/src/main.py",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "Config",
-      "norm_label": "entrypoint for the hots analytics replay daemon. usage: python -m src.main #...",
-      "id": "daemon_python_src_main_rationale_1"
-    },
-    {
-      "label": "Local persistence of \"this replay is already synced\" state, backed by SQLite\u2026",
-      "file_type": "rationale",
-      "source_file": "daemon-python/src/sync_state.py",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 5,
-      "community_name": "Config",
-      "norm_label": "local persistence of \"this replay is already synced\" state, backed by sqlite...",
-      "id": "daemon_python_src_sync_state_rationale_1"
     },
     {
       "label": "autostart.py",
@@ -15197,6 +15336,17 @@
       "community_name": "updater.py",
       "norm_label": "the actionable instructions shown (see gui.py) next to the \"ouvrir le dossier\"...",
       "id": "daemon_python_src_updater_rationale_199"
+    },
+    {
+      "label": "Where a downloaded update build is staged before being handed off to the\u2026",
+      "file_type": "rationale",
+      "source_file": "daemon-python/src/updater.py",
+      "source_location": "L213",
+      "_origin": "ast",
+      "community": 51,
+      "community_name": "updater.py",
+      "norm_label": "where a downloaded update build is staged before being handed off to the...",
+      "id": "daemon_python_src_updater_rationale_213"
     },
     {
       "label": "`%APPDATA%\\\\hots-analytics\\\\update.log` -- next to `config.json`. The relaunch\u2026",
@@ -15540,17 +15690,6 @@
       "id": "daemon_python_src_updater_py_event"
     },
     {
-      "label": "Path",
-      "file_type": "code",
-      "source_file": "",
-      "source_location": "",
-      "_origin": "ast",
-      "community": 7,
-      "community_name": "ApiClient",
-      "norm_label": "path",
-      "id": "daemon_python_src_ingestion_py_path"
-    },
-    {
       "label": "test_ingestion.py",
       "file_type": "code",
       "source_file": "daemon-python/tests/test_ingestion.py",
@@ -15562,17 +15701,6 @@
       "id": "daemon_python_tests_test_ingestion"
     },
     {
-      "label": "Parses and (re-)uploads every replay in `replays_dir`. Safe to run repeatedly:\u2026",
-      "file_type": "rationale",
-      "source_file": "daemon-python/src/ingestion.py",
-      "source_location": "L257",
-      "_origin": "ast",
-      "community": 7,
-      "community_name": "ApiClient",
-      "norm_label": "parses and (re-)uploads every replay in `replays_dir`. safe to run repeatedly:...",
-      "id": "daemon_python_src_ingestion_rationale_257"
-    },
-    {
       "label": "Result of one `ingest_file` call, for callers that want to react to it: the\u2026",
       "file_type": "rationale",
       "source_file": "daemon-python/src/ingestion.py",
@@ -15582,17 +15710,6 @@
       "community_name": "ApiClient",
       "norm_label": "result of one `ingest_file` call, for callers that want to react to it: the...",
       "id": "daemon_python_src_ingestion_rationale_26"
-    },
-    {
-      "label": "Best-effort forwards one local ingestion failure to the API (`POST\u2026",
-      "file_type": "rationale",
-      "source_file": "daemon-python/src/ingestion.py",
-      "source_location": "L43",
-      "_origin": "ast",
-      "community": 7,
-      "community_name": "ApiClient",
-      "norm_label": "best-effort forwards one local ingestion failure to the api (`post...",
-      "id": "daemon_python_src_ingestion_rationale_43"
     },
     {
       "label": "Parses and uploads one replay. When `sync_state` is given, a replay already\u2026",
@@ -15749,15 +15866,26 @@
       "id": "apps_api_src_index_app"
     },
     {
-      "label": "requireUser",
+      "label": "query.ts",
       "file_type": "code",
-      "source_file": "apps/api/src/middleware/auth-session.ts",
-      "source_location": "L23",
+      "source_file": "apps/api/src/lib/query.ts",
+      "source_location": "L1",
       "_origin": "ast",
       "community": 8,
       "community_name": "api/src/index.ts",
-      "norm_label": "requireuser",
-      "id": "apps_api_src_middleware_auth_session_requireuser"
+      "norm_label": "query.ts",
+      "id": "apps_api_src_lib_query"
+    },
+    {
+      "label": "gameModeListSchema",
+      "file_type": "code",
+      "source_file": "apps/api/src/lib/query.ts",
+      "source_location": "L14",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "api/src/index.ts",
+      "norm_label": "gamemodelistschema",
+      "id": "apps_api_src_lib_query_gamemodelistschema"
     },
     {
       "label": "health.ts",
@@ -15870,17 +15998,6 @@
       "id": "apps_api_src_routes_stats_summaryqueryschema"
     },
     {
-      "label": "data-reset.service.ts",
-      "file_type": "code",
-      "source_file": "apps/api/src/services/data-reset.service.ts",
-      "source_location": "L1",
-      "_origin": "ast",
-      "community": 8,
-      "community_name": "api/src/index.ts",
-      "norm_label": "data-reset.service.ts",
-      "id": "apps_api_src_services_data_reset_service"
-    },
-    {
       "label": "stats.service.ts",
       "file_type": "code",
       "source_file": "apps/api/src/services/stats.service.ts",
@@ -15914,48 +16031,37 @@
       "id": "apps_api_src_services_talents_service_talent_tiers"
     },
     {
-      "label": "client.ts",
+      "label": "shared-types/src/index.ts",
       "file_type": "code",
-      "source_file": "packages/db/src/client.ts",
+      "source_file": "packages/shared-types/src/index.ts",
       "source_location": "L1",
       "_origin": "ast",
       "community": 8,
       "community_name": "api/src/index.ts",
-      "norm_label": "client.ts",
-      "id": "packages_db_src_client"
+      "norm_label": "shared-types/src/index.ts",
+      "id": "packages_shared_types_src_index"
     },
     {
-      "label": "db",
+      "label": "src/stats.ts",
       "file_type": "code",
-      "source_file": "packages/db/src/client.ts",
-      "source_location": "L12",
-      "_origin": "ast",
-      "community": 8,
-      "community_name": "api/src/index.ts",
-      "norm_label": "db",
-      "id": "packages_db_src_client_db"
-    },
-    {
-      "label": "queryClient",
-      "file_type": "code",
-      "source_file": "packages/db/src/client.ts",
-      "source_location": "L10",
-      "_origin": "ast",
-      "community": 8,
-      "community_name": "api/src/index.ts",
-      "norm_label": "queryclient",
-      "id": "packages_db_src_client_queryclient"
-    },
-    {
-      "label": "db/src/index.ts",
-      "file_type": "code",
-      "source_file": "packages/db/src/index.ts",
+      "source_file": "packages/shared-types/src/stats.ts",
       "source_location": "L1",
       "_origin": "ast",
       "community": 8,
       "community_name": "api/src/index.ts",
-      "norm_label": "db/src/index.ts",
-      "id": "packages_db_src_index"
+      "norm_label": "src/stats.ts",
+      "id": "packages_shared_types_src_stats"
+    },
+    {
+      "label": "heroStatsScopeSchema",
+      "file_type": "code",
+      "source_file": "packages/shared-types/src/stats.ts",
+      "source_location": "L4",
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "api/src/index.ts",
+      "norm_label": "herostatsscopeschema",
+      "id": "packages_shared_types_src_stats_herostatsscopeschema"
     },
     {
       "label": "Runs one check-and-apply cycle right now, on a background thread -- what the\u2026",
@@ -16022,28 +16128,6 @@
       "community_name": "sync_state_file_path",
       "norm_label": "path to the local sync-state database, next to `config.json`.",
       "id": "daemon_python_src_sync_state_rationale_79"
-    },
-    {
-      "label": "Every replay currently in an error state, most recent first -- backs the Debug\u2026",
-      "file_type": "rationale",
-      "source_file": "daemon-python/src/sync_state.py",
-      "source_location": "L286",
-      "_origin": "ast",
-      "community": 86,
-      "community_name": "ReplayErrorRecord",
-      "norm_label": "every replay currently in an error state, most recent first -- backs the debug...",
-      "id": "daemon_python_src_sync_state_rationale_286"
-    },
-    {
-      "label": "One failed replay, as shown in the Debug window (gui.py).",
-      "file_type": "rationale",
-      "source_file": "daemon-python/src/sync_state.py",
-      "source_location": "L97",
-      "_origin": "ast",
-      "community": 86,
-      "community_name": "ReplayErrorRecord",
-      "norm_label": "one failed replay, as shown in the debug window (gui.py).",
-      "id": "daemon_python_src_sync_state_rationale_97"
     },
     {
       "label": "db/tsconfig.json",
@@ -40768,6 +40852,72 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
+      "source_file": "CLAUDE.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "claude",
+      "target": "claude_claude_md",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "CLAUDE.md",
+      "source_location": "L102",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "claude_claude_md",
+      "target": "claude_auth",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "CLAUDE.md",
+      "source_location": "L108",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "claude_claude_md",
+      "target": "claude_graphify",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "CLAUDE.md",
+      "source_location": "L21",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "claude_claude_md",
+      "target": "claude_commands",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "CLAUDE.md",
+      "source_location": "L5",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "claude_claude_md",
+      "target": "claude_project",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "CLAUDE.md",
+      "source_location": "L65",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "claude_claude_md",
+      "target": "claude_architecture_replay_ingestion_adapters_and_versioning",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
       "source_file": "daemon-python/assets/generate_icons.py",
       "source_location": "L36",
       "weight": 1.0,
@@ -52845,5 +52995,5 @@
       "source_file": "tasks/daemon-audit-2026-08-12.md"
     }
   ],
-  "built_at_commit": "f5a519da915b07b1798a690ebc723738a7e4a321"
+  "built_at_commit": "f60ace111d4139035cf3edfe416f7c19d76aa95d"
 }
