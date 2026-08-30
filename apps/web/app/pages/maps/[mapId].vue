@@ -288,7 +288,7 @@ const teamImpactChartOptions = computed(() => ({
         <p class="mb-4 text-xs text-muted">
           Heatmap de présence, kills et morts, agrégée sur les parties enregistrées pour cette carte.
         </p>
-        <SpatialAggregateSlot
+        <SpatialSlotGroup
           v-if="spatialHeroOptions.length > 0"
           :map-id="mapId"
           :hero-options="spatialHeroOptions"

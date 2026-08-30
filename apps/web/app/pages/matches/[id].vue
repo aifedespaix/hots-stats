@@ -90,6 +90,12 @@ const spatialMatchHeroes = computed<MatchSlotHero[]>(() => {
   });
 });
 
+/** Hero options for Slot B's "Historique" picker in the 2-Slot comparison --
+ * scoped to this match's own 10 heroes (not the full roster) since the most
+ * natural comparison here is "this game's Muradin vs my historical
+ * Muradin", not an arbitrary hero never played this game. */
+const spatialHeroOptions = computed(() => spatialMatchHeroes.value.map((h) => ({ id: h.heroId, name: h.heroName })));
+
 /** Default sort: me, then my teammates, then opponents. */
 function rank(row: ScoreboardRow): number {
   if (row.isMe) return 0;
@@ -198,12 +204,15 @@ const displayedInsights = computed(() =>
 
       <template #heatmaps>
         <div class="mt-4">
-          <SpatialMatchSlot
+          <SpatialSlotGroup
             v-if="spatialGrid && spatialMatchHeroes.length > 0"
             :map-id="data.match.mapId"
             :grid-cols="spatialGrid.cols"
             :grid-rows="spatialGrid.rows"
-            :heroes="spatialMatchHeroes"
+            :match-heroes="spatialMatchHeroes"
+            :match-deaths="data.timeline?.deaths ?? []"
+            :hero-options="spatialHeroOptions"
+            :my-battletag="myBattletag"
           />
           <CoachHeatmapsPlaceholder v-else :calibrated="data.spatialCalibrated" />
         </div>

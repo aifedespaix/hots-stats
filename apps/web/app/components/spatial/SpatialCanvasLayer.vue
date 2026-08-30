@@ -17,6 +17,12 @@ const props = defineProps<{
 
 const canvasEl = ref<HTMLCanvasElement | null>(null);
 
+// Floor for the least-intense occupied cell's alpha (relative to `opacity`),
+// so a lightly-visited zone doesn't fade to invisible against the map --
+// same precedent as `heatmapRenderer.ts`'s `MIN_CELL_ALPHA` (60/255), kept
+// here as a fraction since this component's `opacity` is already 0..1.
+const MIN_CELL_ALPHA_FRACTION = 60 / 255;
+
 function redraw() {
   const canvas = canvasEl.value;
   const ctx = canvas?.getContext("2d");
@@ -35,7 +41,7 @@ function redraw() {
 
   for (const [key, value] of Object.entries(props.grid)) {
     const { col, row } = cellRowCol(Number(key), props.gridCols);
-    const intensity = value / max;
+    const intensity = Math.max(MIN_CELL_ALPHA_FRACTION, value / max);
     ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${(intensity * props.opacity).toFixed(3)})`;
     // Row 0 = the calibration's world-Y minimum, which is the *bottom* of
     // the map (game engines have Y increasing upward, screens increasing

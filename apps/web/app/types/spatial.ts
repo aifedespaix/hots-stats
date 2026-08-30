@@ -39,7 +39,7 @@ export interface MatchSpatialData {
   trajectories?: MatchHeroTrajectory[];
 }
 
-/** One hero's grids for `SpatialMatchSlot.vue`, cross-referencing `MatchSpatialHero` with scoreboard display info (name, ally/enemy). */
+/** One hero's grids for a "Cette partie" Slot (`useMatchSpatialSlot.ts`), cross-referencing `MatchSpatialHero` with scoreboard display info (name, ally/enemy). */
 export interface MatchSlotHero {
   matchPlayerId: string;
   battletag: string;
