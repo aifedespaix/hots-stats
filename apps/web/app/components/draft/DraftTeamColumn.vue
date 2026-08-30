@@ -20,6 +20,26 @@ function isSelected(slot: DraftPlayerSlot) {
 function isSelf(slot: DraftPlayerSlot) {
   return Boolean(slot.effectiveBattletag) && slot.effectiveBattletag === props.ownBattletag;
 }
+
+// Slots (by number) currently showing the correction combobox instead of
+// their label -- a resolved or unknown pseudo starts collapsed behind an
+// edit button so the common case (nothing to fix) stays uncluttered; an
+// ambiguous pseudo (candidates but no effectiveBattletag yet) always needs
+// picking one, so it's never collapsed.
+const editingSlots = reactive(new Set<number>());
+
+function isEditing(slot: DraftPlayerSlot) {
+  return editingSlots.has(slot.slot) || (slot.candidates.length > 1 && !slot.effectiveBattletag);
+}
+
+function startEditing(slotNumber: number) {
+  editingSlots.add(slotNumber);
+}
+
+function onPick(slot: DraftPlayerSlot, battletag: string) {
+  editingSlots.delete(slot.slot);
+  emit("disambiguate", slot, battletag);
+}
 </script>
 
 <template>
@@ -61,21 +81,39 @@ function isSelf(slot: DraftPlayerSlot) {
               <span class="truncate">{{ slot.rawName }}</span>
               <span v-if="isSelf(slot)" class="text-[10px] font-normal uppercase tracking-wide text-muted">(toi)</span>
               <PlayersAnnotationBadges v-if="slot.effectiveBattletag" :battletag="slot.effectiveBattletag" />
+              <UButton
+                v-if="!isEditing(slot)"
+                icon="i-heroicons-pencil-square"
+                size="xs"
+                variant="ghost"
+                color="neutral"
+                :padded="false"
+                class="shrink-0 text-muted"
+                @click.stop="startEditing(slot.slot)"
+              />
             </p>
-            <p v-if="slot.candidates.length === 0" class="text-[11px] text-muted">Joueur inconnu</p>
-            <select
-              v-else-if="!slot.effectiveBattletag"
-              class="mt-1 w-full max-w-[180px] rounded border border-border bg-background px-1.5 py-1 text-[11px] text-foreground"
-              @click.stop
-              @change="
-                (event) => emit('disambiguate', slot, (event.target as HTMLSelectElement).value)
-              "
+            <p
+              v-if="slot.candidates.length === 0 && !slot.effectiveBattletag && !isEditing(slot)"
+              class="text-[11px] text-muted"
             >
-              <option value="" disabled selected>Quel battletag ?</option>
-              <option v-for="candidate in slot.candidates" :key="candidate" :value="candidate">
-                {{ candidate }}
-              </option>
-            </select>
+              Joueur inconnu
+            </p>
+            <div v-else-if="isEditing(slot)" class="mt-1 flex max-w-[180px] items-center gap-1">
+              <DraftPseudoCombobox
+                :seed-candidates="slot.candidates"
+                placeholder="Quel battletag ?"
+                @pick="onPick(slot, $event)"
+              />
+              <UButton
+                v-if="!(slot.candidates.length > 1 && !slot.effectiveBattletag)"
+                icon="i-heroicons-x-mark"
+                size="xs"
+                variant="ghost"
+                color="neutral"
+                :padded="false"
+                @click.stop="editingSlots.delete(slot.slot)"
+              />
+            </div>
           </template>
         </div>
 

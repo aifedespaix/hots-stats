@@ -16,20 +16,20 @@ const ownBattletag = computed(() => authData.value?.user?.battletag ?? null);
 const { snapshot, connected } = useDraftStream();
 const config = useRuntimeConfig();
 
-// Client-side overrides for ambiguous pseudos, applied on top of the
-// server's `effectiveBattletag` so picking one updates the UI immediately
-// instead of waiting for the next captured snapshot to reflect the
-// preference just persisted via POST /draft/preference.
+// Client-side overrides for any pseudo the viewer has corrected -- ambiguous,
+// unknown, or even one the server already resolved but got wrong -- applied
+// on top of the server's `effectiveBattletag` so picking one updates the UI
+// immediately instead of waiting for the next captured snapshot to reflect
+// the preference just persisted via POST /draft/preference. An explicit
+// correction always wins, regardless of what the server resolved.
 const overrides = reactive(new Map<string, string>());
 
 function applyOverrides(slots: DraftPlayerSlot[] | undefined): DraftPlayerSlot[] {
   if (!slots) return [];
   return slots.map((slot) => {
-    if (slot.effectiveBattletag || !slot.rawName) return slot;
+    if (!slot.rawName) return slot;
     const override = overrides.get(slot.rawName.trim().toLowerCase());
-    if (override && slot.candidates.includes(override)) {
-      return { ...slot, effectiveBattletag: override };
-    }
+    if (override) return { ...slot, effectiveBattletag: override };
     return slot;
   });
 }

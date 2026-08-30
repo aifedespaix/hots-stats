@@ -10,6 +10,7 @@ import {
   getPlayerDraftStats,
   getTeamThreats,
   ingestDraftSnapshot,
+  searchBattletags,
   setDraftPseudoPreference,
   subscribeToDraftUpdates,
 } from "../services/draft.service";
@@ -18,6 +19,8 @@ import {
 // query param instead of a repeated one, and cheap to build client-side
 // from the already-resolved slots of a team.
 const teamThreatsQuerySchema = z.object({ battletags: z.string().min(1) });
+
+const battletagSearchQuerySchema = z.object({ q: z.string().default("") });
 
 type Env = { Variables: { user: User } };
 
@@ -77,6 +80,14 @@ export const draftRoute = new Hono<Env>()
     const user = c.get("user");
     await setDraftPseudoPreference(user.id, parsed.data.pseudo, parsed.data.battletag);
     return c.json({ status: "ok" });
+  })
+  .get("/battletags/search", authSession, requireUser, async (c) => {
+    const parsed = battletagSearchQuerySchema.safeParse(c.req.query());
+    if (!parsed.success) {
+      return c.json({ error: parsed.error.flatten() }, 400);
+    }
+    const battletags = await searchBattletags(parsed.data.q);
+    return c.json({ battletags });
   })
   .get("/players/:battletag", authSession, requireUser, async (c) => {
     const user = c.get("user");

@@ -16,3 +16,7 @@ export interface DraftPlayerStatsResponse {
 export interface TeamThreatsResponse {
   threats: TeamThreatEntry[];
 }
+
+export interface BattletagSearchResponse {
+  battletags: string[];
+}

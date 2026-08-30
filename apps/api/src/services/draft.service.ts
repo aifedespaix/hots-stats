@@ -68,6 +68,26 @@ async function resolveCandidates(rawName: string): Promise<string[]> {
   return rows.map((row) => row.battletag);
 }
 
+const BATTLETAG_SEARCH_LIMIT = 15;
+
+/** Free-text lookup over every battletag ever recorded in `match_players`,
+ * for the live-draft correction combobox: unlike `resolveCandidates`, this
+ * doesn't require the query to match a pseudo's name part exactly, so it
+ * still finds the right battletag when the OCR read is unrelated to it (or
+ * when the viewer just wants to search for someone directly). */
+export async function searchBattletags(query: string): Promise<string[]> {
+  const trimmed = query.trim();
+  if (trimmed.length < 2) return [];
+
+  const rows = await db
+    .selectDistinct({ battletag: matchPlayers.battletag })
+    .from(matchPlayers)
+    .where(sql`${matchPlayers.battletag} ilike ${`%${trimmed}%`}`)
+    .limit(BATTLETAG_SEARCH_LIMIT);
+
+  return rows.map((row) => row.battletag);
+}
+
 async function loadPreferences(viewerUserId: string, pseudos: string[]): Promise<Map<string, string>> {
   if (pseudos.length === 0) return new Map();
 
@@ -83,21 +103,20 @@ async function loadPreferences(viewerUserId: string, pseudos: string[]): Promise
 
 /** Applies one viewer's remembered preferences to a shared, resolved
  * snapshot -- two viewers can see the same ambiguous pseudo and mean two
- * different battletags, so this can't be baked into `StoredSnapshot` itself. */
+ * different battletags, so this can't be baked into `StoredSnapshot` itself.
+ * A preference always wins over the auto-resolved candidate, and applies
+ * regardless of how many candidates were found (including zero, or exactly
+ * one that OCR still got wrong) -- it's an explicit correction, not just a
+ * tie-breaker for ambiguity. */
 async function toViewerSnapshot(viewerUserId: string, stored: StoredSnapshot): Promise<DraftSnapshot> {
-  const ambiguousPseudos = [...stored.teamLeft, ...stored.teamRight]
-    .filter((slot) => slot.candidates.length > 1 && slot.rawName)
+  const pseudos = [...stored.teamLeft, ...stored.teamRight]
+    .filter((slot) => slot.rawName)
     .map((slot) => slot.rawName!.trim().toLowerCase());
-  const preferences = await loadPreferences(viewerUserId, [...new Set(ambiguousPseudos)]);
+  const preferences = await loadPreferences(viewerUserId, [...new Set(pseudos)]);
 
   function resolveSlot(slot: ResolvedSlot): DraftPlayerSlot {
-    let effectiveBattletag: string | null = null;
-    if (slot.candidates.length === 1) {
-      effectiveBattletag = slot.candidates[0]!;
-    } else if (slot.candidates.length > 1 && slot.rawName) {
-      const preferred = preferences.get(slot.rawName.trim().toLowerCase());
-      effectiveBattletag = preferred && slot.candidates.includes(preferred) ? preferred : null;
-    }
+    const preferred = slot.rawName ? preferences.get(slot.rawName.trim().toLowerCase()) : undefined;
+    const effectiveBattletag = preferred ?? (slot.candidates.length === 1 ? slot.candidates[0]! : null);
     return {
       slot: slot.slot,
       rawName: slot.rawName,
