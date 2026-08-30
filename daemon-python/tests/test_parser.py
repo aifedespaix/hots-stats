@@ -1517,6 +1517,36 @@ def test_normalized_position_samples_by_toon_sorts_and_drops_out_of_bounds():
     assert samples["1-Hero-1-1001"] == [(0, None, 0.1, 0.1), (160, None, 0.5, 0.5)]
 
 
+def test_normalized_position_samples_by_toon_drops_points_in_overlapping_layers():
+    # The default ("") and "bottom" layers overlap on [40, 60]x[40, 60] --
+    # violates the "layers are disjoint" assumption
+    # `_normalized_position_samples_by_toon` documents itself as relying on.
+    # A point inside that overlap must be dropped (not silently attributed
+    # to whichever layer happens to sort first), since there's no
+    # principled way to pick a winner.
+    calibrations = {
+        "": {"minX": 0.0, "maxX": 100.0, "minY": 0.0, "maxY": 100.0},
+        "bottom": {"minX": 40.0, "maxX": 140.0, "minY": 40.0, "maxY": 140.0},
+    }
+    events = [
+        _unit_born_event(1, "HeroLiMing"),
+        _unit_positions_event(0, [(1, 50.0, 50.0)]),  # inside both layers' bounds
+        _unit_positions_event(160, [(1, 10.0, 10.0)]),  # inside only the default layer
+        _unit_positions_event(320, [(1, 120.0, 120.0)]),  # inside only "bottom"
+    ]
+
+    samples = _normalized_position_samples_by_toon(
+        events, tracker_id_to_toon={1: "1-Hero-1-1001"}, calibrations=calibrations
+    )
+
+    # The ambiguous point (gameloop 0) is absent entirely -- neither
+    # attributed to the default layer nor to "bottom".
+    assert samples["1-Hero-1-1001"] == [
+        (160, None, 0.1, 0.1),
+        (320, "bottom", 0.8, 0.8),
+    ]
+
+
 def test_extract_spatial_returns_none_for_degenerate_calibration():
     calibrations = {"": {"minX": 50.0, "maxX": 50.0, "minY": 0.0, "maxY": 100.0}}
     events = [_unit_positions_event(0, [(1, 10.0, 10.0)])]

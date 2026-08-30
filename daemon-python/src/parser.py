@@ -734,14 +734,27 @@ def _normalized_position_samples_by_toon(
     `[0,1]`, grouped by toon handle and sorted chronologically by gameloop.
     `calibrations` is one map's per-layer bounds dict (layer key -> `{minX,
     maxX, minY, maxY}`, `""` meaning the map's default/only level -- see
-    apps/api/src/lib/spatial-layer.ts's DEFAULT_LAYER_KEY). Layers are tried
-    in sorted key order and the first whose bounds contain the raw point
-    wins; a point inside zero or more than one layer's bounds is dropped
-    (an off-map position, or a still-imprecise calibration -- either way,
-    not something that should corrupt a grid cell index). Assumes each
-    layer's bounds are disjoint (see this plan's Global Constraints /
-    tasks/epic-10-analyse-spatiale.md section 4's "à trancher
-    empiriquement" note -- UNCONFIRMED against a real multi-layer replay).
+    apps/api/src/lib/spatial-layer.ts's DEFAULT_LAYER_KEY). Every valid
+    layer's bounds is checked (sorted key order is only for determinism, not
+    a first-match shortcut); a point inside exactly one layer's bounds is
+    tagged with that layer, while a point inside zero *or more than one*
+    layer's bounds is dropped (an off-map position, an overlapping-bounds
+    ambiguity the "layers are disjoint" assumption below doesn't actually
+    hold for, or a still-imprecise calibration -- none of these should
+    corrupt a grid cell index by guessing). Assumes each layer's bounds are
+    disjoint (see this plan's Global Constraints / tasks/epic-10-analyse-
+    spatiale.md section 4's "à trancher empiriquement" note -- UNCONFIRMED
+    against a real multi-layer replay); the zero-or-more-than-one-match drop
+    above is this function's only runtime safety net if that assumption
+    turns out false for a real map, so a violation is silently excluded
+    rather than silently mis-attributed.
+
+    A per-map-dict entry that isn't itself a valid `{minX, maxX, minY,
+    maxY}` bounds dict (e.g. a stale pre-migration local cache, or a
+    pre-Task-8 API response still returning the old flat single-layer shape
+    directly instead of nesting it under a layer key) is skipped rather than
+    raising -- same "invalid layer, not a crash" posture as a degenerate
+    (zero-width/height) bounding box.
 
     Shared by `_extract_spatial` (the presence grid) and `_extract_deaths`
     (each death's approximate position, looked up via
@@ -751,7 +764,22 @@ def _normalized_position_samples_by_toon(
     here since this function has no other way to signal it back).
     """
     layers = sorted(
-        (key, b) for key, b in calibrations.items() if b["maxX"] > b["minX"] and b["maxY"] > b["minY"]
+        (key, b)
+        for key, b in calibrations.items()
+        # Defensively tolerant of a malformed/old-shape entry (e.g. a stale
+        # pre-migration local cache, or a pre-Task-8 API response still
+        # returning the old flat `{minX, maxX, minY, maxY, updatedAt}` shape
+        # directly instead of nesting it under a layer key): `b` must itself
+        # be a per-layer bounds dict with all 4 numeric bounds before it's
+        # even eligible for the degenerate-box check below. Without this, a
+        # malformed entry raises a raw `TypeError` here that gets swallowed
+        # into a misleading generic `ReplayParseError` for every replay on
+        # that map, instead of just being skipped like any other invalid
+        # layer.
+        if isinstance(b, dict)
+        and all(isinstance(b.get(field), (int, float)) for field in ("minX", "maxX", "minY", "maxY"))
+        and b["maxX"] > b["minX"]
+        and b["maxY"] > b["minY"]
     )
     if not layers:
         return {}
@@ -762,16 +790,24 @@ def _normalized_position_samples_by_toon(
         toon_handle = hero_tags.get(tag_index)
         if toon_handle is None:
             continue
-        matched: tuple[str | None, float, float] | None = None
+        # Every layer whose bounds contain the point, not just the first
+        # (sorted-key-order) match: a point inside more than one layer's
+        # bounds means the "layers are disjoint" assumption above doesn't
+        # hold for this pair, and there's no principled way to pick a
+        # winner -- silently attributing it to whichever layer happens to
+        # sort first would corrupt that layer's grid instead of surfacing
+        # the violated assumption. Dropped the same as a zero-match (an
+        # off-map point), not attributed to any layer.
+        matched: list[tuple[str | None, float, float]] = []
         for layer_key, b in layers:
             xn = (x - b["minX"]) / (b["maxX"] - b["minX"])
             yn = (y - b["minY"]) / (b["maxY"] - b["minY"])
             if 0.0 <= xn <= 1.0 and 0.0 <= yn <= 1.0:
-                matched = (layer_key or None, xn, yn)
-                break
-        if matched is None:
+                matched.append((layer_key or None, xn, yn))
+        if len(matched) != 1:
             continue
-        samples.setdefault(toon_handle, []).append((gameloop, matched[0], matched[1], matched[2]))
+        layer, xn, yn = matched[0]
+        samples.setdefault(toon_handle, []).append((gameloop, layer, xn, yn))
 
     for toon_samples in samples.values():
         toon_samples.sort(key=lambda sample: sample[0])
