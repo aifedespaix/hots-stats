@@ -167,7 +167,22 @@ from __future__ import annotations
 # `MIN_PARSER_VERSION` bump: this only changes what gets POSTed to
 # `/spatial/samples` for *uncalibrated* maps, never the `spatial` block of an
 # already-ingested match, so there's nothing to resync.
-PARSER_VERSION = "1.12"
+# 1.13: adds multi-layer support to the `spatial` block -- a map with more
+# than one calibrated layer (e.g. Haunted Mines' surface + underground mine,
+# see tasks/epic-10-analyse-spatiale.md section 4) now gets one
+# `spatial.presence[]`/`spatial.trajectories[]` entry per (hero, layer)
+# touched, and `timeline.deaths[].layer` records which layer a death's `x`/
+# `y` are normalized against, instead of every position on the map being
+# forced through one flat, single-rectangle calibration regardless of which
+# physical area it actually came from. `layer` was already reserved (always
+# `null`) in every prior version's schema -- this just starts populating it
+# for maps an admin has calibrated more than one layer of. A single-layer
+# map is completely unaffected (`layer` stays `null` for it). Deliberately
+# NOT paired with a `MIN_PARSER_VERSION` bump, same additive-only reasoning
+# as 1.8/1.11: a match ingested before this ships simply keeps its existing
+# single, `layer: null` grid until it happens to resync for some other
+# reason.
+PARSER_VERSION = "1.13"
 
 # How many times a single replay is allowed to fail with a parse error (a
 # corrupt/incomplete archive -- see parser.ReplayParseError) at the *same*

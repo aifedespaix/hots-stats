@@ -422,7 +422,7 @@ def _extract_deaths(
     tracker_id_to_toon: dict[int, str],
     players: dict[str, dict[str, Any]],
     gates_open_loop: int,
-    calibration: dict[str, float] | None,
+    calibrations: dict[str, dict[str, float]] | None,
 ) -> list[dict[str, Any]]:
     """Every hero death (`SUnitDiedEvent`), as `{battletag, team, atSeconds}`
     -- the timeline data the Coach tab's `outnumberedFights`/`staggeredDeaths`/
@@ -436,14 +436,15 @@ def _extract_deaths(
     Two additional, independently-gated enrichments (see
     tasks/epic-10-analyse-spatiale.md Livrable 1):
 
-    - `x`/`y` (normalized `[0,1]` position of the death): only added when
-      `calibration` is given (the map has a spatial calibration) *and* the
-      dying hero has a position sample at or before the death -- taken from
-      `SUnitPositionsEvent` via `_normalized_position_samples_by_toon`
-      (`SUnitDiedEvent` is not assumed to carry its own position; deriving
-      it from the position stream avoids stacking a second unconfirmed field
-      hypothesis on top of the first).
-    - `killers`/`killType`: independent of `calibration` -- from
+    - `x`/`y` (normalized `[0,1]` position of the death), with `layer` set
+      alongside them: only added when `calibrations` is given (the map has a
+      spatial calibration) *and* the dying hero has a position sample at or
+      before the death -- taken from `SUnitPositionsEvent` via
+      `_normalized_position_samples_by_toon` (`SUnitDiedEvent` is not
+      assumed to carry its own position; deriving it from the position
+      stream avoids stacking a second unconfirmed field hypothesis on top of
+      the first).
+    - `killers`/`killType`: independent of `calibrations` -- from
       `SUnitDiedEvent`'s **hypothesized** `m_killerPlayerId` field (an
       optional tracker PlayerID). UNCONFIRMED: no real replay was available
       to verify this field name/shape (same caveat as
@@ -456,7 +457,7 @@ def _extract_deaths(
       `killTypeSchema` in shared-types).
     """
     samples_by_toon = (
-        _normalized_position_samples_by_toon(tracker_events, tracker_id_to_toon, calibration) if calibration else {}
+        _normalized_position_samples_by_toon(tracker_events, tracker_id_to_toon, calibrations) if calibrations else {}
     )
 
     deaths: list[dict[str, Any]] = []
@@ -478,7 +479,7 @@ def _extract_deaths(
         if toon_samples:
             position = _position_at_or_before(toon_samples, event["_gameloop"])
             if position is not None:
-                death["x"], death["y"] = position
+                death["layer"], death["x"], death["y"] = position
 
         killer_tracker_id = event.get("m_killerPlayerId")
         killer_toon = tracker_id_to_toon.get(killer_tracker_id) if killer_tracker_id is not None else None
@@ -724,53 +725,71 @@ def _collect_calibration_samples(
 
 
 def _normalized_position_samples_by_toon(
-    tracker_events: list[dict], tracker_id_to_toon: dict[int, str], calibration: dict[str, float]
-) -> dict[str, list[tuple[int, float, float]]]:
+    tracker_events: list[dict],
+    tracker_id_to_toon: dict[int, str],
+    calibrations: dict[str, dict[str, float]],
+) -> dict[str, list[tuple[int, str | None, float, float]]]:
     """Every `SUnitPositionsEvent` sample for a hero unit, normalized against
-    `calibration`'s world bounds into `[0,1]`, grouped by toon handle and
-    sorted chronologically by gameloop. Out-of-`[0,1]` samples are dropped
+    whichever of `calibrations`' layers' world bounds contains it, into
+    `[0,1]`, grouped by toon handle and sorted chronologically by gameloop.
+    `calibrations` is one map's per-layer bounds dict (layer key -> `{minX,
+    maxX, minY, maxY}`, `""` meaning the map's default/only level -- see
+    apps/api/src/lib/spatial-layer.ts's DEFAULT_LAYER_KEY). Layers are tried
+    in sorted key order and the first whose bounds contain the raw point
+    wins; a point inside zero or more than one layer's bounds is dropped
     (an off-map position, or a still-imprecise calibration -- either way,
-    not something that should corrupt a grid cell index). Returns `{}` if
-    `calibration` is degenerate (zero-width/height bounding box -- can't
-    happen from the calibration tool's own validation, guarded here since
-    this function has no other way to signal it back).
+    not something that should corrupt a grid cell index). Assumes each
+    layer's bounds are disjoint (see this plan's Global Constraints /
+    tasks/epic-10-analyse-spatiale.md section 4's "à trancher
+    empiriquement" note -- UNCONFIRMED against a real multi-layer replay).
 
     Shared by `_extract_spatial` (the presence grid) and `_extract_deaths`
     (each death's approximate position, looked up via
     `_position_at_or_before`) so both agree on exactly the same normalized
-    positions.
+    positions and layer assignment. Returns `{}` if no layer's bounds are
+    valid (can't happen from the calibration tool's own validation, guarded
+    here since this function has no other way to signal it back).
     """
-    min_x, max_x, min_y, max_y = calibration["minX"], calibration["maxX"], calibration["minY"], calibration["maxY"]
-    if max_x <= min_x or max_y <= min_y:
+    layers = sorted(
+        (key, b) for key, b in calibrations.items() if b["maxX"] > b["minX"] and b["maxY"] > b["minY"]
+    )
+    if not layers:
         return {}
 
     hero_tags = _hero_unit_tags_by_index(tracker_events, tracker_id_to_toon)
-    samples: dict[str, list[tuple[int, float, float]]] = {}
+    samples: dict[str, list[tuple[int, str | None, float, float]]] = {}
     for gameloop, tag_index, x, y in _iter_unit_positions(tracker_events):
         toon_handle = hero_tags.get(tag_index)
         if toon_handle is None:
             continue
-        xn = (x - min_x) / (max_x - min_x)
-        yn = (y - min_y) / (max_y - min_y)
-        if not (0.0 <= xn <= 1.0 and 0.0 <= yn <= 1.0):
+        matched: tuple[str | None, float, float] | None = None
+        for layer_key, b in layers:
+            xn = (x - b["minX"]) / (b["maxX"] - b["minX"])
+            yn = (y - b["minY"]) / (b["maxY"] - b["minY"])
+            if 0.0 <= xn <= 1.0 and 0.0 <= yn <= 1.0:
+                matched = (layer_key or None, xn, yn)
+                break
+        if matched is None:
             continue
-        samples.setdefault(toon_handle, []).append((gameloop, xn, yn))
+        samples.setdefault(toon_handle, []).append((gameloop, matched[0], matched[1], matched[2]))
 
     for toon_samples in samples.values():
         toon_samples.sort(key=lambda sample: sample[0])
     return samples
 
 
-def _position_at_or_before(samples: list[tuple[int, float, float]], gameloop: int) -> tuple[float, float] | None:
-    """Latest normalized `(x, y)` in `samples` (sorted by gameloop, see
+def _position_at_or_before(
+    samples: list[tuple[int, str | None, float, float]], gameloop: int
+) -> tuple[str | None, float, float] | None:
+    """Latest `(layer, x, y)` in `samples` (sorted by gameloop, see
     `_normalized_position_samples_by_toon`) at or before `gameloop`, or
     `None` if every sample is after it (e.g. the hero died before its first
     position sample)."""
-    idx = bisect.bisect_right(samples, (gameloop, math.inf, math.inf)) - 1
+    idx = bisect.bisect_right(samples, gameloop, key=lambda sample: sample[0]) - 1
     if idx < 0:
         return None
-    _, xn, yn = samples[idx]
-    return xn, yn
+    _, layer, xn, yn = samples[idx]
+    return layer, xn, yn
 
 
 def _distribute_segment_across_cells(
@@ -838,17 +857,20 @@ def _extract_spatial(
     tracker_events: list[dict],
     tracker_id_to_toon: dict[int, str],
     players: dict[str, dict[str, Any]],
-    calibration: dict[str, float],
+    calibrations: dict[str, dict[str, float]],
 ) -> dict[str, Any] | None:
-    """Builds the `spatial.presence[]` block: a sparse per-hero grid of
-    seconds spent in each cell, normalized against `calibration`'s
-    `{minX, maxX, minY, maxY}` world bounds and interpolated between
-    samples (see `_presence_seconds_by_cell`) -- tasks/epic-10-analyse-spatiale.md
-    Livrable 1. Returns `None` if the replay has no `SUnitPositionsEvent` at
-    all, or if `calibration` is degenerate.
+    """Builds the `spatial.presence[]` block: a sparse per-(hero, layer) grid
+    of seconds spent in each cell, normalized against whichever of
+    `calibrations`' layers contains each sample and interpolated between
+    same-layer samples (see `_presence_seconds_by_cell`) --
+    tasks/epic-10-analyse-spatiale.md Livrable 1. A hero present on more than
+    one layer gets one `presence[]` entry per layer, matching that spec's "un
+    objet par héros... par niveau si map multi-niveaux". Returns `None` if
+    the replay has no `SUnitPositionsEvent` at all, or if no layer in
+    `calibrations` is valid.
     """
     cols, rows = constants.SPATIAL_GRID_COLS, constants.SPATIAL_GRID_ROWS
-    samples_by_toon = _normalized_position_samples_by_toon(tracker_events, tracker_id_to_toon, calibration)
+    samples_by_toon = _normalized_position_samples_by_toon(tracker_events, tracker_id_to_toon, calibrations)
     if not samples_by_toon:
         return None
 
@@ -856,28 +878,32 @@ def _extract_spatial(
     for toon_handle, samples in samples_by_toon.items():
         if toon_handle not in players:
             continue
-        cells = _presence_seconds_by_cell(samples, cols, rows)
-        if not cells:
-            continue
         player = players[toon_handle]
-        cell_indices = sorted(cells)
-        presence.append(
-            {
-                "battletag": player["battletag"],
-                "heroId": player["heroId"],
-                "layer": None,
-                "cellIndex": cell_indices,
-                # 2 decimals, not 1: interpolation can spread one gap's
-                # elapsed time across a hundred-plus cells, so a per-cell
-                # share is often well under 0.1s -- rounding to a single
-                # decimal there would systematically round many small shares
-                # up, inflating the total by a meaningful margin summed
-                # across that many cells (confirmed by a failing test with
-                # ~15% drift). 2 decimals shrinks that quantization error by
-                # roughly 10x for a negligible payload cost.
-                "secondsInCell": [round(cells[idx], 2) for idx in cell_indices],
-            }
-        )
+        samples_by_layer: dict[str | None, list[tuple[int, float, float]]] = {}
+        for gameloop, layer, xn, yn in samples:
+            samples_by_layer.setdefault(layer, []).append((gameloop, xn, yn))
+        for layer, layer_samples in samples_by_layer.items():
+            cells = _presence_seconds_by_cell(layer_samples, cols, rows)
+            if not cells:
+                continue
+            cell_indices = sorted(cells)
+            presence.append(
+                {
+                    "battletag": player["battletag"],
+                    "heroId": player["heroId"],
+                    "layer": layer,
+                    "cellIndex": cell_indices,
+                    # 2 decimals, not 1: interpolation can spread one gap's
+                    # elapsed time across a hundred-plus cells, so a per-cell
+                    # share is often well under 0.1s -- rounding to a single
+                    # decimal there would systematically round many small shares
+                    # up, inflating the total by a meaningful margin summed
+                    # across that many cells (confirmed by a failing test with
+                    # ~15% drift). 2 decimals shrinks that quantization error by
+                    # roughly 10x for a negligible payload cost.
+                    "secondsInCell": [round(cells[idx], 2) for idx in cell_indices],
+                }
+            )
 
     if not presence:
         return None
@@ -893,7 +919,7 @@ def _extract_trajectories(
     tracker_events: list[dict],
     tracker_id_to_toon: dict[int, str],
     players: dict[str, dict[str, Any]],
-    calibration: dict[str, float],
+    calibrations: dict[str, dict[str, float]],
     gates_open_loop: int,
 ) -> list[dict[str, Any]]:
     """Builds `spatial.trajectories[]`: a downsampled, per-hero path that
@@ -907,7 +933,8 @@ def _extract_trajectories(
     by. The Pro Comparison View needs literal rotation paths and
     time/event-windowed heatmaps, which need each point's own `atSeconds`
     -- hence this parallel, timestamped path per hero (see
-    `apps/web/app/composables/useHeatmapSync.ts`).
+    `apps/web/app/composables/useHeatmapSync.ts`). One entry per (hero,
+    layer) touched, same split as `_extract_spatial`.
 
     Downsampled to one point per `constants.SPATIAL_TRAJECTORY_SAMPLE_INTERVAL_SECONDS`
     of elapsed match time, independently per hero: macro-strategic rotation
@@ -915,7 +942,7 @@ def _extract_trajectories(
     bounded (a 30-minute game x 10 heroes at the default 2s interval is
     ~9k points total).
     """
-    samples_by_toon = _normalized_position_samples_by_toon(tracker_events, tracker_id_to_toon, calibration)
+    samples_by_toon = _normalized_position_samples_by_toon(tracker_events, tracker_id_to_toon, calibrations)
     if not samples_by_toon:
         return []
 
@@ -925,29 +952,33 @@ def _extract_trajectories(
         if toon_handle not in players:
             continue
         player = players[toon_handle]
-        at_seconds: list[int] = []
-        xs: list[float] = []
-        ys: list[float] = []
-        next_loop: float | None = None
-        for loop, xn, yn in samples:
-            if next_loop is not None and loop < next_loop:
+        samples_by_layer: dict[str | None, list[tuple[int, float, float]]] = {}
+        for gameloop, layer, xn, yn in samples:
+            samples_by_layer.setdefault(layer, []).append((gameloop, xn, yn))
+        for layer, layer_samples in samples_by_layer.items():
+            at_seconds: list[int] = []
+            xs: list[float] = []
+            ys: list[float] = []
+            next_loop: float | None = None
+            for loop, xn, yn in layer_samples:
+                if next_loop is not None and loop < next_loop:
+                    continue
+                at_seconds.append(max(0, round((loop - gates_open_loop) / _GAMELOOPS_PER_SECOND)))
+                xs.append(round(xn, 4))
+                ys.append(round(yn, 4))
+                next_loop = loop + interval_loops
+            if not at_seconds:
                 continue
-            at_seconds.append(max(0, round((loop - gates_open_loop) / _GAMELOOPS_PER_SECOND)))
-            xs.append(round(xn, 4))
-            ys.append(round(yn, 4))
-            next_loop = loop + interval_loops
-        if not at_seconds:
-            continue
-        trajectories.append(
-            {
-                "battletag": player["battletag"],
-                "heroId": player["heroId"],
-                "layer": None,
-                "atSeconds": at_seconds,
-                "x": xs,
-                "y": ys,
-            }
-        )
+            trajectories.append(
+                {
+                    "battletag": player["battletag"],
+                    "heroId": player["heroId"],
+                    "layer": layer,
+                    "atSeconds": at_seconds,
+                    "x": xs,
+                    "y": ys,
+                }
+            )
     return trajectories
 
 
@@ -1115,7 +1146,7 @@ def _read_archive_file(archive: mpyq.MPQArchive, filename: str) -> bytes:
     return contents
 
 
-def parse_replay(path: Path, calibrations: dict[str, dict[str, float]] | None = None) -> dict[str, Any]:
+def parse_replay(path: Path, calibrations: dict[str, dict[str, dict[str, float]]] | None = None) -> dict[str, Any]:
     """Parses a `.StormReplay` file into a dict matching `replayPayloadSchema`.
 
     Raises `ReplayParseError` for anything we can't confidently extract
@@ -1157,7 +1188,7 @@ def parse_replay(path: Path, calibrations: dict[str, dict[str, float]] | None = 
             attributes_events=attributes_events,
             battletags=battletags,
             replay_hash=hash_replay_file(path),
-            calibrations=calibrations,
+            calibrations_by_map=calibrations,
         )
     except ReplayParseError:
         raise
@@ -1177,7 +1208,7 @@ def build_payload(
     attributes_events: dict,
     battletags: dict[str, str],
     replay_hash: str,
-    calibrations: dict[str, dict[str, float]] | None = None,
+    calibrations_by_map: dict[str, dict[str, dict[str, float]]] | None = None,
 ) -> dict[str, Any]:
     """Pure transformation from decoded replay structures to the API payload.
 
@@ -1185,9 +1216,10 @@ def build_payload(
     most likely to need adjusting against real replays) can be unit tested
     with synthetic data, independent of `mpyq`/`heroprotocol` decoding.
 
-    `calibrations` is the Daemon's cached `GET /spatial/calibrations`
-    dictionary (map slug -> world bounds), refreshed once per run/batch --
-    see `app.py`'s `_sync_spatial_calibrations`. When the replay's map has an
+    `calibrations_by_map` is the Daemon's cached `GET /spatial/calibrations`
+    dictionary (map slug -> per-layer world bounds dict, layer key -> `{minX,
+    maxX, minY, maxY}`), refreshed once per run/batch -- see `app.py`'s
+    `_sync_spatial_calibrations`. When the replay's map has an
     entry, the returned dict gains a `spatial` block (see `_extract_spatial`).
     When it doesn't, raw positions are instead collected for
     `ingestion.ingest_file` to POST to `/spatial/samples`, surfaced here
@@ -1405,20 +1437,20 @@ def build_payload(
     region = str(player_list[0]["m_toon"]["m_region"])
 
     map_slug = _slugify(map_display_name)
-    calibration = calibrations.get(map_slug) if calibrations else None
+    calibrations = calibrations_by_map.get(map_slug) if calibrations_by_map else None
 
     hero_unit_tags = _hero_unit_tags_by_toon(tracker_events, tracker_id_to_toon)
-    deaths = _extract_deaths(tracker_events, hero_unit_tags, tracker_id_to_toon, players, gates_open_loop, calibration)
+    deaths = _extract_deaths(tracker_events, hero_unit_tags, tracker_id_to_toon, players, gates_open_loop, calibrations)
     level_snapshots = _extract_level_snapshots(tracker_events, tracker_id_to_toon, players, gates_open_loop)
     structure_events = _extract_structure_events(tracker_events, tracker_id_to_toon, players, gates_open_loop)
 
-    spatial = _extract_spatial(tracker_events, tracker_id_to_toon, players, calibration) if calibration else None
+    spatial = _extract_spatial(tracker_events, tracker_id_to_toon, players, calibrations) if calibrations else None
     trajectories = (
-        _extract_trajectories(tracker_events, tracker_id_to_toon, players, calibration, gates_open_loop)
-        if calibration
+        _extract_trajectories(tracker_events, tracker_id_to_toon, players, calibrations, gates_open_loop)
+        if calibrations
         else []
     )
-    pending_points = None if calibration else _collect_calibration_samples(tracker_events, tracker_id_to_toon)
+    pending_points = None if calibrations else _collect_calibration_samples(tracker_events, tracker_id_to_toon)
 
     payload = {
         # Blizzard's own field name, kept as-is (not camelCased) since

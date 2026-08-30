@@ -1092,7 +1092,7 @@ def test_extract_deaths_skips_unresolvable_tags():
     events = [_unit_died_event(999, 700)]
     assert (
         _extract_deaths(
-            events, hero_unit_tags={}, tracker_id_to_toon={}, players={}, gates_open_loop=0, calibration=None
+            events, hero_unit_tags={}, tracker_id_to_toon={}, players={}, gates_open_loop=0, calibrations=None
         )
         == []
     )
@@ -1298,7 +1298,7 @@ def test_build_payload_includes_spatial_block_for_calibrated_map():
         attributes_events=_base_attributes_events(),
         battletags=_battletags(),
         replay_hash="a" * 64,
-        calibrations={"cursed-hollow": {"minX": 0.0, "maxX": 100.0, "minY": 0.0, "maxY": 100.0}},
+        calibrations_by_map={"cursed-hollow": {"": {"minX": 0.0, "maxX": 100.0, "minY": 0.0, "maxY": 100.0}}},
     )
 
     assert "_pendingSpatialSample" not in payload
@@ -1314,6 +1314,74 @@ def test_build_payload_includes_spatial_block_for_calibrated_map():
     assert foo["cellIndex"] == sorted(foo["cellIndex"])
     assert len(foo["cellIndex"]) == 1
     assert foo["secondsInCell"] == pytest.approx([10.0])
+
+
+def test_extract_spatial_splits_one_hero_across_two_layers():
+    events = [
+        *_base_tracker_events(),
+        _unit_born_event(1, "HeroLiMing"),
+        # Two samples in the default ("") layer's bounds, two more in
+        # "bottom"'s -- `_presence_seconds_by_cell` only credits a segment
+        # *between* two same-layer samples, so a layer needs at least a pair
+        # to show up in `presence[]` at all (a single sample there would be
+        # silently dropped, same as it already is for the default layer).
+        _unit_positions_event(610, [(1, 10.0, 10.0)]),
+        _unit_positions_event(610 + 16 * 10, [(1, 20.0, 20.0)]),
+        _unit_positions_event(610 + 16 * 20, [(1, 1010.0, 1010.0)]),
+        _unit_positions_event(610 + 16 * 30, [(1, 1020.0, 1020.0)]),
+    ]
+
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=events,
+        attributes_events=_base_attributes_events(),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+        calibrations_by_map={
+            "cursed-hollow": {
+                "": {"minX": 0.0, "maxX": 100.0, "minY": 0.0, "maxY": 100.0},
+                "bottom": {"minX": 1000.0, "maxX": 1100.0, "minY": 1000.0, "maxY": 1100.0},
+            }
+        },
+    )
+
+    entries = [p for p in payload["spatial"]["presence"] if p["battletag"] == "Foo#1111"]
+    layers = {e["layer"] for e in entries}
+    assert layers == {None, "bottom"}
+    default_entry = next(e for e in entries if e["layer"] is None)
+    bottom_entry = next(e for e in entries if e["layer"] == "bottom")
+    assert sum(default_entry["secondsInCell"]) == pytest.approx(10.0, abs=0.1)
+    assert bottom_entry["cellIndex"]
+
+
+def test_extract_deaths_tags_death_layer():
+    events = [
+        *_base_tracker_events(),
+        _unit_born_event(1, "HeroLiMing"),
+        _unit_positions_event(610, [(1, 1010.0, 1010.0)]),
+        _unit_died_event(1, 610 + 16 * 5),
+    ]
+
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=events,
+        attributes_events=_base_attributes_events(),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+        calibrations_by_map={
+            "cursed-hollow": {
+                "": {"minX": 0.0, "maxX": 100.0, "minY": 0.0, "maxY": 100.0},
+                "bottom": {"minX": 1000.0, "maxX": 1100.0, "minY": 1000.0, "maxY": 1100.0},
+            }
+        },
+    )
+
+    death = next(d for d in payload["timeline"]["deaths"] if d["battletag"] == "Foo#1111")
+    assert death["layer"] == "bottom"
 
 
 def test_build_payload_collects_calibration_sample_for_unmapped_map():
@@ -1332,7 +1400,7 @@ def test_build_payload_collects_calibration_sample_for_unmapped_map():
         attributes_events=_base_attributes_events(),
         battletags=_battletags(),
         replay_hash="a" * 64,
-        calibrations={},  # no entry for "cursed-hollow"
+        calibrations_by_map={},  # no entry for "cursed-hollow"
     )
 
     assert "spatial" not in payload
@@ -1358,7 +1426,7 @@ def test_build_payload_excludes_non_hero_positions_from_calibration_sample():
         attributes_events=_base_attributes_events(),
         battletags=_battletags(),
         replay_hash="a" * 64,
-        calibrations={},  # no entry for "cursed-hollow"
+        calibrations_by_map={},  # no entry for "cursed-hollow"
     )
 
     pending = payload["_pendingSpatialSample"]
@@ -1427,38 +1495,40 @@ def test_presence_seconds_by_cell_ignores_out_of_order_zero_or_negative_gaps():
 
 
 def test_position_at_or_before_returns_the_latest_sample_not_after_gameloop():
-    samples = [(0, 0.1, 0.1), (160, 0.2, 0.2), (320, 0.3, 0.3)]
+    samples = [(0, None, 0.1, 0.1), (160, None, 0.2, 0.2), (320, None, 0.3, 0.3)]
 
-    assert _position_at_or_before(samples, 200) == (0.2, 0.2)
-    assert _position_at_or_before(samples, 320) == (0.3, 0.3)
+    assert _position_at_or_before(samples, 200) == (None, 0.2, 0.2)
+    assert _position_at_or_before(samples, 320) == (None, 0.3, 0.3)
     assert _position_at_or_before(samples, -1) is None
 
 
 def test_normalized_position_samples_by_toon_sorts_and_drops_out_of_bounds():
-    calibration = {"minX": 0.0, "maxX": 100.0, "minY": 0.0, "maxY": 100.0}
+    calibrations = {"": {"minX": 0.0, "maxX": 100.0, "minY": 0.0, "maxY": 100.0}}
     events = [
         _unit_positions_event(160, [(1, 50.0, 50.0)]),
         _unit_positions_event(0, [(1, 10.0, 10.0), (1, -50.0, -50.0)]),  # out-of-bounds point dropped
         _unit_born_event(1, "HeroLiMing"),
     ]
 
-    samples = _normalized_position_samples_by_toon(events, tracker_id_to_toon={1: "1-Hero-1-1001"}, calibration=calibration)
+    samples = _normalized_position_samples_by_toon(
+        events, tracker_id_to_toon={1: "1-Hero-1-1001"}, calibrations=calibrations
+    )
 
-    assert samples["1-Hero-1-1001"] == [(0, 0.1, 0.1), (160, 0.5, 0.5)]
+    assert samples["1-Hero-1-1001"] == [(0, None, 0.1, 0.1), (160, None, 0.5, 0.5)]
 
 
 def test_extract_spatial_returns_none_for_degenerate_calibration():
-    calibration = {"minX": 50.0, "maxX": 50.0, "minY": 0.0, "maxY": 100.0}
+    calibrations = {"": {"minX": 50.0, "maxX": 50.0, "minY": 0.0, "maxY": 100.0}}
     events = [_unit_positions_event(0, [(1, 10.0, 10.0)])]
 
-    assert _extract_spatial(events, tracker_id_to_toon={}, players={}, calibration=calibration) is None
+    assert _extract_spatial(events, tracker_id_to_toon={}, players={}, calibrations=calibrations) is None
 
 
 def test_extract_deaths_derives_position_from_last_known_sample():
     players = {"toon-1": {"battletag": "Foo#1111", "team": 0, "heroId": "li-ming"}}
     hero_unit_tags = {(1, 0): "toon-1"}
     tracker_id_to_toon = {1: "toon-1"}
-    calibration = {"minX": 0.0, "maxX": 100.0, "minY": 0.0, "maxY": 100.0}
+    calibrations = {"": {"minX": 0.0, "maxX": 100.0, "minY": 0.0, "maxY": 100.0}}
     events = [
         # `_normalized_position_samples_by_toon` (unlike `hero_unit_tags`
         # above) resolves tag -> toon via a real SUnitBornEvent scan, not
@@ -1470,7 +1540,7 @@ def test_extract_deaths_derives_position_from_last_known_sample():
     ]
 
     deaths = _extract_deaths(
-        events, hero_unit_tags, tracker_id_to_toon, players, gates_open_loop=0, calibration=calibration
+        events, hero_unit_tags, tracker_id_to_toon, players, gates_open_loop=0, calibrations=calibrations
     )
 
     assert len(deaths) == 1
@@ -1485,7 +1555,7 @@ def test_extract_deaths_omits_position_without_calibration():
     events = [_unit_positions_event(0, [(1, 10.0, 10.0)]), _unit_died_event(1, 200)]
 
     deaths = _extract_deaths(
-        events, hero_unit_tags, tracker_id_to_toon, players, gates_open_loop=0, calibration=None
+        events, hero_unit_tags, tracker_id_to_toon, players, gates_open_loop=0, calibrations=None
     )
 
     assert "x" not in deaths[0]
@@ -1502,7 +1572,7 @@ def test_extract_deaths_attributes_killer_when_resolvable():
     events = [_unit_died_event(1, 200, killer_player_id=2)]
 
     deaths = _extract_deaths(
-        events, hero_unit_tags, tracker_id_to_toon, players, gates_open_loop=0, calibration=None
+        events, hero_unit_tags, tracker_id_to_toon, players, gates_open_loop=0, calibrations=None
     )
 
     assert deaths[0]["killers"] == ["Bar#2222"]
@@ -1515,7 +1585,7 @@ def test_extract_deaths_kill_type_other_without_a_resolvable_killer():
     events = [_unit_died_event(1, 200)]  # no killer_player_id at all
 
     deaths = _extract_deaths(
-        events, hero_unit_tags, tracker_id_to_toon={}, players=players, gates_open_loop=0, calibration=None
+        events, hero_unit_tags, tracker_id_to_toon={}, players=players, gates_open_loop=0, calibrations=None
     )
 
     assert deaths[0]["killers"] == []
@@ -1539,7 +1609,7 @@ def test_build_payload_spatial_presence_interpolates_fast_movement():
         attributes_events=_base_attributes_events(),
         battletags=_battletags(),
         replay_hash="a" * 64,
-        calibrations={"cursed-hollow": {"minX": 0.0, "maxX": 100.0, "minY": 0.0, "maxY": 100.0}},
+        calibrations_by_map={"cursed-hollow": {"": {"minX": 0.0, "maxX": 100.0, "minY": 0.0, "maxY": 100.0}}},
     )
 
     presence_by_tag = {p["battletag"]: p for p in payload["spatial"]["presence"]}
@@ -1565,7 +1635,7 @@ def test_build_payload_death_includes_position_and_killer():
         attributes_events=_base_attributes_events(),
         battletags=_battletags(),
         replay_hash="a" * 64,
-        calibrations={"cursed-hollow": {"minX": 0.0, "maxX": 100.0, "minY": 0.0, "maxY": 100.0}},
+        calibrations_by_map={"cursed-hollow": {"": {"minX": 0.0, "maxX": 100.0, "minY": 0.0, "maxY": 100.0}}},
     )
 
     death = payload["timeline"]["deaths"][0]
@@ -1656,7 +1726,7 @@ def test_build_payload_includes_structure_events_for_fort_destruction():
 
 
 def test_extract_trajectories_downsamples_to_the_configured_interval():
-    calibration = {"minX": 0.0, "maxX": 100.0, "minY": 0.0, "maxY": 100.0}
+    calibrations = {"": {"minX": 0.0, "maxX": 100.0, "minY": 0.0, "maxY": 100.0}}
     players = {"1-Hero-1-1001": {"battletag": "Foo#1111", "team": 0, "heroId": "li-ming"}}
     interval_loops = constants.SPATIAL_TRAJECTORY_SAMPLE_INTERVAL_SECONDS * 16
     events = [
@@ -1669,7 +1739,7 @@ def test_extract_trajectories_downsamples_to_the_configured_interval():
     ]
 
     trajectories = _extract_trajectories(
-        events, tracker_id_to_toon={1: "1-Hero-1-1001"}, players=players, calibration=calibration, gates_open_loop=0
+        events, tracker_id_to_toon={1: "1-Hero-1-1001"}, players=players, calibrations=calibrations, gates_open_loop=0
     )
 
     assert len(trajectories) == 1
@@ -1683,11 +1753,11 @@ def test_extract_trajectories_downsamples_to_the_configured_interval():
 
 
 def test_extract_trajectories_returns_empty_without_position_events():
-    calibration = {"minX": 0.0, "maxX": 100.0, "minY": 0.0, "maxY": 100.0}
+    calibrations = {"": {"minX": 0.0, "maxX": 100.0, "minY": 0.0, "maxY": 100.0}}
 
     assert (
         _extract_trajectories(
-            _base_tracker_events(), tracker_id_to_toon={}, players={}, calibration=calibration, gates_open_loop=0
+            _base_tracker_events(), tracker_id_to_toon={}, players={}, calibrations=calibrations, gates_open_loop=0
         )
         == []
     )
@@ -1710,7 +1780,7 @@ def test_build_payload_includes_trajectories_alongside_presence_grid():
         attributes_events=_base_attributes_events(),
         battletags=_battletags(),
         replay_hash="a" * 64,
-        calibrations={"cursed-hollow": {"minX": 0.0, "maxX": 100.0, "minY": 0.0, "maxY": 100.0}},
+        calibrations_by_map={"cursed-hollow": {"": {"minX": 0.0, "maxX": 100.0, "minY": 0.0, "maxY": 100.0}}},
     )
 
     trajectories_by_tag = {t["battletag"]: t for t in payload["spatial"]["trajectories"]}
@@ -1735,7 +1805,7 @@ def test_build_payload_omits_trajectories_key_without_calibration():
         attributes_events=_base_attributes_events(),
         battletags=_battletags(),
         replay_hash="a" * 64,
-        calibrations={},  # no calibration for "cursed-hollow" -- spatial itself is omitted
+        calibrations_by_map={},  # no calibration for "cursed-hollow" -- spatial itself is omitted
     )
 
     assert "spatial" not in payload
