@@ -688,17 +688,33 @@ def _hero_unit_tags_by_index(tracker_events: list[dict], tracker_id_to_toon: dic
 
 
 def _collect_calibration_samples(
-    tracker_events: list[dict], target_count: int = constants.CALIBRATION_SAMPLE_TARGET
+    tracker_events: list[dict],
+    tracker_id_to_toon: dict[int, str],
+    target_count: int = constants.CALIBRATION_SAMPLE_TARGET,
 ) -> list[dict[str, float]]:
-    """Evenly-strided subsample of every raw (unnormalized) position observed
-    in the replay -- spread across the whole match rather than front-loaded,
-    since a calibration admin needs points from every part of the map, not
-    just wherever the laning phase happened to be (see
+    """Evenly-strided subsample of every raw (unnormalized) *hero* position
+    observed in the replay -- spread across the whole match rather than
+    front-loaded, since a calibration admin needs points from every part of
+    the map, not just wherever the laning phase happened to be (see
     tasks/epic-10-analyse-spatiale.md). Returns `[]` if the replay has no
     `SUnitPositionsEvent` at all (older build -- not an error, see
     `build_payload`'s known/unknown-map branch).
+
+    Filtered to hero units via `_hero_unit_tags_by_index`, same as
+    `_normalized_position_samples_by_toon` already does for the real
+    heatmap: `SUnitPositionsEvent` reports every trackable unit's position,
+    not just heroes (minions, structures, mercenary camps, altars, ...).
+    Before this filter existed, those non-hero points fed straight into the
+    admin calibration tool's `autoFitBounds()` (apps/web/app/pages/admin/
+    calibrate.vue), which does a naive min/max over the raw cloud -- one
+    outlier (e.g. a structure or altar far from the actual playable
+    footprint) was enough to badly stretch the saved world bounds, observed
+    (2026-08) on Towers of Doom's altar/structure layout.
     """
-    all_points = [(x, y) for _, _, x, y in _iter_unit_positions(tracker_events)]
+    hero_tags = _hero_unit_tags_by_index(tracker_events, tracker_id_to_toon)
+    all_points = [
+        (x, y) for _, tag_index, x, y in _iter_unit_positions(tracker_events) if tag_index in hero_tags
+    ]
     if not all_points:
         return []
     if len(all_points) <= target_count:
@@ -1402,7 +1418,7 @@ def build_payload(
         if calibration
         else []
     )
-    pending_points = None if calibration else _collect_calibration_samples(tracker_events)
+    pending_points = None if calibration else _collect_calibration_samples(tracker_events, tracker_id_to_toon)
 
     payload = {
         # Blizzard's own field name, kept as-is (not camelCased) since

@@ -154,7 +154,20 @@ from __future__ import annotations
 # of the payload is unaffected if it under- or over-matches, pending
 # real-replay validation. Deliberately NOT paired with a
 # `MIN_PARSER_VERSION` bump, same reasoning as 1.8's entry above.
-PARSER_VERSION = "1.11"
+# 1.12: `_collect_calibration_samples` (the raw points POSTed to
+# `/spatial/samples` for the admin calibration tool) included every tracked
+# unit's position -- minions, structures, altars, mercenary camps -- not
+# just heroes, unlike the actual heatmap-building path
+# (`_normalized_position_samples_by_toon`), which already filtered to heroes
+# via `_hero_unit_tags_by_index`. A single outlier non-hero position was
+# enough to badly stretch `autoFitBounds()`'s naive min/max in
+# apps/web/app/pages/admin/calibrate.vue, producing a visibly wrong-scaled
+# calibration -- confirmed (2026-08) on Towers of Doom. Now filters to hero
+# units only, matching the real heatmap path. Deliberately NOT paired with a
+# `MIN_PARSER_VERSION` bump: this only changes what gets POSTed to
+# `/spatial/samples` for *uncalibrated* maps, never the `spatial` block of an
+# already-ingested match, so there's nothing to resync.
+PARSER_VERSION = "1.12"
 
 # How many times a single replay is allowed to fail with a parse error (a
 # corrupt/incomplete archive -- see parser.ReplayParseError) at the *same*

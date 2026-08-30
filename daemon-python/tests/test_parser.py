@@ -1234,14 +1234,18 @@ def test_iter_unit_positions_decodes_delta_encoded_tags():
 
 
 def test_collect_calibration_samples_returns_empty_without_position_events():
-    assert _collect_calibration_samples(_base_tracker_events()) == []
+    assert _collect_calibration_samples(_base_tracker_events(), tracker_id_to_toon={}) == []
 
 
 def test_collect_calibration_samples_subsamples_evenly_above_target():
+    tracker_id_to_toon = {1: "1-Hero-1-1001"}
     points = [(float(i), float(i)) for i in range(10)]
-    events = [_unit_positions_event(100, [(i + 1, x, y) for i, (x, y) in enumerate(points)])]
+    events = [
+        _unit_born_event(1, "HeroLiMing", unit_tag_index=1),
+        _unit_positions_event(100, [(1, x, y) for x, y in points]),
+    ]
 
-    sampled = _collect_calibration_samples(events, target_count=5)
+    sampled = _collect_calibration_samples(events, tracker_id_to_toon, target_count=5)
 
     assert len(sampled) == 5
     # Spread across the whole range, not front-loaded from the first 5 points.
@@ -1250,11 +1254,31 @@ def test_collect_calibration_samples_subsamples_evenly_above_target():
 
 
 def test_collect_calibration_samples_returns_every_point_below_target():
-    events = [_unit_positions_event(100, [(1, 1.0, 1.0), (2, 2.0, 2.0)])]
+    tracker_id_to_toon = {1: "1-Hero-1-1001", 2: "1-Hero-1-1002"}
+    events = [
+        _unit_born_event(1, "HeroLiMing", unit_tag_index=1),
+        _unit_born_event(2, "HeroMalfurion", unit_tag_index=2),
+        _unit_positions_event(100, [(1, 1.0, 1.0), (2, 2.0, 2.0)]),
+    ]
 
-    sampled = _collect_calibration_samples(events, target_count=1000)
+    sampled = _collect_calibration_samples(events, tracker_id_to_toon, target_count=1000)
 
     assert sampled == [{"x": 1.0, "y": 1.0}, {"x": 2.0, "y": 2.0}]
+
+
+def test_collect_calibration_samples_excludes_non_hero_units():
+    tracker_id_to_toon = {1: "1-Hero-1-1001"}
+    events = [
+        _unit_born_event(1, "HeroLiMing", unit_tag_index=1),
+        # Tag 99 never appears in a SUnitBornEvent for a hero -- stands in
+        # for a structure/altar/minion position, which SUnitPositionsEvent
+        # reports for every trackable unit, not just heroes.
+        _unit_positions_event(100, [(1, 10.0, 10.0), (99, 500.0, 500.0)]),
+    ]
+
+    sampled = _collect_calibration_samples(events, tracker_id_to_toon)
+
+    assert sampled == [{"x": 10.0, "y": 10.0}]
 
 
 def test_build_payload_includes_spatial_block_for_calibrated_map():
@@ -1316,6 +1340,31 @@ def test_build_payload_collects_calibration_sample_for_unmapped_map():
     assert pending["mapId"] == "cursed-hollow"
     assert {"x": 10.0, "y": 10.0} in pending["points"]
     assert {"x": 90.0, "y": 90.0} in pending["points"]
+
+
+def test_build_payload_excludes_non_hero_positions_from_calibration_sample():
+    events = [
+        *_base_tracker_events(),
+        _unit_born_event(1, "HeroLiMing"),
+        _unit_born_event(2, "HeroMalfurion"),
+        _unit_positions_event(610, [(1, 10.0, 10.0), (2, 90.0, 90.0), (99, 5000.0, 5000.0)]),
+    ]
+
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=events,
+        attributes_events=_base_attributes_events(),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+        calibrations={},  # no entry for "cursed-hollow"
+    )
+
+    pending = payload["_pendingSpatialSample"]
+    assert {"x": 10.0, "y": 10.0} in pending["points"]
+    assert {"x": 90.0, "y": 90.0} in pending["points"]
+    assert {"x": 5000.0, "y": 5000.0} not in pending["points"]
 
 
 def test_build_payload_omits_spatial_without_any_position_events():
