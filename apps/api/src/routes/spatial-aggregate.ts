@@ -11,6 +11,7 @@ const heroRoleSchema = z.enum(["Tank", "Bruiser", "RangedAssassin", "MeleeAssass
 const aggregateQuerySchema = z
   .object({
     mapId: z.string().min(1),
+    layer: z.string().optional(),
     heroId: z.string().optional(),
     role: heroRoleSchema.optional(),
     battletag: z.string().optional(),
@@ -42,7 +43,7 @@ export const spatialAggregateRoute = new Hono<Env>()
     if (!parsed.success) {
       return c.json({ error: parsed.error.flatten() }, 400);
     }
-    const { mapId, heroId, role, battletag, global, outcome } = parsed.data;
-    const result = await getSpatialAggregate({ mapId, heroId, role, battletag, global, outcome });
+    const { mapId, layer, heroId, role, battletag, global, outcome } = parsed.data;
+    const result = await getSpatialAggregate({ mapId, layer: layer ?? null, heroId, role, battletag, global, outcome });
     return c.json(result);
   });

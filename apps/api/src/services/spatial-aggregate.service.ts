@@ -7,12 +7,16 @@ import {
 } from "@hots-stats/db";
 import { type Grid, gridToWireArrays, sumGrids } from "@hots-stats/shared-types";
 import { and, eq, inArray } from "drizzle-orm";
+import { toDbLayer } from "../lib/spatial-layer";
 
 export type SpatialOutcomeFilter = "win" | "loss" | "all";
 export type HeroRole = NonNullable<Hero["role"]>;
 
 export interface SpatialAggregateParams {
   mapId: string;
+  // null/omitted = the map's default/only level, same convention as
+  // everywhere else -- see apps/api/src/lib/spatial-layer.ts.
+  layer?: string | null;
   // Exactly one of these two selects which hero(es) to include.
   heroId?: string;
   role?: HeroRole;
@@ -66,6 +70,7 @@ export async function getSpatialAggregate(params: SpatialAggregateParams): Promi
   if (heroIds.length === 0) return EMPTY_RESPONSE;
 
   const outcomes = params.outcome === "all" ? (["win", "loss"] as const) : ([params.outcome] as const);
+  const layer = toDbLayer(params.layer);
 
   const rows = params.global
     ? await db
@@ -74,6 +79,7 @@ export async function getSpatialAggregate(params: SpatialAggregateParams): Promi
         .where(
           and(
             eq(heroMapGlobalSpatialRollup.mapId, params.mapId),
+            eq(heroMapGlobalSpatialRollup.layer, layer),
             inArray(heroMapGlobalSpatialRollup.heroId, heroIds),
             inArray(heroMapGlobalSpatialRollup.outcome, outcomes),
           ),
@@ -85,6 +91,7 @@ export async function getSpatialAggregate(params: SpatialAggregateParams): Promi
           .where(
             and(
               eq(heroMapPlayerSpatialRollup.mapId, params.mapId),
+              eq(heroMapPlayerSpatialRollup.layer, layer),
               inArray(heroMapPlayerSpatialRollup.heroId, heroIds),
               eq(heroMapPlayerSpatialRollup.battletag, params.battletag),
               inArray(heroMapPlayerSpatialRollup.outcome, outcomes),
