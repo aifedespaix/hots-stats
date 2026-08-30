@@ -4,9 +4,12 @@ import type { MapBoundsInput } from "~/utils/mapProjection";
 
 const props = defineProps<{
   mapId: string;
+  layer?: string | null;
   points: { x: number; y: number }[];
   bounds: MapBoundsInput;
 }>();
+
+const imageSlug = computed(() => (props.layer ? `${props.mapId}-${props.layer}` : props.mapId));
 
 const wrapperEl = ref<HTMLDivElement | null>(null);
 const imgEl = ref<HTMLImageElement | null>(null);
@@ -105,7 +108,7 @@ useResizeObserver(wrapperEl, redraw);
   <div ref="wrapperEl" class="relative w-full overflow-hidden rounded-lg border border-border bg-background">
     <img
       ref="imgEl"
-      :src="`/images/maps/original/${mapId}.jpg`"
+      :src="`/images/maps/original/${imageSlug}.jpg`"
       :alt="mapId"
       class="block w-full"
       @load="syncCanvasSize"

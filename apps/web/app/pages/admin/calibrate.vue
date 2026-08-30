@@ -14,6 +14,7 @@ interface PendingMapEntry {
 interface CalibratedMapEntry {
   mapId: string;
   mapName: string;
+  layer: string;
   bounds: { minX: number; maxX: number; minY: number; maxY: number };
   updatedAt: string;
 }
@@ -31,6 +32,13 @@ async function refreshMapLists() {
   await Promise.all([refreshPendingMaps(), refreshCalibratedMaps()]);
 }
 
+function layerLabel(layer: string): string {
+  return layer ? layer : "(défaut)";
+}
+function optionKey(mapId: string, layer: string): string {
+  return `${mapId}::${layer}`;
+}
+
 // One unified picker for every map the tool knows about, so there's a
 // single always-correct "what am I looking at" state -- the previous design
 // had two independent dropdowns (the real pending-map list, and a separate
@@ -39,24 +47,31 @@ async function refreshMapLists() {
 // clicked "Générer", which looked exactly like selection silently failing.
 interface MapOption {
   label: string;
-  value: string;
-  status: "pending" | "calibrated";
+  value: string; // optionKey(mapId, layer)
+  mapId: string;
+  layer: string;
+  status: "pending" | "calibrated" | "new-layer";
 }
 const mapOptions = computed<MapOption[]>(() => [
   ...(pendingMaps.value?.maps ?? []).map((m) => ({
     label: `${m.mapName} — à calibrer (${m.pointCount} points)`,
-    value: m.mapId,
+    value: optionKey(m.mapId, ""),
+    mapId: m.mapId,
+    layer: "",
     status: "pending" as const,
   })),
   ...(calibratedMaps.value?.maps ?? []).map((m) => ({
-    label: `${m.mapName} — déjà calibrée`,
-    value: m.mapId,
+    label: `${m.mapName} — ${layerLabel(m.layer)} (déjà calibrée)`,
+    value: optionKey(m.mapId, m.layer),
+    mapId: m.mapId,
+    layer: m.layer,
     status: "calibrated" as const,
   })),
 ]);
 
-const selectedMapId = ref<string | undefined>(undefined);
-const selectedOption = computed(() => mapOptions.value.find((m) => m.value === selectedMapId.value) ?? null);
+const selectedOptionKey = ref<string | undefined>(undefined);
+const selectedOption = computed(() => mapOptions.value.find((m) => m.value === selectedOptionKey.value) ?? null);
+const selectedMapId = computed(() => selectedOption.value?.mapId);
 const points = ref<{ x: number; y: number }[]>([]);
 const loadingSample = ref(false);
 
@@ -64,27 +79,22 @@ const minX = ref(0);
 const maxX = ref(1);
 const minY = ref(0);
 const maxY = ref(1);
+const layer = ref("");
 const bounds = computed(() => ({ minX: minX.value, maxX: maxX.value, minY: minY.value, maxY: maxY.value }));
 
-watch(selectedMapId, async (mapId) => {
-  points.value = [];
-  minX.value = 0;
-  maxX.value = 1;
-  minY.value = 0;
-  maxY.value = 1;
-  if (!mapId) return;
+// Every distinct mapId already offered by either list -- lets "Ajouter un
+// niveau" target any map that has at least a pending sample or one
+// calibrated layer, not just already-multi-level ones.
+const knownMapIds = computed<{ id: string; name: string }[]>(() => {
+  const byId = new Map<string, string>();
+  for (const m of pendingMaps.value?.maps ?? []) byId.set(m.mapId, m.mapName);
+  for (const m of calibratedMaps.value?.maps ?? []) byId.set(m.mapId, m.mapName);
+  return [...byId.entries()].map(([id, name]) => ({ id, name }));
+});
+const newLayerMapId = ref<string | undefined>(undefined);
+const newLayerKey = ref("");
 
-  // Editing an already-calibrated map starts from its saved bounds, not
-  // 0..1 -- "Auto-ajuster aux points" is still there to reset from scratch
-  // if the existing calibration turns out to be badly wrong.
-  const existing = calibratedMaps.value?.maps.find((m) => m.mapId === mapId);
-  if (existing) {
-    minX.value = existing.bounds.minX;
-    maxX.value = existing.bounds.maxX;
-    minY.value = existing.bounds.minY;
-    maxY.value = existing.bounds.maxY;
-  }
-
+async function loadSampleFor(mapId: string) {
   loadingSample.value = true;
   try {
     const sample = await $fetch<{ mapId: string; points: { x: number; y: number }[] }>(
@@ -93,17 +103,67 @@ watch(selectedMapId, async (mapId) => {
     );
     points.value = sample.points;
   } catch (err) {
-    // An already-calibrated map calibrated before this tool started keeping
-    // samples past calibration (or whose sample was never re-uploaded
-    // since) legitimately has none -- not a failure, just an empty canvas
-    // to eyeball the existing bounds against blind.
-    if (!(existing && (err as { statusCode?: number })?.statusCode === 404)) {
+    if (!(err as { statusCode?: number })?.statusCode || (err as { statusCode?: number }).statusCode !== 404) {
       toast.add({ title: "Impossible de charger l'échantillon", color: "error" });
     }
   } finally {
     loadingSample.value = false;
   }
+}
+
+watch(selectedOptionKey, async (key) => {
+  points.value = [];
+  minX.value = 0;
+  maxX.value = 1;
+  minY.value = 0;
+  maxY.value = 1;
+  layer.value = "";
+  if (!key) return;
+  const option = mapOptions.value.find((m) => m.value === key);
+  if (!option) return;
+  layer.value = option.layer;
+
+  // Editing an already-calibrated map starts from its saved bounds, not
+  // 0..1 -- "Auto-ajuster aux points" is still there to reset from scratch
+  // if the existing calibration turns out to be badly wrong.
+  if (option.status === "calibrated") {
+    const existing = calibratedMaps.value?.maps.find((m) => m.mapId === option.mapId && m.layer === option.layer);
+    if (existing) {
+      minX.value = existing.bounds.minX;
+      maxX.value = existing.bounds.maxX;
+      minY.value = existing.bounds.minY;
+      maxY.value = existing.bounds.maxY;
+    }
+  }
+
+  await loadSampleFor(option.mapId);
 });
+
+/** Starts calibrating a brand new layer (not yet saved) for `mapId`, reusing
+ * that map's existing raw sample cloud -- the same undifferentiated points
+ * shown for any other layer of this map, since an admin carves each level's
+ * rectangle out by eye. */
+async function addLayer() {
+  if (!newLayerMapId.value || !newLayerKey.value.trim()) return;
+  const mapId = newLayerMapId.value;
+  const layerKey = newLayerKey.value.trim();
+  selectedOptionKey.value = undefined;
+  layer.value = layerKey;
+  minX.value = 0;
+  maxX.value = 1;
+  minY.value = 0;
+  maxY.value = 1;
+  await loadSampleFor(mapId);
+  // Not present in mapOptions (unsaved) -- track it as pseudo-selection via
+  // a synthetic option key so the canvas/save button still have a mapId to
+  // work against.
+  pendingNewLayer.value = { mapId, layer: layerKey };
+  newLayerKey.value = "";
+}
+
+const pendingNewLayer = ref<{ mapId: string; layer: string } | null>(null);
+const activeMapId = computed(() => pendingNewLayer.value?.mapId ?? selectedMapId.value);
+const activeLayer = computed(() => (pendingNewLayer.value ? pendingNewLayer.value.layer : layer.value));
 
 // Every map slug confirmed to have a real image at
 // /images/maps/original/<slug>.jpg -- lets the example generator offer any
@@ -146,8 +206,9 @@ async function generateExample() {
     await refreshMapLists();
     // Now the one true selector -- picking it here is what actually loads
     // the fresh points into the canvas below, same as picking any other
-    // entry in the list.
-    selectedMapId.value = exampleMapId.value;
+    // entry in the list. Example generation always targets the default
+    // layer ("").
+    selectedOptionKey.value = optionKey(exampleMapId.value, "");
     toast.add({
       title: "Exemple généré",
       description: "Clique \"Auto-ajuster aux points\" pour voir le résultat, ou ajuste les bornes à la main.",
@@ -185,22 +246,24 @@ const calibrationField = useSavableField(async () => {
     method: "POST",
     baseURL: config.public.apiBase,
     credentials: "include",
-    body: { mapId: selectedMapId.value, ...bounds.value },
+    body: { mapId: activeMapId.value, layer: activeLayer.value, ...bounds.value },
   });
 });
 const saving = calibrationField.loading;
 const saveError = calibrationField.error;
 
 async function save() {
-  if (!selectedMapId.value) return;
+  if (!activeMapId.value) return;
   await calibrationField.submit(undefined);
   if (saveError.value) return;
   toast.add({ title: "Carte calibrée", color: "success" });
-  const calibratedMapId = selectedMapId.value;
-  selectedMapId.value = undefined;
+  const savedMapId = activeMapId.value;
+  const savedLayer = activeLayer.value;
+  pendingNewLayer.value = null;
+  selectedOptionKey.value = undefined;
   points.value = [];
   await refreshMapLists();
-  selectedMapId.value = calibratedMapId;
+  selectedOptionKey.value = optionKey(savedMapId, savedLayer);
 }
 </script>
 
@@ -216,7 +279,7 @@ async function save() {
 
     <section class="space-y-4 rounded-lg border border-border p-4 sm:p-6">
       <h2 class="font-heading text-lg">Carte</h2>
-      <USelectMenu v-model="selectedMapId" value-key="value" :items="mapOptions" placeholder="Choisir une carte…" />
+      <USelectMenu v-model="selectedOptionKey" value-key="value" :items="mapOptions" placeholder="Choisir une carte…" />
       <p v-if="mapOptions.length === 0" class="text-sm text-muted">
         Aucune carte en attente ni calibrée pour l'instant. Une carte apparaît ici une fois qu'un daemon a envoyé de
         vraies positions de joueurs pour elle (parties déjà jouées et uploadées) -- rien à faire de plus que
@@ -258,10 +321,33 @@ async function save() {
       </div>
     </details>
 
-    <div v-if="selectedMapId" class="grid gap-6 lg:grid-cols-[3fr_2fr]">
+    <details class="rounded-lg border border-dashed border-border p-4 text-sm sm:p-6">
+      <summary class="cursor-pointer font-heading text-sm text-muted">Ajouter un niveau à une carte existante</summary>
+      <div class="mt-3 space-y-3">
+        <p class="text-xs text-muted">
+          Pour une carte multi-niveaux (ex. Mines Hantées : surface + sous-sol), calibre chaque niveau séparément à
+          partir du même nuage de points brut. Le nom du niveau détermine l'image de fond utilisée --
+          <code>haunted-mines</code> + niveau <code>bottom</code> affiche <code>haunted-mines-bottom.jpg</code>.
+        </p>
+        <div class="flex flex-wrap items-center gap-2">
+          <USelectMenu
+            v-model="newLayerMapId"
+            :items="knownMapIds.map((m) => ({ label: m.name, value: m.id }))"
+            value-key="value"
+            size="sm"
+            class="w-56"
+            placeholder="Carte…"
+          />
+          <UInput v-model="newLayerKey" size="sm" placeholder="Nom du niveau (ex. bottom)" class="w-56" />
+          <UButton size="sm" variant="soft" color="neutral" @click="addLayer">Démarrer la calibration</UButton>
+        </div>
+      </div>
+    </details>
+
+    <div v-if="activeMapId" class="grid gap-6 lg:grid-cols-[3fr_2fr]">
       <div class="space-y-2">
-        <AdminCalibrationCanvas :map-id="selectedMapId" :points="points" :bounds="bounds" />
-        <p class="text-xs text-muted">{{ points.length }} point(s) chargé(s)</p>
+        <AdminCalibrationCanvas :map-id="activeMapId" :layer="activeLayer || null" :points="points" :bounds="bounds" />
+        <p class="text-xs text-muted">{{ points.length }} point(s) chargé(s) — niveau « {{ activeLayer || "(défaut)" }} »</p>
       </div>
 
       <section class="space-y-4 rounded-lg border border-border p-4 sm:p-6">
