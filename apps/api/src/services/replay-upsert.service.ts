@@ -25,6 +25,7 @@ import { eq, inArray, or } from "drizzle-orm";
 import { displayNameFromSlug, ensureMapExists } from "../lib/ensure-map";
 import { computeGameFingerprint } from "../lib/game-fingerprint";
 import { isVersionGreater } from "../lib/parser-version";
+import { toDbLayer } from "../lib/spatial-layer";
 import { type SpatialGridContribution, applySpatialRollupDelta } from "./spatial-rollup.service";
 
 export type UpsertResult =
@@ -56,6 +57,7 @@ async function matchHasSpatialData(matchId: string): Promise<boolean> {
 interface PlayerSpatialContribution {
   battletag: string;
   heroId: string;
+  layer: string;
   gridCols: number;
   gridRows: number;
   presenceGrid: Grid;
@@ -76,10 +78,13 @@ function buildSpatialContributions(payload: ReplayPayload): PlayerSpatialContrib
   const { cols, rows } = payload.spatial.grid;
 
   const contributions = new Map<string, PlayerSpatialContribution>();
+  const key = (battletag: string, layer: string) => `${battletag}::${layer}`;
   for (const entry of payload.spatial.presence) {
-    contributions.set(entry.battletag, {
+    const layer = toDbLayer(entry.layer);
+    contributions.set(key(entry.battletag, layer), {
       battletag: entry.battletag,
       heroId: entry.heroId,
+      layer,
       gridCols: cols,
       gridRows: rows,
       presenceGrid: gridFromWireArrays(entry.cellIndex, entry.secondsInCell),
@@ -90,13 +95,14 @@ function buildSpatialContributions(payload: ReplayPayload): PlayerSpatialContrib
 
   for (const death of payload.timeline?.deaths ?? []) {
     if (death.x === undefined || death.y === undefined) continue;
+    const layer = toDbLayer(death.layer);
     const cellIndex = cellIndexForPosition(death.x, death.y, cols, rows);
 
-    const victim = contributions.get(death.battletag);
+    const victim = contributions.get(key(death.battletag, layer));
     if (victim) incrementCell(victim.deathsGrid, cellIndex);
 
     for (const killerBattletag of death.killers ?? []) {
-      const killer = contributions.get(killerBattletag);
+      const killer = contributions.get(key(killerBattletag, layer));
       if (killer) incrementCell(killer.killsGrid, cellIndex);
     }
   }
@@ -173,12 +179,18 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
     levelSnapshotsByBattletag.set(snapshot.battletag, list);
   }
 
-  const spatialContributionsByBattletag = new Map(
-    (buildSpatialContributions(payload) ?? []).map((c) => [c.battletag, c]),
-  );
-  const trajectoriesByBattletag = new Map<string, MatchHeroTrajectory>(
-    (payload.spatial?.trajectories ?? []).map((t) => [t.battletag, t]),
-  );
+  const spatialContributionsByBattletag = new Map<string, PlayerSpatialContribution[]>();
+  for (const c of buildSpatialContributions(payload) ?? []) {
+    const list = spatialContributionsByBattletag.get(c.battletag) ?? [];
+    list.push(c);
+    spatialContributionsByBattletag.set(c.battletag, list);
+  }
+  const trajectoriesByBattletag = new Map<string, MatchHeroTrajectory[]>();
+  for (const t of payload.spatial?.trajectories ?? []) {
+    const list = trajectoriesByBattletag.get(t.battletag) ?? [];
+    list.push(t);
+    trajectoriesByBattletag.set(t.battletag, list);
+  }
   const structureEvents: MatchStructureEvent[] = payload.timeline?.structureEvents ?? [];
 
   return db.transaction(async (tx) => {
@@ -196,6 +208,7 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
           battletag: matchPlayers.battletag,
           heroId: matchPlayers.heroId,
           winner: matchPlayers.winner,
+          layer: matchSpatialGrids.layer,
           gridCols: matchSpatialGrids.gridCols,
           gridRows: matchSpatialGrids.gridRows,
           presenceGrid: matchSpatialGrids.presenceGrid,
@@ -207,12 +220,13 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
         .where(eq(matchPlayers.matchId, matchId));
 
       for (const old of oldContributions) {
-        if (old.gridCols === null || old.gridRows === null || old.presenceGrid === null) continue;
+        if (old.gridCols === null || old.gridRows === null || old.presenceGrid === null || old.layer === null) continue;
         await applySpatialRollupDelta(
           tx,
           {
             mapId: existing.mapId,
             heroId: old.heroId,
+            layer: old.layer,
             battletag: old.battletag,
             outcome: old.winner ? "win" : "loss",
             gridCols: old.gridCols,
@@ -313,6 +327,7 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
             atSeconds: death.atSeconds,
             x: death.x ?? null,
             y: death.y ?? null,
+            layer: death.layer ?? null,
             killers: death.killers ?? null,
             killType: death.killType ?? null,
           })),
@@ -330,10 +345,11 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
         );
       }
 
-      const spatial = spatialContributionsByBattletag.get(player.battletag);
-      if (spatial) {
+      const spatials = spatialContributionsByBattletag.get(player.battletag) ?? [];
+      for (const spatial of spatials) {
         await tx.insert(matchSpatialGrids).values({
           matchPlayerId: createdPlayer.id,
+          layer: spatial.layer,
           gridCols: spatial.gridCols,
           gridRows: spatial.gridRows,
           presenceGrid: spatial.presenceGrid,
@@ -344,6 +360,7 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
         const contribution: SpatialGridContribution = {
           mapId: payload.map,
           heroId: player.heroId,
+          layer: spatial.layer,
           battletag: player.battletag,
           outcome: player.winner ? "win" : "loss",
           gridCols: spatial.gridCols,
@@ -355,10 +372,11 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
         await applySpatialRollupDelta(tx, contribution, 1);
       }
 
-      const trajectory = trajectoriesByBattletag.get(player.battletag);
-      if (trajectory) {
+      const trajectories = trajectoriesByBattletag.get(player.battletag) ?? [];
+      for (const trajectory of trajectories) {
         await tx.insert(matchHeroTrajectories).values({
           matchPlayerId: createdPlayer.id,
+          layer: toDbLayer(trajectory.layer),
           atSeconds: trajectory.atSeconds,
           x: trajectory.x,
           y: trajectory.y,

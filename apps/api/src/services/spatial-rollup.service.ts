@@ -9,6 +9,7 @@ import { and, eq } from "drizzle-orm";
 export interface SpatialGridContribution {
   mapId: string;
   heroId: string;
+  layer: string;
   battletag: string;
   outcome: "win" | "loss";
   gridCols: number;
@@ -44,6 +45,7 @@ async function applyPlayerRollupDelta(tx: Transaction, c: SpatialGridContributio
       and(
         eq(heroMapPlayerSpatialRollup.mapId, c.mapId),
         eq(heroMapPlayerSpatialRollup.heroId, c.heroId),
+        eq(heroMapPlayerSpatialRollup.layer, c.layer),
         eq(heroMapPlayerSpatialRollup.battletag, c.battletag),
         eq(heroMapPlayerSpatialRollup.outcome, c.outcome),
       ),
@@ -55,6 +57,7 @@ async function applyPlayerRollupDelta(tx: Transaction, c: SpatialGridContributio
     await tx.insert(heroMapPlayerSpatialRollup).values({
       mapId: c.mapId,
       heroId: c.heroId,
+      layer: c.layer,
       battletag: c.battletag,
       outcome: c.outcome,
       matchCount: 1,
@@ -101,6 +104,7 @@ async function applyGlobalRollupDelta(tx: Transaction, c: SpatialGridContributio
       and(
         eq(heroMapGlobalSpatialRollup.mapId, c.mapId),
         eq(heroMapGlobalSpatialRollup.heroId, c.heroId),
+        eq(heroMapGlobalSpatialRollup.layer, c.layer),
         eq(heroMapGlobalSpatialRollup.outcome, c.outcome),
       ),
     )
@@ -111,6 +115,7 @@ async function applyGlobalRollupDelta(tx: Transaction, c: SpatialGridContributio
     await tx.insert(heroMapGlobalSpatialRollup).values({
       mapId: c.mapId,
       heroId: c.heroId,
+      layer: c.layer,
       outcome: c.outcome,
       matchCount: 1,
       gridCols: c.gridCols,
