@@ -9,18 +9,20 @@ function toBounds(row: MapCalibration): MapBounds {
 
 /**
  * GET /spatial/calibrations -- the Daemon's full in-memory cache, refreshed
- * once per run/batch. `updatedAt` rides along with each map's bounds (the
- * normalization math in parser.py only ever reads the 4 bound keys, so this
- * is harmless to it) so the Daemon can tell a map it already knew about
- * apart from one that's brand new or was just recalibrated -- see
- * app.py's `_sync_spatial_calibrations`, which diffs against the
- * previously-cached value to invalidate only replays for maps that
- * actually changed, instead of a map's calibration silently never
- * retroactively unlocking heatmaps for matches already ingested before it.
+ * once per run/batch. mapId -> layer key -> bounds + `updatedAt`, so a
+ * daemon can test a raw position against every calibrated layer of its
+ * replay's map (see parser.py's `_normalized_position_samples_by_toon`) and
+ * tell apart a layer it already knew about from one that's brand new or was
+ * just recalibrated (see app.py's `_sync_spatial_calibrations`).
  */
-export async function getAllCalibrations(): Promise<Record<string, MapBounds & { updatedAt: string }>> {
+export async function getAllCalibrations(): Promise<Record<string, Record<string, MapBounds & { updatedAt: string }>>> {
   const rows = await db.select().from(mapCalibrations);
-  return Object.fromEntries(rows.map((row) => [row.mapId, { ...toBounds(row), updatedAt: row.updatedAt.toISOString() }]));
+  const result: Record<string, Record<string, MapBounds & { updatedAt: string }>> = {};
+  for (const row of rows) {
+    const byLayer = (result[row.mapId] ??= {});
+    byLayer[row.layer] = { ...toBounds(row), updatedAt: row.updatedAt.toISOString() };
+  }
+  return result;
 }
 
 /**
@@ -103,11 +105,14 @@ export async function generateExampleSample(mapId: string): Promise<{ mapId: str
 
 /**
  * GET /admin/spatial/pending-maps -- populates the calibration tool's "à
- * calibrer" list: maps with a raw sample but *no* `map_calibrations` row
- * yet. A map keeps its raw sample row after being calibrated (see
- * `saveCalibration`), so "pending" is decided by the calibration join, not
- * by row presence -- otherwise every already-calibrated map would still
- * show up here forever.
+ * calibrer" list: maps with a raw sample but *no* calibrated layer at all
+ * yet. A map that already has one calibrated layer and needs another (e.g.
+ * Haunted Mines' "bottom" level) is *not* pending -- it's picked from the
+ * "calibrated maps" list instead and given a new `layer` value when saving
+ * (see `saveCalibration` below). A map keeps its raw sample row after being
+ * calibrated (see `saveCalibration`), so "pending" is decided by the
+ * calibration join, not by row presence -- otherwise every already-
+ * calibrated map would still show up here forever.
  */
 export async function listPendingMapIds(): Promise<{ mapId: string; mapName: string; pointCount: number }[]> {
   const rows = await db
@@ -120,12 +125,13 @@ export async function listPendingMapIds(): Promise<{ mapId: string; mapName: str
 }
 
 /**
- * GET /admin/spatial/calibrated-maps -- lets the tool offer already-
- * calibrated maps for editing (see `saveCalibration`'s upsert), not just
- * brand new ones.
+ * GET /admin/spatial/calibrated-maps -- lets the tool offer every
+ * already-calibrated `(map, layer)` pair for editing, and is also how the
+ * tool discovers which maps can have a *new* layer added (any map appearing
+ * here at all is a candidate -- see calibrate.vue's "Ajouter un niveau").
  */
 export async function listCalibratedMaps(): Promise<
-  { mapId: string; mapName: string; bounds: MapBounds; updatedAt: string }[]
+  { mapId: string; mapName: string; layer: string; bounds: MapBounds; updatedAt: string }[]
 > {
   const rows = await db
     .select({ mapId: mapCalibrations.mapId, mapName: maps.name, calibration: mapCalibrations })
@@ -134,6 +140,7 @@ export async function listCalibratedMaps(): Promise<
   return rows.map((row) => ({
     mapId: row.mapId,
     mapName: row.mapName,
+    layer: row.calibration.layer,
     bounds: toBounds(row.calibration),
     updatedAt: row.calibration.updatedAt.toISOString(),
   }));
@@ -146,20 +153,21 @@ export async function getPendingSample(mapId: string): Promise<RawMapSample | nu
 }
 
 /**
- * POST /admin/spatial/calibrate -- saves (or updates) a map's world bounds.
- * Its raw sample row (if any) is deliberately left in place -- unlike the
- * tool's original design, which deleted it here -- so re-opening an
- * already-calibrated map to fix a mistake still has points to render
- * against instead of a blank canvas (see `listPendingMapIds`'s docstring
- * for how "pending" is now decided instead).
+ * POST /admin/spatial/calibrate -- saves (or updates) one `(mapId, layer)`
+ * pair's world bounds. `layer` defaults to `DEFAULT_LAYER_KEY` ("") for a
+ * map's default level; a non-empty value creates or updates an *additional*
+ * level for the same map (the composite PK means this never overwrites a
+ * different layer's row). Its raw sample row (if any) is deliberately left
+ * in place so re-opening an already-calibrated map -- to fix a mistake, or
+ * to add another level -- still has points to render against.
  */
-export async function saveCalibration(mapId: string, bounds: MapBounds): Promise<void> {
+export async function saveCalibration(mapId: string, layer: string, bounds: MapBounds): Promise<void> {
   await ensureMapExists(mapId);
   await db
     .insert(mapCalibrations)
-    .values({ mapId, ...bounds })
+    .values({ mapId, layer, ...bounds })
     .onConflictDoUpdate({
-      target: mapCalibrations.mapId,
+      target: [mapCalibrations.mapId, mapCalibrations.layer],
       set: { ...bounds, updatedAt: new Date() },
     });
 }

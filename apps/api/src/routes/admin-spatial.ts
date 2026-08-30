@@ -41,7 +41,7 @@ export const adminSpatialRoute = new Hono<Env>()
     if (!parsed.success) {
       return c.json({ error: parsed.error.flatten() }, 400);
     }
-    const { mapId, ...bounds } = parsed.data;
-    await saveCalibration(mapId, bounds);
+    const { mapId, layer, ...bounds } = parsed.data;
+    await saveCalibration(mapId, layer, bounds);
     return c.json({ status: "ok" });
   });
