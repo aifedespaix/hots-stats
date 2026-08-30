@@ -52,6 +52,12 @@ export const matchTimelineDeathSchema = z.object({
   atSeconds: z.number().int().nonnegative(),
   x: z.number().min(0).max(1).optional(),
   y: z.number().min(0).max(1).optional(),
+  // Which calibrated layer `x`/`y` are normalized against -- `null` (or
+  // absent, for a daemon build older than PARSER_VERSION 1.13) is the map's
+  // default/only level, same convention as `spatialPresenceEntrySchema.layer`
+  // below. Only meaningful alongside `x`/`y`; a death with no position never
+  // has a layer either.
+  layer: z.string().nullable().optional(),
   killers: z.array(z.string()).optional(),
   killType: killTypeSchema.optional(),
 });
