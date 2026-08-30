@@ -349,7 +349,7 @@ def resync(
 _SPATIAL_CALIBRATIONS_META_KEY = "spatial_calibrations"
 
 
-def _previously_cached_calibrations(sync_state: SyncState) -> dict[str, dict]:
+def _previously_cached_calibrations(sync_state: SyncState) -> dict[str, dict[str, dict]]:
     cached = sync_state.get_meta(_SPATIAL_CALIBRATIONS_META_KEY)
     if not cached:
         return {}
@@ -363,7 +363,7 @@ def _previously_cached_calibrations(sync_state: SyncState) -> dict[str, dict]:
         return {}
 
 
-def sync_spatial_calibrations(config: Config, sync_state: SyncState) -> dict[str, dict]:
+def sync_spatial_calibrations(config: Config, sync_state: SyncState) -> dict[str, dict[str, dict]]:
     """Called once per parse batch -- the tray daemon's startup/periodic
     resync (app.py's `_run_sync_loop`) and a headless `--resync` (main.py)
     alike, same as `resync()`/`ingest_file()` above are shared by both: it
@@ -398,8 +398,11 @@ def sync_spatial_calibrations(config: Config, sync_state: SyncState) -> dict[str
     previous = _previously_cached_calibrations(sync_state)
     changed_maps = {
         map_slug
-        for map_slug, bounds in calibrations.items()
-        if map_slug not in previous or previous[map_slug].get("updatedAt") != bounds.get("updatedAt")
+        for map_slug, layers in calibrations.items()
+        for layer_key, bounds in layers.items()
+        if map_slug not in previous
+        or layer_key not in previous[map_slug]
+        or previous[map_slug][layer_key].get("updatedAt") != bounds.get("updatedAt")
     }
     if changed_maps:
         invalidated = sync_state.invalidate_stale_for_maps(changed_maps)

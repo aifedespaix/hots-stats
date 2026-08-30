@@ -571,7 +571,7 @@ def test_resync_passes_calibrations_through_to_ingest_file(tmp_path):
 
 def test_sync_spatial_calibrations_caches_and_returns_the_fetched_dict(tmp_path):
     sync_state = SyncState(tmp_path / "sync_state.db")
-    body = {"dragon-shire": {"minX": -100.0, "maxX": 100.0, "minY": -100.0, "maxY": 100.0, "updatedAt": "2026-08-16T10:00:00Z"}}
+    body = {"dragon-shire": {"": {"minX": -100.0, "maxX": 100.0, "minY": -100.0, "maxY": 100.0, "updatedAt": "2026-08-16T10:00:00Z"}}}
 
     with patch("src.ingestion.api_client.fetch_calibrations", return_value=body):
         calibrations = sync_spatial_calibrations(_config(tmp_path), sync_state)
@@ -582,7 +582,7 @@ def test_sync_spatial_calibrations_caches_and_returns_the_fetched_dict(tmp_path)
 
 def test_sync_spatial_calibrations_falls_back_to_cache_when_api_unreachable(tmp_path):
     sync_state = SyncState(tmp_path / "sync_state.db")
-    cached = {"dragon-shire": {"minX": -100.0, "maxX": 100.0, "minY": -100.0, "maxY": 100.0, "updatedAt": "2026-08-16T10:00:00Z"}}
+    cached = {"dragon-shire": {"": {"minX": -100.0, "maxX": 100.0, "minY": -100.0, "maxY": 100.0, "updatedAt": "2026-08-16T10:00:00Z"}}}
     sync_state.set_meta("spatial_calibrations", json.dumps(cached))
 
     with patch("src.ingestion.api_client.fetch_calibrations", return_value=None):
@@ -611,7 +611,7 @@ def test_sync_spatial_calibrations_invalidates_replays_for_a_newly_calibrated_ma
     sync_state.mark_synced("abc", constants.PARSER_VERSION, file_path="a", map_slug="dragon-shire")
     assert sync_state.is_up_to_date("abc", constants.PARSER_VERSION) is True
 
-    body = {"dragon-shire": {"minX": -100.0, "maxX": 100.0, "minY": -100.0, "maxY": 100.0, "updatedAt": "2026-08-16T10:00:00Z"}}
+    body = {"dragon-shire": {"": {"minX": -100.0, "maxX": 100.0, "minY": -100.0, "maxY": 100.0, "updatedAt": "2026-08-16T10:00:00Z"}}}
     with patch("src.ingestion.api_client.fetch_calibrations", return_value=body):
         sync_spatial_calibrations(_config(tmp_path), sync_state)
 
@@ -625,11 +625,11 @@ def test_sync_spatial_calibrations_invalidates_replays_when_a_map_is_recalibrate
     sync_state = SyncState(tmp_path / "sync_state.db")
     sync_state.set_meta(
         "spatial_calibrations",
-        json.dumps({"dragon-shire": {"minX": -100.0, "maxX": 100.0, "minY": -100.0, "maxY": 100.0, "updatedAt": "T1"}}),
+        json.dumps({"dragon-shire": {"": {"minX": -100.0, "maxX": 100.0, "minY": -100.0, "maxY": 100.0, "updatedAt": "T1"}}}),
     )
     sync_state.mark_synced("abc", constants.PARSER_VERSION, file_path="a", map_slug="dragon-shire")
 
-    body = {"dragon-shire": {"minX": -90.0, "maxX": 90.0, "minY": -90.0, "maxY": 90.0, "updatedAt": "T2"}}
+    body = {"dragon-shire": {"": {"minX": -90.0, "maxX": 90.0, "minY": -90.0, "maxY": 90.0, "updatedAt": "T2"}}}
     with patch("src.ingestion.api_client.fetch_calibrations", return_value=body):
         sync_spatial_calibrations(_config(tmp_path), sync_state)
 
@@ -643,11 +643,11 @@ def test_sync_spatial_calibrations_does_not_invalidate_when_unchanged(tmp_path):
     sync_state = SyncState(tmp_path / "sync_state.db")
     sync_state.set_meta(
         "spatial_calibrations",
-        json.dumps({"dragon-shire": {"minX": -100.0, "maxX": 100.0, "minY": -100.0, "maxY": 100.0, "updatedAt": "T1"}}),
+        json.dumps({"dragon-shire": {"": {"minX": -100.0, "maxX": 100.0, "minY": -100.0, "maxY": 100.0, "updatedAt": "T1"}}}),
     )
     sync_state.mark_synced("abc", constants.PARSER_VERSION, file_path="a", map_slug="dragon-shire")
 
-    body = {"dragon-shire": {"minX": -100.0, "maxX": 100.0, "minY": -100.0, "maxY": 100.0, "updatedAt": "T1"}}
+    body = {"dragon-shire": {"": {"minX": -100.0, "maxX": 100.0, "minY": -100.0, "maxY": 100.0, "updatedAt": "T1"}}}
     with patch("src.ingestion.api_client.fetch_calibrations", return_value=body):
         sync_spatial_calibrations(_config(tmp_path), sync_state)
 
@@ -663,8 +663,8 @@ def test_sync_spatial_calibrations_only_invalidates_the_changed_map(tmp_path):
         "spatial_calibrations",
         json.dumps(
             {
-                "dragon-shire": {"minX": -100.0, "maxX": 100.0, "minY": -100.0, "maxY": 100.0, "updatedAt": "T1"},
-                "cursed-hollow": {"minX": -50.0, "maxX": 50.0, "minY": -50.0, "maxY": 50.0, "updatedAt": "T1"},
+                "dragon-shire": {"": {"minX": -100.0, "maxX": 100.0, "minY": -100.0, "maxY": 100.0, "updatedAt": "T1"}},
+                "cursed-hollow": {"": {"minX": -50.0, "maxX": 50.0, "minY": -50.0, "maxY": 50.0, "updatedAt": "T1"}},
             }
         ),
     )
@@ -672,11 +672,39 @@ def test_sync_spatial_calibrations_only_invalidates_the_changed_map(tmp_path):
     sync_state.mark_synced("cursed-hollow-replay", constants.PARSER_VERSION, file_path="b", map_slug="cursed-hollow")
 
     body = {
-        "dragon-shire": {"minX": -90.0, "maxX": 90.0, "minY": -90.0, "maxY": 90.0, "updatedAt": "T2"},
-        "cursed-hollow": {"minX": -50.0, "maxX": 50.0, "minY": -50.0, "maxY": 50.0, "updatedAt": "T1"},
+        "dragon-shire": {"": {"minX": -90.0, "maxX": 90.0, "minY": -90.0, "maxY": 90.0, "updatedAt": "T2"}},
+        "cursed-hollow": {"": {"minX": -50.0, "maxX": 50.0, "minY": -50.0, "maxY": 50.0, "updatedAt": "T1"}},
     }
     with patch("src.ingestion.api_client.fetch_calibrations", return_value=body):
         sync_spatial_calibrations(_config(tmp_path), sync_state)
 
     assert sync_state.is_up_to_date("dragon-shire-replay", constants.PARSER_VERSION) is False
     assert sync_state.is_up_to_date("cursed-hollow-replay", constants.PARSER_VERSION) is True
+
+
+def test_sync_spatial_calibrations_invalidates_when_a_new_layer_is_added_to_a_known_map(tmp_path):
+    """A map that previously had only its default ("") layer calibrated must
+    still be invalidated when a *new* layer (e.g. "bottom", a sublevel) gets
+    calibrated for it, even though the existing "" layer's `updatedAt` is
+    unchanged -- otherwise a newly-calibrated sublevel would never
+    retroactively unlock its own heatmap layer for already-synced replays."""
+    sync_state = SyncState(tmp_path / "sync_state.db")
+    sync_state.set_meta(
+        "spatial_calibrations",
+        json.dumps(
+            {"braxis-holdout": {"": {"minX": -100.0, "maxX": 100.0, "minY": -100.0, "maxY": 100.0, "updatedAt": "T1"}}}
+        ),
+    )
+    sync_state.mark_synced("abc", constants.PARSER_VERSION, file_path="a", map_slug="braxis-holdout")
+
+    body = {
+        "braxis-holdout": {
+            "": {"minX": -100.0, "maxX": 100.0, "minY": -100.0, "maxY": 100.0, "updatedAt": "T1"},
+            "bottom": {"minX": 1000.0, "maxX": 1100.0, "minY": 1000.0, "maxY": 1100.0, "updatedAt": "T2"},
+        }
+    }
+    with patch("src.ingestion.api_client.fetch_calibrations", return_value=body):
+        calibrations = sync_spatial_calibrations(_config(tmp_path), sync_state)
+
+    assert calibrations == body
+    assert sync_state.is_up_to_date("abc", constants.PARSER_VERSION) is False
