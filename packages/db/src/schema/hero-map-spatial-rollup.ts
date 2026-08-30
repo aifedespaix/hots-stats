@@ -34,6 +34,7 @@ export const heroMapPlayerSpatialRollup = pgTable(
     heroId: text("hero_id")
       .notNull()
       .references(() => heroes.id, { onDelete: "cascade" }),
+    layer: text("layer").notNull().default(""),
     // Not a FK to users.id: rolled up for *every* battletag seen, registered
     // account or not, same identity convention as match_players.battletag.
     battletag: text("battletag").notNull(),
@@ -50,6 +51,7 @@ export const heroMapPlayerSpatialRollup = pgTable(
     uniqueRow: uniqueIndex("hero_map_player_spatial_rollup_unique").on(
       table.mapId,
       table.heroId,
+      table.layer,
       table.battletag,
       table.outcome,
     ),
@@ -70,6 +72,7 @@ export const heroMapGlobalSpatialRollup = pgTable(
     heroId: text("hero_id")
       .notNull()
       .references(() => heroes.id, { onDelete: "cascade" }),
+    layer: text("layer").notNull().default(""),
     outcome: matchOutcomeEnum("outcome").notNull(),
     matchCount: integer("match_count").notNull().default(0),
     gridCols: integer("grid_cols").notNull(),
@@ -80,7 +83,12 @@ export const heroMapGlobalSpatialRollup = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    uniqueRow: uniqueIndex("hero_map_global_spatial_rollup_unique").on(table.mapId, table.heroId, table.outcome),
+    uniqueRow: uniqueIndex("hero_map_global_spatial_rollup_unique").on(
+      table.mapId,
+      table.heroId,
+      table.layer,
+      table.outcome,
+    ),
   }),
 );
 

@@ -1,4 +1,4 @@
-import { index, integer, jsonb, pgEnum, pgTable, real, uuid } from "drizzle-orm/pg-core";
+import { index, integer, jsonb, pgEnum, pgTable, real, text, uuid } from "drizzle-orm/pg-core";
 import { matchPlayers } from "./match-players";
 
 // See packages/shared-types/src/replay-payload.ts's `killTypeSchema` for why
@@ -19,6 +19,12 @@ export const matchDeaths = pgTable(
     // calibration yet at ingestion time (see spatial-calibration.service.ts).
     x: real("x"),
     y: real("y"),
+    // Which calibrated layer `x`/`y` are normalized against -- null for the
+    // map's default/only level, or when the death has no position at all.
+    // Same convention as match_spatial_grids.layer, but stored as the
+    // real string-or-null here (no NOT NULL/DEFAULT sentinel needed --
+    // this table has its own uuid PK, not a composite key on this column).
+    layer: text("layer"),
     // Battletags credited with the kill (jsonb text array, not a native
     // Postgres array -- matches this schema's existing jsonb-over-array
     // convention, see raw_map_samples.rawPoints). Empty/null when killType

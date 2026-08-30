@@ -1,11 +1,11 @@
-import { jsonb, pgTable, timestamp, uuid } from "drizzle-orm/pg-core";
+import { jsonb, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { matchPlayers } from "./match-players";
 
 /**
- * One hero's downsampled, *timestamped* path for one match, keyed 1:1 by
- * `matchPlayerId` (same PK-as-FK shape as `match-spatial-grids.ts` -- a
- * hero has exactly one trajectory per match). Absent entirely for a match
- * whose map had no calibration at ingestion time, same gating as
+ * One hero's downsampled, *timestamped* path for one match on one layer,
+ * keyed by `(matchPlayerId, layer)` -- same layer convention as
+ * `match-spatial-grids.ts`. Absent entirely for a match whose map had no
+ * calibration for a given layer at ingestion time, same gating as
  * `matchSpatialGrids`.
  *
  * Deliberately a separate table from `matchSpatialGrids`, not a column on
@@ -19,15 +19,22 @@ import { matchPlayers } from "./match-players";
  * is read as a whole path for one hero at a time, never queried or
  * aggregated per-point, so there's no benefit to normalizing it into rows.
  */
-export const matchHeroTrajectories = pgTable("match_hero_trajectories", {
-  matchPlayerId: uuid("match_player_id")
-    .primaryKey()
-    .references(() => matchPlayers.id, { onDelete: "cascade" }),
-  atSeconds: jsonb("at_seconds").notNull().$type<number[]>(),
-  x: jsonb("x").notNull().$type<number[]>(),
-  y: jsonb("y").notNull().$type<number[]>(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const matchHeroTrajectories = pgTable(
+  "match_hero_trajectories",
+  {
+    matchPlayerId: uuid("match_player_id")
+      .notNull()
+      .references(() => matchPlayers.id, { onDelete: "cascade" }),
+    layer: text("layer").notNull().default(""),
+    atSeconds: jsonb("at_seconds").notNull().$type<number[]>(),
+    x: jsonb("x").notNull().$type<number[]>(),
+    y: jsonb("y").notNull().$type<number[]>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.matchPlayerId, table.layer] }),
+  }),
+);
 
 export type MatchHeroTrajectory = typeof matchHeroTrajectories.$inferSelect;
 export type NewMatchHeroTrajectory = typeof matchHeroTrajectories.$inferInsert;
