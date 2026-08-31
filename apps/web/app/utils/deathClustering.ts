@@ -7,6 +7,7 @@ export interface SpatialEventPoint {
   atSeconds: number;
   x: number;
   y: number;
+  layer: string | null;
 }
 
 export interface SpatialEventCluster {
@@ -33,9 +34,10 @@ export function buildSpatialEventPoints(deaths: MatchTimelineDeath[]): SpatialEv
   const points: SpatialEventPoint[] = [];
   for (const death of deaths) {
     if (death.x === undefined || death.y === undefined) continue;
-    points.push({ kind: "death", battletag: death.battletag, atSeconds: death.atSeconds, x: death.x, y: death.y });
+    const layer = death.layer ?? null;
+    points.push({ kind: "death", battletag: death.battletag, atSeconds: death.atSeconds, x: death.x, y: death.y, layer });
     for (const killer of death.killers ?? []) {
-      points.push({ kind: "kill", battletag: killer, atSeconds: death.atSeconds, x: death.x, y: death.y });
+      points.push({ kind: "kill", battletag: killer, atSeconds: death.atSeconds, x: death.x, y: death.y, layer });
     }
   }
   return points;

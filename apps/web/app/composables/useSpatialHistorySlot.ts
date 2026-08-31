@@ -28,6 +28,9 @@ export function useSpatialHistorySlot(
   mapId: string,
   defaultHeroId: string | undefined,
   myBattletag: Ref<string | null>,
+  // Which layer of a multi-layer map to fetch the aggregate for -- a
+  // "Historique" Slot always represents exactly one layer per request.
+  activeLayer: Ref<string | null>,
   // Skips the fetch until true -- lets `SpatialSlotGroup.vue` create a 2nd
   // Slot's composable instance up front (composables can only be called
   // unconditionally at setup time) without firing its request before the
@@ -69,6 +72,7 @@ export function useSpatialHistorySlot(
         credentials: "include",
         query: {
           mapId,
+          ...(activeLayer.value ? { layer: activeLayer.value } : {}),
           ...(heroParam ? { heroId: heroParam } : { role: roleParam }),
           ...(isGlobal.value ? { global: "true" } : { battletag: battletag.value }),
           outcome: outcome.value,
@@ -82,7 +86,7 @@ export function useSpatialHistorySlot(
     }
   }
 
-  watch([playerMode, otherBattletag, heroSelector, selectedHeroId, selectedRole, outcome, enabled], load, { immediate: true });
+  watch([playerMode, otherBattletag, heroSelector, selectedHeroId, selectedRole, outcome, enabled, activeLayer], load, { immediate: true });
 
   const presenceGrid = computed(() => (data.value ? gridFromWireArrays(data.value.presence.cellIndex, data.value.presence.values) : {}));
   const killsGrid = computed(() => (data.value ? gridFromWireArrays(data.value.kills.cellIndex, data.value.kills.values) : {}));

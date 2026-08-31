@@ -18,6 +18,10 @@ export interface MatchTimelineDeath {
   y?: number;
   killers?: string[];
   killType?: "hero" | "other";
+  // Which layer of a multi-layer map (e.g. Haunted Mines' surface/mine) the
+  // death occurred on -- null for a single-layer map, absent for a match
+  // ingested before layer tracking existed.
+  layer?: string | null;
 }
 
 export interface MatchTimelineLevelSnapshot {

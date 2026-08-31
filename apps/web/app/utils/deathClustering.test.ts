@@ -3,7 +3,7 @@ import type { MatchTimelineDeath } from "~/types/coach";
 import { buildSpatialEventPoints, clusterSpatialEvents, type SpatialEventPoint } from "./deathClustering";
 
 function point(overrides: Partial<SpatialEventPoint> = {}): SpatialEventPoint {
-  return { kind: "death", battletag: "Foo#1111", atSeconds: 0, x: 0.5, y: 0.5, ...overrides };
+  return { kind: "death", battletag: "Foo#1111", atSeconds: 0, x: 0.5, y: 0.5, layer: null, ...overrides };
 }
 
 describe("buildSpatialEventPoints", () => {
@@ -13,9 +13,9 @@ describe("buildSpatialEventPoints", () => {
     ];
     const points = buildSpatialEventPoints(deaths);
     expect(points).toEqual([
-      { kind: "death", battletag: "Victim#1", atSeconds: 100, x: 0.2, y: 0.3 },
-      { kind: "kill", battletag: "Killer#1", atSeconds: 100, x: 0.2, y: 0.3 },
-      { kind: "kill", battletag: "Killer#2", atSeconds: 100, x: 0.2, y: 0.3 },
+      { kind: "death", battletag: "Victim#1", atSeconds: 100, x: 0.2, y: 0.3, layer: null },
+      { kind: "kill", battletag: "Killer#1", atSeconds: 100, x: 0.2, y: 0.3, layer: null },
+      { kind: "kill", battletag: "Killer#2", atSeconds: 100, x: 0.2, y: 0.3, layer: null },
     ]);
   });
 
@@ -26,7 +26,7 @@ describe("buildSpatialEventPoints", () => {
 
   it("emits a death point with no kill points when there are no credited killers", () => {
     const deaths: MatchTimelineDeath[] = [{ battletag: "Victim#1", team: 0, atSeconds: 100, x: 0.2, y: 0.3, killers: [] }];
-    expect(buildSpatialEventPoints(deaths)).toEqual([{ kind: "death", battletag: "Victim#1", atSeconds: 100, x: 0.2, y: 0.3 }]);
+    expect(buildSpatialEventPoints(deaths)).toEqual([{ kind: "death", battletag: "Victim#1", atSeconds: 100, x: 0.2, y: 0.3, layer: null }]);
   });
 });
 
