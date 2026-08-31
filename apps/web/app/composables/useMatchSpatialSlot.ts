@@ -24,6 +24,7 @@ export type MatchSlotViewMode = "hero" | "team";
 export function useMatchSpatialSlot(
   heroes: MatchSlotHero[],
   deaths: MatchTimelineDeath[],
+  activeLayer: Ref<string | null>,
   colorOverride?: Ref<[number, number, number] | undefined>,
 ) {
   // Everyone selected by default -- "superposition de tous les héros d'une
@@ -52,28 +53,51 @@ export function useMatchSpatialSlot(
 
   const viewMode = ref<MatchSlotViewMode>("hero");
 
+  function gridsFor(hero: MatchSlotHero) {
+    return hero.layers.find((l) => l.layer === activeLayer.value);
+  }
+
   const presenceLayers = computed<SpatialPresenceLayer[]>(() => {
     const override = colorOverride?.value;
     if (override) {
-      return [{ grid: sumGrids(activeHeroes.value.map((h) => gridFromWireArrays(h.presence.cellIndex, h.presence.values))), colorRgb: override }];
+      return [
+        {
+          grid: sumGrids(activeHeroes.value.map((h) => gridFromWireArrays(gridsFor(h)?.presence.cellIndex ?? [], gridsFor(h)?.presence.values ?? []))),
+          colorRgb: override,
+        },
+      ];
     }
     if (viewMode.value === "team") {
       const layers: SpatialPresenceLayer[] = [];
       const allies = activeHeroes.value.filter((h) => h.isAlly);
       const enemies = activeHeroes.value.filter((h) => !h.isAlly);
-      if (allies.length > 0) layers.push({ grid: sumGrids(allies.map((h) => gridFromWireArrays(h.presence.cellIndex, h.presence.values))), colorRgb: ALLY_TEAM_RGB, label: "Mon équipe" });
-      if (enemies.length > 0) layers.push({ grid: sumGrids(enemies.map((h) => gridFromWireArrays(h.presence.cellIndex, h.presence.values))), colorRgb: ENEMY_TEAM_RGB, label: "Adversaires" });
+      if (allies.length > 0)
+        layers.push({
+          grid: sumGrids(allies.map((h) => gridFromWireArrays(gridsFor(h)?.presence.cellIndex ?? [], gridsFor(h)?.presence.values ?? []))),
+          colorRgb: ALLY_TEAM_RGB,
+          label: "Mon équipe",
+        });
+      if (enemies.length > 0)
+        layers.push({
+          grid: sumGrids(enemies.map((h) => gridFromWireArrays(gridsFor(h)?.presence.cellIndex ?? [], gridsFor(h)?.presence.values ?? []))),
+          colorRgb: ENEMY_TEAM_RGB,
+          label: "Adversaires",
+        });
       return layers;
     }
-    return activeHeroes.value.map((hero) => ({
-      grid: gridFromWireArrays(hero.presence.cellIndex, hero.presence.values),
-      colorRgb: colorForHeroIndex(heroColorIndex.get(hero.matchPlayerId) ?? 0),
-      label: hero.heroName,
-    }));
+    return activeHeroes.value
+      .filter((hero) => gridsFor(hero) !== undefined)
+      .map((hero) => ({
+        grid: gridFromWireArrays(gridsFor(hero)!.presence.cellIndex, gridsFor(hero)!.presence.values),
+        colorRgb: colorForHeroIndex(heroColorIndex.get(hero.matchPlayerId) ?? 0),
+        label: hero.heroName,
+      }));
   });
 
   const activeBattletags = computed(() => new Set(activeHeroes.value.map((h) => h.battletag)));
-  const markerClusters = computed(() => clusterSpatialEvents(buildSpatialEventPoints(deaths).filter((p) => activeBattletags.value.has(p.battletag))));
+  const markerClusters = computed(() =>
+    clusterSpatialEvents(buildSpatialEventPoints(deaths).filter((p) => activeBattletags.value.has(p.battletag) && p.layer === activeLayer.value)),
+  );
 
   return { selected, toggle, selectAllies, selectEnemies, selectAll, activeHeroes, viewMode, presenceLayers, markerClusters };
 }

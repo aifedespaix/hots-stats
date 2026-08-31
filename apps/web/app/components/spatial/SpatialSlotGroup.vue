@@ -36,6 +36,24 @@ const props = withDefaults(
 const allowMatchScope = computed(() => props.matchHeroes.length > 0);
 const myBattletagRef = computed(() => props.myBattletag ?? null);
 
+// Every distinct layer this match's heroes have data on -- empty when no
+// match is in context (e.g. /maps/:mapId), single-entry [null] for a
+// single-level map. Only meaningful when `allowMatchScope` is true; the
+// "Historique"-only case (no active match) always uses the default layer
+// for now (deriving available layers for a map with no match in context
+// would need a dedicated endpoint, out of scope here).
+const availableLayers = computed<(string | null)[]>(() => {
+  if (!allowMatchScope.value) return [null];
+  const seen = new Set<string | null>();
+  for (const hero of props.matchHeroes) for (const l of hero.layers) seen.add(l.layer);
+  const layers = [...seen];
+  return layers.length > 0 ? layers.sort((a, b) => (a ?? "").localeCompare(b ?? "")) : [null];
+});
+const activeLayer = ref<string | null>(availableLayers.value[0] ?? null);
+function layerTabLabel(layer: string | null): string {
+  return layer ?? "Surface";
+}
+
 const comparisonEnabled = ref(false);
 type SlotScope = "match" | "history";
 const slotBScope = ref<SlotScope>(allowMatchScope.value ? "match" : "history");
@@ -52,16 +70,18 @@ const colorB = ref<[number, number, number] | undefined>(SLOT_B_RGB);
 // Slot A: "Cette partie" when a match is in context, "Historique" otherwise
 // (e.g. the Hub des Cartes) -- a single long-lived instance so toggling
 // comparison on/off never resets the user's hero/config selection.
-const matchSlotA = allowMatchScope.value ? useMatchSpatialSlot(props.matchHeroes, props.matchDeaths, colorA) : null;
-const historySlotA = !allowMatchScope.value ? useSpatialHistorySlot(props.mapId, props.heroOptions[0]?.id, myBattletagRef) : null;
+const matchSlotA = allowMatchScope.value ? useMatchSpatialSlot(props.matchHeroes, props.matchDeaths, activeLayer, colorA) : null;
+const historySlotA = !allowMatchScope.value
+  ? useSpatialHistorySlot(props.mapId, props.heroOptions[0]?.id, myBattletagRef, activeLayer)
+  : null;
 
 // Slot B only exists once comparison mode is on -- both composables are
 // still created eagerly (composables can only be called unconditionally at
 // setup time), but `historySlotB`'s fetch is gated by `enabled` so it never
 // fires while Slot B is on "Cette partie" scope or comparison is off.
-const matchSlotB = allowMatchScope.value ? useMatchSpatialSlot(props.matchHeroes, props.matchDeaths, colorB) : null;
+const matchSlotB = allowMatchScope.value ? useMatchSpatialSlot(props.matchHeroes, props.matchDeaths, activeLayer, colorB) : null;
 const historySlotBEnabled = computed(() => comparisonEnabled.value && slotBScope.value === "history");
-const historySlotB = useSpatialHistorySlot(props.mapId, props.heroOptions[0]?.id, myBattletagRef, historySlotBEnabled);
+const historySlotB = useSpatialHistorySlot(props.mapId, props.heroOptions[0]?.id, myBattletagRef, activeLayer, historySlotBEnabled);
 
 // Both "Historique" grids share the app-wide grid resolution in practice
 // (see spatial-grid.ts), but when no `gridCols`/`gridRows` prop is given
@@ -116,6 +136,20 @@ function exportView(heatmapViewRef: { mapContainerEl: HTMLElement | null } | nul
 
 <template>
   <div class="space-y-4">
+    <div v-if="availableLayers.length > 1" class="flex items-center gap-1.5 text-xs">
+      <span class="text-muted">Niveau :</span>
+      <UButton
+        v-for="l in availableLayers"
+        :key="l ?? '__default__'"
+        size="xs"
+        :variant="activeLayer === l ? 'solid' : 'soft'"
+        color="neutral"
+        @click="activeLayer = l"
+      >
+        {{ layerTabLabel(l) }}
+      </UButton>
+    </div>
+
     <div v-if="!comparisonEnabled">
       <SpatialMatchSlotFields v-if="matchSlotA" :heroes="matchHeroes" :slot="matchSlotA" />
       <SpatialHistorySlotConfig
@@ -153,6 +187,7 @@ function exportView(heatmapViewRef: { mapContainerEl: HTMLElement | null } | nul
         ref="heatmapRef"
         class="mt-3"
         :map-id="mapId"
+        :layer="activeLayer"
         :grid-cols="effectiveGridCols"
         :grid-rows="effectiveGridRows"
         :layers="slotALayers"
@@ -234,6 +269,7 @@ function exportView(heatmapViewRef: { mapContainerEl: HTMLElement | null } | nul
         <SpatialHeatmapView
           ref="heatmapRef"
           :map-id="mapId"
+          :layer="activeLayer"
           :grid-cols="effectiveGridCols"
           :grid-rows="effectiveGridRows"
           :layers="[...slotALayers, ...slotBLayers]"
@@ -253,6 +289,7 @@ function exportView(heatmapViewRef: { mapContainerEl: HTMLElement | null } | nul
           <SpatialHeatmapView
             ref="heatmapRefA"
             :map-id="mapId"
+            :layer="activeLayer"
             :grid-cols="effectiveGridCols"
             :grid-rows="effectiveGridRows"
             :layers="slotALayers"
@@ -271,6 +308,7 @@ function exportView(heatmapViewRef: { mapContainerEl: HTMLElement | null } | nul
           <SpatialHeatmapView
             ref="heatmapRefB"
             :map-id="mapId"
+            :layer="activeLayer"
             :grid-cols="effectiveGridCols"
             :grid-rows="effectiveGridRows"
             :layers="slotBLayers"

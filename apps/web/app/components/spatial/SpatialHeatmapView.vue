@@ -23,6 +23,8 @@ export interface SpatialPresenceLayer {
 const props = withDefaults(
   defineProps<{
     mapId: string;
+    /** Which layer of `mapId` is being displayed -- selects the background image (`${mapId}-${layer}.jpg`) via `imageSlug`. `null`/omitted for a single-level map, which keeps the plain `${mapId}.jpg` image. */
+    layer?: string | null;
     gridCols: number;
     gridRows: number;
     /** One or more colored presence layers, stacked on the same canvas -- see `SpatialPresenceLayer`. */
@@ -38,6 +40,7 @@ const props = withDefaults(
     presenceOpacity?: number;
   }>(),
   {
+    layer: null,
     killsGrid: undefined,
     deathsGrid: undefined,
     markerClusters: undefined,
@@ -47,6 +50,8 @@ const props = withDefaults(
     presenceOpacity: 0.75,
   },
 );
+
+const imageSlug = computed(() => (props.layer ? `${props.mapId}-${props.layer}` : props.mapId));
 
 const emit = defineEmits<{ "select-cluster": [cluster: SpatialEventCluster] }>();
 
@@ -80,7 +85,7 @@ function rgbCss(rgb: [number, number, number]): string {
     <div ref="mapContainerEl" class="relative w-full overflow-hidden rounded-lg border border-border bg-background">
       <img
         ref="imgEl"
-        :src="`/images/maps/original/${mapId}.jpg`"
+        :src="`/images/maps/original/${imageSlug}.jpg`"
         :alt="mapId"
         class="block w-full"
         @load="onImageLoad"

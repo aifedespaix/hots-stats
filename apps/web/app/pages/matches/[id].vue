@@ -82,9 +82,7 @@ const spatialMatchHeroes = computed<MatchSlotHero[]>(() => {
         heroName: row.heroName,
         team: row.team,
         isAlly: row.isAlly,
-        presence: hero.presence,
-        kills: hero.kills,
-        deaths: hero.deaths,
+        layers: hero.layers,
       },
     ];
   });

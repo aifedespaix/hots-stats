@@ -113,10 +113,23 @@ function buildDensityGrid(points: HeatmapPathPoint[], cols: number, rows: number
   return grid;
 }
 
+// `game.trajectories` can now hold more than one entry per battletag (one
+// per layer, see `MatchHeroTrajectory`'s doc comment) -- this composable has
+// no layer-switching UI yet (full per-layer trajectory selection for the Pro
+// Comparison View is out of scope for this change), so deterministically
+// prefer the default layer's (`layer === null`) entry over whichever
+// happens to come first in the array, falling back to any match if the hero
+// somehow has no default-layer entry rather than showing nothing.
 function selectTrajectory(game: HeatmapGameData | null, battletag: string | null): MatchHeroTrajectory | null {
   if (!game) return null;
-  if (battletag) return game.trajectories.find((t) => t.battletag === battletag) ?? null;
-  return game.trajectories[0] ?? null;
+  if (battletag) {
+    return (
+      game.trajectories.find((t) => t.battletag === battletag && t.layer === null) ??
+      game.trajectories.find((t) => t.battletag === battletag) ??
+      null
+    );
+  }
+  return game.trajectories.find((t) => t.layer === null) ?? game.trajectories[0] ?? null;
 }
 
 export interface UseHeatmapSyncOptions {
