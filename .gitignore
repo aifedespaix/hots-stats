@@ -25,19 +25,12 @@ daemon-python/.pytest_cache/
 **/__pycache__/
 apps/replay-parser/.venv/
 
-graphify-out/cache/
-# Machine-specific interpreter/scan-root pointers written by the graphify
-# skill/CLI (absolute local paths) - re-derived per machine, never portable.
-graphify-out/.graphify_python
-graphify-out/.graphify_root
-# Daily pre-overwrite snapshots (graphify's backup_if_protected) - redundant
-# with git history once committed; would otherwise grow the repo forever.
-graphify-out/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
-# Per-file scan bookkeeping (mtime/seen/hash) used to decide what graphify
-# needs to re-extract - the "seen" timestamp is rewritten for every file on
-# every run regardless of real changes, so tracking it just produces noise
-# commits. Re-derived locally on the next `graphify update .`.
-graphify-out/manifest.json
+# The whole graphify knowledge graph is machine-regenerable (AST-only, no
+# API cost -- `graphify update .`, also run automatically by its post-commit
+# hook) and churns on nearly every commit, so tracking it just produces
+# large diffs unrelated to the actual change and merge conflicts between
+# concurrent branches/sessions. Not worth committing.
+graphify-out/
 
 prompts
 
