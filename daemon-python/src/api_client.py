@@ -233,22 +233,26 @@ def fetch_version(base_url: str, access_token: str, timeout: float = 5.0) -> dic
 
 
 def fetch_calibrations(base_url: str, access_token: str, timeout: float = 5.0) -> dict[str, dict] | None:
-    """Best-effort `GET {base_url}/spatial/calibrations` fetch: `{mapId:
-    {layerKey: {minX, maxX, minY, maxY, updatedAt}}}` for every calibrated
-    map, one inner entry per calibrated layer (`""` = a map's default/only
-    level). `updatedAt` is used (not by `parser.build_payload`'s
-    normalization math, which only reads the 4 bound keys per layer) to
-    detect a layer that's new or was just recalibrated since the last run --
-    see `ingestion.sync_spatial_calibrations`, which diffs against the
+    """Best-effort `GET {base_url}/spatial/calibrations/by-layer` fetch:
+    `{mapId: {layerKey: {minX, maxX, minY, maxY, updatedAt}}}` for every
+    calibrated map, one inner entry per calibrated layer (`""` = a map's
+    default/only level). Deliberately hits the `/by-layer` path, not the
+    legacy `/spatial/calibrations` (which serves the older flat, default-
+    layer-only shape forever, for daemon builds before this one) -- see
+    apps/api/src/routes/spatial.ts. `updatedAt` is used (not by
+    `parser.build_payload`'s normalization math, which only reads the 4
+    bound keys per layer) to detect a layer that's new or was just
+    recalibrated since the last run -- see
+    `ingestion.sync_spatial_calibrations`, which diffs against the
     previous run's cached dict and invalidates that map's already-synced
-    replays so they get reparsed. Cached in `SyncState`'s `meta` table so a
-    temporarily-unreachable API falls back to the last known calibrations
-    instead of treating every map as uncalibrated. Returns None on any
-    failure -- callers must treat that as "unknown", not "nothing is
-    calibrated"."""
+    replays so they get reparsed. Cached in `SyncState`'s `meta` table so
+    a temporarily-unreachable API falls back to the last known
+    calibrations instead of treating every map as uncalibrated. Returns
+    None on any failure -- callers must treat that as "unknown", not
+    "nothing is calibrated"."""
     try:
         response = requests.get(
-            f"{base_url.rstrip('/')}/spatial/calibrations",
+            f"{base_url.rstrip('/')}/spatial/calibrations/by-layer",
             headers={"Authorization": f"Bearer {access_token}"},
             timeout=timeout,
         )

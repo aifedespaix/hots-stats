@@ -46,8 +46,9 @@ async def parse(file: UploadFile = File(...), calibrations: str = Form(...)) -> 
     /uploads` feeds this straight into `ingestReplayPayload`, the same
     adapter-resolution/upsert path `POST /ingest` uses for the daemon.
 
-    `calibrations` is a *required* JSON-encoded `{mapId: {minX, maxX, minY,
-    maxY, ...}}` form field, passed straight through to `parse_replay` (see
+    `calibrations` is a *required* JSON-encoded `{mapId: {layerKey: {minX,
+    maxX, minY, maxY, ...}}}` form field (layerKey `""` = a map's
+    default/only level), passed straight through to `parse_replay` (see
     its docstring) so a web-uploaded replay gets a `spatial` block exactly
     like a daemon upload does when its map is calibrated -- this service has
     no daemon-style local cache of its own, so `apps/api`'s `POST /uploads`

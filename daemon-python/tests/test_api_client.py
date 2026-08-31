@@ -188,7 +188,7 @@ def test_fetch_calibrations_returns_body_on_200():
     body = {"dragon-shire": {"minX": -100.0, "maxX": 100.0, "minY": -100.0, "maxY": 100.0}}
     with patch("src.api_client.requests.get", return_value=_response(200, body)) as get:
         assert fetch_calibrations("https://api.example.com", "hots_pat_abc") == body
-    assert get.call_args.args[0] == "https://api.example.com/spatial/calibrations"
+    assert get.call_args.args[0] == "https://api.example.com/spatial/calibrations/by-layer"
     assert get.call_args.kwargs["headers"] == {"Authorization": "Bearer hots_pat_abc"}
 
 

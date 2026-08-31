@@ -94,7 +94,7 @@ watch(
 function deathMarkersFor(game: HeatmapGameData | null, currentSeconds: number): HeatmapMarker[] {
   if (!game) return [];
   return game.deaths
-    .filter((d) => d.atSeconds <= currentSeconds && d.x !== undefined && d.y !== undefined)
+    .filter((d) => d.atSeconds <= currentSeconds && d.x !== undefined && d.y !== undefined && (d.layer ?? null) === null)
     .map((d) => ({ x: d.x as number, y: d.y as number }));
 }
 

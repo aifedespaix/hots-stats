@@ -2,6 +2,7 @@ import { type MapCalibration, type RawMapSample, db, mapCalibrations, maps, rawM
 import type { MapBounds } from "@hots-stats/shared-types";
 import { eq, isNull } from "drizzle-orm";
 import { ensureMapExists } from "../lib/ensure-map";
+import { DEFAULT_LAYER_KEY } from "../lib/spatial-layer";
 
 function toBounds(row: MapCalibration): MapBounds {
   return { minX: row.minX, maxX: row.maxX, minY: row.minY, maxY: row.maxY };
@@ -21,6 +22,29 @@ export async function getAllCalibrations(): Promise<Record<string, Record<string
   for (const row of rows) {
     const byLayer = (result[row.mapId] ??= {});
     byLayer[row.layer] = { ...toBounds(row), updatedAt: row.updatedAt.toISOString() };
+  }
+  return result;
+}
+
+/**
+ * GET /spatial/calibrations (legacy path) -- kept serving the pre-1.13
+ * flat shape (`{mapId: MapBounds & {updatedAt}}`, default layer only)
+ * forever, for any daemon build at PARSER_VERSION <= "1.12" still in the
+ * field: an already-deployed daemon reads `calibration["minX"]` directly
+ * and has no concept of a nested per-layer dict. A daemon on 1.13+ calls
+ * `GET /spatial/calibrations/by-layer` instead (see `getAllCalibrations`
+ * above). Never remove this without confirming no such daemon build
+ * remains in circulation -- an earlier, unconditional shape change here
+ * caused every calibrated map's replays to fail to ingest for every
+ * already-deployed daemon (`KeyError` on `calibration["minX"]`), plus a
+ * resync storm from its diffing logic reading every map as "changed".
+ */
+export async function getDefaultLayerCalibrations(): Promise<Record<string, MapBounds & { updatedAt: string }>> {
+  const nested = await getAllCalibrations();
+  const result: Record<string, MapBounds & { updatedAt: string }> = {};
+  for (const [mapId, layers] of Object.entries(nested)) {
+    const defaultLayer = layers[DEFAULT_LAYER_KEY];
+    if (defaultLayer) result[mapId] = defaultLayer;
   }
   return result;
 }

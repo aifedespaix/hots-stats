@@ -374,13 +374,16 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
 
       const trajectories = trajectoriesByBattletag.get(player.battletag) ?? [];
       for (const trajectory of trajectories) {
-        await tx.insert(matchHeroTrajectories).values({
-          matchPlayerId: createdPlayer.id,
-          layer: toDbLayer(trajectory.layer),
-          atSeconds: trajectory.atSeconds,
-          x: trajectory.x,
-          y: trajectory.y,
-        });
+        await tx
+          .insert(matchHeroTrajectories)
+          .values({
+            matchPlayerId: createdPlayer.id,
+            layer: toDbLayer(trajectory.layer),
+            atSeconds: trajectory.atSeconds,
+            x: trajectory.x,
+            y: trajectory.y,
+          })
+          .onConflictDoNothing();
       }
     }
 
