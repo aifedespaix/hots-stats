@@ -22,6 +22,7 @@ import { MIN_RELIABLE_STATS_PARSER_VERSION } from "../constants";
 import { gameModeListSchema, gameVersionListSchema } from "../lib/query";
 import { isVersionAtLeast } from "../lib/parser-version";
 import { isAllZeroCombat } from "../lib/replay-plausibility";
+import { fromDbLayer } from "../lib/spatial-layer";
 import { authSession, requireUser } from "../middleware/auth-session";
 import { getFriendshipStatuses } from "../services/friendships.service";
 
@@ -591,6 +592,7 @@ export const matchesRoute = new Hono<Env>()
               atSeconds: matchDeaths.atSeconds,
               x: matchDeaths.x,
               y: matchDeaths.y,
+              layer: matchDeaths.layer,
               killers: matchDeaths.killers,
               killType: matchDeaths.killType,
             })
@@ -611,6 +613,7 @@ export const matchesRoute = new Hono<Env>()
         ? db
             .select({
               matchPlayerId: matchSpatialGrids.matchPlayerId,
+              layer: matchSpatialGrids.layer,
               gridCols: matchSpatialGrids.gridCols,
               gridRows: matchSpatialGrids.gridRows,
               presenceGrid: matchSpatialGrids.presenceGrid,
@@ -624,6 +627,7 @@ export const matchesRoute = new Hono<Env>()
         ? db
             .select({
               matchPlayerId: matchHeroTrajectories.matchPlayerId,
+              layer: matchHeroTrajectories.layer,
               atSeconds: matchHeroTrajectories.atSeconds,
               x: matchHeroTrajectories.x,
               y: matchHeroTrajectories.y,
@@ -661,7 +665,7 @@ export const matchesRoute = new Hono<Env>()
                   battletag: player.battletag,
                   team: player.team,
                   atSeconds: d.atSeconds,
-                  ...(d.x !== null && d.y !== null ? { x: d.x, y: d.y } : {}),
+                  ...(d.x !== null && d.y !== null ? { x: d.x, y: d.y, layer: d.layer } : {}),
                   ...(d.killType ? { killers: d.killers ?? [], killType: d.killType } : {}),
                 },
               ];
@@ -683,20 +687,30 @@ export const matchesRoute = new Hono<Env>()
     // tasks/epic-10-analyse-spatiale.md's Slot model). `null` (field
     // omitted) rather than an empty array when no hero in this match has
     // spatial data, same "absent, not empty" convention as `timeline`.
+    const gridRowsByPlayer = new Map<string, typeof spatialGridRows>();
+    for (const row of spatialGridRows) {
+      const list = gridRowsByPlayer.get(row.matchPlayerId) ?? [];
+      list.push(row);
+      gridRowsByPlayer.set(row.matchPlayerId, list);
+    }
+
     const spatial =
       spatialGridRows.length > 0
         ? {
             grid: { cols: spatialGridRows[0]!.gridCols, rows: spatialGridRows[0]!.gridRows },
-            heroes: spatialGridRows.map((row) => {
-              const player = playerById.get(row.matchPlayerId);
+            heroes: [...gridRowsByPlayer.entries()].map(([matchPlayerId, rows]) => {
+              const player = playerById.get(matchPlayerId);
               return {
-                matchPlayerId: row.matchPlayerId,
+                matchPlayerId,
                 battletag: player?.battletag ?? null,
                 heroId: player?.heroId ?? null,
                 team: player?.team ?? null,
-                presence: gridToWireArrays(row.presenceGrid as Grid),
-                kills: gridToWireArrays(row.killsGrid as Grid),
-                deaths: gridToWireArrays(row.deathsGrid as Grid),
+                layers: rows.map((row) => ({
+                  layer: fromDbLayer(row.layer),
+                  presence: gridToWireArrays(row.presenceGrid as Grid),
+                  kills: gridToWireArrays(row.killsGrid as Grid),
+                  deaths: gridToWireArrays(row.deathsGrid as Grid),
+                })),
               };
             }),
             // Absent (not an empty array) when no hero in this match has a
@@ -714,6 +728,7 @@ export const matchesRoute = new Hono<Env>()
                       battletag: player?.battletag ?? null,
                       heroId: player?.heroId ?? null,
                       team: player?.team ?? null,
+                      layer: fromDbLayer(row.layer),
                       atSeconds: row.atSeconds,
                       x: row.x,
                       y: row.y,
