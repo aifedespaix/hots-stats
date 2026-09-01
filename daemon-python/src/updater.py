@@ -278,7 +278,16 @@ def migrate_to_velopack_install() -> None:
         _append_update_log_line(version, f"Migration: launch failed: {err}")
         return
 
-    _mark_migration_done()
+    try:
+        _mark_migration_done()
+    except OSError as err:
+        logger.warning(
+            "Migration: Setup.exe launched but failed to mark migration complete, will retry next launch: %s",
+            err,
+        )
+        _append_update_log_line(version, f"Migration: Setup.exe launched but marking complete failed: {err}")
+        return
+
     logger.info("Migration: Setup.exe launched and the migration was marked complete.")
     _append_update_log_line(version, "Migration: Setup.exe launched, marked complete.")
 

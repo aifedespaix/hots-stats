@@ -102,6 +102,46 @@ def test_is_running_from_legacy_install_true_for_an_arbitrary_old_location(monke
     assert is_running_from_legacy_install() is True
 
 
+# -- migrate_to_velopack_install (one-time migration shim) -------------------
+
+
+def test_migrate_to_velopack_install_does_not_raise_when_marking_done_fails(monkeypatch, tmp_path):
+    """The Setup.exe has already been launched by the time `_mark_migration_done`
+    runs, so a failure to persist the completion flag (e.g. a locked/unwritable
+    config dir) must be logged and swallowed -- exactly like every other
+    failure path in this function -- rather than propagate out of
+    `migrate_to_velopack_install()` and crash the caller."""
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
+    monkeypatch.setattr(updater, "_is_migration_marked_done", lambda: False)
+
+    release_response = MagicMock()
+    release_response.json.return_value = {
+        "tag_name": "v1.2.3",
+        "assets": [
+            {"name": updater._SETUP_ASSET_NAME, "browser_download_url": "https://example.com/Setup.exe"}
+        ],
+    }
+
+    download_response = MagicMock()
+    download_response.__enter__.return_value = download_response
+    download_response.__exit__.return_value = False
+    download_response.iter_content.return_value = [b"data"]
+
+    def fake_get(url, **kwargs):
+        if url == updater._LATEST_RELEASE_API_URL:
+            return release_response
+        return download_response
+
+    monkeypatch.setattr(updater.requests, "get", fake_get)
+    monkeypatch.setattr(updater.subprocess, "Popen", MagicMock())
+    monkeypatch.setattr(updater, "_mark_migration_done", MagicMock(side_effect=OSError("locked")))
+
+    updater.migrate_to_velopack_install()  # must not raise
+
+    lines = read_last_update_log_lines()
+    assert any("marking complete failed" in line for line in lines)
+
+
 # -- manual_fallback_message -------------------------------------------------
 
 
