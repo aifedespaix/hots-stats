@@ -189,19 +189,14 @@ def test_download_update_reports_none_progress_without_content_length(tmp_path):
 # -- installed_exe_path -------------------------------------------------
 
 
-def test_installed_exe_path_prefers_onefile_binary_env(monkeypatch, tmp_path):
-    real_exe = tmp_path / "hots-analytics-daemon.exe"
-    real_exe.write_bytes(b"")
-    monkeypatch.setenv("NUITKA_ONEFILE_BINARY", str(real_exe))
+def test_installed_exe_path_returns_the_velopack_stub_path(monkeypatch, tmp_path):
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setattr("src.updater._PACK_ID", "hots-analytics-daemon")
+    monkeypatch.setattr("src.updater._EXE_NAME", "hots-analytics-daemon.exe")
 
-    assert installed_exe_path() == real_exe.resolve()
+    result = installed_exe_path()
 
-
-def test_installed_exe_path_falls_back_to_sys_executable(monkeypatch):
-    monkeypatch.delenv("NUITKA_ONEFILE_BINARY", raising=False)
-    monkeypatch.setattr("src.updater.sys.executable", "/tmp/fake-python")
-
-    assert installed_exe_path() == Path("/tmp/fake-python").resolve()
+    assert result == tmp_path / "hots-analytics-daemon" / "hots-analytics-daemon.exe"
 
 
 # -- manual fallback (stage_manual_fallback / manual_fallback_exe_path) --

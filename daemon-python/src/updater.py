@@ -97,25 +97,34 @@ def _get_update_manager() -> velopack.UpdateManager:
     return _update_manager
 
 
-def installed_exe_path() -> Path:
-    """The path of the .exe the user actually launched (double-clicked, or
-    the autostart registry entry) -- as opposed to `sys.executable`, which
-    under Nuitka's --onefile packaging resolves to the ephemeral per-run
-    extraction folder that gets deleted once the process exits. Copying an
-    update "over" that path, or registering it for Windows autostart, would
-    silently target a file that's gone by the time anything looks for it
-    again -- which is why both `apply_update_and_exit` and `autostart.py`
-    go through this helper instead of `sys.executable` directly.
+# Must match the `--packId`/`--mainExe` values `vpk pack` is invoked with in
+# .github/workflows/build-daemon.yml -- these three names (this pair, plus
+# the CI workflow's own two flags) are the one place Velopack's identity for
+# this app is decided; keep them in sync if either ever changes.
+_PACK_ID = "hots-analytics-daemon"
+_EXE_NAME = "hots-analytics-daemon.exe"
 
-    Nuitka sets `NUITKA_ONEFILE_BINARY` in the unpacked child process's
-    environment to the original onefile binary's path for exactly this
-    self-updating use case; fall back to `sys.executable` when it's unset
-    (e.g. a non-onefile build, or not running under Nuitka at all).
+
+def installed_exe_path() -> Path:
+    """The stable path Windows autostart (and anything else that needs "the
+    exe to launch, that will still be there next boot") should point at --
+    NOT `sys.executable` (which under Nuitka's --onefile packaging resolves
+    to an ephemeral per-run extraction folder that's deleted at exit) and
+    NOT the versioned copy inside Velopack's `current\\` directory (which
+    gets replaced wholesale on every update -- a shortcut pointing directly
+    at it could end up pointing at a deleted file mid-update).
+
+    Velopack installs to `%LocalAppData%\\{packId}\\` and places a small,
+    version-independent "stub" executable at the root of that folder (next
+    to `current\\` and `Update.exe`) whose only job is to launch whatever is
+    currently inside `current\\` -- see
+    docs/superpowers/specs/2026-08-31-daemon-velopack-auto-update-design.md.
+    That stub is what stays stable across updates, so it's what this
+    function returns.
     """
-    onefile_binary = os.environ.get("NUITKA_ONEFILE_BINARY")
-    if onefile_binary:
-        return Path(onefile_binary).resolve()
-    return Path(sys.executable).resolve()
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    base = Path(local_app_data) if local_app_data else Path.home() / "AppData" / "Local"
+    return base / _PACK_ID / _EXE_NAME
 
 
 def manual_fallback_message(version: str) -> str:
