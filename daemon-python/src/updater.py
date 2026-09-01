@@ -241,7 +241,7 @@ def _mark_migration_done() -> None:
 
 def migrate_to_velopack_install() -> None:
     """Downloads the current release's Setup.exe and runs it silently, then
-    marks the migration done (see `_MIGRATION_DONE_CONFIG_KEY`) so this never
+    marks the migration done (see `_MIGRATION_DONE_SENTINEL_NAME`) so this never
     repeats even if somehow launched again from the old location. Called
     once, early in `main()`, only for the one transitional release this
     function ships in -- see
