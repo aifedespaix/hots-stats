@@ -30,7 +30,6 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import os
-import sys
 import threading
 from dataclasses import dataclass, replace
 from enum import Enum
