@@ -1,66 +1,28 @@
 """Background self-update: checks GitHub Releases for a daemon build newer
-than this one and, if found, downloads it and relaunches in its place.
+than this one and, if found, downloads and installs it via Velopack.
 
-A running Windows .exe can't reliably overwrite or rename itself (and a
-Nuitka --onefile build in particular may be executing from a self-extracted
-copy rather than the original path), so the swap can't happen in this
-process. Instead, `apply_update_and_exit` writes a tiny PowerShell script
-that waits for this process to exit, copies the downloaded build over the
-current .exe, relaunches it, and deletes itself -- then this process exits
-immediately, releasing the file lock the script is waiting on. This is the
-same handoff technique most self-updating single-.exe Windows apps use.
+This used to hand off to a hand-rolled PowerShell script that copied a
+downloaded .exe over the running one and relaunched it -- exactly the shape
+of thing real-time antivirus is built to kill on sight, regardless of how
+legitimate the app actually is. Velopack (an update framework with an
+official Python SDK, see `_update_manager`/`_get_update_manager` below)
+replaces all of that: `UpdateManager.download_updates` fetches the release
+asset, and `UpdateManager.apply_updates_and_restart` performs an atomic,
+versioned install-directory swap using Velopack's own bundled `Update.exe`
+-- a signed, well-known updater binary instead of an ad-hoc unsigned script,
+which is what actually gets flagged by endpoint protection.
 
-Exiting is only safe once the handoff has actually taken -- `Popen`
-succeeding just means Windows *accepted* the request to spawn the script,
-not that it's still running a moment later. `apply_update_and_exit` briefly
-confirms the script is still alive before committing to `os._exit`; if it
-isn't (or `powershell.exe` couldn't even be launched), the update is
-aborted and this process keeps running the current version instead of
-exiting into what would otherwise be nothing. This matters in practice, not
-just in theory: the script this hands off to is, unavoidably, an unsigned,
-hidden, execution-policy-bypassing process that copies one unsigned .exe
-over another and relaunches it -- exactly the shape of thing real-time
-antivirus is built to kill on sight, regardless of how legitimate the app
-actually is.
+This build is still not code-signed (no certificate has been purchased for
+it), so Windows SmartScreen shows its "Windows protected your PC" warning
+the first time a browser-downloaded copy is run -- that's a one-time,
+per-download-hash prompt from Explorer's own Attachment Execution Service,
+unrelated to the update mechanism itself.
 
-This build is not code-signed (no certificate has been purchased for it),
-so Windows SmartScreen shows its "Windows protected your PC" warning the
-first time a browser-downloaded copy is run -- that's a one-time,
-per-download-hash prompt from Explorer's own Attachment Execution Service.
-The update .exe itself is fetched with `requests`, so it never picks up a
-Mark-of-the-Web -- but `Start-Process` with a bare `-FilePath` still goes
-through the same ShellExecute path Explorer uses, so if the *installed*
-.exe already carries a Mark-of-the-Web (very likely: it's usually sitting
-wherever the user's browser first downloaded it), that same SmartScreen
-prompt could reappear on every self-relaunch and block it silently since
-nobody is there to click "Run anyway". The relaunch script strips it
-(`Unblock-File`) right after copying the new build into place, so this
-doesn't depend on the installed .exe's location or download history.
-
-Every relaunch attempt is logged to `update.log` next to `config.json` (see
-`update_log_file_path`) -- the PowerShell handoff runs after this process
-has already exited, so that log is the only record of what happened if a
-copy/relaunch step fails and the app doesn't come back. Both the copy and
-the relaunch are retried a few times (a just-exited process, or real-time
-antivirus scanning an unfamiliar unsigned .exe, can each hold a brief file
-lock), and if copying the new build over the installed .exe still fails
-after every retry, the script falls back to relaunching the previous
-version (left untouched on disk) instead of leaving the app closed --
-otherwise a single failed update permanently "bricks" the daemon until the
-user notices and manually reruns an old installer from wherever they kept
-it.
-
-Two distinct failure modes -- this process never even managing to hand off
-to the relaunch script (`apply_update_and_exit` returning False), and the
-script itself never managing to replace the installed .exe (the
-copy-retries-exhausted case above) -- both also leave the already-downloaded
-build as a "new-"-prefixed copy right next to the installed .exe (see
-`manual_fallback_exe_path`) and tell the player exactly how to finish the
-install by hand, instead of a fully-good build sitting unreachable in a temp
-folder until the next silent retry. See `stage_manual_fallback` for the
-first case (this process is still alive) and `_render_relaunch_script`'s
-copy-failure branch for the second (this process has already exited, so the
-script shows the dialog itself).
+`update.log` (see `update_log_file_path`) still records what happened during
+each check/download/install attempt -- there's no longer a separate
+out-of-process script that could fail silently after this process exits, but
+keeping a log is still useful for diagnosing a failed automatic update after
+the fact (e.g. via the settings window's "Voir le journal" button).
 """
 
 from __future__ import annotations
@@ -68,81 +30,71 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import os
-import shutil
-import subprocess
 import sys
-import tempfile
 import threading
-import time
 from dataclasses import dataclass, replace
 from enum import Enum
 from pathlib import Path
 from typing import Callable
 
-import requests
+import velopack
 
 from .constants import APP_VERSION
 
 logger = logging.getLogger(__name__)
 
 _GITHUB_REPO = "aifedespaix/hots-stats"
-_LATEST_RELEASE_URL = f"https://api.github.com/repos/{_GITHUB_REPO}/releases/latest"
-# Human-facing counterpart of `_LATEST_RELEASE_URL` -- GitHub redirects this
-# to whatever tag is actually current, so it never goes stale the way
+# Human-facing counterpart of the update source below -- GitHub redirects
+# this to whatever tag is actually current, so it never goes stale the way
 # pinning a version number would. Opened in the player's browser by the
-# "Mise à jour manuelle" button (see gui.py) as a fallback with a completely
-# different failure surface than `apply_update_and_exit`'s PowerShell
-# handoff: it's just a normal browser download + double-click, the same
-# trusted everyday flow as any other .exe from the web, so it isn't subject
-# to the unsigned-script blocking (antivirus, Smart App Control, a locked-down
-# execution policy) that can silently kill the automatic swap.
+# "Mise à jour manuelle" button (see gui.py) and by `manual_fallback_message`
+# as a fallback with a completely different failure surface than the
+# automatic install: it's just a normal browser download + double-click, the
+# same trusted everyday flow as any other .exe from the web.
 _RELEASE_PAGE_URL = f"https://github.com/{_GITHUB_REPO}/releases/latest"
-# Deliberately not versioned -- see build-daemon.yml's ASSET_NAME comment.
-# The release's tag_name (below, via `find_update`) is the only source of
-# truth for the version; the asset itself is always this exact name, so
-# every download lands at the same path and this process never needs to
-# parse a version out of a filename.
-_ASSET_NAME = "hots-analytics-daemon.exe"
-_REQUEST_TIMEOUT_SECONDS = 15
-_DOWNLOAD_TIMEOUT_SECONDS = 60
-
-# Prefix used for the downloaded build left next to the installed .exe when
-# the automatic swap+relaunch could not be completed at all -- see
-# `manual_fallback_exe_path`, `stage_manual_fallback`, and
-# `_render_relaunch_script`'s copy-failure branch. Both sides of the handoff
-# (this process, and the relaunch script it hands off to) use the same
-# prefix so a player only ever has to recognize one file-naming pattern.
-_MANUAL_FALLBACK_PREFIX = "new-"
+_GITHUB_REPO_URL = f"https://github.com/{_GITHUB_REPO}"
 
 _STARTUP_DELAY_SECONDS = 30  # let the daemon finish its first sync pass before checking
 _CHECK_INTERVAL_SECONDS = 6 * 60 * 60  # 6h
 
-_DOWNLOADS_DIR_NAME = "hots-analytics-updates"
-
-# Only exist on Windows. `apply_update_and_exit` only does anything
-# meaningful against a real Windows-installed .exe, but resolving these
-# eagerly with `getattr` (instead of a bare `subprocess.DETACHED_PROCESS`
-# at the call site) keeps the module importable -- and the rest of that
-# function's logic unit-testable with `subprocess.Popen` itself mocked --
-# on the non-Windows platforms this test suite and `python -m src.main` in
-# dev actually run on.
-_DETACHED_PROCESS = getattr(subprocess, "DETACHED_PROCESS", 0)
-_CREATE_NEW_PROCESS_GROUP = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-
-# How long `apply_update_and_exit` waits, after handing off to the relaunch
-# script, to confirm that script is still alive before actually exiting --
-# see that function's docstring for why this matters (real-time antivirus /
-# SmartScreen killing an unsigned, freshly-spawned "copy an exe over another
-# exe and relaunch it" script is a real failure mode, not a hypothetical
-# one). Long enough to not false-positive on a merely slow process start,
-# short enough that a normal successful update barely notices the delay.
-_RELAUNCH_LIVENESS_CHECK_SECONDS = 1.5
-
 # Nuitka injects `__compiled__` into every compiled module's globals; unlike
 # PyInstaller, it does not set `sys.frozen`, so this is the reliable way to
 # tell "running as the built .exe" apart from "running from source". Only
-# the frozen build has a real .exe on disk worth replacing.
+# the frozen build has a real Velopack-managed installation worth checking.
 IS_FROZEN = "__compiled__" in globals()
+
+# Where updates come from -- constructing a `GithubSource` itself is cheap
+# and side-effect-free (no network call, no install-layout lookup), so it's
+# safe to do at module import time.
+_update_source = velopack.GithubSource(_GITHUB_REPO_URL, None, False)
+
+# The `UpdateManager` itself is deliberately *not* constructed eagerly here,
+# even though it's conceptually the same kind of shared, constructed-once
+# module state as `_update_source` above. `velopack.UpdateManager(...)`
+# raises immediately (`RuntimeError: ... Could not auto-locate app
+# manifest`) unless it's running from inside a real Velopack-managed install
+# directory -- confirmed empirically against the installed `velopack` 1.2.0
+# package in this repo's venv. That's true of every unfrozen run (`pytest`,
+# `python -m src.main` in dev) and would break *importing this module at
+# all* -- which every test, and `app.py`/`gui.py` at startup, does
+# unconditionally. See `_get_update_manager` for the lazy singleton that
+# avoids this while still sharing one instance across every real caller.
+_update_manager: velopack.UpdateManager | None = None
+
+
+def _get_update_manager() -> velopack.UpdateManager:
+    """Lazily constructs (once) and returns the module-shared
+    `UpdateManager`. Only ever actually called from code paths already
+    gated on `IS_FROZEN` -- `watch_for_updates` returns immediately if not
+    `IS_FROZEN`, and the Update tab that wires up `trigger_manual_update` is
+    only built by gui.py's `_build_ui` when `IS_FROZEN` -- so by the time
+    this runs, the process is expected to be a real Velopack-installed
+    build, where `UpdateManager`'s install-layout auto-detection succeeds.
+    """
+    global _update_manager
+    if _update_manager is None:
+        _update_manager = velopack.UpdateManager(_update_source)
+    return _update_manager
 
 
 def installed_exe_path() -> Path:
@@ -166,56 +118,16 @@ def installed_exe_path() -> Path:
     return Path(sys.executable).resolve()
 
 
-def manual_fallback_exe_path() -> Path:
-    """Where a downloaded update ends up if the automatic swap+relaunch
-    could never be completed -- right next to the installed .exe, prefixed
-    so it can never collide with it. Same naming scheme on both sides of the
-    handoff: this process uses it via `stage_manual_fallback` when
-    `apply_update_and_exit` couldn't even hand off to the relaunch script;
-    the script itself (see `_render_relaunch_script`) uses the equivalent
-    path when its own `Copy-Item` retries are exhausted."""
-    current = installed_exe_path()
-    return current.with_name(f"{_MANUAL_FALLBACK_PREFIX}{current.name}")
-
-
-def stage_manual_fallback(new_exe: Path) -> Path | None:
-    """Best-effort copy of the already-downloaded `new_exe` to
-    `manual_fallback_exe_path()`, for the case where `apply_update_and_exit`
-    returns False -- the handoff to the relaunch script couldn't even start
-    (see `perform_update`). Without this, a fully-downloaded, valid update
-    simply sat in `downloads_dir()`, a temp folder nobody has a reason to
-    look in, with nothing on screen pointing at it -- the only way forward
-    was silently waiting for the next 6-hour retry cycle to maybe succeed.
-
-    Returns the destination path on success, `None` if the copy itself
-    failed (disk full, permission denied, ...): this only ever runs as an
-    extra courtesy on top of an already-failed update, so a failure here
-    must never raise -- there's simply nothing extra to point the user at.
-    """
-    destination = manual_fallback_exe_path()
-    try:
-        shutil.copy2(new_exe, destination)
-    except OSError:
-        logger.warning(
-            "Could not stage the manual-fallback build at %s",
-            destination,
-            exc_info=True,
-        )
-        return None
-    return destination
-
-
-def manual_fallback_message(version: str, fallback_path: Path) -> str:
-    """The actionable instructions shown (see gui.py) next to the "Ouvrir le
-    dossier" button when `stage_manual_fallback` succeeds -- naming the
-    real files involved instead of a generic "update failed", so following
-    them is a matter of reading, not guessing."""
-    current_name = installed_exe_path().name
+def manual_fallback_message(version: str) -> str:
+    """Actionable instructions shown (see gui.py) when an update could not
+    be applied automatically. Points at the installer on the GitHub Release
+    page rather than a locally-staged file -- Velopack's UpdateManager owns
+    the download/apply staging directory, so unlike the old PowerShell-based
+    mechanism, there is no separate "already-downloaded build" this daemon
+    can point the user at directly."""
     return (
-        f"La mise à jour v{version} a été téléchargée mais le lancement automatique a échoué "
-        "(probablement bloqué par un antivirus). Pour l'installer à la main : fermez HotS "
-        f"Analytics, supprimez « {current_name} », puis relancez l'application en ouvrant "
-        f"« {fallback_path.name} » dans le même dossier."
+        f"La mise à jour vers la version {version} n'a pas pu être installée automatiquement. "
+        f"Téléchargez et lancez l'installeur depuis {release_page_url()} pour l'installer manuellement."
     )
 
 
@@ -224,22 +136,11 @@ def release_page_url() -> str:
     return _RELEASE_PAGE_URL
 
 
-def downloads_dir() -> Path:
-    """Where a downloaded update build is staged before being handed off to
-    the relaunch script -- `%TEMP%\\hots-analytics-updates\\`. Temp, not
-    appdata: this only ever holds a build that's either about to replace the
-    installed .exe (and gets deleted by the relaunch script once it does) or
-    was abandoned mid-download, neither of which is worth surviving a
-    reboot."""
-    return Path(tempfile.gettempdir()) / _DOWNLOADS_DIR_NAME
-
-
 def update_log_file_path() -> Path:
-    """`%APPDATA%\\hots-analytics\\update.log` -- next to `config.json`. The
-    relaunch script (see `_render_relaunch_script`) appends one line per step
-    to this file; since it runs after this process has already exited, it's
-    the only record of what happened if a copy/relaunch step fails silently
-    on the user's machine."""
+    """`%APPDATA%\\hots-analytics\\update.log` -- next to `config.json`.
+    `_append_update_log_line` appends one line per notable check/download/
+    install event to this file, so it's a record of what happened even if
+    the settings window wasn't open (or the app itself) to see it live."""
     from .config import config_file_path
 
     return config_file_path().parent / "update.log"
@@ -261,16 +162,11 @@ def read_last_update_log_lines(max_lines: int = 10) -> list[str]:
 
 
 def _append_update_log_line(version: str, message: str) -> None:
-    """Best-effort append to `update.log`, timestamped the same way the
-    relaunch PowerShell script's own `Log` function is (see
-    `_RELAUNCH_SCRIPT`), so lines written from Python and from the script
-    interleave into one coherent timeline regardless of which side wrote
-    which. Called from `apply_update_and_exit` itself -- on both the normal
-    handoff path and every abort path -- so an attempt that never gets as
-    far as the PowerShell script successfully logging anything (it failed to
-    launch at all, or was killed within its first moment of life) still
-    leaves a trace. Without this, that failure mode looked exactly like "the
-    app quietly vanished", with nothing on disk anywhere to explain why."""
+    """Best-effort, timestamped append to `update.log`. Called from the
+    check/download/install flow below on the events worth a permanent
+    record (an update found, a download failure, an install failure) --
+    never raises, since a locked/unwritable log must never interrupt an
+    actual update attempt."""
     try:
         log_path = update_log_file_path()
         log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -281,35 +177,15 @@ def _append_update_log_line(version: str, message: str) -> None:
         logger.debug("Could not write to the update log", exc_info=True)
 
 
-def cleanup_stale_downloads() -> None:
-    """Clears `downloads_dir()` of anything left over from a previous run --
-    an update build that failed to download completely, or one that was
-    superseded by a newer release before ever being applied. Nothing in
-    there is resumable or otherwise worth keeping across a restart; a normal
-    successful update already removes its own file (see
-    `_render_relaunch_script`), so this is just cleanup for the abnormal
-    cases. Best-effort and called once at startup, never on the hot path of
-    an actual download."""
-    directory = downloads_dir()
-    if not directory.is_dir():
-        return
-    for child in directory.iterdir():
-        try:
-            if child.is_dir():
-                shutil.rmtree(child)
-            else:
-                child.unlink()
-        except OSError:
-            logger.debug(
-                "Could not remove stale update download at %s", child, exc_info=True
-            )
-
-
 @dataclass(frozen=True)
 class AvailableUpdate:
     version: str
-    download_url: str
-    asset_name: str
+    # The Velopack `UpdateInfo` this was derived from -- passed straight
+    # back into `UpdateManager.download_updates`/`apply_updates_and_restart`
+    # by `perform_update`. Velopack owns everything about what to fetch and
+    # from where; this daemon only needs `version` for display and
+    # notify-once-per-version bookkeeping (see `watch_for_updates`).
+    velopack_info: velopack.UpdateInfo
 
 
 class UpdatePhase(str, Enum):
@@ -327,11 +203,14 @@ class UpdateStatus:
     version: str | None = None
     progress: float | None = None  # 0..1 while phase is DOWNLOADING
     message: str | None = None  # extra context: an error, or "up to date"
-    # Set alongside `message` only when `stage_manual_fallback` staged a
-    # downloaded-but-uninstallable build (see `perform_update`) -- lets the
-    # GUI show an "Ouvrir le dossier" button pointing straight at it instead
-    # of just the message text. See `UpdateStatusTracker.set` for why this
-    # is reset by default on every other status update.
+    # Historically set alongside `message` when a downloaded-but-
+    # uninstallable build had been staged next to the installed .exe for the
+    # player to finish by hand. Velopack now owns the download/apply staging
+    # directory itself, so there's no longer a separate locally-staged build
+    # this daemon could point at -- this field is always `None` today, but
+    # is kept (rather than removed) since gui.py (not modified by this
+    # change) still reads it defensively. See `UpdateStatusTracker.set` for
+    # why it's reset by default on every status update.
     manual_fallback_path: Path | None = None
 
 
@@ -352,13 +231,13 @@ class UpdateStatusTracker:
     def set(self, **kwargs: object) -> None:
         with self._lock:
             # `manual_fallback_path` only ever makes sense alongside the
-            # exact failure it was staged for (see `perform_update`) -- reset
-            # it here by default so it can't silently survive (via
-            # `replace`'s "keep whatever the field already was" behavior)
-            # into a later, unrelated status such as the next background
-            # check or download that never meant to carry it forward. The
-            # one caller that *does* want it set passes it explicitly as a
-            # kwarg, which overrides this default.
+            # exact failure it was staged for -- reset it here by default so
+            # it can't silently survive (via `replace`'s "keep whatever the
+            # field already was" behavior) into a later, unrelated status
+            # such as the next background check or download that never
+            # meant to carry it forward. No current caller ever passes it
+            # explicitly (see `UpdateStatus.manual_fallback_path`'s
+            # docstring), so in practice this always resets it to `None`.
             kwargs.setdefault("manual_fallback_path", None)
             self._status = replace(self._status, **kwargs)
 
@@ -376,489 +255,72 @@ class UpdateStatusTracker:
             return True
 
 
-def parse_version(version: str) -> tuple[int, ...] | None:
-    """ "v1.2.3" / "1.2.3" -> (1, 2, 3). None for anything that isn't a plain
-    dotted-numeric version, e.g. the "0.0.0-dev.<sha>" builds produced by
-    manual/non-tag runs -- those are never treated as an update candidate,
-    in either direction."""
-    parts = version.strip().lstrip("v").split(".")
-    if not parts:
-        return None
+def _check_for_update() -> AvailableUpdate | None:
+    """Best-effort check via Velopack's `UpdateManager` (backed by
+    `_update_source`, a `GithubSource` pointed at this repo's releases).
+    Returns `None` on any failure (offline, rate-limited, no release
+    published yet) or when already on the latest version -- an update check
+    must never interrupt the daemon's actual job of syncing replays.
+    Velopack's own manifest-based comparison replaces the old hand-rolled
+    `parse_version`/`find_update` version-comparison logic."""
     try:
-        return tuple(int(part) for part in parts)
-    except ValueError:
-        return None
-
-
-def find_update(release: dict, current_version: str) -> AvailableUpdate | None:
-    """Pure decision logic, split out from `check_for_update` for testing:
-    given a GitHub "latest release" API response and the running version,
-    is there a newer daemon build to install?"""
-    latest = parse_version(release.get("tag_name", ""))
-    current = parse_version(current_version)
-    if latest is None or current is None or latest <= current:
-        return None
-
-    for asset in release.get("assets", []):
-        if asset.get("name") == _ASSET_NAME:
-            return AvailableUpdate(
-                version=release["tag_name"].lstrip("v"),
-                download_url=asset["browser_download_url"],
-                asset_name=asset["name"],
-            )
-
-    logger.warning(
-        "Release %s has no '%s' asset, skipping.", release.get("tag_name"), _ASSET_NAME
-    )
-    return None
-
-
-def check_for_update(current_version: str = APP_VERSION) -> AvailableUpdate | None:
-    """Best-effort check against GitHub's "latest release" API. Returns None
-    on any failure (offline, rate-limited, no release published yet, no
-    matching asset) -- an update check must never interrupt the daemon's
-    actual job of syncing replays."""
-    try:
-        response = requests.get(_LATEST_RELEASE_URL, timeout=_REQUEST_TIMEOUT_SECONDS)
-        response.raise_for_status()
-        return find_update(response.json(), current_version)
-    except (requests.RequestException, ValueError, KeyError) as err:
+        update_info = _get_update_manager().check_for_updates()
+    except Exception as err:
         logger.info("Update check failed (non-fatal): %s", err)
         return None
-
-
-def download_update(
-    update: AvailableUpdate,
-    dest_dir: Path,
-    on_progress: Callable[[float | None], None] | None = None,
-) -> Path:
-    """Streams the release asset to `dest_dir / update.asset_name`, calling
-    `on_progress` with a 0..1 fraction after each chunk (or `None` if the
-    server didn't report a Content-Length to compute one against)."""
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    dest = dest_dir / update.asset_name
-    with requests.get(
-        update.download_url, stream=True, timeout=_DOWNLOAD_TIMEOUT_SECONDS
-    ) as response:
-        response.raise_for_status()
-        total = response.headers.get("Content-Length")
-        total_bytes = int(total) if total is not None and total.isdigit() else None
-        written = 0
-        with open(dest, "wb") as f:
-            for chunk in response.iter_content(chunk_size=1024 * 1024):
-                f.write(chunk)
-                written += len(chunk)
-                if on_progress is not None:
-                    on_progress((written / total_bytes) if total_bytes else None)
-    return dest
-
-
-# Every step logs a timestamped line to `{log_path}` (best-effort: wrapped in
-# try/catch so a locked/unwritable log never stops the actual update) since
-# this script is the *only* thing running once this process has exited --
-# without it, a failure here (a locked file, a blocked relaunch) previously
-# looked to the user like "the app closed and never came back", with nothing
-# on disk to explain why. Copy-Item and Start-Process are each retried a few
-# times because the just-exited process (or real-time antivirus scanning an
-# unfamiliar unsigned .exe) can hold a brief file lock or block execution
-# right after `Wait-Process` returns or the copy completes. Path arguments
-# are single-quoted (not double-quoted) so a `$` in a username or folder
-# name -- valid in a Windows path, but PowerShell variable-expansion syntax
-# inside a double-quoted string -- can't silently corrupt them.
-#
-# Critically, if replacing the installed .exe fails even after every retry,
-# this still relaunches the *previous* version (untouched on disk) rather
-# than leaving the app closed: a failed update should degrade back to "still
-# running the old version", never to "gone until a human notices and
-# manually reruns an old installer". Without this fallback, a persistent
-# failure (e.g. antivirus holding a lock past the retry window) looked
-# exactly like the app permanently forgetting how to start -- and since the
-# installed .exe was never actually replaced, every future launch would
-# redetect the same "new" release and repeat the identical failure.
-#
-# On top of that fallback, the copy-failure branch also stages the build
-# that couldn't be installed next to the one that's still running (see
-# `manual_fallback_exe_path`) and offers a one-click way to go find it, so a
-# persistent failure leaves the player an actual manual escape hatch instead
-# of just "wait for the next retry and hope" -- a `Test-Path` before staging
-# keeps that dialog from reappearing on every single 6-hour retry.
-_RELAUNCH_SCRIPT = """\
-$ErrorActionPreference = 'Continue'
-function Log($msg) {{
-    try {{ Add-Content -LiteralPath '{log_path}' -Value "$(Get-Date -Format o) [v{version}] $msg" -Encoding utf8 }} catch {{}}
-}}
-
-function Relaunch($exePath, $why) {{
-    for ($attempt = 1; $attempt -le 5; $attempt++) {{
-        try {{
-            Unblock-File -LiteralPath $exePath -ErrorAction SilentlyContinue
-            $proc = Start-Process -FilePath $exePath -PassThru
-            # Diagnostic only -- doesn't change the retry/fallback decision
-            # below, which already treats a non-throwing Start-Process call
-            # as success. This just tells the difference, in the log, between
-            # "relaunched and still running" and "relaunched but something
-            # (antivirus, SmartScreen) killed it a moment later" -- both look
-            # identical to Start-Process itself, since it doesn't wait.
-            Start-Sleep -Milliseconds 1500
-            if ($proc -and $proc.HasExited) {{
-                Log "$why -- relaunched (attempt $attempt) but the process exited almost immediately (code $($proc.ExitCode)); it may have been blocked by antivirus or SmartScreen."
-            }} else {{
-                Log "$why -- relaunched successfully (attempt $attempt) and is still running."
-            }}
-            return $true
-        }} catch {{
-            Log "$why -- relaunch attempt $attempt failed: $($_.Exception.Message)"
-            Start-Sleep -Milliseconds 1000
-        }}
-    }}
-    return $false
-}}
-
-Log "Waiting for process {pid} to exit..."
-Wait-Process -Id {pid} -ErrorAction SilentlyContinue
-Start-Sleep -Milliseconds 500
-
-$copied = $false
-for ($attempt = 1; $attempt -le 10; $attempt++) {{
-    try {{
-        Copy-Item -LiteralPath '{new_exe}' -Destination '{current_exe}' -Force
-        $copied = $true
-        Log "Copied new build into place (attempt $attempt)."
-        break
-    }} catch {{
-        Log "Copy attempt $attempt failed: $($_.Exception.Message)"
-        Start-Sleep -Milliseconds 1000
-    }}
-}}
-
-if ($copied) {{
-    Remove-Item -LiteralPath '{new_exe}' -Force -ErrorAction SilentlyContinue
-    if (-not (Relaunch '{current_exe}' "Update installed")) {{
-        Log "Update installed but every relaunch attempt failed -- the app will not restart on its own."
-    }}
-}} else {{
-    Log "Update failed: could not replace the running executable after 10 attempts. Previous version left in place."
-    if (-not (Relaunch '{current_exe}' "Copy failed, falling back to the previous version")) {{
-        Log "Fallback relaunch of the previous version also failed -- the app will not restart on its own."
-    }}
-
-    # Best-effort courtesy on top of the fallback above: leave the build
-    # that couldn't be installed right next to the one that's still
-    # running, under a "new-" prefixed name, and offer to open that folder.
-    # `Test-Path` before staging is a cheap, stateless "already told them"
-    # guard -- without it, a machine with a persistent block (antivirus,
-    # Smart App Control) would re-pop this dialog every single retry cycle
-    # (every 6h), forever. It under-notifies in one narrow case (a
-    # *different*, later version failing the same way after the player
-    # never acted on an earlier prompt just silently refreshes the staged
-    # file instead of prompting again) -- an accepted tradeoff for staying
-    # a plain file check instead of tracking state across runs.
-    $fallbackAlreadyStaged = Test-Path -LiteralPath '{fallback_exe}'
-    try {{
-        Copy-Item -LiteralPath '{new_exe}' -Destination '{fallback_exe}' -Force
-        Log "Staged the downloaded build at '{fallback_exe}' for manual install."
-        if (-not $fallbackAlreadyStaged) {{
-            try {{
-                Add-Type -AssemblyName System.Windows.Forms
-                $choice = [System.Windows.Forms.MessageBox]::Show(
-                    '{fallback_message}',
-                    'HotS Analytics - Mise à jour',
-                    [System.Windows.Forms.MessageBoxButtons]::YesNo,
-                    [System.Windows.Forms.MessageBoxIcon]::Warning
-                )
-                if ($choice -eq [System.Windows.Forms.DialogResult]::Yes) {{
-                    Start-Process -FilePath 'explorer.exe' -ArgumentList '{current_exe.parent}'
-                }}
-            }} catch {{
-                Log "Could not show the manual-install dialog: $($_.Exception.Message)"
-            }}
-        }}
-    }} catch {{
-        Log "Could not stage the downloaded build for manual install: $($_.Exception.Message)"
-    }}
-}}
-
-Remove-Item -LiteralPath '{script_path}' -Force -ErrorAction SilentlyContinue
-"""
-
-
-def _render_relaunch_script(
-    *,
-    pid: int,
-    new_exe: Path,
-    current_exe: Path,
-    script_path: Path,
-    log_path: Path,
-    version: str,
-) -> str:
-    """Pure string-formatting split out from `apply_update_and_exit` so the
-    script's content is unit-testable without actually spawning PowerShell
-    or exiting the process."""
-    fallback_exe = current_exe.with_name(f"{_MANUAL_FALLBACK_PREFIX}{current_exe.name}")
-    # Escaped for interpolation into a single-quoted PowerShell string
-    # literal, where a literal `'` must be doubled -- the message is built
-    # from natural French (lots of apostrophes: "n'a pas pu", "l'ancienne"),
-    # so this isn't optional the way it might be for an all-ASCII string.
-    fallback_message = (
-        f"La mise à jour v{version} n'a pas pu s'installer automatiquement "
-        "(probablement bloquée par un antivirus) -- l'application précédente a été relancée. "
-        f"Pour terminer à la main : fermez HotS Analytics, supprimez « {current_exe.name} », "
-        f"puis relancez-la en ouvrant « {fallback_exe.name} » dans le même dossier."
-    ).replace("'", "''")
-    return _RELAUNCH_SCRIPT.format(
-        pid=pid,
-        new_exe=new_exe,
-        current_exe=current_exe,
-        script_path=script_path,
-        log_path=log_path,
-        version=version,
-        fallback_exe=fallback_exe,
-        fallback_message=fallback_message,
+    if update_info is None:
+        return None
+    return AvailableUpdate(
+        version=update_info.TargetFullRelease.Version.lstrip("v"),
+        velopack_info=update_info,
     )
-
-
-def _powershell_diagnostics() -> str:
-    """A best-effort environment fingerprint, logged right before every
-    relaunch attempt so a failure has real evidence behind it instead of the
-    generic "likely blocked by antivirus or a security policy" guess in
-    `apply_update_and_exit`. Deliberately a synchronous `-Command` probe
-    rather than piggy-backing on the relaunch script itself: a policy that
-    blocks loading a *script file* (`-File`, exactly the failure this module
-    exists to guard against) commonly still allows inline cmdlets via
-    `-Command`, so this can report useful state even in exactly the scenario
-    it's meant to help diagnose.
-
-    Reports the resolved `powershell.exe` path, its version/edition, the
-    effective `Get-ExecutionPolicy` at every scope (a Group Policy/MDM-pushed
-    `AllSigned`/`Restricted` at the Machine or User scope silently overrides
-    our own `-ExecutionPolicy Bypass` flag -- that's by design, not a bug,
-    and would explain a clean, instant, code-0 exit that never reaches a
-    single line of our script), and the Smart App Control policy state
-    (Windows 11's unsigned-code blocker -- a separate subsystem from Windows
-    Defender antivirus, not affected by toggling real-time protection, and a
-    very plausible culprit for a machine with no third-party AV).
-
-    Never raises: any failure here must not stop the update attempt that
-    follows it. On non-Windows machines (dev, CI) `powershell.exe` isn't on
-    PATH at all, so this is a cheap no-op short-circuit there.
-    """
-    ps_path = shutil.which("powershell.exe")
-    if ps_path is None:
-        return "powershell.exe not found on PATH"
-
-    probe = (
-        "$ep = (Get-ExecutionPolicy -List | ForEach-Object { $_.Scope.ToString() + '=' + $_.ExecutionPolicy.ToString() }) -join ', '; "
-        "$sac = try { Get-ItemPropertyValue -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\CI\\Policy' -Name VerifiedAndReputablePolicyState -ErrorAction Stop } catch { 'n/a' }; "
-        "Write-Output ('PSVersion=' + $PSVersionTable.PSVersion.ToString() + ' PSEdition=' + $PSVersionTable.PSEdition + ' ExecutionPolicy=[' + $ep + '] SmartAppControl(0=off,1=on,2=audit,n/a=no-such-key)=' + $sac)"
-    )
-    try:
-        result = subprocess.run(
-            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", probe],
-            capture_output=True,
-            # This process has no console (frozen, windowed build), so its
-            # own stdin is not a valid inheritable handle. `capture_output`
-            # covers stdout/stderr but leaves stdin on the default "inherit
-            # from parent" -- which is exactly what made this same probe
-            # fail with `OSError: [WinError 6] The handle is invalid` before
-            # this line existed (see `apply_update_and_exit`'s Popen call,
-            # which already redirects all three for the same reason).
-            stdin=subprocess.DEVNULL,
-            encoding="utf-8",
-            errors="replace",
-            timeout=10,
-            creationflags=_DETACHED_PROCESS | _CREATE_NEW_PROCESS_GROUP,
-        )
-        output = (result.stdout or "").strip() or (result.stderr or "").strip()
-        return f"powershell={ps_path} (exit {result.returncode}) {output}"[:1000]
-    except (OSError, subprocess.TimeoutExpired, subprocess.SubprocessError) as err:
-        return f"powershell={ps_path} probe failed: {err}"
-
-
-def apply_update_and_exit(new_exe: Path, version: str = "?") -> bool:
-    """Hands off to a detached PowerShell script that waits for this process
-    (by pid) to exit, replaces the *actually installed* .exe (see
-    `installed_exe_path`) with `new_exe`, relaunches it, and cleans up after
-    itself -- then exits this process immediately (`os._exit`) so the
-    script's wait resolves. Does not return in that case.
-
-    Returns `False` instead of exiting if the handoff can't even get that
-    far: `powershell.exe` fails to launch at all (missing/blocked
-    interpreter), or -- the case this exists to guard against -- the script
-    process dies within its first moment of life, before it could possibly
-    have finished `Copy-Item` and relaunched anything. That second case is
-    not hypothetical: this script is, by construction, an unsigned,
-    freshly-spawned, hidden, execution-policy-bypassing process that copies
-    one unsigned .exe over another and relaunches it -- exactly the shape of
-    thing real-time antivirus and other endpoint protection is built to kill
-    on sight, regardless of how legitimate the app actually is (see the
-    module docstring's note on why this build isn't code-signed).
-
-    Without this check, that failure mode was indistinguishable from success
-    from this process's point of view: `Popen` returning just means Windows
-    *accepted* the request to start a process, not that it kept running, and
-    the very next line unconditionally exited -- so the app would vanish and
-    never come back, with nothing on disk to explain why (the killed script
-    likely never got to execute its own first `Log` call either). Aborting
-    here instead means a self-update that can't complete degrades to "still
-    running the current version, will retry next cycle", the same fallback
-    principle `_RELAUNCH_SCRIPT` already applies on the *other* side of this
-    handoff (see `_render_relaunch_script`'s callers/tests) if `Copy-Item`
-    itself fails there.
-    """
-    current_exe = installed_exe_path()
-    log_path = update_log_file_path()
-    try:
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-    except OSError:
-        pass
-
-    _append_update_log_line(version, f"Diagnostics: {_powershell_diagnostics()}")
-
-    fd, script_path_str = tempfile.mkstemp(
-        suffix=".ps1", prefix="hots-analytics-update-"
-    )
-    script_path = Path(script_path_str)
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        f.write(
-            _render_relaunch_script(
-                pid=os.getpid(),
-                new_exe=new_exe,
-                current_exe=current_exe,
-                script_path=script_path,
-                log_path=log_path,
-                version=version,
-            )
-        )
-
-    try:
-        process = subprocess.Popen(
-            [
-                "powershell.exe",
-                "-NoProfile",
-                "-NonInteractive",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-WindowStyle",
-                "Hidden",
-                "-File",
-                str(script_path),
-            ],
-            creationflags=_DETACHED_PROCESS | _CREATE_NEW_PROCESS_GROUP,
-            close_fds=True,
-            stdin=subprocess.DEVNULL,
-            # Captured (rather than left to the default inherited/hidden-console
-            # handles) so that if the process dies within the liveness check
-            # below, whatever PowerShell itself printed -- an execution-policy
-            # or "not digitally signed" error, for instance -- ends up in
-            # update.log instead of silently vanishing into a console that
-            # `-WindowStyle Hidden`/`DETACHED_PROCESS` never created. Unread in
-            # the success path (script outlives the check, we exit right
-            # after), which is safe here only because `_RELAUNCH_SCRIPT` never
-            # itself writes to stdout/stderr (see its own comments) -- so
-            # there's nothing that could ever fill the pipe buffer.
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            encoding="utf-8",
-            errors="replace",
-        )
-    except OSError as err:
-        logger.error("Could not launch the relaunch script: %s", err)
-        _append_update_log_line(
-            version, f"Could not launch powershell.exe for the relaunch script: {err}."
-        )
-        return False
-
-    deadline = time.monotonic() + _RELAUNCH_LIVENESS_CHECK_SECONDS
-    while time.monotonic() < deadline:
-        if process.poll() is not None:
-            logger.error(
-                "Relaunch script (pid %d) exited almost immediately (code %s); aborting the update.",
-                process.pid,
-                process.returncode,
-            )
-            output = ""
-            try:
-                stdout_text, stderr_text = process.communicate(timeout=2)
-                output = (stderr_text or stdout_text or "").strip()
-            except Exception:
-                logger.debug(
-                    "Could not read the relaunch script's output", exc_info=True
-                )
-            detail = (
-                f" PowerShell said: {output[:500]!r}."
-                if output
-                else " (PowerShell produced no output.)"
-            )
-            _append_update_log_line(
-                version,
-                f"Relaunch script exited immediately (code {process.returncode}) -- likely blocked by "
-                f"antivirus or a security policy.{detail} Update aborted, staying on the current version.",
-            )
-            return False
-        time.sleep(0.1)
-
-    logger.info("Handed off to the relaunch script, exiting to update to v%s.", version)
-    _append_update_log_line(
-        version, f"Handed off to relaunch script (pid {process.pid}), exiting now."
-    )
-    os._exit(0)
 
 
 def perform_update(update: AvailableUpdate, status: UpdateStatusTracker) -> bool:
-    """Downloads and applies `update`, reporting progress on `status`
-    throughout. Returns False without doing anything if another update is
-    already in flight (see `UpdateStatusTracker.try_begin`); returns True
-    once an attempt has been made (which, on success, is essentially never
-    observed -- the process replaces itself via `apply_update_and_exit`).
+    """Downloads and applies `update` via Velopack's `UpdateManager`,
+    reporting progress on `status` throughout. Returns False without doing
+    anything if another update is already in flight (see
+    `UpdateStatusTracker.try_begin`); returns True once an attempt has been
+    made (which, on success, is essentially never observed --
+    `apply_updates_and_restart` replaces the running process instead of
+    returning).
     """
     if not status.try_begin(update.version):
         logger.info("Update already in progress, ignoring redundant trigger.")
         return False
 
+    manager = _get_update_manager()
+
+    def _on_download_progress(percent: int) -> None:
+        # Velopack reports 0..100 (an int); `UpdateStatus.progress` is
+        # documented (and relied on by gui.py's progress bar) as 0..1.
+        status.set(progress=percent / 100)
+
     try:
-        new_exe = download_update(
-            update,
-            downloads_dir(),
-            on_progress=lambda frac: status.set(progress=frac),
-        )
-    except (requests.RequestException, OSError) as err:
-        # OSError alongside the obvious network errors: `download_update`
-        # also touches disk (`dest_dir.mkdir`, writing the file), and a
-        # disk-full/permission/AV-lock failure there must degrade the same
-        # way a network failure does -- logged and retried next cycle --
-        # rather than propagate out of this function uncaught, which would
-        # silently kill whichever thread called it (the persistent
-        # "hots-update-checker" loop in `watch_for_updates`, or a one-shot
-        # "Vérifier les mises à jour" click) and stop it from ever checking
-        # again for the rest of this run.
+        manager.download_updates(update.velopack_info, progress_callback=_on_download_progress)
+    except Exception as err:
+        # An update check/download must never interrupt the daemon's actual
+        # job of syncing replays -- log and degrade to "retry next cycle"
+        # rather than let this propagate out of the calling thread
+        # (`watch_for_updates`'s loop, or a one-shot manual check) and stop
+        # it from ever checking again for the rest of this run.
         logger.warning("Update download failed, will retry next cycle: %s", err)
-        status.set(phase=UpdatePhase.ERROR, message=str(err))
+        _append_update_log_line(update.version, f"Download failed: {err}")
+        status.set(
+            phase=UpdatePhase.ERROR,
+            message=f"Le téléchargement de la mise à jour a échoué : {err}",
+        )
         return True
 
     status.set(phase=UpdatePhase.INSTALLING, progress=None)
-    # Only returns (always `False`) if the handoff to the relaunch script
-    # couldn't be confirmed -- see `apply_update_and_exit`'s docstring. On
-    # success it exits the process instead, so this line is never reached.
-    if not apply_update_and_exit(new_exe, version=update.version):
-        # The handoff never got far enough to touch the installed .exe (see
-        # `apply_update_and_exit`), so this process is still the one
-        # running -- the last chance to hand the player something more
-        # actionable than "retry next cycle" before the fully-downloaded
-        # build goes back to sitting unnoticed in a temp folder.
-        fallback_path = stage_manual_fallback(new_exe)
-        status.set(
-            phase=UpdatePhase.ERROR,
-            message=(
-                manual_fallback_message(update.version, fallback_path)
-                if fallback_path is not None
-                else (
-                    "Le redémarrage automatique a échoué (probablement bloqué par un antivirus) -- "
-                    "l'application précédente continue de fonctionner ; nouvel essai au prochain cycle."
-                )
-            ),
-            manual_fallback_path=fallback_path,
-        )
-    return True
+    try:
+        manager.apply_updates_and_restart(update.velopack_info)
+        return True  # unreachable in practice -- the process restarts itself on success
+    except Exception as err:
+        logger.warning("Update install failed: %s", err)
+        _append_update_log_line(update.version, f"Install failed: {err}")
+        status.set(phase=UpdatePhase.ERROR, message=manual_fallback_message(update.version))
+        return True
 
 
 def trigger_manual_update(status: UpdateStatusTracker) -> None:
@@ -866,25 +328,11 @@ def trigger_manual_update(status: UpdateStatusTracker) -> None:
     what the settings window's "Mettre à jour maintenant" button calls.
     Safe to call even while the background `watch_for_updates` loop is
     mid-cycle: `perform_update`'s `try_begin` guard means only one of them
-    actually downloads.
-
-    Always logs `_powershell_diagnostics()` up front, even when no update
-    turns out to be available: `apply_update_and_exit` (and the diagnostics
-    line it writes) only ever runs during an actual pending-update attempt,
-    which requires a newer release to exist -- so once a user is already on
-    the latest version, there'd otherwise be no way to produce a fresh
-    diagnostic short of waiting for the next release. Logging it here too
-    means the existing "Vérifier les mises à jour" button doubles as an
-    on-demand self-test the user can run (and then read back via "Voir le
-    journal") whenever asked to help debug a relaunch failure."""
+    actually downloads."""
 
     def _run() -> None:
         status.set(phase=UpdatePhase.CHECKING, message=None)
-        _append_update_log_line(
-            APP_VERSION,
-            f"Manual update check triggered. Diagnostics: {_powershell_diagnostics()}",
-        )
-        update = check_for_update()
+        update = _check_for_update()
         if update is None:
             status.set(
                 phase=UpdatePhase.IDLE,
@@ -908,9 +356,9 @@ def watch_for_updates(
     """Runs for the app's lifetime on a background thread: checks for a
     newer release shortly after startup, then every few hours, and --
     unless `auto_update_enabled()` says otherwise -- applies it (see
-    `apply_update_and_exit`) as soon as one is found. No-ops when not
-    running as the compiled .exe (e.g. `python -m src.main` in dev), since
-    there's no installed binary to replace.
+    `perform_update`) as soon as one is found. No-ops when not running as
+    the compiled .exe (e.g. `python -m src.main` in dev), since there's no
+    installed binary to replace.
 
     `auto_update_enabled` is re-checked on every cycle (not read once at
     startup) so toggling the settings-window checkbox takes effect on the
@@ -926,14 +374,13 @@ def watch_for_updates(
     """
     if not IS_FROZEN:
         return
-    cleanup_stale_downloads()
     if stop_event.wait(_STARTUP_DELAY_SECONDS):
         return
 
     notified_version: str | None = None
     while not stop_event.is_set():
         status.set(phase=UpdatePhase.CHECKING, message=None)
-        update = check_for_update()
+        update = _check_for_update()
         if update is None:
             status.set(
                 phase=UpdatePhase.IDLE, version=None, progress=None, message=None
@@ -947,6 +394,7 @@ def watch_for_updates(
             )
             if update.version != notified_version:
                 notified_version = update.version
+                _append_update_log_line(update.version, "Update found.")
                 if on_update_found is not None:
                     try:
                         on_update_found(update)
