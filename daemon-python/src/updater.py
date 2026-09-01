@@ -28,10 +28,10 @@ the fact (e.g. via the settings window's "Voir le journal" button).
 from __future__ import annotations
 
 import datetime as dt
-import json
 import logging
 import os
 import subprocess
+import sys
 import tempfile
 import threading
 from dataclasses import dataclass, replace
@@ -41,8 +41,6 @@ from typing import Callable
 
 import requests
 import velopack
-
-from .constants import APP_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -137,11 +135,20 @@ _SETUP_ASSET_NAME = f"{_PACK_ID}-Setup.exe"
 _MIGRATION_REQUEST_TIMEOUT_SECONDS = 15
 _MIGRATION_DOWNLOAD_TIMEOUT_SECONDS = 60
 
-# Local-config flag name (see config.py's `read_config_file`/`save_config`
-# JSON-file mechanism, the same one `autoUpdateEnabled` uses) marking that
-# this one-time migration has already run, so it's never repeated even if a
-# legacy install somehow gets launched again after migrating.
-_MIGRATION_DONE_CONFIG_KEY = "velopack_migration_complete"
+# Name of the sentinel file (in the same folder as config.json -- see
+# config.py's `config_file_path`) marking that this one-time migration has
+# already run, so it's never repeated even if a legacy install somehow gets
+# launched again after migrating.
+#
+# Deliberately a standalone file rather than a key inside config.json:
+# `config.py`'s `save_config` writes a *fixed literal payload* (it doesn't
+# merge unknown keys back in), so any flag stored in config.json would be
+# silently erased the first time the user hits Save in the settings window --
+# which, post-migration, is a completely normal thing to do. That would make
+# the migration re-trigger on every subsequent legacy-exe launch. A separate
+# file has no other writer, and deleting it is all that's needed when this
+# whole shim is removed.
+_MIGRATION_DONE_SENTINEL_NAME = ".velopack-migrated"
 
 
 def installed_exe_path() -> Path:
@@ -166,46 +173,70 @@ def installed_exe_path() -> Path:
     return base / _PACK_ID / _EXE_NAME
 
 
+def _running_exe_path() -> Path:
+    """Where THIS process's executable actually lives right now -- as opposed
+    to `installed_exe_path()`, which returns the stable stub path the app
+    *should* be installed at, whether or not it's there yet.
+
+    Under Nuitka's --onefile packaging `sys.executable` points at the
+    ephemeral per-run extraction folder, so `NUITKA_ONEFILE_BINARY` (which
+    Nuitka sets to the real launched .exe) takes priority when present."""
+    onefile_binary = os.environ.get("NUITKA_ONEFILE_BINARY")
+    return Path(onefile_binary or sys.executable).resolve()
+
+
 def is_running_from_legacy_install() -> bool:
     """True only for the one-time migration case: a frozen build running
     from somewhere other than the Velopack-managed install directory (i.e.
     the old raw-exe install model, from before this migration). Never true
-    for a fresh Velopack install, and never true for local dev."""
+    for a fresh Velopack install, and never true for local dev.
+
+    Compares the *actually running* exe (`_running_exe_path`) against the
+    Velopack install directory -- not `installed_exe_path()` against a
+    recomputation of its own definition, which would be tautologically
+    equal and so could never detect anything."""
     if not IS_FROZEN:
         return False
-    return installed_exe_path().parent != Path(os.environ.get("LOCALAPPDATA", "")) / _PACK_ID
+    try:
+        velopack_dir = installed_exe_path().parent.resolve()
+    except OSError:
+        # Can't tell where the Velopack install would be -> don't claim this
+        # is a legacy install; the migration retries on the next launch.
+        return False
+    # `parents` (not a `==` on the immediate parent) because a Velopack
+    # install runs the app from `<dir>\current\`, not from `<dir>` itself --
+    # only the stub sits at the root.
+    return velopack_dir not in _running_exe_path().parents
+
+
+def _migration_done_sentinel_path() -> Path:
+    """`%APPDATA%\\hots-analytics\\.velopack-migrated` -- next to config.json.
+    See `_MIGRATION_DONE_SENTINEL_NAME` for why this isn't a config key."""
+    from .config import config_file_path
+
+    return config_file_path().parent / _MIGRATION_DONE_SENTINEL_NAME
 
 
 def _is_migration_marked_done() -> bool:
-    """Reads `_MIGRATION_DONE_CONFIG_KEY` from the local JSON config file,
-    mirroring config.py's own `is_auto_update_enabled()`: defensive (defaults
-    to "not done yet" on any read failure) since this must never itself be
-    the reason the migration doesn't retry on the next launch."""
-    from .config import ConfigError, read_config_file
-
+    """Whether the sentinel file exists. Defensive (defaults to "not done
+    yet" on any failure) since this must never itself be the reason the
+    migration doesn't retry on the next launch."""
     try:
-        return bool(read_config_file().get(_MIGRATION_DONE_CONFIG_KEY, False))
-    except ConfigError:
+        return _migration_done_sentinel_path().is_file()
+    except OSError:
         return False
 
 
 def _mark_migration_done() -> None:
-    """Persists `_MIGRATION_DONE_CONFIG_KEY = True` into the JSON config
-    file, preserving whatever other fields (apiBaseUrl, accessToken, ...)
-    are already there -- unlike `config.py`'s `save_config`, which only ever
-    writes its own fixed set of known fields, this merges into the raw dict
-    (same file, same `read_config_file`/`json.dumps` mechanism) since this
-    flag isn't part of the `Config` dataclass."""
-    from .config import ConfigError, config_file_path, read_config_file
-
-    try:
-        values = read_config_file()
-    except ConfigError:
-        values = {}
-    values[_MIGRATION_DONE_CONFIG_KEY] = True
-    path = config_file_path()
+    """Creates the sentinel file (see `_MIGRATION_DONE_SENTINEL_NAME`),
+    creating `%APPDATA%\\hots-analytics\\` if it doesn't exist yet. Its
+    contents are purely informational -- only its existence is read."""
+    path = _migration_done_sentinel_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(values, indent=2), encoding="utf-8")
+    timestamp = dt.datetime.now().astimezone().isoformat(timespec="seconds")
+    path.write_text(
+        f"Migrated to the Velopack-managed install at {timestamp}.\n", encoding="utf-8"
+    )
 
 
 def migrate_to_velopack_install() -> None:
@@ -277,6 +308,29 @@ def migrate_to_velopack_install() -> None:
         logger.warning("Migration: failed to launch %s, will retry next launch: %s", _SETUP_ASSET_NAME, err)
         _append_update_log_line(version, f"Migration: launch failed: {err}")
         return
+
+    # Hand the Windows autostart registration over to the new install before
+    # marking the migration done. The `HKCU\...\Run` value still points at
+    # *this* (legacy, arbitrarily-located) .exe, which Setup.exe does not
+    # touch and does not delete -- so without this, the next boot launches
+    # the old exe, which sees the migration already marked done and exits
+    # without starting anything: autostart silently stops working for every
+    # migrated user who had it enabled. `set_enabled(True)` rewrites the
+    # value to `installed_exe_path()`, i.e. the Velopack stub. Setup.exe runs
+    # asynchronously so that stub may not exist on disk yet at this instant;
+    # that's fine, the Run value is only ever read at the next boot.
+    try:
+        from .autostart import is_enabled, set_enabled
+
+        if is_enabled():
+            set_enabled(True)
+            logger.info("Migration: Windows autostart re-pointed at %s.", installed_exe_path())
+            _append_update_log_line(version, "Migration: autostart re-pointed at the Velopack stub.")
+    except OSError as err:
+        # Best-effort, exactly like every other step here: a failed registry
+        # write must not abort a migration whose install is already underway.
+        logger.warning("Migration: could not hand over the autostart registration: %s", err)
+        _append_update_log_line(version, f"Migration: autostart hand-over failed: {err}")
 
     try:
         _mark_migration_done()

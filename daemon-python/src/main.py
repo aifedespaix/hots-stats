@@ -23,19 +23,6 @@ logger = logging.getLogger(__name__)
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
-    # One-time pre-Velopack -> Velopack migration shim (TEMPORARY -- see
-    # updater.py's `migrate_to_velopack_install` docstring and
-    # docs/superpowers/plans/2026-08-31-daemon-velopack-auto-update.md, Task
-    # 6, for why this exists and when to delete it). Checked before anything
-    # else `main()` does, same "handle exceptional startup cases first"
-    # reasoning as `run.py`'s `velopack.App().run()` hook -- it's a no-op
-    # (returns False immediately) for every normal Velopack install and every
-    # local dev run, so this costs nothing outside the one legacy-install
-    # case it exists for.
-    if updater.is_running_from_legacy_install():
-        updater.migrate_to_velopack_install()
-        return 0  # this run's only job was migrating; don't also start the tray/sync
-
     arg_parser = argparse.ArgumentParser(description="HotS Analytics replay daemon")
     arg_parser.add_argument(
         "--resync",
@@ -64,6 +51,24 @@ def main(argv: list[str] | None = None) -> int:
         calibrations = sync_spatial_calibrations(config, sync_state)
         resync(client, target_dir, sync_state, calibrations=calibrations)
         return 0
+
+    # One-time pre-Velopack -> Velopack migration shim (TEMPORARY -- see
+    # updater.py's `migrate_to_velopack_install` docstring and
+    # docs/superpowers/plans/2026-08-31-daemon-velopack-auto-update.md, Task
+    # 6, for why this exists and when to delete it). It's a no-op (returns
+    # False immediately) for every normal Velopack install and every local
+    # dev run, so this costs nothing outside the one legacy-install case it
+    # exists for.
+    #
+    # Deliberately placed *after* `parse_args` and after the `--resync`
+    # branch, not at the top of `main()`: migrating downloads and launches a
+    # real installer, which must never be what `--help` or `--resync` does.
+    # (`--help` exits inside `parse_args`; `--resync` returns above.) Unlike
+    # `run.py`'s `velopack.App().run()` hook -- which genuinely must precede
+    # every import -- this check only needs to precede `run_app()`.
+    if updater.is_running_from_legacy_install():
+        updater.migrate_to_velopack_install()
+        return 0  # this run's only job was migrating; don't also start the tray/sync
 
     # Default (no flags): the tray app — settings window on first run (or
     # when the config is invalid/incomplete), then a tray icon with the sync

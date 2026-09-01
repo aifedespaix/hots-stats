@@ -2,6 +2,7 @@ import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 import velopack
 
 from src import updater
@@ -19,6 +20,22 @@ from src.updater import (
     update_log_file_path,
     watch_for_updates,
 )
+
+
+@pytest.fixture(autouse=True)
+def _isolate_appdata(monkeypatch, tmp_path):
+    """Every path this module touches on disk (`update.log`, `config.json`,
+    the migration sentinel) is derived from `config.config_file_path()`,
+    which reads `%APPDATA%`. Without this, `watch_for_updates`'s
+    `_append_update_log_line(..., "Update found.")` appends real lines to the
+    developer's actual `%APPDATA%\\hots-analytics\\update.log` -- the same
+    file a maintainer reads when triaging a genuinely failed update.
+
+    Autouse (rather than per-test) so no future test in this file can
+    reintroduce that pollution by forgetting to redirect it. Individual tests
+    may still `monkeypatch.setenv("APPDATA", ...)` to their own `tmp_path`
+    subdirectory; that simply overrides this."""
+    monkeypatch.setenv("APPDATA", str(tmp_path / "_autouse_appdata"))
 
 
 def _velopack_asset(version: str) -> velopack.VelopackAsset:
@@ -62,47 +79,218 @@ def test_installed_exe_path_returns_the_velopack_stub_path(monkeypatch, tmp_path
 # -- is_running_from_legacy_install (one-time migration shim) ----------------
 
 
+#
+# These deliberately drive the *real* inputs (`NUITKA_ONEFILE_BINARY`,
+# `LOCALAPPDATA`) rather than monkeypatching `installed_exe_path`. Patching
+# that function is what let the original bug ship: since Task 3,
+# `installed_exe_path()` is a pure computation from `LOCALAPPDATA`, so
+# comparing it against a recomputation of its own definition was
+# tautologically equal and the predicate could never return True. Faking its
+# return value tested the arithmetic of the comparison instead of the
+# predicate, and happily passed.
+
+
+def _make_exe(path: Path) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"MZ")
+    return path
+
+
 def test_is_running_from_legacy_install_false_when_not_frozen(monkeypatch, tmp_path):
-    """Never true for local dev, regardless of where `installed_exe_path`
-    would resolve to."""
+    """Never true for local dev, no matter where the running exe sits."""
     monkeypatch.setattr("src.updater.IS_FROZEN", False)
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "LocalAppData"))
+    monkeypatch.setenv(
+        "NUITKA_ONEFILE_BINARY", str(_make_exe(tmp_path / "Games" / "hots-analytics-daemon.exe"))
+    )
 
     assert is_running_from_legacy_install() is False
 
 
 def test_is_running_from_legacy_install_false_for_a_real_velopack_install(monkeypatch, tmp_path):
-    """A frozen build running from the actual Velopack-managed directory
-    (`%LOCALAPPDATA%\\{packId}\\{exeName}`) is the normal, post-migration
-    case -- never flagged as legacy."""
+    """A frozen build launched from inside the Velopack-managed directory
+    (`%LOCALAPPDATA%\\{packId}\\current\\{exeName}` -- Velopack runs the app
+    out of `current\\`, only the stub sits at the folder root) is the normal,
+    post-migration case: never flagged as legacy."""
+    local_app_data = tmp_path / "LocalAppData"
     monkeypatch.setattr("src.updater.IS_FROZEN", True)
-    monkeypatch.setattr("src.updater._PACK_ID", "hots-analytics-daemon")
-    monkeypatch.setattr("src.updater._EXE_NAME", "hots-analytics-daemon.exe")
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    monkeypatch.setattr(
-        "src.updater.installed_exe_path",
-        lambda: tmp_path / "hots-analytics-daemon" / "hots-analytics-daemon.exe",
+    monkeypatch.setenv("LOCALAPPDATA", str(local_app_data))
+    running = _make_exe(
+        local_app_data / "hots-analytics-daemon" / "current" / "hots-analytics-daemon.exe"
     )
+    monkeypatch.setenv("NUITKA_ONEFILE_BINARY", str(running))
 
     assert is_running_from_legacy_install() is False
 
 
 def test_is_running_from_legacy_install_true_for_an_arbitrary_old_location(monkeypatch, tmp_path):
-    """A frozen build whose `installed_exe_path()` parent is anything other
-    than the Velopack install directory is the pre-Velopack, raw-exe-
-    anywhere-on-disk model this migration exists to detect."""
+    """The pre-Velopack model: a frozen raw .exe living wherever the user
+    happened to put it, outside the Velopack install directory entirely.
+    This is exactly the case the migration shim exists for."""
     monkeypatch.setattr("src.updater.IS_FROZEN", True)
-    monkeypatch.setattr("src.updater._PACK_ID", "hots-analytics-daemon")
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "LocalAppData"))
+    running = _make_exe(tmp_path / "Games" / "HotsDaemon" / "hots-analytics-daemon.exe")
+    monkeypatch.setenv("NUITKA_ONEFILE_BINARY", str(running))
+
+    assert is_running_from_legacy_install() is True
+
+
+def test_is_running_from_legacy_install_falls_back_to_sys_executable(monkeypatch, tmp_path):
+    """`NUITKA_ONEFILE_BINARY` is only set by --onefile builds; without it
+    the running exe is `sys.executable`. Same verdict either way."""
+    monkeypatch.setattr("src.updater.IS_FROZEN", True)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "LocalAppData"))
+    monkeypatch.delenv("NUITKA_ONEFILE_BINARY", raising=False)
     monkeypatch.setattr(
-        "src.updater.installed_exe_path",
-        lambda: tmp_path / "SomeOtherFolder" / "hots-analytics-daemon.exe",
+        "src.updater.sys.executable",
+        str(_make_exe(tmp_path / "Program Files" / "hots-analytics-daemon.exe")),
     )
 
     assert is_running_from_legacy_install() is True
 
 
+def test_is_running_from_legacy_install_with_localappdata_unset(monkeypatch, tmp_path):
+    """With `LOCALAPPDATA` missing, `installed_exe_path()` falls back to
+    `~/AppData/Local/...` -- an absolute path, so the comparison stays
+    meaningful. It must not return True merely because the environment
+    degraded (the old code compared against the *relative* path
+    `Path("hots-analytics-daemon")`, which never matched anything)."""
+    monkeypatch.setattr("src.updater.IS_FROZEN", True)
+    monkeypatch.delenv("LOCALAPPDATA", raising=False)
+    fake_home = tmp_path / "home"
+    monkeypatch.setattr("src.updater.Path.home", staticmethod(lambda: fake_home))
+
+    velopack_exe = _make_exe(
+        fake_home
+        / "AppData"
+        / "Local"
+        / "hots-analytics-daemon"
+        / "current"
+        / "hots-analytics-daemon.exe"
+    )
+    monkeypatch.setenv("NUITKA_ONEFILE_BINARY", str(velopack_exe))
+    assert is_running_from_legacy_install() is False
+
+    legacy_exe = _make_exe(tmp_path / "Games" / "hots-analytics-daemon.exe")
+    monkeypatch.setenv("NUITKA_ONEFILE_BINARY", str(legacy_exe))
+    assert is_running_from_legacy_install() is True
+
+
 # -- migrate_to_velopack_install (one-time migration shim) -------------------
+
+
+def _stub_release_download(monkeypatch) -> MagicMock:
+    """Makes the GitHub release lookup + Setup.exe download succeed, and
+    returns the `subprocess.Popen` mock standing in for launching it."""
+    release_response = MagicMock()
+    release_response.json.return_value = {
+        "tag_name": "v1.2.3",
+        "assets": [
+            {"name": updater._SETUP_ASSET_NAME, "browser_download_url": "https://example.com/Setup.exe"}
+        ],
+    }
+
+    download_response = MagicMock()
+    download_response.__enter__.return_value = download_response
+    download_response.__exit__.return_value = False
+    download_response.iter_content.return_value = [b"data"]
+
+    def fake_get(url, **kwargs):
+        if url == updater._LATEST_RELEASE_API_URL:
+            return release_response
+        return download_response
+
+    popen = MagicMock()
+    monkeypatch.setattr(updater.requests, "get", fake_get)
+    monkeypatch.setattr(updater.subprocess, "Popen", popen)
+    return popen
+
+
+def test_migration_done_marker_is_a_file_that_save_config_cannot_erase(monkeypatch, tmp_path):
+    """The marker must not live in config.json: `config.save_config` writes a
+    fixed literal payload rather than merging, so a key there would be
+    silently deleted the first time the user saves settings after migrating
+    -- making the migration re-trigger on every subsequent launch."""
+    from src import config
+
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
+    assert updater._is_migration_marked_done() is False
+
+    updater._mark_migration_done()
+    assert updater._is_migration_marked_done() is True
+
+    config.save_config("https://api.example.com", "token", str(tmp_path / "replays"))
+
+    assert updater._is_migration_marked_done() is True
+    assert "velopack" not in config.read_config_file()
+
+
+def test_migrate_to_velopack_install_marks_done_with_a_sentinel_file(monkeypatch, tmp_path):
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
+    popen = _stub_release_download(monkeypatch)
+
+    updater.migrate_to_velopack_install()
+
+    popen.assert_called_once()
+    sentinel = tmp_path / "AppData" / "hots-analytics" / updater._MIGRATION_DONE_SENTINEL_NAME
+    assert sentinel.is_file()
+
+
+def test_migrate_to_velopack_install_is_skipped_once_the_sentinel_exists(monkeypatch, tmp_path):
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
+    popen = _stub_release_download(monkeypatch)
+    updater._mark_migration_done()
+
+    updater.migrate_to_velopack_install()
+
+    popen.assert_not_called()
+
+
+def test_migrate_to_velopack_install_hands_autostart_over_when_enabled(monkeypatch, tmp_path):
+    """Setup.exe doesn't touch the `HKCU\\...\\Run` value, which still points
+    at the legacy exe. Without re-registering it against the Velopack stub,
+    the next boot launches the old exe, which sees the migration already done
+    and exits -- autostart silently stops working."""
+    from src import autostart
+
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
+    _stub_release_download(monkeypatch)
+    set_enabled = MagicMock()
+    monkeypatch.setattr(autostart, "is_enabled", lambda: True)
+    monkeypatch.setattr(autostart, "set_enabled", set_enabled)
+
+    updater.migrate_to_velopack_install()
+
+    set_enabled.assert_called_once_with(True)
+
+
+def test_migrate_to_velopack_install_leaves_autostart_alone_when_disabled(monkeypatch, tmp_path):
+    from src import autostart
+
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
+    _stub_release_download(monkeypatch)
+    set_enabled = MagicMock()
+    monkeypatch.setattr(autostart, "is_enabled", lambda: False)
+    monkeypatch.setattr(autostart, "set_enabled", set_enabled)
+
+    updater.migrate_to_velopack_install()
+
+    set_enabled.assert_not_called()
+
+
+def test_migrate_to_velopack_install_survives_a_failing_autostart_handover(monkeypatch, tmp_path):
+    """A failed registry write must not abort a migration whose install is
+    already underway -- log and continue to marking it done."""
+    from src import autostart
+
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
+    _stub_release_download(monkeypatch)
+    monkeypatch.setattr(autostart, "is_enabled", lambda: True)
+    monkeypatch.setattr(autostart, "set_enabled", MagicMock(side_effect=OSError("registry locked")))
+
+    updater.migrate_to_velopack_install()  # must not raise
+
+    assert updater._is_migration_marked_done() is True
 
 
 def test_migrate_to_velopack_install_does_not_raise_when_marking_done_fails(monkeypatch, tmp_path):
