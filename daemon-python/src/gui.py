@@ -234,9 +234,10 @@ def run_update_progress_window(
 
     Blocks (on the calling thread, meant to be a dedicated one -- see
     app.py's `_on_update_found`) until the update finishes. On success the
-    whole process exits from underneath this window (see
-    `updater.apply_update_and_exit`), so there is nothing to close; on
-    failure it shows the error and waits for the user to dismiss it.
+    whole process is replaced from underneath this window (Velopack's
+    `apply_updates_and_restart`, see `updater.perform_update`), so there is
+    nothing to close; on failure it shows the error and waits for the user to
+    dismiss it.
     """
     root = tk.Tk()
     _UpdateProgressWindow(root, update_status, version)
@@ -277,11 +278,13 @@ class _UpdateProgressWindow:
         self._bar.pack(fill="x")
         self._bar_driver = _ProgressBarDriver(self._bar)
 
-        # Only shown when the error carries a `manual_fallback_path` (see
-        # `updater.stage_manual_fallback`) -- a downloaded build the
-        # automatic install couldn't apply, staged next to the installed
-        # .exe for the player to finish by hand (see `_format_update_status`
-        # via `status.message` for the actual instructions).
+        # Only shown when the error carries a `manual_fallback_path`, which
+        # since the Velopack migration is always `None`: Velopack owns its
+        # own download/apply staging directory, so there is no longer a
+        # locally-staged build this app could point the player at (see
+        # `updater.UpdateStatus.manual_fallback_path`). Kept, inert, because
+        # that field is still part of the type and this widget is guarded on
+        # it -- delete both together if the field ever goes.
         self._fallback_path: Path | None = None
         self._open_fallback_button = ttk.Button(
             outer,
@@ -291,11 +294,11 @@ class _UpdateProgressWindow:
         )
 
         # Shown, prominently, alongside the failure -- a fallback with a
-        # completely different failure surface than the PowerShell handoff
-        # that just failed (see `updater.release_page_url`): a normal
-        # browser download + double-click, unaffected by whatever blocked
-        # the automatic swap (antivirus, Smart App Control, a locked-down
-        # execution policy).
+        # completely different failure surface than the automatic Velopack
+        # install that just failed (see `updater.release_page_url`):
+        # downloading `hots-analytics-daemon-Setup.exe` from the release page
+        # in a browser and running it, unaffected by whatever blocked the
+        # in-place install (antivirus, Smart App Control, a locked file).
         self._manual_download_button = ttk.Button(
             outer,
             text="⬇ Mise à jour manuelle",
@@ -1285,8 +1288,9 @@ class _SettingsWindow:
 
         # Always available (unlike the buttons above, needs no
         # `update_status` -- it's just a browser link) as a fallback with a
-        # completely different failure surface than the automatic
-        # PowerShell handoff: see `updater.release_page_url`.
+        # completely different failure surface than the automatic Velopack
+        # install: downloading the release page's Setup.exe by hand, see
+        # `updater.release_page_url`.
         # `_refresh_update_status` switches it to `Accent.TButton` while the
         # last automatic attempt is in `UpdatePhase.ERROR`, so it's easy to
         # spot exactly when it's actually needed.
@@ -1300,11 +1304,12 @@ class _SettingsWindow:
 
         if self._update_status is not None:
             # Built but left unpacked -- `_refresh_update_status` packs it in
-            # only while the current status carries a `manual_fallback_path`
-            # (a downloaded build the automatic install couldn't apply,
-            # staged next to the installed .exe -- see
-            # `updater.stage_manual_fallback`) and unpacks it again once
-            # that's no longer true, e.g. after a subsequent update succeeds.
+            # only while the current status carries a `manual_fallback_path`,
+            # which since the Velopack migration is always `None` (Velopack
+            # owns its own staging directory, so there is no locally-staged
+            # build to open -- see `updater.UpdateStatus.manual_fallback_path`).
+            # Inert today, kept only because that field is still part of the
+            # type; delete both together if it ever goes.
             self._fallback_path: Path | None = None
             self._open_fallback_button = ttk.Button(
                 button_row,
@@ -1729,12 +1734,11 @@ class _SettingsWindow:
             )
 
         # Same idea for the "Ouvrir le dossier" button: normally unpacked
-        # until `_refresh_update_status` sees a `manual_fallback_path` (this
-        # runs before that ever gets a chance to, see `__init__`'s call
-        # order), briefly packed here so `button_row`'s worst-case width --
-        # one more button wider than the common case -- is already accounted
-        # for instead of growing the window the first time an update
-        # actually fails this way.
+        # until `_refresh_update_status` sees a `manual_fallback_path`, which
+        # since the Velopack migration never happens (the field is always
+        # `None`). Still briefly packed here so `button_row`'s worst-case
+        # width -- one more button wider than the common case -- stays
+        # accounted for as long as the widget exists at all.
         if hasattr(self, "_open_fallback_button"):
             self._open_fallback_button.pack(side="left", padx=(10, 0))
 
