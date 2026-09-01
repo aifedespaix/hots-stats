@@ -178,11 +178,21 @@ def _running_exe_path() -> Path:
     to `installed_exe_path()`, which returns the stable stub path the app
     *should* be installed at, whether or not it's there yet.
 
-    Under Nuitka's --onefile packaging `sys.executable` points at the
-    ephemeral per-run extraction folder, so `NUITKA_ONEFILE_BINARY` (which
-    Nuitka sets to the real launched .exe) takes priority when present."""
-    onefile_binary = os.environ.get("NUITKA_ONEFILE_BINARY")
-    return Path(onefile_binary or sys.executable).resolve()
+    Under Nuitka's --onefile packaging, `sys.executable` resolves to the
+    ephemeral per-run extraction folder (always somewhere under `%TEMP%`,
+    deleted at exit) rather than to the binary that was actually launched --
+    it never matches a real install directory. There is also no
+    `NUITKA_ONEFILE_BINARY` environment variable to fall back to: Nuitka's
+    onefile bootstrap only ever sets `NUITKA_ONEFILE_PARENT`/`_DIRECTORY`/
+    `_RANDOM`/`_TIME_US`/`_START` (confirmed against its bundled C bootstrap
+    source and by compiling and running a throwaway onefile probe), so
+    reading it always returned `None` and this fell through to
+    `sys.executable` unconditionally -- meaning `is_running_from_legacy_install`
+    was always `True` for every real frozen launch, migration-installer-swap
+    included. `sys.argv[0]` is what Nuitka's onefile bootstrap actually
+    re-execs the payload with, and reliably carries the original launched
+    path instead."""
+    return Path(sys.argv[0]).resolve()
 
 
 def is_running_from_legacy_install() -> bool:

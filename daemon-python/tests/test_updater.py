@@ -80,14 +80,13 @@ def test_installed_exe_path_returns_the_velopack_stub_path(monkeypatch, tmp_path
 
 
 #
-# These deliberately drive the *real* inputs (`NUITKA_ONEFILE_BINARY`,
-# `LOCALAPPDATA`) rather than monkeypatching `installed_exe_path`. Patching
-# that function is what let the original bug ship: since Task 3,
-# `installed_exe_path()` is a pure computation from `LOCALAPPDATA`, so
-# comparing it against a recomputation of its own definition was
-# tautologically equal and the predicate could never return True. Faking its
-# return value tested the arithmetic of the comparison instead of the
-# predicate, and happily passed.
+# These deliberately drive the *real* inputs (`sys.argv[0]`, `LOCALAPPDATA`)
+# rather than monkeypatching `installed_exe_path`. Patching that function is
+# what let the original bug ship: since Task 3, `installed_exe_path()` is a
+# pure computation from `LOCALAPPDATA`, so comparing it against a
+# recomputation of its own definition was tautologically equal and the
+# predicate could never return True. Faking its return value tested the
+# arithmetic of the comparison instead of the predicate, and happily passed.
 
 
 def _make_exe(path: Path) -> Path:
@@ -96,13 +95,21 @@ def _make_exe(path: Path) -> Path:
     return path
 
 
+def _set_running_exe(monkeypatch, path: Path) -> None:
+    """Drives `_running_exe_path()`'s real input: `sys.argv[0]`, exactly what
+    Nuitka's onefile bootstrap re-execs the payload with. NOT
+    `NUITKA_ONEFILE_BINARY` (no such env var exists -- see
+    `_running_exe_path`'s docstring) and NOT `sys.executable` (under onefile
+    that's the ephemeral `%TEMP%` extraction folder, never a real install
+    path)."""
+    monkeypatch.setattr("src.updater.sys.argv", [str(_make_exe(path))])
+
+
 def test_is_running_from_legacy_install_false_when_not_frozen(monkeypatch, tmp_path):
     """Never true for local dev, no matter where the running exe sits."""
     monkeypatch.setattr("src.updater.IS_FROZEN", False)
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "LocalAppData"))
-    monkeypatch.setenv(
-        "NUITKA_ONEFILE_BINARY", str(_make_exe(tmp_path / "Games" / "hots-analytics-daemon.exe"))
-    )
+    _set_running_exe(monkeypatch, tmp_path / "Games" / "hots-analytics-daemon.exe")
 
     assert is_running_from_legacy_install() is False
 
@@ -115,10 +122,9 @@ def test_is_running_from_legacy_install_false_for_a_real_velopack_install(monkey
     local_app_data = tmp_path / "LocalAppData"
     monkeypatch.setattr("src.updater.IS_FROZEN", True)
     monkeypatch.setenv("LOCALAPPDATA", str(local_app_data))
-    running = _make_exe(
-        local_app_data / "hots-analytics-daemon" / "current" / "hots-analytics-daemon.exe"
+    _set_running_exe(
+        monkeypatch, local_app_data / "hots-analytics-daemon" / "current" / "hots-analytics-daemon.exe"
     )
-    monkeypatch.setenv("NUITKA_ONEFILE_BINARY", str(running))
 
     assert is_running_from_legacy_install() is False
 
@@ -129,24 +135,35 @@ def test_is_running_from_legacy_install_true_for_an_arbitrary_old_location(monke
     This is exactly the case the migration shim exists for."""
     monkeypatch.setattr("src.updater.IS_FROZEN", True)
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "LocalAppData"))
-    running = _make_exe(tmp_path / "Games" / "HotsDaemon" / "hots-analytics-daemon.exe")
-    monkeypatch.setenv("NUITKA_ONEFILE_BINARY", str(running))
+    _set_running_exe(monkeypatch, tmp_path / "Games" / "HotsDaemon" / "hots-analytics-daemon.exe")
 
     assert is_running_from_legacy_install() is True
 
 
-def test_is_running_from_legacy_install_falls_back_to_sys_executable(monkeypatch, tmp_path):
-    """`NUITKA_ONEFILE_BINARY` is only set by --onefile builds; without it
-    the running exe is `sys.executable`. Same verdict either way."""
+def test_is_running_from_legacy_install_true_when_running_from_the_onefile_temp_extraction(
+    monkeypatch, tmp_path
+):
+    """Regression test for the actual bug shipped in a1e71d7: with no
+    `NUITKA_ONEFILE_BINARY` env var to read (Nuitka never sets one),
+    `_running_exe_path()` used to fall through to `sys.executable`, which
+    under onefile is always the ephemeral `%TEMP%\\onefile_*` extraction
+    folder -- never inside the Velopack install directory, so this used to
+    evaluate to `True` on every real launch, legacy or not. Kept distinct
+    from the "arbitrary old location" case above since it's the one that
+    actually shipped and broke production, confirmed by compiling and
+    running a throwaway Nuitka onefile probe."""
     monkeypatch.setattr("src.updater.IS_FROZEN", True)
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "LocalAppData"))
     monkeypatch.delenv("NUITKA_ONEFILE_BINARY", raising=False)
     monkeypatch.setattr(
         "src.updater.sys.executable",
-        str(_make_exe(tmp_path / "Program Files" / "hots-analytics-daemon.exe")),
+        str(_make_exe(tmp_path / "Temp" / "onefile_1234_567_abc" / "python.exe")),
+    )
+    _set_running_exe(
+        monkeypatch, tmp_path / "LocalAppData" / "hots-analytics-daemon" / "current" / "hots-analytics-daemon.exe"
     )
 
-    assert is_running_from_legacy_install() is True
+    assert is_running_from_legacy_install() is False
 
 
 def test_is_running_from_legacy_install_with_localappdata_unset(monkeypatch, tmp_path):
@@ -160,7 +177,7 @@ def test_is_running_from_legacy_install_with_localappdata_unset(monkeypatch, tmp
     fake_home = tmp_path / "home"
     monkeypatch.setattr("src.updater.Path.home", staticmethod(lambda: fake_home))
 
-    velopack_exe = _make_exe(
+    velopack_exe = (
         fake_home
         / "AppData"
         / "Local"
@@ -168,11 +185,11 @@ def test_is_running_from_legacy_install_with_localappdata_unset(monkeypatch, tmp
         / "current"
         / "hots-analytics-daemon.exe"
     )
-    monkeypatch.setenv("NUITKA_ONEFILE_BINARY", str(velopack_exe))
+    _set_running_exe(monkeypatch, velopack_exe)
     assert is_running_from_legacy_install() is False
 
-    legacy_exe = _make_exe(tmp_path / "Games" / "hots-analytics-daemon.exe")
-    monkeypatch.setenv("NUITKA_ONEFILE_BINARY", str(legacy_exe))
+    legacy_exe = tmp_path / "Games" / "hots-analytics-daemon.exe"
+    _set_running_exe(monkeypatch, legacy_exe)
     assert is_running_from_legacy_install() is True
 
 
