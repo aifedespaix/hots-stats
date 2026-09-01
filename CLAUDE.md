@@ -16,6 +16,8 @@ them. Monorepo managed with Bun workspaces.
   `ReplayPayload`, the daemon→API ingestion shape).
 - **`daemon-python`** — Windows tray app (`watchdog` + `heroprotocol`) that watches the replays
   folder, parses new files, and syncs stats to the API. Ships as a Nuitka-built `.exe`
+  packaged with Velopack (`vpk`) into a `Setup.exe` installer plus update packages, and
+  self-updates from GitHub Releases via `velopack.UpdateManager`
   (`.github/workflows/build-daemon.yml`).
 
 ## Commands

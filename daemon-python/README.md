@@ -13,9 +13,13 @@ python -m venv .venv
 pip install -e ".[dev]"
 ```
 
-The packaged `.exe` (see `.github/workflows/build-daemon.yml`) needs no
-setup: double-clicking it opens the settings window the first time, then
-adds a tray icon. Configuration lives in `%APPDATA%\hots-analytics\config.json`:
+End users don't need any of that: the GitHub Release carries
+`hots-analytics-daemon-Setup.exe` (built by
+`.github/workflows/build-daemon.yml`), a Velopack installer that installs
+the app into `%LocalAppData%\hots-analytics-daemon\` and launches it — the
+settings window opens the first time, then a tray icon. Configuration lives
+in `%APPDATA%\hots-analytics\config.json`, outside the install directory, so
+updates never touch it:
 
 ```json
 {
@@ -302,110 +306,78 @@ jour** button runs a check on demand instead of waiting for the next
 scheduled cycle — useful right after a release goes out. All of this only
 runs in the compiled build; `python -m src.main` in dev never self-updates.
 
-**Where it downloads to, and how the replace/relaunch works:** the new
-build is streamed to `%TEMP%\hots-analytics-updates\` (`updater.downloads_dir`).
-Once complete, this process writes a small PowerShell script to a temp
-`.ps1` file and hands off to it (detached, hidden window), then exits
-immediately (a running `.exe` can't overwrite or rename itself, and under
-Nuitka's `--onefile` packaging the running process may well be executing
-from an ephemeral self-extracted copy rather than the installed path
-anyway). That script: waits for this process's PID to fully exit, copies
-the downloaded build over the *installed* `.exe`
-(`updater.installed_exe_path()` — see below), deletes the downloaded copy
-and itself, and starts the installed `.exe` again — no separate "second
-exe" or bundled library needed, PowerShell already does this handoff
-reliably and ships with Windows. There is no old version left lying around
-afterward: the installed `.exe` is replaced *in place* (one file, one
-path), and `%TEMP%\hots-analytics-updates\` is swept clean of anything left
-over from an interrupted/superseded download the next time the daemon
-starts (`cleanup_stale_downloads`, called from `watch_for_updates`).
+**How the install and the swap actually work:** updates are handled by
+[Velopack](https://velopack.io/), not by any hand-rolled download-and-
+overwrite logic in this repo. `src/updater.py` holds a
+`velopack.UpdateManager` backed by a `GithubSource` pointed at this repo's
+Releases; `check_for_updates()` compares the installed version against the
+latest published package, `download_updates()` fetches it (reporting 0..100
+progress, which `perform_update` converts to the 0..1 fraction the UI's
+progress bar wants), and `apply_updates_and_restart()` hands off to
+Velopack's own bundled `Update.exe`, which performs the swap and relaunches
+the app. That last call never returns on success — the process is replaced.
 
-Both the copy and the relaunch are retried a few times (a just-exited
-process, or real-time antivirus scanning an unfamiliar unsigned `.exe`, can
-each hold a brief lock) — and if replacing the installed `.exe` still fails
-after every retry, the script falls back to relaunching the *previous*
-version instead of leaving the app closed. A failed update always degrades
-back to "still running the old version," never to "gone until someone
-notices and manually reruns an old installer" — and since a failed copy
-means the installed `.exe` was never actually replaced, that's also what
-stops a persistent failure from repeating the exact same "found this
-update, downloaded it, then vanished" cycle on every subsequent launch.
+**Install layout.** `hots-analytics-daemon-Setup.exe` installs into
+`%LocalAppData%\hots-analytics-daemon\`. Inside it, Velopack keeps a
+`current\` subdirectory holding the version actually being run, an
+`Update.exe`, and — at the folder root — a small, version-independent *stub*
+executable whose only job is to launch whatever is currently in `current\`.
+An update replaces `current\` **wholesale**; the stub's path never changes.
+That's why `updater.installed_exe_path()` returns the stub path rather than
+`sys.executable`: anything that has to still be valid after the next update
+(notably the "Lancer au démarrage de Windows" registry entry written by
+`src/autostart.py`) must point at the stub. `sys.executable` is doubly
+wrong here — under Nuitka's `--onefile` packaging it resolves to an
+ephemeral per-run extraction folder that is deleted the moment the process
+exits.
 
-**When even that can't complete automatically** (the copy keeps failing
-every retry, or this process never managed to hand off to the relaunch
-script at all — e.g. `powershell.exe` itself is blocked), the
-already-downloaded build is still put to use: it's copied next to the
-installed `.exe` under a `new-`-prefixed name (`updater.stage_manual_fallback`
-/ `manual_fallback_exe_path`, or the relaunch script's own copy-failure
-branch when this process has already exited) instead of being left in
-`%TEMP%` where nobody has a reason to look. Either side shows a dialog
-naming the exact files involved and the three steps to finish by hand
-(close the app, delete the old `.exe`, launch the new one) — the settings
-window's Update tab and the standalone progress popup both grow an
-**Ouvrir le dossier** button once the current status carries a
-`manual_fallback_path`; the relaunch script (already running with nothing
-left in Python to show a Tk dialog) shows a native message box with the
-same instructions and an equivalent button, guarded by a `Test-Path` check
-so a persistently-blocked machine isn't re-prompted on every 6-hour retry.
+**Your data is not inside the install directory.** `config.json`,
+`sync_state.db`, `update.log` and the live-draft folder all live under
+`%APPDATA%\hots-analytics\`, which Velopack never touches — so an update
+replacing `current\` cannot lose settings, sync state or logs.
 
-Every step of that handoff is logged, with a timestamp, to
-`%APPDATA%\hots-analytics\update.log` (`updater.update_log_file_path`) —
-since the script runs after this process has already exited, that log is
-the only record of what happened if a copy or relaunch step fails. It's one
-click away from the settings window's Update tab (**Voir le journal**). The
-Python side writes to the same log too (`updater._append_update_log_line`),
-before and immediately after handing off to the script — not just the
-script itself — so an attempt that never got far enough for the script to
-log anything on its own (killed before its first `Log` call, or
-`powershell.exe` failing to launch at all) still leaves a trace instead of
-the log staying completely empty.
+**Nothing is invisible, and failures are recoverable.** Notable events
+(update found, download failed, install failed) are appended with a
+timestamp to `%APPDATA%\hots-analytics\update.log`
+(`updater.update_log_file_path` / `_append_update_log_line`), one click away
+from the settings window's Update tab (**Voir le journal**). If
+`download_updates()` or `apply_updates_and_restart()` raises, the failure is
+logged, the Update tab shows the error, **the daemon keeps running
+normally**, and the next scheduled cycle retries. The error message
+(`updater.manual_fallback_message`) points at the release page so the user
+can download and run `hots-analytics-daemon-Setup.exe` by hand — running an
+installer over an existing install is a far more foolproof manual recovery
+than swapping files around.
 
-**This process never exits on faith that the handoff will work.**
-`Popen` returning successfully only means Windows *accepted* the request to
-start the relaunch script — not that it kept running. Before this process
-commits to `os._exit(0)`, `apply_update_and_exit` briefly confirms the
-script process is still alive; if it isn't (or `powershell.exe` couldn't be
-launched at all), the update is aborted instead — logged, the Update tab
-shows a clear error, and **the current process keeps running normally**,
-retrying on the next scheduled cycle. This closes the failure mode that
-used to look like "it downloads, then the app just closes and never comes
-back, with nothing anywhere on disk to explain why": a script this shape —
-unsigned, hidden, execution-policy-bypassing, copying one unsigned `.exe`
-over another and relaunching it — is exactly what real-time antivirus and
-other endpoint protection are built to kill on sight, and until this check
-existed, this process had already unconditionally exited by the time that
-happened, so there was nothing left running to notice or recover.
+**Why Velopack and not a script.** The previous mechanism copied a freshly
+downloaded `.exe` over the running one via a generated, hidden,
+execution-policy-bypassing PowerShell script — precisely the shape of thing
+real-time antivirus is built to kill on sight regardless of intent, and when
+it was killed the app had already exited with nothing left running to notice.
+Velopack's `Update.exe` is a well-known, signed updater binary performing a
+versioned directory swap instead, which is what actually changes the
+endpoint-protection outcome.
 
 **Unsigned binary / SmartScreen:** this build isn't code-signed (no
 certificate has been purchased for it), so the *first* time a
-browser-downloaded copy is run, Windows SmartScreen shows its "Windows
-protected your PC" prompt — click "Informations complémentaires" then
-"Exécuter quand même". That's a one-time, per-download-hash check from
-Explorer's own Attachment Execution Service and can't be suppressed from
-inside the app without an actual signing certificate. The new build itself
-is fetched with `requests`, so it never picks up a Mark-of-the-Web the way
-a browser download does — but `Start-Process` with a bare `-FilePath` still
-goes through the same ShellExecute path Explorer uses, so if the *installed*
-`.exe` already carries a Mark-of-the-Web (likely, since that's usually
-wherever the user's browser first put it), the same SmartScreen prompt
-could otherwise reappear on every self-relaunch and block it silently with
-nobody there to click "Run anyway." The relaunch script strips it
-(`Unblock-File`) right after copying the new build into place, so self-updates
-relaunch silently regardless of where the installed `.exe` lives. (Real-time
-antivirus heuristics are a separate mechanism from SmartScreen and could in
-principle still flag an unfamiliar unsigned binary; the retrying Copy-Item/
-Start-Process + `update.log` above exist partly to make that failure mode
-visible — and recoverable — instead of silent if it ever happens. The
-durable fix is buying a code-signing certificate, which is a
-purchase/verification decision outside what this repo's code can do on its
-own.)
+browser-downloaded `Setup.exe` is run, Windows SmartScreen shows its
+"Windows protected your PC" prompt — click "Informations complémentaires"
+then "Exécuter quand même". That's a one-time, per-download-hash check from
+Explorer's own Attachment Execution Service, unrelated to the update
+mechanism itself, and it can't be suppressed from inside the app without an
+actual signing certificate. Automatic updates go through `Update.exe` rather
+than ShellExecute, so they don't re-prompt.
 
-The self-replace step (and the "Lancer au démarrage de Windows" registry
-entry) resolve the actual installed `.exe` via `updater.installed_exe_path()`
-rather than `sys.executable`: under Nuitka's `--onefile` packaging,
-`sys.executable` points into the ephemeral per-run extraction folder, which
-is deleted the moment the process exits — pointing either of those at it
-would silently target a file that's already gone.
+**One-time migration from the pre-Velopack install.** Builds released before
+this change were a single raw `.exe` sitting wherever the user put it. The
+transitional release ships a shim (`updater.is_running_from_legacy_install`
+/ `migrate_to_velopack_install`, called from `main()` on the tray path only)
+that notices it is running from outside `%LocalAppData%\hots-analytics-daemon\`,
+downloads that release's `Setup.exe`, runs it silently, re-points the
+autostart registry entry at the new stub, and records a
+`.velopack-migrated` sentinel file next to `config.json` so it never repeats.
+It is deliberately temporary code, marked as such in `updater.py`, to be
+deleted once the old install base has moved over.
 
 ## Single instance
 
@@ -421,21 +393,29 @@ state, or tray icon.
 Every push to `main` that touches `daemon-python`'s code (not just
 `tests/`/`README.md`) is automatically released: CI bumps the patch version
 in `pyproject.toml` + `constants.py`'s `APP_VERSION`, commits it, tags it
-`vX.Y.Z`, builds the `.exe`, and publishes it as a GitHub Release — see
+`vX.Y.Z`, builds the `.exe` with Nuitka, packages it with `vpk` (Velopack's
+CLI) and publishes the result as a GitHub Release — see
 `.github/workflows/build-daemon.yml`. There's nothing manual to do; just
 merge the change.
 
-The release **asset** itself is always named `hots-analytics-daemon.exe` --
-never version-suffixed. The version lives only on the release: its git tag
-(`vX.Y.Z`) and title (`Daemon vX.Y.Z`). This is deliberate, not an
-oversight: `updater.py`'s self-update handoff already treats the *installed*
-`.exe`'s path/filename as opaque (`installed_exe_path()` — it copies the new
-build's bytes over whatever that path already is, never renames it), so a
-stable asset name doesn't cost that mechanism anything, and it means a
-manual download from the Releases page always lands at the same filename
-instead of a new one piling up next to every previous version ever fetched.
-`updater._ASSET_NAME` and `find_update` match this exact name; only the
-release's `tag_name` is ever parsed as a version.
+What lands on a release is what `vpk` produces: the
+`hots-analytics-daemon-Setup.exe` installer users download once, plus the
+`.nupkg` update packages (a full one, and delta ones where applicable) that
+`UpdateManager` consumes. `vpk pack` is given a *staged* directory holding
+only the built `.exe` — never Nuitka's `dist/` directly, which also contains
+its build intermediates (`run.build/`, `run.dist/`, `run.onefile-build/`)
+and would balloon every package with hundreds of MB of junk. A pull request
+touching `daemon-python/` runs the same build + `vpk pack` without any
+publish step (the `pack-check` job), so packaging regressions fail at review
+time rather than at release time.
+
+The built executable is always named `hots-analytics-daemon.exe`, never
+version-suffixed. The version lives only on the release (its git tag
+`vX.Y.Z` and title `Daemon vX.Y.Z`) and inside Velopack's package manifest.
+The name is `vpk pack`'s `--mainExe` and must stay identical across
+versions — Velopack looks for exactly that name inside every package — and
+it must match `_EXE_NAME` in `src/updater.py`, which derives the stable stub
+path from it, alongside `--packId` / `_PACK_ID`.
 
 ## Architecture
 
