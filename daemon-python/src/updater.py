@@ -28,14 +28,18 @@ the fact (e.g. via the settings window's "Voir le journal" button).
 from __future__ import annotations
 
 import datetime as dt
+import json
 import logging
 import os
+import subprocess
+import tempfile
 import threading
 from dataclasses import dataclass, replace
 from enum import Enum
 from pathlib import Path
 from typing import Callable
 
+import requests
 import velopack
 
 from .constants import APP_VERSION
@@ -103,6 +107,42 @@ def _get_update_manager() -> velopack.UpdateManager:
 _PACK_ID = "hots-analytics-daemon"
 _EXE_NAME = "hots-analytics-daemon.exe"
 
+# -- One-time pre-Velopack -> Velopack migration shim -------------------------
+#
+# TEMPORARY, ship-in-exactly-one-release code. See
+# docs/superpowers/plans/2026-08-31-daemon-velopack-auto-update.md, Task 6,
+# for the full rationale. Once telemetry/support signals confirm the
+# pre-Velopack install base has migrated, delete
+# `is_running_from_legacy_install`, `migrate_to_velopack_install`, their
+# helpers and constants below, and the `main()` call site that invokes them
+# -- a permanent per-startup check for a one-time historical event is
+# unnecessary complexity once it's done its job.
+#
+# The GitHub Releases API (not `_update_manager`/Velopack's `GithubSource`)
+# is used here on purpose: `UpdateManager` only knows how to download "the
+# update package" for the install it's managing, not an arbitrary named
+# asset -- and a legacy install has no Velopack-managed install for it to
+# even construct against (see `_get_update_manager`'s docstring). This
+# reimplements just enough of the pre-Task-2 `download_update`'s plain
+# `requests`-based GitHub-asset-download approach (removed by Task 2 from the
+# main update flow, kept here only for this one-time path) to fetch the
+# installer instead.
+_LATEST_RELEASE_API_URL = f"https://api.github.com/repos/{_GITHUB_REPO}/releases/latest"
+# Velopack's own naming for the installer `vpk pack`/`vpk upload github`
+# publish alongside the update packages -- see build-daemon.yml and
+# docs/superpowers/specs/2026-08-31-daemon-velopack-auto-update-design.md's
+# "Migration" section. Must stay `{_PACK_ID}-Setup.exe` to match what `vpk`
+# actually produces.
+_SETUP_ASSET_NAME = f"{_PACK_ID}-Setup.exe"
+_MIGRATION_REQUEST_TIMEOUT_SECONDS = 15
+_MIGRATION_DOWNLOAD_TIMEOUT_SECONDS = 60
+
+# Local-config flag name (see config.py's `read_config_file`/`save_config`
+# JSON-file mechanism, the same one `autoUpdateEnabled` uses) marking that
+# this one-time migration has already run, so it's never repeated even if a
+# legacy install somehow gets launched again after migrating.
+_MIGRATION_DONE_CONFIG_KEY = "velopack_migration_complete"
+
 
 def installed_exe_path() -> Path:
     """The stable path Windows autostart (and anything else that needs "the
@@ -124,6 +164,123 @@ def installed_exe_path() -> Path:
     local_app_data = os.environ.get("LOCALAPPDATA")
     base = Path(local_app_data) if local_app_data else Path.home() / "AppData" / "Local"
     return base / _PACK_ID / _EXE_NAME
+
+
+def is_running_from_legacy_install() -> bool:
+    """True only for the one-time migration case: a frozen build running
+    from somewhere other than the Velopack-managed install directory (i.e.
+    the old raw-exe install model, from before this migration). Never true
+    for a fresh Velopack install, and never true for local dev."""
+    if not IS_FROZEN:
+        return False
+    return installed_exe_path().parent != Path(os.environ.get("LOCALAPPDATA", "")) / _PACK_ID
+
+
+def _is_migration_marked_done() -> bool:
+    """Reads `_MIGRATION_DONE_CONFIG_KEY` from the local JSON config file,
+    mirroring config.py's own `is_auto_update_enabled()`: defensive (defaults
+    to "not done yet" on any read failure) since this must never itself be
+    the reason the migration doesn't retry on the next launch."""
+    from .config import ConfigError, read_config_file
+
+    try:
+        return bool(read_config_file().get(_MIGRATION_DONE_CONFIG_KEY, False))
+    except ConfigError:
+        return False
+
+
+def _mark_migration_done() -> None:
+    """Persists `_MIGRATION_DONE_CONFIG_KEY = True` into the JSON config
+    file, preserving whatever other fields (apiBaseUrl, accessToken, ...)
+    are already there -- unlike `config.py`'s `save_config`, which only ever
+    writes its own fixed set of known fields, this merges into the raw dict
+    (same file, same `read_config_file`/`json.dumps` mechanism) since this
+    flag isn't part of the `Config` dataclass."""
+    from .config import ConfigError, config_file_path, read_config_file
+
+    try:
+        values = read_config_file()
+    except ConfigError:
+        values = {}
+    values[_MIGRATION_DONE_CONFIG_KEY] = True
+    path = config_file_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(values, indent=2), encoding="utf-8")
+
+
+def migrate_to_velopack_install() -> None:
+    """Downloads the current release's Setup.exe and runs it silently, then
+    marks the migration done (see `_MIGRATION_DONE_CONFIG_KEY`) so this never
+    repeats even if somehow launched again from the old location. Called
+    once, early in `main()`, only for the one transitional release this
+    function ships in -- see
+    docs/superpowers/specs/2026-08-31-daemon-velopack-auto-update-design.md's
+    "Migration" section, and the TEMPORARY-code comment above this section.
+    Best-effort: any failure here just leaves the user on their current
+    (working) install, to be retried on this release's next launch rather
+    than left in a broken state.
+    """
+    if _is_migration_marked_done():
+        logger.debug("Velopack migration already completed, nothing to do.")
+        return
+
+    logger.info("Legacy (pre-Velopack) install detected -- starting one-time migration.")
+    try:
+        response = requests.get(_LATEST_RELEASE_API_URL, timeout=_MIGRATION_REQUEST_TIMEOUT_SECONDS)
+        response.raise_for_status()
+        release = response.json()
+    except (requests.RequestException, ValueError) as err:
+        logger.warning("Migration: could not fetch the latest release, will retry next launch: %s", err)
+        _append_update_log_line("?", f"Migration: release lookup failed: {err}")
+        return
+
+    version = str(release.get("tag_name", "")).lstrip("v") or "?"
+
+    setup_asset_url: str | None = None
+    for asset in release.get("assets", []):
+        if asset.get("name") == _SETUP_ASSET_NAME:
+            setup_asset_url = asset.get("browser_download_url")
+            break
+
+    if setup_asset_url is None:
+        logger.warning(
+            "Migration: release %s has no '%s' asset (yet), will retry next launch.",
+            release.get("tag_name"),
+            _SETUP_ASSET_NAME,
+        )
+        _append_update_log_line(
+            version, f"Migration: no '{_SETUP_ASSET_NAME}' asset on the latest release yet."
+        )
+        return
+
+    try:
+        dest_dir = Path(tempfile.mkdtemp(prefix="hots-analytics-migration-"))
+        setup_exe_path = dest_dir / _SETUP_ASSET_NAME
+        logger.info("Migration: downloading %s from %s...", _SETUP_ASSET_NAME, setup_asset_url)
+        with requests.get(
+            setup_asset_url, stream=True, timeout=_MIGRATION_DOWNLOAD_TIMEOUT_SECONDS
+        ) as dl_response:
+            dl_response.raise_for_status()
+            with open(setup_exe_path, "wb") as f:
+                for chunk in dl_response.iter_content(chunk_size=1024 * 1024):
+                    f.write(chunk)
+    except (requests.RequestException, OSError) as err:
+        logger.warning("Migration: failed to download %s, will retry next launch: %s", _SETUP_ASSET_NAME, err)
+        _append_update_log_line(version, f"Migration: download failed: {err}")
+        return
+
+    logger.info("Migration: downloaded %s to %s, launching it silently...", _SETUP_ASSET_NAME, setup_exe_path)
+    _append_update_log_line(version, f"Migration: downloaded {_SETUP_ASSET_NAME}, launching --silent install.")
+    try:
+        subprocess.Popen([str(setup_exe_path), "--silent"], close_fds=True)
+    except OSError as err:
+        logger.warning("Migration: failed to launch %s, will retry next launch: %s", _SETUP_ASSET_NAME, err)
+        _append_update_log_line(version, f"Migration: launch failed: {err}")
+        return
+
+    _mark_migration_done()
+    logger.info("Migration: Setup.exe launched and the migration was marked complete.")
+    _append_update_log_line(version, "Migration: Setup.exe launched, marked complete.")
 
 
 def manual_fallback_message(version: str) -> str:

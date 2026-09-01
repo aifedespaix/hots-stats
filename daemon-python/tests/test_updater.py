@@ -10,6 +10,7 @@ from src.updater import (
     UpdatePhase,
     UpdateStatusTracker,
     installed_exe_path,
+    is_running_from_legacy_install,
     manual_fallback_message,
     perform_update,
     read_last_update_log_lines,
@@ -56,6 +57,49 @@ def test_installed_exe_path_returns_the_velopack_stub_path(monkeypatch, tmp_path
     result = installed_exe_path()
 
     assert result == tmp_path / "hots-analytics-daemon" / "hots-analytics-daemon.exe"
+
+
+# -- is_running_from_legacy_install (one-time migration shim) ----------------
+
+
+def test_is_running_from_legacy_install_false_when_not_frozen(monkeypatch, tmp_path):
+    """Never true for local dev, regardless of where `installed_exe_path`
+    would resolve to."""
+    monkeypatch.setattr("src.updater.IS_FROZEN", False)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+
+    assert is_running_from_legacy_install() is False
+
+
+def test_is_running_from_legacy_install_false_for_a_real_velopack_install(monkeypatch, tmp_path):
+    """A frozen build running from the actual Velopack-managed directory
+    (`%LOCALAPPDATA%\\{packId}\\{exeName}`) is the normal, post-migration
+    case -- never flagged as legacy."""
+    monkeypatch.setattr("src.updater.IS_FROZEN", True)
+    monkeypatch.setattr("src.updater._PACK_ID", "hots-analytics-daemon")
+    monkeypatch.setattr("src.updater._EXE_NAME", "hots-analytics-daemon.exe")
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setattr(
+        "src.updater.installed_exe_path",
+        lambda: tmp_path / "hots-analytics-daemon" / "hots-analytics-daemon.exe",
+    )
+
+    assert is_running_from_legacy_install() is False
+
+
+def test_is_running_from_legacy_install_true_for_an_arbitrary_old_location(monkeypatch, tmp_path):
+    """A frozen build whose `installed_exe_path()` parent is anything other
+    than the Velopack install directory is the pre-Velopack, raw-exe-
+    anywhere-on-disk model this migration exists to detect."""
+    monkeypatch.setattr("src.updater.IS_FROZEN", True)
+    monkeypatch.setattr("src.updater._PACK_ID", "hots-analytics-daemon")
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setattr(
+        "src.updater.installed_exe_path",
+        lambda: tmp_path / "SomeOtherFolder" / "hots-analytics-daemon.exe",
+    )
+
+    assert is_running_from_legacy_install() is True
 
 
 # -- manual_fallback_message -------------------------------------------------

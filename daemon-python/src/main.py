@@ -12,7 +12,7 @@ import argparse
 import logging
 from pathlib import Path
 
-from . import api_client
+from . import api_client, updater
 from .config import ConfigError, load_config
 from .ingestion import resync, sync_spatial_calibrations
 from .sync_state import SyncState
@@ -22,6 +22,19 @@ logger = logging.getLogger(__name__)
 
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
+    # One-time pre-Velopack -> Velopack migration shim (TEMPORARY -- see
+    # updater.py's `migrate_to_velopack_install` docstring and
+    # docs/superpowers/plans/2026-08-31-daemon-velopack-auto-update.md, Task
+    # 6, for why this exists and when to delete it). Checked before anything
+    # else `main()` does, same "handle exceptional startup cases first"
+    # reasoning as `run.py`'s `velopack.App().run()` hook -- it's a no-op
+    # (returns False immediately) for every normal Velopack install and every
+    # local dev run, so this costs nothing outside the one legacy-install
+    # case it exists for.
+    if updater.is_running_from_legacy_install():
+        updater.migrate_to_velopack_install()
+        return 0  # this run's only job was migrating; don't also start the tray/sync
 
     arg_parser = argparse.ArgumentParser(description="HotS Analytics replay daemon")
     arg_parser.add_argument(
