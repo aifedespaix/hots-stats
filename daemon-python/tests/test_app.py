@@ -1,7 +1,9 @@
+import sys
 import threading
 import time
 from unittest.mock import MagicMock, patch
 
+from src import app
 from src.app import (
     _PERSISTENT_FAILURE_THRESHOLD,
     _DaemonRunner,
@@ -367,3 +369,51 @@ def test_start_does_not_announce_an_empty_initial_scan(tmp_path):
         runner.stop()
 
     notify.assert_not_called()
+
+
+# -- worker thread priority lowering (tasks/daemon-ux-reliability-overhaul.md, task 5) ----
+
+
+def test_lower_worker_priority_calls_set_thread_priority_on_windows(monkeypatch):
+    monkeypatch.setattr(app.sys, "platform", "win32")
+    fake_ctypes = MagicMock()
+    fake_ctypes.windll.kernel32.SetThreadPriority.return_value = 1
+    monkeypatch.setitem(sys.modules, "ctypes", fake_ctypes)
+
+    app._lower_worker_priority()
+
+    fake_ctypes.windll.kernel32.SetThreadPriority.assert_called_once()
+    _handle, priority = fake_ctypes.windll.kernel32.SetThreadPriority.call_args.args
+    assert priority == -1  # THREAD_PRIORITY_BELOW_NORMAL
+
+
+def test_lower_worker_priority_is_a_noop_off_windows(monkeypatch):
+    monkeypatch.setattr(app.sys, "platform", "linux")
+    fake_ctypes = MagicMock()
+    monkeypatch.setitem(sys.modules, "ctypes", fake_ctypes)
+
+    app._lower_worker_priority()  # must not raise
+
+    fake_ctypes.windll.kernel32.SetThreadPriority.assert_not_called()
+
+
+def test_lower_worker_priority_swallows_a_failed_call(monkeypatch):
+    monkeypatch.setattr(app.sys, "platform", "win32")
+    fake_ctypes = MagicMock()
+    fake_ctypes.windll.kernel32.SetThreadPriority.return_value = 0
+    fake_ctypes.WinError.return_value = OSError("access denied")
+    monkeypatch.setitem(sys.modules, "ctypes", fake_ctypes)
+
+    app._lower_worker_priority()  # must not raise
+
+
+def test_run_sync_loop_initial_pool_uses_the_priority_initializer(tmp_path):
+    _touch_replay(tmp_path, "A.StormReplay")
+    status = StatusTracker()
+    stop_event = threading.Event()
+
+    with patch("src.app.watch_replays"), patch("src.app.ThreadPoolExecutor") as pool_cls:
+        pool_cls.return_value.__enter__.return_value.submit.return_value = MagicMock()
+        _run_sync_loop(tmp_path, lambda _p: None, stop_event, status)
+
+    assert pool_cls.call_args.kwargs["initializer"] is app._lower_worker_priority

@@ -13,6 +13,7 @@ Threading model:
 from __future__ import annotations
 
 import logging
+import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -53,6 +54,28 @@ _INITIAL_SYNC_WORKERS = 4
 # request) don't trigger it, low enough to still notify well before a whole
 # large backlog silently fails end to end (e.g. a revoked token).
 _PERSISTENT_FAILURE_THRESHOLD = 5
+
+
+def _lower_worker_priority() -> None:
+    """Runs once per initial-sync pool worker thread (`ThreadPoolExecutor`'s
+    `initializer`, see `_run_sync_loop`) so replay parsing yields CPU to
+    whatever's in the foreground -- typically the game itself, if the
+    player starts one while the initial backlog is still draining. No
+    detection of "is a game running": lowering the *background* work's
+    priority is the general fix, correct regardless of which foreground app
+    it's competing with. Best-effort -- a failure here must never stop the
+    sync it's trying to make less disruptive."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        THREAD_PRIORITY_BELOW_NORMAL = -1
+        handle = ctypes.windll.kernel32.GetCurrentThread()
+        if not ctypes.windll.kernel32.SetThreadPriority(handle, THREAD_PRIORITY_BELOW_NORMAL):
+            raise ctypes.WinError()
+    except Exception:
+        logger.warning("Could not lower sync worker thread priority", exc_info=True)
 
 
 def _run_sync_loop(
@@ -96,7 +119,11 @@ def _run_sync_loop(
         # tolerates concurrent callers (its own internal lock + a
         # `check_same_thread=False` connection), so no changes were needed
         # there for this to be safe.
-        with ThreadPoolExecutor(max_workers=_INITIAL_SYNC_WORKERS, thread_name_prefix="hots-initial-sync") as pool:
+        with ThreadPoolExecutor(
+            max_workers=_INITIAL_SYNC_WORKERS,
+            thread_name_prefix="hots-initial-sync",
+            initializer=_lower_worker_priority,
+        ) as pool:
             futures = []
             for path in existing:
                 if stop_event.is_set():
