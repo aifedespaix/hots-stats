@@ -38,6 +38,13 @@ _RESERVED_HOTKEYS = {
     "print screen",
 }
 
+# How many times HotkeyManager retries a failed registration before giving
+# up, and how long it waits between attempts -- covers the observed
+# "restarting the daemon fixes it" case automatically (a fresh process's
+# first `start()` call is exactly attempt 1 of this same sequence).
+_MAX_REGISTRATION_ATTEMPTS = 3
+_RETRY_DELAY_SECONDS = 1.5
+
 
 class InvalidHotkeyError(ValueError):
     """Raised by `validate` for a combo that can't be registered."""
@@ -100,8 +107,17 @@ class HotkeyManager:
         self._on_trigger = on_trigger
         self._lock = threading.Lock()
         self._registered: str | None = None
+        # Separate from `_registered`, which only ever reflects a
+        # *successful* registration: `retry()` needs to know which string
+        # to re-attempt even when the last attempt failed.
+        self._last_attempted: str | None = None
         self._last_error: str | None = None
         self._last_triggered_at: datetime | None = None
+        # Bumped by every start()/stop() call; a pending retry checks this
+        # before touching `keyboard` so a rebind (or shutdown) invalidates
+        # any retry still in flight for the *previous* hotkey instead of it
+        # registering something the caller no longer wants.
+        self._generation = 0
 
     @property
     def active_hotkey(self) -> str | None:
@@ -131,12 +147,11 @@ class HotkeyManager:
 
     def start(self, hotkey: str) -> None:
         """Validates and registers `hotkey`, replacing any previously
-        registered one. Logs and leaves nothing registered on failure (e.g.
-        `keyboard` can't install its hook on this platform/permission
-        level) rather than raising -- a broken hotkey must never crash the
-        daemon's startup or a settings save. `snapshot().last_error` is how
-        a caller (the settings window) finds out a failure happened at
-        all -- see `HotkeyStatus`."""
+        registered one. Never raises. On a registration failure, retries a
+        few times in the background (see `_attempt_registration`) instead
+        of giving up outright -- `snapshot().last_error` reflects the
+        latest failure the whole time, and a "Réessayer" action in the
+        settings window can also force an extra attempt on demand."""
         try:
             normalized = validate(hotkey)
         except InvalidHotkeyError as err:
@@ -145,23 +160,73 @@ class HotkeyManager:
                 self._last_error = str(err)
             return
 
-        import keyboard
-
         with self._lock:
             self._unregister_locked()
-            try:
-                keyboard.add_hotkey(normalized, self._handle_trigger)
-            except Exception as err:
-                logger.exception("Failed to register global hotkey %r", normalized)
+            self._generation += 1
+            generation = self._generation
+            self._last_attempted = normalized
+        self._attempt_registration(normalized, generation, attempt=1)
+
+    def _attempt_registration(self, normalized: str, generation: int, attempt: int) -> None:
+        with self._lock:
+            if generation != self._generation:
+                return  # superseded by a newer start()/stop() -- drop this attempt
+        import keyboard
+
+        try:
+            keyboard.add_hotkey(normalized, self._handle_trigger)
+        except Exception as err:
+            logger.exception(
+                "Failed to register global hotkey %r (attempt %d/%d)",
+                normalized,
+                attempt,
+                _MAX_REGISTRATION_ATTEMPTS,
+            )
+            with self._lock:
+                if generation != self._generation:
+                    return
                 self._last_error = str(err)
+            if attempt < _MAX_REGISTRATION_ATTEMPTS:
+                timer = threading.Timer(
+                    _RETRY_DELAY_SECONDS,
+                    self._attempt_registration,
+                    args=(normalized, generation, attempt + 1),
+                )
+                timer.daemon = True
+                timer.start()
+            return
+
+        with self._lock:
+            if generation != self._generation:
+                # A newer start()/stop() happened while this attempt was in
+                # flight -- unregister what was just added instead of
+                # leaving a hotkey live that nothing wants anymore.
+                try:
+                    keyboard.remove_hotkey(normalized)
+                except (KeyError, ValueError):
+                    pass
                 return
             self._registered = normalized
             self._last_error = None
-            logger.info("Registered live-draft capture hotkey: %s", normalized)
+        logger.info("Registered live-draft capture hotkey: %s", normalized)
 
     def stop(self) -> None:
         with self._lock:
+            self._generation += 1
             self._unregister_locked()
+
+    def retry(self) -> None:
+        """Forces one extra registration attempt for the hotkey most
+        recently passed to `start()`, independent of the automatic retry
+        loop -- what the settings window's "Réessayer" action calls, for a
+        player who doesn't want to wait for the automatic retries."""
+        with self._lock:
+            normalized = self._last_attempted
+            if normalized is None:
+                return
+            self._generation += 1
+            generation = self._generation
+        self._attempt_registration(normalized, generation, attempt=1)
 
     def _unregister_locked(self) -> None:
         if self._registered is None:

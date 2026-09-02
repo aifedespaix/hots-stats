@@ -1,9 +1,19 @@
 import sys
+import time
 from unittest.mock import MagicMock
 
 import pytest
 
 from src.hotkey import HotkeyManager, InvalidHotkeyError, validate
+
+
+def _wait_until(condition, timeout=1.0):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if condition():
+            return
+        time.sleep(0.005)
+    raise AssertionError("condition was not met in time")
 
 
 @pytest.fixture
@@ -72,7 +82,10 @@ def test_hotkey_manager_stop_unregisters(fake_keyboard):
     fake_keyboard.remove_hotkey.assert_called_once_with("ctrl+shift+d")
 
 
-def test_hotkey_manager_registration_failure_is_swallowed(fake_keyboard):
+def test_hotkey_manager_registration_failure_is_swallowed(fake_keyboard, monkeypatch):
+    import src.hotkey as hotkey_module
+
+    monkeypatch.setattr(hotkey_module, "_MAX_REGISTRATION_ATTEMPTS", 1)
     fake_keyboard.add_hotkey.side_effect = RuntimeError("hook failed")
     manager = HotkeyManager(on_trigger=lambda: None)
 
@@ -90,7 +103,10 @@ def test_snapshot_reports_registered_hotkey_and_no_error(fake_keyboard):
     assert status.last_error is None
 
 
-def test_snapshot_reports_last_error_on_registration_failure(fake_keyboard):
+def test_snapshot_reports_last_error_on_registration_failure(fake_keyboard, monkeypatch):
+    import src.hotkey as hotkey_module
+
+    monkeypatch.setattr(hotkey_module, "_MAX_REGISTRATION_ATTEMPTS", 1)
     fake_keyboard.add_hotkey.side_effect = RuntimeError("hook failed")
     manager = HotkeyManager(on_trigger=lambda: None)
 
@@ -149,3 +165,50 @@ def test_last_triggered_at_updates_even_if_on_trigger_raises(fake_keyboard):
         registered_callback()
 
     assert manager.snapshot().last_triggered_at is not None
+
+
+def test_start_retries_after_a_registration_failure_and_eventually_succeeds(
+    fake_keyboard, monkeypatch
+):
+    import src.hotkey as hotkey_module
+
+    monkeypatch.setattr(hotkey_module, "_RETRY_DELAY_SECONDS", 0.01)
+    fake_keyboard.add_hotkey.side_effect = [RuntimeError("hook failed"), None]
+    manager = HotkeyManager(on_trigger=lambda: None)
+
+    manager.start("ctrl+shift+d")
+    assert manager.active_hotkey is None
+    assert manager.snapshot().last_error == "hook failed"
+
+    _wait_until(lambda: manager.active_hotkey == "ctrl+shift+d")
+    assert manager.snapshot().last_error is None
+
+
+def test_retry_gives_up_after_max_attempts(fake_keyboard, monkeypatch):
+    import src.hotkey as hotkey_module
+
+    monkeypatch.setattr(hotkey_module, "_RETRY_DELAY_SECONDS", 0.01)
+    monkeypatch.setattr(hotkey_module, "_MAX_REGISTRATION_ATTEMPTS", 2)
+    fake_keyboard.add_hotkey.side_effect = RuntimeError("hook failed")
+    manager = HotkeyManager(on_trigger=lambda: None)
+
+    manager.start("ctrl+shift+d")
+    time.sleep(0.05)  # long enough for every retry attempt to have run
+
+    assert manager.active_hotkey is None
+    assert fake_keyboard.add_hotkey.call_count == 2
+
+
+def test_a_pending_retry_is_superseded_by_a_new_start_call(fake_keyboard, monkeypatch):
+    import src.hotkey as hotkey_module
+
+    monkeypatch.setattr(hotkey_module, "_RETRY_DELAY_SECONDS", 0.05)
+    fake_keyboard.add_hotkey.side_effect = [RuntimeError("hook failed"), None, None]
+    manager = HotkeyManager(on_trigger=lambda: None)
+
+    manager.start("ctrl+shift+d")  # fails, schedules a retry for "ctrl+shift+d"
+    manager.start("ctrl+alt+g")  # succeeds immediately, should win
+
+    time.sleep(0.1)  # let the stale retry's timer fire, if it's going to
+
+    assert manager.active_hotkey == "ctrl+alt+g"
