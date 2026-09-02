@@ -120,3 +120,32 @@ def test_snapshot_reports_invalid_hotkey_as_last_error(fake_keyboard):
     status = manager.snapshot()
     assert status.registered_hotkey is None
     assert "modification" in status.last_error
+
+
+def test_snapshot_records_last_triggered_at_on_a_real_press(fake_keyboard):
+    calls: list[str] = []
+    manager = HotkeyManager(on_trigger=lambda: calls.append("fired"))
+    manager.start("ctrl+shift+d")
+
+    # `fake_keyboard.add_hotkey` doesn't call its callback itself -- grab
+    # the wrapped callback `HotkeyManager` actually registered and invoke it
+    # directly, simulating Windows firing the hook.
+    registered_callback = fake_keyboard.add_hotkey.call_args.args[1]
+    registered_callback()
+
+    assert calls == ["fired"]
+    assert manager.snapshot().last_triggered_at is not None
+
+
+def test_last_triggered_at_updates_even_if_on_trigger_raises(fake_keyboard):
+    def _boom():
+        raise RuntimeError("capture blew up")
+
+    manager = HotkeyManager(on_trigger=_boom)
+    manager.start("ctrl+shift+d")
+    registered_callback = fake_keyboard.add_hotkey.call_args.args[1]
+
+    with pytest.raises(RuntimeError):
+        registered_callback()
+
+    assert manager.snapshot().last_triggered_at is not None

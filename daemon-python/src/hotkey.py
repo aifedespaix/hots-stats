@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 import threading
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Callable
 
 logger = logging.getLogger(__name__)
@@ -116,6 +116,19 @@ class HotkeyManager:
                 last_triggered_at=self._last_triggered_at,
             )
 
+    def _handle_trigger(self) -> None:
+        """What's actually registered with `keyboard.add_hotkey` -- stamps
+        `last_triggered_at` *before* calling the real callback, so a press
+        is recorded even if the callback itself is slow, superseded, or
+        raises. This is what lets the settings window show "the hotkey was
+        detected" as a signal independent of whether the resulting capture
+        succeeded (see `draft_capture.capture_and_submit`, which can fail
+        for reasons that have nothing to do with the hotkey itself, e.g. no
+        game window found)."""
+        with self._lock:
+            self._last_triggered_at = datetime.now(timezone.utc)
+        self._on_trigger()
+
     def start(self, hotkey: str) -> None:
         """Validates and registers `hotkey`, replacing any previously
         registered one. Logs and leaves nothing registered on failure (e.g.
@@ -137,7 +150,7 @@ class HotkeyManager:
         with self._lock:
             self._unregister_locked()
             try:
-                keyboard.add_hotkey(normalized, self._on_trigger)
+                keyboard.add_hotkey(normalized, self._handle_trigger)
             except Exception as err:
                 logger.exception("Failed to register global hotkey %r", normalized)
                 self._last_error = str(err)
