@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import logging
 import threading
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Callable
 
 logger = logging.getLogger(__name__)
@@ -39,6 +41,21 @@ _RESERVED_HOTKEYS = {
 
 class InvalidHotkeyError(ValueError):
     """Raised by `validate` for a combo that can't be registered."""
+
+
+@dataclass(frozen=True)
+class HotkeyStatus:
+    """A point-in-time snapshot of `HotkeyManager`'s state -- what's
+    actually registered with Windows right now, the most recent
+    registration failure (if any), and when the hotkey was last actually
+    pressed. Exists because the settings window previously had no way to
+    tell "the combo is syntactically valid" (`validate()`, a pure string
+    check) apart from "Windows actually installed the hook" -- the gap that
+    made a silently-failed registration look identical to a working one."""
+
+    registered_hotkey: str | None
+    last_error: str | None
+    last_triggered_at: datetime | None
 
 
 def validate(hotkey: str) -> str:
@@ -83,22 +100,36 @@ class HotkeyManager:
         self._on_trigger = on_trigger
         self._lock = threading.Lock()
         self._registered: str | None = None
+        self._last_error: str | None = None
+        self._last_triggered_at: datetime | None = None
 
     @property
     def active_hotkey(self) -> str | None:
         with self._lock:
             return self._registered
 
+    def snapshot(self) -> HotkeyStatus:
+        with self._lock:
+            return HotkeyStatus(
+                registered_hotkey=self._registered,
+                last_error=self._last_error,
+                last_triggered_at=self._last_triggered_at,
+            )
+
     def start(self, hotkey: str) -> None:
         """Validates and registers `hotkey`, replacing any previously
         registered one. Logs and leaves nothing registered on failure (e.g.
         `keyboard` can't install its hook on this platform/permission
         level) rather than raising -- a broken hotkey must never crash the
-        daemon's startup or a settings save."""
+        daemon's startup or a settings save. `snapshot().last_error` is how
+        a caller (the settings window) finds out a failure happened at
+        all -- see `HotkeyStatus`."""
         try:
             normalized = validate(hotkey)
         except InvalidHotkeyError as err:
             logger.error("Not registering draft hotkey: %s", err)
+            with self._lock:
+                self._last_error = str(err)
             return
 
         import keyboard
@@ -107,10 +138,12 @@ class HotkeyManager:
             self._unregister_locked()
             try:
                 keyboard.add_hotkey(normalized, self._on_trigger)
-            except Exception:
+            except Exception as err:
                 logger.exception("Failed to register global hotkey %r", normalized)
+                self._last_error = str(err)
                 return
             self._registered = normalized
+            self._last_error = None
             logger.info("Registered live-draft capture hotkey: %s", normalized)
 
     def stop(self) -> None:
