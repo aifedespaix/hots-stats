@@ -467,6 +467,11 @@ class _SettingsWindow:
         # `root.after`, which would otherwise raise from a thread nothing is
         # watching.
         self._closed = False
+        # Populated by `_build_tab`: key -> (notebook, tab frame, base
+        # title), so `_set_tab_problem` can toggle a marker on a tab's
+        # label without needing every call site to pass the notebook/frame
+        # around itself.
+        self._tabs: dict[str, tuple[ttk.Notebook, ttk.Frame, str]] = {}
 
         root.title("HotS Analytics - Configuration")
         root.configure(bg=_BG)
@@ -499,9 +504,10 @@ class _SettingsWindow:
 
     # -- layout ---------------------------------------------------------
 
-    def _build_tab(self, notebook: ttk.Notebook, title: str) -> ttk.Frame:
+    def _build_tab(self, notebook: ttk.Notebook, key: str, title: str) -> ttk.Frame:
         tab = ttk.Frame(notebook, style="TFrame", padding=18)
         notebook.add(tab, text=title)
+        self._tabs[key] = (notebook, tab, title)
         return tab
 
     def _build_ui(self) -> None:
@@ -532,11 +538,11 @@ class _SettingsWindow:
         notebook = ttk.Notebook(outer)
         notebook.pack(fill="both", expand=True)
 
-        self._build_config_tab(self._build_tab(notebook, "Config"))
-        self._build_draft_tab(self._build_tab(notebook, "Draft Live"))
-        self._build_sync_tab(self._build_tab(notebook, "Synchronisation"))
+        self._build_config_tab(self._build_tab(notebook, "config", "Config"))
+        self._build_draft_tab(self._build_tab(notebook, "draft_live", "Draft Live"))
+        self._build_sync_tab(self._build_tab(notebook, "sync", "Synchronisation"))
         if updater.IS_FROZEN:
-            self._build_update_tab(self._build_tab(notebook, "Update"))
+            self._build_update_tab(self._build_tab(notebook, "update", "Update"))
 
         self._error_label = ttk.Label(
             outer,
@@ -1655,8 +1661,18 @@ class _SettingsWindow:
 
     # -- misc ---------------------------------------------------------------
 
+    # A filled-circle emoji rather than a plain "*"/"!" -- ttk.Notebook tab
+    # text can't be partially colored, but an emoji glyph renders in its own
+    # color regardless of the tab's text color, which is what makes a red
+    # marker possible here without custom tab drawing.
+    _TAB_PROBLEM_MARKER = " 🔴"
+
     def _set_status(self, label: ttk.Label, text: str, color: str) -> None:
         label.configure(text=text, foreground=color)
+
+    def _set_tab_problem(self, key: str, has_problem: bool) -> None:
+        notebook, tab, title = self._tabs[key]
+        notebook.tab(tab, text=title + self._TAB_PROBLEM_MARKER if has_problem else title)
 
     def _open_token_link(self) -> None:
         webbrowser.open(guess_settings_url(self._api_var.get() or DEFAULT_API_BASE_URL))
