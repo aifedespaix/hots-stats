@@ -28,8 +28,10 @@ import logging
 import threading
 import tkinter as tk
 import webbrowser
+from datetime import datetime, timezone
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
+from typing import Callable
 
 from PIL import Image, ImageTk
 
@@ -147,6 +149,19 @@ def _truncate(text: str, max_chars: int) -> str:
     return text[: max_chars - 1].rstrip() + "…"
 
 
+def _format_time_ago(moment: datetime) -> str:
+    """Renders a past UTC timestamp as a short relative French phrase (e.g.
+    "il y a 12s") for the Draft Live tab's "dernier appui détecté" line."""
+    seconds = int((datetime.now(timezone.utc) - moment).total_seconds())
+    if seconds < 60:
+        return f"il y a {max(seconds, 0)}s"
+    minutes = seconds // 60
+    if minutes < 60:
+        return f"il y a {minutes} min"
+    hours = minutes // 60
+    return f"il y a {hours} h"
+
+
 class _ProgressBarDriver:
     """Switches a `ttk.Progressbar` between determinate (a known 0-100%)
     and indeterminate ("something's happening, no ETA") modes to match an
@@ -194,6 +209,8 @@ def run_settings_window(
     sync_state: SyncState | None = None,
     update_status: UpdateStatusTracker | None = None,
     draft_capture_status: DraftCaptureCoordinator | None = None,
+    hotkey_manager: "hotkey.HotkeyManager | None" = None,
+    on_manual_capture: Callable[[], None] | None = None,
 ) -> bool:
     """Opens the settings window and blocks (on the calling thread) until
     it's closed. Returns True if the user saved a valid configuration.
@@ -206,6 +223,12 @@ def run_settings_window(
     Update tab's live progress and lets its "Vérifier les mises à jour"
     button report back to something. `draft_capture_status`, same
     condition, backs the Draft Live tab's "capture in progress" indicator.
+
+    `hotkey_manager`, same condition, backs the Draft Live tab's real
+    registration status (error message, last-triggered timestamp) and its
+    "Réessayer" action. `on_manual_capture`, same condition, is what the
+    Draft Live tab's "Capturer maintenant" button calls to trigger a real
+    (non-dry-run) capture on demand.
     """
     result = {"saved": False}
     root = tk.Tk()
@@ -217,6 +240,8 @@ def run_settings_window(
         sync_state=sync_state,
         update_status=update_status,
         draft_capture_status=draft_capture_status,
+        hotkey_manager=hotkey_manager,
+        on_manual_capture=on_manual_capture,
     )
     root.mainloop()
     return result["saved"]
@@ -382,6 +407,12 @@ def _apply_dark_style() -> None:
         font=("Segoe UI", 9),
     )
     style.configure(
+        "SectionHeader.TLabel",
+        background=_PANEL,
+        foreground=_TEXT_MUTED,
+        font=("Segoe UI", 9, "bold"),
+    )
+    style.configure(
         "Title.TLabel", background=_BG, foreground=_TEXT, font=("Segoe UI", 15, "bold")
     )
     style.configure(
@@ -444,6 +475,8 @@ class _SettingsWindow:
         sync_state: SyncState | None = None,
         update_status: UpdateStatusTracker | None = None,
         draft_capture_status: DraftCaptureCoordinator | None = None,
+        hotkey_manager: "hotkey.HotkeyManager | None" = None,
+        on_manual_capture: Callable[[], None] | None = None,
     ) -> None:
         self._root = root
         self._is_first_run = is_first_run
@@ -452,6 +485,8 @@ class _SettingsWindow:
         self._sync_state = sync_state
         self._update_status = update_status
         self._draft_capture_status = draft_capture_status
+        self._hotkey_manager = hotkey_manager
+        self._on_manual_capture = on_manual_capture
         self._debounce_job: str | None = None
         self._live_stats_job: str | None = None
         self._update_status_job: str | None = None
@@ -731,11 +766,22 @@ class _SettingsWindow:
     # -- Draft Live tab -----------------------------------------------------
 
     def _build_draft_tab(self, parent: ttk.Frame) -> None:
+        self._build_raccourci_section(parent)
+        self._build_capture_section(parent)
+        self._build_etat_section(parent)
+
+    # -- Draft Live tab: Raccourci ------------------------------------------
+
+    def _build_raccourci_section(self, parent: ttk.Frame) -> None:
         card = tk.Frame(parent, bg=_PANEL)
-        card.pack(fill="x")
+        card.pack(fill="x", pady=(0, 12))
         inner = ttk.Frame(card, style="Panel.TFrame", padding=18)
         inner.pack(fill="x")
         inner.grid_columnconfigure(0, weight=1, minsize=340)
+
+        ttk.Label(inner, text="RACCOURCI", style="SectionHeader.TLabel").grid(
+            row=0, column=0, columnspan=3, sticky="w", pady=(0, 10)
+        )
 
         self._draft_enabled_var = tk.BooleanVar(value=True)
         enabled_check = self._checkbutton(
@@ -744,15 +790,12 @@ class _SettingsWindow:
             variable=self._draft_enabled_var,
             command=self._on_draft_enabled_toggled,
         )
-        enabled_check.grid(row=0, column=0, columnspan=3, sticky="w")
+        enabled_check.grid(row=1, column=0, columnspan=3, sticky="w")
 
-        ttk.Label(inner, text="Raccourci clavier", style="Panel.TLabel").grid(
-            row=1, column=0, columnspan=3, sticky="w", pady=(14, 0)
-        )
         self._draft_hotkey_var = tk.StringVar()
 
         hotkey_row = ttk.Frame(inner, style="Panel.TFrame")
-        hotkey_row.grid(row=2, column=0, columnspan=3, sticky="w", pady=(4, 0))
+        hotkey_row.grid(row=2, column=0, columnspan=3, sticky="w", pady=(10, 0))
 
         display_wrapper = tk.Frame(
             hotkey_row,
@@ -799,20 +842,51 @@ class _SettingsWindow:
             justify="left",
         ).grid(row=4, column=0, columnspan=3, sticky="w", pady=(10, 0))
 
-        if self._draft_capture_status is not None:
-            self._draft_capture_animating = False
-            self._draft_capture_status_label = ttk.Label(
-                inner, text="", style="PanelMuted.TLabel"
+        # Real registration status -- distinct from the syntax-only "✓
+        # Raccourci valide" above, which used to be the only signal shown
+        # and could stay green even when Windows never actually installed
+        # the hook. Only shown once a live HotkeyManager exists (not on
+        # first run, before the daemon has started once).
+        if self._hotkey_manager is not None:
+            status_row = ttk.Frame(inner, style="Panel.TFrame")
+            status_row.grid(row=5, column=0, columnspan=3, sticky="w", pady=(10, 0))
+            self._hotkey_registration_status = ttk.Label(
+                status_row, text="", style="PanelMuted.TLabel", wraplength=360, justify="left"
             )
-            self._draft_capture_status_label.grid(
-                row=5, column=0, columnspan=3, sticky="w", pady=(14, 4)
+            self._hotkey_registration_status.pack(side="left")
+            self._hotkey_retry_btn = ttk.Button(
+                status_row,
+                text="Réessayer",
+                style="Ghost.TButton",
+                command=self._retry_hotkey_registration,
             )
-            self._draft_capture_progress_bar = ttk.Progressbar(
-                inner, orient="horizontal", length=200, mode="indeterminate"
-            )
-            # Not gridded here -- only shown while a capture is actually in
-            # progress (see _refresh_draft_capture_status), so idle time
-            # (almost always) doesn't show an empty bar doing nothing.
+            # Not packed here -- only shown while there's an error to retry,
+            # see `_refresh_draft_capture_status`. Tracked via an explicit
+            # flag rather than `winfo_ismapped()`: this button lives inside
+            # a ttk.Notebook tab, and a widget in a non-selected tab reports
+            # `winfo_ismapped() == False` even while still packed, so that
+            # query can't distinguish "not packed" from "packed but on a
+            # hidden tab".
+            self._hotkey_retry_btn_shown = False
+
+    def _retry_hotkey_registration(self) -> None:
+        if self._hotkey_manager is None:
+            return
+        threading.Thread(
+            target=self._hotkey_manager.retry, daemon=True, name="hots-hotkey-retry"
+        ).start()
+
+    # -- Draft Live tab: Capture ---------------------------------------------
+
+    def _build_capture_section(self, parent: ttk.Frame) -> None:
+        card = tk.Frame(parent, bg=_PANEL)
+        card.pack(fill="x", pady=(0, 12))
+        inner = ttk.Frame(card, style="Panel.TFrame", padding=18)
+        inner.pack(fill="x")
+
+        ttk.Label(inner, text="CAPTURE", style="SectionHeader.TLabel").grid(
+            row=0, column=0, columnspan=2, sticky="w", pady=(0, 10)
+        )
 
         # "Tester la capture" -- runs the same screenshot -> crop -> OCR
         # pipeline against whatever window has focus, without ever POSTing
@@ -821,20 +895,81 @@ class _SettingsWindow:
         # draft_capture.run_test_capture). Independent of the "Activer la
         # capture de draft en direct" checkbox above and of any saved
         # config -- available even on first run, before anything's saved.
-        test_row = ttk.Frame(inner, style="Panel.TFrame")
-        test_row.grid(row=7, column=0, columnspan=3, sticky="w", pady=(18, 0))
+        test_col = ttk.Frame(inner, style="Panel.TFrame")
+        test_col.grid(row=1, column=0, sticky="nw", padx=(0, 20))
         self._test_capture_btn = ttk.Button(
-            test_row,
-            text="Tester la capture",
+            test_col,
+            text="🔍 Tester la capture",
             style="Ghost.TButton",
             command=self._start_test_capture,
         )
-        self._test_capture_btn.pack(side="left")
-        self._test_capture_status_label = ttk.Label(
-            inner, text="", style="PanelMuted.TLabel"
-        )
+        self._test_capture_btn.pack(anchor="w")
+        ttk.Label(
+            test_col,
+            text="Aucun envoi. Vérifie le cadrage/OCR sur la fenêtre active — pour calibrer.",
+            style="PanelMuted.TLabel",
+            wraplength=190,
+            justify="left",
+        ).pack(anchor="w", pady=(4, 0))
+
+        # "Capturer maintenant" -- a real (non-dry-run) capture, same as a
+        # hotkey press, for when the player isn't mid-draft or the hotkey
+        # itself isn't responding. Only shown once a live daemon exists to
+        # hand the request to (not on first run).
+        if self._on_manual_capture is not None:
+            capture_col = ttk.Frame(inner, style="Panel.TFrame")
+            capture_col.grid(row=1, column=1, sticky="nw")
+            ttk.Button(
+                capture_col,
+                text="📤 Capturer maintenant",
+                style="Accent.TButton",
+                command=self._start_manual_capture,
+            ).pack(anchor="w")
+            ttk.Label(
+                capture_col,
+                text="Déclenche une vraie capture + envoi, comme le raccourci — utile hors "
+                "partie ou si le raccourci ne répond pas.",
+                style="PanelMuted.TLabel",
+                wraplength=190,
+                justify="left",
+            ).pack(anchor="w", pady=(4, 0))
+
+        self._test_capture_status_label = ttk.Label(inner, text="", style="PanelMuted.TLabel")
         self._test_capture_status_label.grid(
-            row=8, column=0, columnspan=3, sticky="w", pady=(6, 0)
+            row=2, column=0, columnspan=2, sticky="w", pady=(10, 0)
+        )
+
+    def _start_manual_capture(self) -> None:
+        if self._on_manual_capture is not None:
+            self._on_manual_capture()
+
+    # -- Draft Live tab: État -------------------------------------------------
+
+    def _build_etat_section(self, parent: ttk.Frame) -> None:
+        if self._draft_capture_status is None:
+            return
+        card = tk.Frame(parent, bg=_PANEL)
+        card.pack(fill="x")
+        inner = ttk.Frame(card, style="Panel.TFrame", padding=18)
+        inner.pack(fill="x")
+
+        ttk.Label(inner, text="ÉTAT", style="SectionHeader.TLabel").grid(
+            row=0, column=0, columnspan=3, sticky="w", pady=(0, 10)
+        )
+
+        self._draft_capture_animating = False
+        self._draft_capture_status_label = ttk.Label(inner, text="", style="PanelMuted.TLabel")
+        self._draft_capture_status_label.grid(row=1, column=0, columnspan=3, sticky="w")
+        self._draft_capture_progress_bar = ttk.Progressbar(
+            inner, orient="horizontal", length=200, mode="indeterminate"
+        )
+        # Not gridded here -- only shown while a capture is actually in
+        # progress (see _refresh_draft_capture_status), so idle time (almost
+        # always) doesn't show an empty bar doing nothing.
+
+        self._hotkey_last_triggered_label = ttk.Label(inner, text="", style="PanelMuted.TLabel")
+        self._hotkey_last_triggered_label.grid(
+            row=3, column=0, columnspan=3, sticky="w", pady=(10, 0)
         )
 
     def _on_draft_enabled_toggled(self) -> None:
@@ -933,6 +1068,11 @@ class _SettingsWindow:
         being logged -- this is what used to look like "the hotkey is fine
         but nothing happens": something did happen, it just wasn't shown
         anywhere a player would see it.
+
+        Also refreshes the Raccourci section's real registration status and
+        the État section's "dernier appui détecté" line on the same tick --
+        one shared 500ms poll rather than a second timer, since both are
+        cheap snapshot reads.
         """
         assert self._draft_capture_status is not None
         status = self._draft_capture_status.snapshot()
@@ -945,7 +1085,7 @@ class _SettingsWindow:
         elif busy and not self._draft_capture_animating:
             self._draft_capture_animating = True
             self._draft_capture_progress_bar.grid(
-                row=6, column=0, columnspan=3, sticky="ew"
+                row=2, column=0, columnspan=3, sticky="ew", pady=(6, 0)
             )
             self._draft_capture_progress_bar.start(12)
 
@@ -966,9 +1106,52 @@ class _SettingsWindow:
             )
             self._set_status(self._draft_capture_status_label, text, _NEUTRAL)
 
+        self._refresh_hotkey_status()
+
         self._draft_capture_status_job = self._root.after(
             _LIVE_STATS_POLL_MS, self._refresh_draft_capture_status
         )
+
+    def _refresh_hotkey_status(self) -> None:
+        """Refreshes the Raccourci section's real registration status (the
+        `HotkeyManager` actually installed the OS-level hook, not just that
+        the combo's syntax parsed) and the État section's "dernier appui
+        détecté" timestamp. Called from `_refresh_draft_capture_status`'s
+        poll tick; a no-op if no live `HotkeyManager` was handed in (first
+        run, before the daemon has started once).
+        """
+        if self._hotkey_manager is None:
+            return
+        snapshot = self._hotkey_manager.snapshot()
+
+        if hasattr(self, "_hotkey_registration_status"):
+            if snapshot.last_error:
+                self._set_status(
+                    self._hotkey_registration_status,
+                    _truncate(f"✗ Échec de l'enregistrement — {snapshot.last_error}", 90),
+                    _ERROR,
+                )
+                if not self._hotkey_retry_btn_shown:
+                    self._hotkey_retry_btn.pack(side="left", padx=(10, 0))
+                    self._hotkey_retry_btn_shown = True
+            else:
+                self._set_status(self._hotkey_registration_status, "", _NEUTRAL)
+                if self._hotkey_retry_btn_shown:
+                    self._hotkey_retry_btn.pack_forget()
+                    self._hotkey_retry_btn_shown = False
+
+        if hasattr(self, "_hotkey_last_triggered_label"):
+            if snapshot.last_triggered_at is None:
+                self._hotkey_last_triggered_label.configure(
+                    text="Aucun appui détecté depuis l'ouverture.", foreground=_NEUTRAL
+                )
+            else:
+                self._hotkey_last_triggered_label.configure(
+                    text=f"Dernier appui du raccourci détecté : {_format_time_ago(snapshot.last_triggered_at)}",
+                    foreground=_NEUTRAL,
+                )
+
+        self._set_tab_problem("draft_live", has_problem=bool(snapshot.last_error))
 
     # -- Draft Live tab: "Tester la capture" ---------------------------------
 
@@ -1727,11 +1910,16 @@ class _SettingsWindow:
             # short fixed in-progress phrases -- same "x"*N filler pattern
             # as the other unbounded-text labels above.
             placeholders.append(
+                (self._draft_capture_status_label, "x" * _DRAFT_CAPTURE_STATUS_MAX_CHARS)
+            )
+            placeholders.append(
                 (
-                    self._draft_capture_status_label,
-                    "x" * _DRAFT_CAPTURE_STATUS_MAX_CHARS,
+                    self._hotkey_last_triggered_label,
+                    "Dernier appui du raccourci détecté : il y a 12345678 h",
                 )
             )
+        if hasattr(self, "_hotkey_registration_status"):
+            placeholders.append((self._hotkey_registration_status, "x" * 90))
         placeholders.append(
             (self._test_capture_status_label, "x" * _TEST_CAPTURE_STATUS_MAX_CHARS)
         )
@@ -1746,7 +1934,7 @@ class _SettingsWindow:
         # doesn't need to grow the first time a real capture actually shows it.
         if self._draft_capture_status is not None:
             self._draft_capture_progress_bar.grid(
-                row=6, column=0, columnspan=3, sticky="ew"
+                row=2, column=0, columnspan=3, sticky="ew", pady=(6, 0)
             )
 
         # Same idea for the "Ouvrir le dossier" button: normally unpacked

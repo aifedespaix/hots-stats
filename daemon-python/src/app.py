@@ -438,6 +438,8 @@ def run_app() -> int:
             sync_state=daemon.sync_state,
             update_status=update_status,
             draft_capture_status=daemon.draft_capture_status,
+            hotkey_manager=daemon.hotkey_manager,
+            on_manual_capture=daemon.trigger_draft_capture,
         ):
             try:
                 new_config = load_config()
