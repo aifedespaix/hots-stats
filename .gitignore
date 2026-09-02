@@ -36,3 +36,5 @@ prompts
 
 # Claude Code local overrides (machine-specific paths/permissions)
 .claude/settings.local.json
+# superpowers brainstorming companion (local scratch)
+.superpowers/
