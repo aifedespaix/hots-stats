@@ -632,25 +632,32 @@ class _SettingsWindow:
     # -- Config tab -------------------------------------------------------
 
     def _build_config_tab(self, parent: ttk.Frame) -> None:
-        card = tk.Frame(parent, bg=_PANEL)
-        card.pack(fill="x")
-        card_inner = ttk.Frame(card, style="Panel.TFrame", padding=18)
-        card_inner.pack(fill="x")
-        card_inner.grid_columnconfigure(0, weight=1, minsize=340)
+        self._build_connexion_section(parent)
+        self._build_stockage_section(parent)
+        self._build_demarrage_section(parent)
 
-        # Each field consumes 2 grid rows (label, then entry); `grid_row`
-        # tracks the next free row so fields, the token link, and the
-        # browse button all stack without overlapping.
-        self._api_entry, self._api_status, grid_row = self._build_field(
-            card_inner,
-            label="URL de l'API",
-            var=self._api_var,
-            start_row=0,
-            on_change=self._on_api_or_token_changed,
+    # -- Config tab: Connexion -----------------------------------------------
+
+    def _build_connexion_section(self, parent: ttk.Frame) -> None:
+        card = tk.Frame(parent, bg=_PANEL)
+        card.pack(fill="x", pady=(0, 12))
+        inner = ttk.Frame(card, style="Panel.TFrame", padding=18)
+        inner.pack(fill="x")
+        inner.grid_columnconfigure(0, weight=1, minsize=340)
+
+        ttk.Label(inner, text="CONNEXION", style="SectionHeader.TLabel").grid(
+            row=0, column=0, columnspan=3, sticky="w", pady=(0, 10)
         )
 
+        self._api_entry, self._api_status, grid_row = self._build_field(
+            inner,
+            label="URL de l'API",
+            var=self._api_var,
+            start_row=1,
+            on_change=self._on_api_or_token_changed,
+        )
         self._token_entry, self._token_status, grid_row = self._build_field(
-            card_inner,
+            inner,
             label="Token d'accès",
             var=self._token_var,
             start_row=grid_row,
@@ -658,41 +665,90 @@ class _SettingsWindow:
             show="•",
         )
         link = ttk.Label(
-            card_inner,
-            text="Générer / gérer mon token →",
-            style="Link.TLabel",
-            cursor="hand2",
+            inner, text="Générer / gérer mon token →", style="Link.TLabel", cursor="hand2"
         )
-        link.grid(row=grid_row, column=0, columnspan=3, sticky="w", pady=(0, 14))
+        link.grid(row=grid_row, column=0, columnspan=3, sticky="w")
         link.bind("<Button-1>", lambda _e: self._open_token_link())
-        grid_row += 1
+
+    # -- Config tab: Stockage -------------------------------------------------
+
+    def _build_stockage_section(self, parent: ttk.Frame) -> None:
+        card = tk.Frame(parent, bg=_PANEL)
+        card.pack(fill="x", pady=(0, 12))
+        inner = ttk.Frame(card, style="Panel.TFrame", padding=18)
+        inner.pack(fill="x")
+        inner.grid_columnconfigure(0, weight=1, minsize=340)
+
+        ttk.Label(inner, text="STOCKAGE", style="SectionHeader.TLabel").grid(
+            row=0, column=0, columnspan=3, sticky="w", pady=(0, 10)
+        )
 
         self._replays_entry, self._replays_status, grid_row = self._build_field(
-            card_inner,
+            inner,
             label="Dossier des replays",
             var=self._replays_var,
-            start_row=grid_row,
+            start_row=1,
             on_change=self._on_replays_changed,
         )
         browse = ttk.Button(
-            card_inner,
-            text="Parcourir…",
-            style="Ghost.TButton",
-            command=self._browse_replays_dir,
+            inner, text="Parcourir…", style="Ghost.TButton", command=self._browse_replays_dir
         )
-        browse.grid(row=grid_row, column=0, columnspan=3, sticky="w", pady=(0, 4))
+        browse.grid(row=grid_row, column=0, columnspan=3, sticky="w")
 
-        if autostart.is_supported():
-            self._autostart_var = tk.BooleanVar(value=autostart.is_enabled())
-            autostart_check = self._checkbutton(
-                card_inner,
-                text="Lancer au démarrage de Windows (en arrière-plan, sans ouvrir cette fenêtre)",
-                variable=self._autostart_var,
-                command=self._on_autostart_toggled,
-            )
-            autostart_check.grid(
-                row=grid_row + 1, column=0, columnspan=3, sticky="w", pady=(10, 0)
-            )
+    # -- Config tab: Démarrage ------------------------------------------------
+
+    def _build_demarrage_section(self, parent: ttk.Frame) -> None:
+        if not autostart.is_supported():
+            return
+        card = tk.Frame(parent, bg=_PANEL)
+        card.pack(fill="x")
+        inner = ttk.Frame(card, style="Panel.TFrame", padding=18)
+        inner.pack(fill="x")
+
+        ttk.Label(inner, text="DÉMARRAGE", style="SectionHeader.TLabel").grid(
+            row=0, column=0, sticky="w", pady=(0, 10)
+        )
+
+        # If Windows silently disabled this entry (Task Manager's Startup
+        # tab, or its own startup-impact policy -- see
+        # autostart.needs_repair()), repair it proactively here rather than
+        # just reflecting "unchecked" and waiting for the player to notice
+        # and re-toggle it themselves.
+        repaired = autostart.needs_repair()
+        if repaired:
+            autostart.set_enabled(True)
+
+        actual = autostart.is_enabled()
+        self._autostart_var = tk.BooleanVar(value=actual)
+        autostart_check = self._checkbutton(
+            inner,
+            text="Lancer au démarrage de Windows (en arrière-plan, sans ouvrir cette fenêtre)",
+            variable=self._autostart_var,
+            command=self._on_autostart_toggled,
+        )
+        autostart_check.grid(row=1, column=0, sticky="w")
+
+        self._autostart_status = ttk.Label(
+            inner, text="", style="PanelMuted.TLabel", wraplength=380, justify="left"
+        )
+        self._autostart_status.grid(row=2, column=0, sticky="w", pady=(8, 0))
+        if repaired:
+            # The caption must match what the checkbox actually shows: only
+            # claim success if the repair write stuck (autostart.set_enabled
+            # swallows OSError on registry-write failure -- see
+            # autostart.py -- so `repaired` alone doesn't prove it worked).
+            if actual:
+                self._set_status(
+                    self._autostart_status,
+                    "✓ Réactivé automatiquement (Windows l'avait désactivé).",
+                    _OK,
+                )
+            else:
+                self._set_status(
+                    self._autostart_status,
+                    "✗ Windows a refusé la réactivation automatique (droits insuffisants ?).",
+                    _ERROR,
+                )
 
     def _checkbutton(
         self, parent, *, text: str, variable: tk.BooleanVar, command
@@ -1840,7 +1896,20 @@ class _SettingsWindow:
     # -- autostart --------------------------------------------------------
 
     def _on_autostart_toggled(self) -> None:
-        autostart.set_enabled(self._autostart_var.get())
+        desired = self._autostart_var.get()
+        autostart.set_enabled(desired)
+        actual = autostart.is_enabled()
+        self._autostart_var.set(actual)
+        if desired and not actual:
+            self._set_status(
+                self._autostart_status,
+                "✗ Windows a refusé l'activation (droits insuffisants ?).",
+                _ERROR,
+            )
+        elif desired:
+            self._set_status(self._autostart_status, "✓ Activé.", _OK)
+        else:
+            self._set_status(self._autostart_status, "", _NEUTRAL)
 
     # -- misc ---------------------------------------------------------------
 
