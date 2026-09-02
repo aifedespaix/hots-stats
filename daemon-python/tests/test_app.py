@@ -222,7 +222,7 @@ def test_trigger_draft_capture_is_noop_before_any_client_is_set():
     runner = _DaemonRunner()
 
     with patch("src.app.draft_capture.capture_and_submit") as capture:
-        runner._trigger_draft_capture()
+        runner.trigger_draft_capture()
         time.sleep(0.05)
 
     capture.assert_not_called()
@@ -234,7 +234,7 @@ def test_trigger_draft_capture_spawns_thread_with_current_client():
     runner._client = fake_client
 
     with patch("src.app.draft_capture.capture_and_submit") as capture:
-        runner._trigger_draft_capture()
+        runner.trigger_draft_capture()
         _wait_until(lambda: capture.called)
 
     capture.assert_called_once_with(fake_client, coordinator=runner.draft_capture_status)
