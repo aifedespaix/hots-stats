@@ -5,6 +5,7 @@
     "": {
       "name": "hots-stats",
       "devDependencies": {
+        "postgres": "3.4.9",
         "typescript": "6.0.3",
       },
     },

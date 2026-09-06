@@ -19,9 +19,11 @@
     "promote-admin": "bun run --filter './apps/api' promote-admin",
     "typecheck": "bun run --filter '*' typecheck",
     "docker:dev:up": "docker compose -f docker-compose.dev.yml up -d",
-    "docker:dev:down": "docker compose -f docker-compose.dev.yml down"
+    "docker:dev:down": "docker compose -f docker-compose.dev.yml down",
+    "test:db:up": "bun run scripts/test-db-up.ts"
   },
   "devDependencies": {
+    "postgres": "3.4.9",
     "typescript": "6.0.3"
   }
 }
