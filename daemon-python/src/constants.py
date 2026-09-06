@@ -236,7 +236,7 @@ SPATIAL_TRAJECTORY_SAMPLE_INTERVAL_SECONDS = 2
 CALIBRATION_SAMPLE_TARGET = 1000
 
 # Shown in the settings window. Bump alongside `[project].version` in pyproject.toml.
-APP_VERSION = "1.0.44"
+APP_VERSION = "1.0.45"
 
 # HotS talent tiers are always at these character levels, in pick order.
 TALENT_TIER_LEVELS = (1, 4, 7, 10, 13, 16, 20)

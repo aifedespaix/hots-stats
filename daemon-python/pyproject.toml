@@ -1,6 +1,6 @@
 [project]
 name = "hots-analytics-daemon"
-version = "1.0.44"
+version = "1.0.45"
 description = "Windows client that watches for new HotS replays and uploads parsed stats to the HotS Analytics API."
 requires-python = ">=3.11"
 dependencies = [
