@@ -47,6 +47,22 @@ const _MIN_DURATION_FOR_ZERO_CHECK_SECONDS = 180;
 // per-player integer with no reason to collide.
 const _DUPLICATE_VALUE_THRESHOLD = 5;
 
+// `experienceContribution` is derived from a team's shared takedown
+// participation, not earned individually like `heroDamage` -- when a team
+// gets only a handful of takedowns for the whole match, everyone who
+// assisted on the *same* one gets the *same* contribution value, which is
+// correct, not corrupt. Confirmed on a real 1297s match (2026-09,
+// "La fonderie Volskaya"): one team's sole takedown for the entire game was
+// a kill with the other four teammates all assisting on it, so all five
+// legitimately tied on `experienceContribution` while every other combat
+// stat (heroDamage, siegeDamage, damageTaken, selfHealing) was properly
+// differentiated per player -- the opposite of the 1.7 shape, which desyncs
+// *every* field at once. Below this many total kills, an exact
+// `experienceContribution` tie is expected rather than suspicious;
+// `heroDamage` alone (never legitimately identical across real players,
+// win or lose) still catches an actual recurrence of the 1.7 shape.
+const _MIN_TOTAL_KILLS_FOR_EXPERIENCE_CONTRIBUTION_DUPLICATE_CHECK = 3;
+
 type CombatStats = Record<(typeof _COMBAT_FIELDS)[number], number>;
 
 /**
@@ -78,7 +94,13 @@ export function checkReplayPlausibility(payload: ReplayPayload): string | null {
     );
   }
 
-  for (const field of ["heroDamage", "experienceContribution"] as const) {
+  const totalKills = payload.players.reduce((sum, p) => sum + p.kills, 0);
+  const fieldsToCheck =
+    totalKills >= _MIN_TOTAL_KILLS_FOR_EXPERIENCE_CONTRIBUTION_DUPLICATE_CHECK
+      ? (["heroDamage", "experienceContribution"] as const)
+      : (["heroDamage"] as const);
+
+  for (const field of fieldsToCheck) {
     const nonZeroValues = payload.players.map((p) => p[field]).filter((value) => value > 0);
     const counts = new Map<number, number>();
     for (const value of nonZeroValues) {
