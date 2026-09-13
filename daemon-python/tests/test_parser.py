@@ -29,6 +29,7 @@ from src.parser import (
     _presence_seconds_by_cell,
     _protocol_module,
     _read_archive_file,
+    _reconcile_score_event_slots,
     _slugify,
     _structure_type_from_unit_type_name,
     _structure_unit_teams_by_tag,
@@ -463,6 +464,70 @@ def test_build_payload_a_players_untouched_stat_does_not_desync_the_next_players
     players_by_tag = {p["battletag"]: p for p in payload["players"]}
     assert "creepDamage" not in players_by_tag["Foo#1111"]
     assert players_by_tag["Bar#2222"]["creepDamage"] == 4200
+
+
+def test_build_payload_reconciles_a_single_relocated_players_score_slot():
+    """See `PARSER_VERSION` 1.14's changelog entry: a real match had tracker
+    id 2 (Bar) completely empty across every score field, with a second,
+    orphaned slot outside `tracker_id_to_toon`'s range (unknown to it since
+    it only ever assigns ids 1 and 2 here) holding what looks exactly like
+    Bar's real stats instead -- most consistent with Bar reconnecting
+    mid-match into a fresh slot the tracker never links back to their
+    original id. `_apply_score_event` must re-attribute that orphaned slot
+    back to Bar instead of raising "Missing stats" for a match that
+    otherwise completed normally."""
+    score_event = {
+        "_event": "NNet.Replay.Tracker.SScoreResultEvent",
+        "m_instanceList": [
+            {
+                "m_name": name.encode(),
+                "m_values": [
+                    [{"m_value": foo_value}],  # Foo (index 1): untouched by the mismatch.
+                    [],  # Bar (index 2): empty everywhere -- the missing slot.
+                    [{"m_value": bar_value}],  # orphan (index 3): Bar's real stats.
+                ],
+            }
+            for name, (foo_value, bar_value) in REQUIRED_STATS.items()
+        ],
+    }
+
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=[
+            *_base_tracker_events()[:3],
+            score_event,
+            *_base_tracker_events()[4:],
+        ],
+        attributes_events=_base_attributes_events(),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+    )
+
+    players_by_tag = {p["battletag"]: p for p in payload["players"]}
+    assert players_by_tag["Foo#1111"]["kills"] == 5
+    assert players_by_tag["Bar#2222"]["kills"] == 1
+    assert players_by_tag["Bar#2222"]["heroDamage"] == 10000
+
+
+def test_reconcile_score_event_slots_only_fires_on_an_unambiguous_1_to_1_mismatch():
+    """Two empty known players, or two orphaned slots, is ambiguous -- there's
+    no safe way to tell which orphan belongs to which empty player, so
+    `_reconcile_score_event_slots` must return no aliases rather than guess
+    and risk attributing a stranger's stats to the wrong player."""
+    tracker_id_to_toon = {1: "1-Hero-1-1001", 2: "1-Hero-1-1002", 3: "1-Hero-1-1003"}
+
+    two_empty_one_orphan = [{"m_values": [[{"m_value": 1}], [], [], [{"m_value": 2}]]}]
+    assert _reconcile_score_event_slots(two_empty_one_orphan, tracker_id_to_toon) == {}
+
+    one_empty_two_orphans = [
+        {"m_values": [[{"m_value": 1}], [], [{"m_value": 3}], [{"m_value": 2}], [{"m_value": 4}]]}
+    ]
+    assert _reconcile_score_event_slots(one_empty_two_orphans, tracker_id_to_toon) == {}
+
+    no_mismatch = [{"m_values": [[{"m_value": 1}], [{"m_value": 2}], [{"m_value": 3}]]}]
+    assert _reconcile_score_event_slots(no_mismatch, tracker_id_to_toon) == {}
 
 
 def test_build_payload_unknown_map_falls_back_to_prettified_slug():

@@ -1111,10 +1111,36 @@ def _score_event_looks_corrupt(players: dict[str, dict[str, Any]], duration_seco
     )
 
 
+def _reconcile_score_event_slots(
+    instance_list: list[dict], tracker_id_to_toon: dict[int, str]
+) -> dict[int, int]:
+    """Finds a specific, unambiguous `m_values` mismatch: one tracker id
+    with no data in *any* field, and one populated slot outside
+    `tracker_id_to_toon`'s range -- see `PARSER_VERSION` 1.14's changelog
+    entry for the real match this was found on. Returns `{orphan_index:
+    real_tracker_index}` to substitute in `_apply_score_event`'s lookup;
+    empty if the mismatch isn't this exact 1-to-1 shape, since guessing at
+    anything more ambiguous risks attributing a stranger's stats to the
+    wrong player instead of just losing one match.
+    """
+    has_data: set[int] = set()
+    for instance in instance_list:
+        for real_index, values in enumerate(instance["m_values"], start=1):
+            if values:
+                has_data.add(real_index)
+
+    empty_known_players = [real_index for real_index in tracker_id_to_toon if real_index not in has_data]
+    orphan_slots = [real_index for real_index in has_data if real_index not in tracker_id_to_toon]
+    if len(empty_known_players) == 1 and len(orphan_slots) == 1:
+        return {orphan_slots[0]: empty_known_players[0]}
+    return {}
+
+
 def _apply_score_event(tracker_events: list[dict], tracker_id_to_toon: dict[int, str], players: dict) -> None:
     for event in tracker_events:
         if event.get("_event") != "NNet.Replay.Tracker.SScoreResultEvent":
             continue
+        slot_aliases = _reconcile_score_event_slots(event["m_instanceList"], tracker_id_to_toon)
         for instance in event["m_instanceList"]:
             # Every stat the tracker reports is forwarded (generically
             # camelCased), not just the ones the API currently reads -- see
@@ -1140,6 +1166,7 @@ def _apply_score_event(tracker_events: list[dict], tracker_id_to_toon: dict[int,
             for real_index, values in enumerate(instance["m_values"], start=1):
                 if not values:
                     continue
+                real_index = slot_aliases.get(real_index, real_index)
                 toon_handle = tracker_id_to_toon.get(real_index)
                 player = players.get(toon_handle) if toon_handle else None
                 if player is not None:

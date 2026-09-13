@@ -182,7 +182,30 @@ from __future__ import annotations
 # as 1.8/1.11: a match ingested before this ships simply keeps its existing
 # single, `layer: null` grid until it happens to resync for some other
 # reason.
-PARSER_VERSION = "1.13"
+# 1.14: `_apply_score_event` assumed `SScoreResultEvent.m_instanceList[].
+# m_values[]` position i always holds tracker id i's data (see the 1.7
+# changelog entry above). Found a real match ("Le comté du dragon",
+# 2026-04-19) where that's false for exactly one player: tracker id 7
+# (Xiph#21703) is empty across every single stat field, while position 12 --
+# unmapped by `tracker_id_to_toon`, which only ever assigns ids 1..10 -- has
+# a complete, plausible stat line for every field instead. `SPlayerSetupEvent`
+# confirms tracker ids 1..10 don't correspond to a clean, gap-free `m_userId`
+# range (id 7's `m_userId` is 7, not 6, i.e. one `m_userId` in the lobby's
+# join history never became a real tracker id) -- consistent with matchmaking
+# churn (a candidate dropping out during loading) leaving a permanently-empty
+# slot, and a still-unexplained extra slot appearing past position 10 that
+# most likely reflects the same player reconnecting mid-match into a fresh
+# slot the tracker never links back to their original tracker id. Raised
+# "Missing stats [...] for player" before, which discarded the whole match
+# (never ingested at all, so no `MIN_PARSER_VERSION` bump needed -- there's
+# no already-stored bad data to resync). `_reconcile_score_event_slots` now
+# detects this specific, unambiguous shape -- exactly one tracker id with no
+# data anywhere in the event, and exactly one populated slot with no tracker
+# id -- and re-attributes the orphaned slot to that player; anything less
+# clear-cut (more than one of either) is left alone and still raises the
+# same error as before, since guessing wrong there would misattribute a
+# stranger's stats instead of just losing one match.
+PARSER_VERSION = "1.14"
 
 # How many times a single replay is allowed to fail with a parse error (a
 # corrupt/incomplete archive -- see parser.ReplayParseError) at the *same*
