@@ -100,7 +100,12 @@ def test_run_sync_loop_new_replay_callback_bumps_found_and_ingests(tmp_path):
 
 
 def _config(tmp_path) -> Config:
-    return Config(api_base_url="https://api.example.com", access_token="hots_pat_abc", replays_dir=tmp_path)
+    return Config(
+        api_base_url="https://api.example.com",
+        access_token="hots_pat_abc",
+        hots_dir=None,
+        extra_replay_dirs=(tmp_path,),
+    )
 
 
 def test_sync_api_version_invalidates_stale_replays(tmp_path):
@@ -305,7 +310,8 @@ def test_start_announces_initial_scan_when_requested(tmp_path):
     config = Config(
         api_base_url="https://api.example.com",
         access_token="hots_pat_abc",
-        replays_dir=tmp_path,
+        hots_dir=None,
+        extra_replay_dirs=(tmp_path,),
         draft_feature_enabled=False,  # keeps this test off the real `keyboard` hook
     )
     runner = _DaemonRunner()
@@ -328,7 +334,8 @@ def test_start_without_announce_initial_scan_does_not_notify(tmp_path):
     config = Config(
         api_base_url="https://api.example.com",
         access_token="hots_pat_abc",
-        replays_dir=tmp_path,
+        hots_dir=None,
+        extra_replay_dirs=(tmp_path,),
         draft_feature_enabled=False,
     )
     runner = _DaemonRunner()
@@ -353,7 +360,8 @@ def test_start_does_not_announce_an_empty_initial_scan(tmp_path):
     config = Config(
         api_base_url="https://api.example.com",
         access_token="hots_pat_abc",
-        replays_dir=tmp_path,
+        hots_dir=None,
+        extra_replay_dirs=(tmp_path,),
         draft_feature_enabled=False,
     )
     runner = _DaemonRunner()

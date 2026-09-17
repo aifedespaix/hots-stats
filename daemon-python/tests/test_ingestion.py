@@ -9,7 +9,12 @@ from src.sync_state import SyncState
 
 
 def _config(tmp_path) -> Config:
-    return Config(api_base_url="https://api.example.com", access_token="hots_pat_abc", replays_dir=tmp_path)
+    return Config(
+        api_base_url="https://api.example.com",
+        access_token="hots_pat_abc",
+        hots_dir=None,
+        extra_replay_dirs=(tmp_path,),
+    )
 
 
 def test_ingest_file_parse_error_returns_error_outcome(tmp_path):
