@@ -97,6 +97,9 @@ async function handleLogout() {
       <UiGameModeFilter class="min-w-0 flex-1 justify-center px-2" />
 
       <div class="flex shrink-0 items-center gap-2 sm:gap-3">
+        <template v-if="authData?.user">
+          <UiAccountSwitcher />
+        </template>
         <div class="hidden md:block">
           <UiThemeSwitcher />
         </div>
