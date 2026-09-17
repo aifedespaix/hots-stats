@@ -1,4 +1,4 @@
-import { db, matchPlayers, matches } from "@hots-stats/db";
+import { db, matchPlayers, matches, userAccounts } from "@hots-stats/db";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 /**
@@ -30,7 +30,19 @@ export async function suggestBattletag(userId: string): Promise<string | null> {
   // the *only* one -- someone who has (so far) only ever uploaded games
   // played alongside the exact same duo partner would otherwise tie, and
   // picking either arbitrarily would be a coin flip, not a detection.
-  const universal = rows.filter((row) => row.matchCount === total);
+  // Never suggest a tag the user already linked (as primary or secondary) --
+  // with several accounts, the interesting suggestion is a *new* one.
+  const alreadyLinked = new Set(
+    (
+      await db
+        .select({ battletag: userAccounts.battletag })
+        .from(userAccounts)
+        .where(eq(userAccounts.userId, userId))
+    ).map((row) => row.battletag.toLowerCase()),
+  );
+  const universal = rows.filter(
+    (row) => row.matchCount === total && !alreadyLinked.has(row.battletag.toLowerCase()),
+  );
   return universal.length === 1 ? universal[0]!.battletag : null;
 }
 

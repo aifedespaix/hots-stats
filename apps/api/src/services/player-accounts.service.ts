@@ -1,10 +1,12 @@
-import { db, userAccounts, users } from "@hots-stats/db";
+import { db, matchPlayers, userAccounts, users } from "@hots-stats/db";
 import {
   MAX_LINKED_ACCOUNTS,
   type PlayerAccount,
   type UserAccountSource,
 } from "@hots-stats/shared-types";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
+import { linkedBattletags } from "../lib/account-scope";
 
 export class AccountLimitError extends Error {
   constructor() {
@@ -44,6 +46,26 @@ function toPlayerAccount(row: AccountRow): PlayerAccount {
     lastSeenAt: row.lastSeenAt ? row.lastSeenAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
   };
+}
+
+/**
+ * True when `battletag` already appears in a match that also contains one of
+ * the user's linked accounts. Personal scope is a set of *player rows*, so
+ * linking such a tag makes those matches contribute two rows to every merged
+ * stat -- Settings warns about it instead of silently inflating the numbers.
+ */
+export async function accountOverlapsExisting(userId: string, battletag: string): Promise<boolean> {
+  const mine = await linkedBattletags(userId);
+  if (mine.length === 0) return false;
+  const mineRows = alias(matchPlayers, "mine");
+  const target = alias(matchPlayers, "target");
+  const [row] = await db
+    .select({ one: sql<number>`1` })
+    .from(target)
+    .innerJoin(mineRows, eq(mineRows.matchId, target.matchId))
+    .where(and(eq(target.battletag, battletag), inArray(mineRows.battletag, mine)))
+    .limit(1);
+  return row !== undefined;
 }
 
 /** Primary first, then oldest first -- the same order linkedBattletags() uses. */

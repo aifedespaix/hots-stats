@@ -1,5 +1,9 @@
 import { type User, db, users } from "@hots-stats/db";
-import { heroStatsScopeSchema } from "@hots-stats/shared-types";
+import {
+  addAccountInputSchema,
+  heroStatsScopeSchema,
+  updateAccountInputSchema,
+} from "@hots-stats/shared-types";
 import { generateCodeVerifier, generateState } from "arctic";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
@@ -13,6 +17,17 @@ import { authToken } from "../middleware/auth-token";
 import { linkUnclaimedMatchPlayers, suggestBattletag } from "../services/account-linking.service";
 import { resetUserData } from "../services/data-reset.service";
 import { createDefaultFriendship } from "../services/friendships.service";
+import {
+  AccountLimitError,
+  AccountNotFoundError,
+  PrimaryConflictError,
+  accountOverlapsExisting,
+  addAccount,
+  linkSelfBattletag,
+  listAccounts,
+  removeAccount,
+  updateAccount,
+} from "../services/player-accounts.service";
 
 const OAUTH_STATE_COOKIE = "hots_oauth_state";
 const OAUTH_VERIFIER_COOKIE = "hots_oauth_verifier";
@@ -35,6 +50,20 @@ function toPublicUser(user: User) {
     publicHandle: user.publicHandle,
     heroStatsScope: user.heroStatsScope,
     role: user.role,
+  };
+}
+
+/**
+ * toPublicUser plus the linked-account list. Kept separate (and async) rather
+ * than folded into toPublicUser so every existing synchronous caller keeps
+ * working unchanged.
+ */
+async function withAccounts(user: User) {
+  const accounts = await listAccounts(user.id);
+  return {
+    ...toPublicUser(user),
+    accounts,
+    primaryBattletag: accounts.find((account) => account.isPrimary)?.battletag ?? user.battletag,
   };
 }
 
@@ -286,9 +315,9 @@ export const authRoute = new Hono()
     });
     return c.json({ status: "ok" });
   })
-  .get("/me", authSession, (c) => {
+  .get("/me", authSession, async (c) => {
     const user = c.get("user");
-    return c.json({ user: user ? toPublicUser(user) : null });
+    return c.json({ user: user ? await withAccounts(user) : null });
   })
   // Best-effort "is this you?" nudge for an account that never set a
   // battletag but already has upload history -- see account-linking.service.ts.
@@ -297,11 +326,69 @@ export const authRoute = new Hono()
     if (!user) {
       return c.json({ error: "Unauthorized" }, 401);
     }
-    if (user.battletag) {
-      return c.json({ suggestion: null });
-    }
+    // No early return when users.battletag is set: with several accounts the
+    // useful suggestion is an *additional*, not-yet-linked tag, and
+    // suggestBattletag() already filters the linked ones out.
     const suggestion = await suggestBattletag(user.id);
     return c.json({ suggestion });
+  })
+  // -- Linked accounts (multi-account support) -----------------------------
+  //
+  // A player can own several BattleTags, and a BattleTag can be linked to
+  // several site accounts (shared/family machine) -- only *primary* is
+  // exclusive, enforced by users.battletag's unique constraint.
+  .get("/me/accounts", authSession, requireUser, async (c) => {
+    const user = c.get("user");
+    if (!user) return c.json({ error: "Unauthorized" }, 401);
+    return c.json({ accounts: await listAccounts(user.id) });
+  })
+  .get("/me/accounts/overlap", authSession, requireUser, async (c) => {
+    const user = c.get("user");
+    if (!user) return c.json({ error: "Unauthorized" }, 401);
+    const battletag = c.req.query("battletag")?.trim() ?? "";
+    if (!battletag) return c.json({ error: "battletag requis" }, 400);
+    return c.json({ overlaps: await accountOverlapsExisting(user.id, battletag) });
+  })
+  .post("/me/accounts", authSession, requireUser, async (c) => {
+    const user = c.get("user");
+    if (!user) return c.json({ error: "Unauthorized" }, 401);
+    const parsed = addAccountInputSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+    try {
+      const account = await addAccount(user.id, parsed.data.battletag, parsed.data.label);
+      return c.json({ account }, 201);
+    } catch (err) {
+      if (err instanceof AccountLimitError || err instanceof PrimaryConflictError) {
+        return c.json({ error: err.message }, 409);
+      }
+      throw err;
+    }
+  })
+  .patch("/me/accounts/:battletag", authSession, requireUser, async (c) => {
+    const user = c.get("user");
+    if (!user) return c.json({ error: "Unauthorized" }, 401);
+    const parsed = updateAccountInputSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+    try {
+      const account = await updateAccount(user.id, c.req.param("battletag"), parsed.data);
+      return c.json({ account });
+    } catch (err) {
+      if (err instanceof PrimaryConflictError) return c.json({ error: err.message }, 409);
+      if (err instanceof AccountNotFoundError) return c.json({ error: err.message }, 404);
+      throw err;
+    }
+  })
+  .delete("/me/accounts/:battletag", authSession, requireUser, async (c) => {
+    const user = c.get("user");
+    if (!user) return c.json({ error: "Unauthorized" }, 401);
+    try {
+      await removeAccount(user.id, c.req.param("battletag"), c.req.query("promote"));
+      return c.json({ status: "ok" });
+    } catch (err) {
+      if (err instanceof PrimaryConflictError) return c.json({ error: err.message }, 409);
+      if (err instanceof AccountNotFoundError) return c.json({ error: err.message }, 404);
+      throw err;
+    }
   })
   .patch("/me", authSession, requireUser, async (c) => {
     const user = c.get("user");
@@ -321,7 +408,13 @@ export const authRoute = new Hono()
         .where(eq(users.battletag, parsed.data.battletag))
         .limit(1);
       if (conflicting[0] && conflicting[0].id !== user.id) {
-        return c.json({ error: "Ce BattleTag est déjà lié à un autre compte" }, 409);
+        // users.battletag is still unique, but it now means "primary account":
+        // a BattleTag shared with another site account is added as a secondary
+        // through POST /me/accounts instead, which never conflicts.
+        return c.json(
+          { error: "Ce BattleTag est déjà le compte principal d'un autre utilisateur" },
+          409,
+        );
       }
     }
 
@@ -349,6 +442,11 @@ export const authRoute = new Hono()
       .returning();
 
     if (updated && parsed.data.battletag) {
+      // Mirror the tag into user_accounts so the two representations never
+      // drift, then make it the primary row (linkSelfBattletag deliberately
+      // only auto-promotes a user's very first account).
+      await linkSelfBattletag(user.id, parsed.data.battletag, null, "manual");
+      await updateAccount(user.id, parsed.data.battletag, { isPrimary: true });
       // Relink any history uploaded before this battletag was claimed.
       // Idempotent (only touches still-unlinked rows), so it's safe to just
       // re-run on every save rather than requiring transactional coupling
@@ -356,12 +454,12 @@ export const authRoute = new Hono()
       await linkUnclaimedMatchPlayers(user.id, parsed.data.battletag);
     }
 
-    return c.json({ user: updated ? toPublicUser(updated) : null });
+    return c.json({ user: updated ? await withAccounts(updated) : null });
   })
   // Lets the daemon confirm its configured token is valid before it starts watching replays.
-  .get("/verify-token", authToken, (c) => {
+  .get("/verify-token", authToken, async (c) => {
     const user = c.get("user");
-    return c.json({ user: toPublicUser(user) });
+    return c.json({ user: await withAccounts(user) });
   })
   // "Zone dangereuse" of the Settings page: deletes every match this account
   // uploaded and stamps `dataResetAt` so the daemon (see GET /ingest/version)
