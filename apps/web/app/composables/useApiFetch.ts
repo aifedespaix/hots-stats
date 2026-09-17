@@ -6,25 +6,61 @@ type ApiFetchOptions = {
    * not mode-dependent (auth, tokens, profile identity, ...).
    */
   withGameMode?: boolean;
+  /**
+   * Every *personal* endpoint must be scoped by the active account selection
+   * (see useAccountsStore). Set to `false` for routes that are not
+   * account-scoped: auth, tokens, player annotations, admin, spatial
+   * calibration.
+   */
+  withAccounts?: boolean;
 };
 
 /**
- * Root of every stats API call: bakes the active game-mode filter into the
- * query so no page/component can accidentally bypass it. This is the single
- * injection point required by the global filter architecture - do not
- * re-implement `mode` handling ad hoc in a page, use this composable instead.
+ * Pure assembly of the global query parameters, exported so it can be unit
+ * tested without a Nuxt runtime (there is none under vitest -- see
+ * vitest.config.ts). `accounts` and `mode` are spread first, so a caller's
+ * own `query` still wins if it needs to override one deliberately.
+ */
+export function buildApiQuery(input: {
+  base: Record<string, unknown>;
+  mode?: string;
+  accounts?: string;
+}): Record<string, unknown> {
+  return {
+    ...(input.accounts ? { accounts: input.accounts } : {}),
+    ...(input.mode ? { mode: input.mode } : {}),
+    ...input.base,
+  };
+}
+
+/**
+ * Root of every API call from the dashboard: bakes the active game-mode and
+ * account selection into the query so no page/component can accidentally
+ * bypass them. This is the single injection point required by the global
+ * filter architecture - do not re-implement `mode` or `accounts` handling ad
+ * hoc in a page, use this composable instead.
  */
 export function useApiFetch<T>(url: string, opts: ApiFetchOptions = {}) {
   const config = useRuntimeConfig();
   const headers = import.meta.server ? useRequestHeaders(["cookie"]) : undefined;
   const withGameMode = opts.withGameMode ?? true;
+  const withAccounts = opts.withAccounts ?? true;
   const gameModeStore = withGameMode ? useGameModeStore() : undefined;
+  const accountsStore = withAccounts ? useAccountsStore() : undefined;
+  const { data: authData } = useAuthUser();
 
-  const query = computed(() => {
-    const base = unref(opts.query) ?? {};
-    if (!gameModeStore) return base;
-    return { mode: gameModeStore.modeQueryParam, ...base };
-  });
+  const query = computed(() =>
+    buildApiQuery({
+      base: (unref(opts.query) ?? {}) as Record<string, unknown>,
+      mode: gameModeStore?.modeQueryParam,
+      accounts: accountsStore
+        ? accountsStore.accountsQueryParam(
+            (authData.value?.user?.accounts ?? []).map((account) => account.battletag),
+            authData.value?.user?.primaryBattletag ?? authData.value?.user?.battletag ?? null,
+          )
+        : undefined,
+    }),
+  );
 
   return useFetch<T>(url, {
     baseURL: config.public.apiBase,

@@ -1,4 +1,4 @@
-import type { HeroStatsScope } from "@hots-stats/shared-types";
+import type { HeroStatsScope, PlayerAccount } from "@hots-stats/shared-types";
 
 export interface AuthUser {
   id: string;
@@ -7,7 +7,11 @@ export interface AuthUser {
   email: string | null;
   displayName: string;
   avatarUrl: string | null;
+  // The *primary* BattleTag, mirrored from user_accounts (see the API).
   battletag: string | null;
+  // Every BattleTag linked to this account -- the header switcher's options.
+  accounts: PlayerAccount[];
+  primaryBattletag: string | null;
   publicHandle: string | null;
   heroStatsScope: HeroStatsScope;
   // Gates access to admin-only tooling (currently: /admin/calibrate, see
