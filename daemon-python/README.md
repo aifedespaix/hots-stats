@@ -25,15 +25,18 @@ updates never touch it:
 {
   "apiBaseUrl": "https://api-hots-stats.aifedespaix.com",
   "accessToken": "hots_pat_...",
-  "replaysDir": "C:\\Users\\you\\Documents\\Heroes of the Storm\\Accounts\\...\\Replays\\Multiplayer"
+  "hotsDir": "C:\\Users\\you\\Documents\\Heroes of the Storm"
 }
 ```
 
 Generate `accessToken` from the dashboard's Settings page — the settings
-window links straight to it. `replaysDir` is autodetected under your
-Documents folder if left unset. Environment variables (`HOTS_API_BASE_URL`,
-`HOTS_ACCESS_TOKEN`, `HOTS_REPLAYS_DIR`) take priority over the file, for
-headless/CI use.
+window links straight to it. `hotsDir` is the `Documents/Heroes of the Storm`
+**root**: every account found under `Accounts/<id>/<toon>/Replays/<queue>` is
+watched, so a smurf's replays upload without configuring anything extra. It is
+autodetected if left unset. Environment variables (`HOTS_API_BASE_URL`,
+`HOTS_ACCESS_TOKEN`, `HOTS_DIR`) take priority over the file, for headless/CI
+use. A pre-multi-account config's `replaysDir` (and `HOTS_REPLAYS_DIR`) still
+works: the root is derived from it and that folder keeps being watched.
 
 ## Usage
 

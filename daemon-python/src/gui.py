@@ -519,6 +519,8 @@ class _SettingsWindow:
         self._api_var = tk.StringVar()
         self._token_var = tk.StringVar()
         self._replays_var = tk.StringVar()
+        # Read-only summary of the accounts found under the chosen HotS root.
+        self._accounts_var = tk.StringVar()
 
         self._build_ui()
         self._prefill()
@@ -695,6 +697,17 @@ class _SettingsWindow:
             inner, text="Parcourir…", style="Ghost.TButton", command=self._browse_replays_dir
         )
         browse.grid(row=grid_row, column=0, columnspan=3, sticky="w")
+
+        # What will actually be watched: every account folder found under the
+        # chosen root (see accounts_discovery). Shown rather than configured,
+        # since discovery is what makes a smurf's replays upload with no setup.
+        ttk.Label(
+            inner,
+            textvariable=self._accounts_var,
+            style="Muted.TLabel",
+            wraplength=520,
+            justify="left",
+        ).grid(row=grid_row + 1, column=0, columnspan=3, sticky="w", pady=(4, 0))
 
     # -- Config tab: Démarrage ------------------------------------------------
 
@@ -1698,12 +1711,21 @@ class _SettingsWindow:
                 f"✓ {len(accounts)} compte(s) détecté(s)",
                 _OK,
             )
+            self._accounts_var.set(
+                "\n".join(
+                    f"• {folder.toon_handle} — "
+                    f"{sum(1 for _ in folder.replays_dir.rglob('*.StormReplay'))} replay(s)"
+                    for folder in accounts
+                )
+            )
         elif (Path(value) / "Accounts").is_dir():
             self._set_status(self._replays_status, "✓ Dossier trouvé (aucun compte)", _OK)
+            self._accounts_var.set("Aucun compte détecté sous Accounts/.")
         else:
             self._set_status(
                 self._replays_status, "✗ Pas un dossier Heroes of the Storm", _ERROR
             )
+            self._accounts_var.set("")
 
     def _browse_replays_dir(self) -> None:
         chosen = filedialog.askdirectory(
