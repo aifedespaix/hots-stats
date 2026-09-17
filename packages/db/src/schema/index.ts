@@ -9,6 +9,7 @@ export * from "./match-deaths";
 export * from "./match-level-snapshots";
 export * from "./friendships";
 export * from "./quarantine";
+export * from "./user-accounts";
 export * from "./draft-pseudo-preferences";
 export * from "./daemon-ingest-errors";
 export * from "./player-annotations";

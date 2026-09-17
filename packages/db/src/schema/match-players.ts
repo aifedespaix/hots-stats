@@ -35,10 +35,14 @@ export const matchPlayers = pgTable(
       table.matchId,
       table.battletag,
     ),
-    // Nearly every "personal scope" query in the app (stats, heroes, players,
-    // matches, friends, face-a-face) filters on userId; Postgres doesn't
-    // auto-index FK columns, so without this every one of them is a seq scan.
+    // Kept for the admin uploads-diagnostics page, which still pivots on
+    // match_players.userId. Personal stat queries no longer use it -- they
+    // filter on the viewer's BattleTag set instead (see battletagIdx below).
     userIdIdx: index("match_players_user_id_idx").on(table.userId),
+    // Personal scope is "battletag IN (...)" after multi-account support. The
+    // composite (match_id, battletag) unique index can't serve a bare
+    // battletag lookup, and the trigram GIN index only serves ILIKE '%term%'.
+    battletagIdx: index("match_players_battletag_idx").on(table.battletag),
     // Trigram GIN index so the "joueur croisé" typeahead (`ILIKE '%term%'`
     // on a partial battletag) can use an index scan instead of a seq scan --
     // a plain btree index can't serve a leading-wildcard match. Requires the
