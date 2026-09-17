@@ -47,6 +47,123 @@ const savingBattletag = battletagField.loading;
 const battletagError = battletagField.error;
 const saveBattletag = () => battletagField.submit(battletag.value);
 
+// -- Comptes liés (multi-compte) --------------------------------------------
+//
+// Each linked BattleTag is one of the player's accounts (main + smurfs). A
+// BattleTag can also be shared between site accounts (family machine) -- only
+// the *primary* one is exclusive, see the API's player-accounts.service.ts.
+const accountsStore = useAccountsStore();
+const accounts = computed(() => authData.value?.user?.accounts ?? []);
+const newBattletag = ref("");
+const addingAccount = ref(false);
+const accountBusy = ref<string | null>(null);
+const accountsError = ref("");
+const overlapWarning = ref("");
+const suggestion = ref<string | null>(null);
+
+/** Best-effort: never blocks a link if the check itself fails. */
+async function checkOverlap(tag: string): Promise<boolean> {
+  try {
+    const res = await $fetch<{ overlaps: boolean }>("/auth/me/accounts/overlap", {
+      baseURL: config.public.apiBase,
+      credentials: "include",
+      query: { battletag: tag },
+    });
+    return res.overlaps;
+  } catch {
+    return false;
+  }
+}
+
+async function addAccount() {
+  const tag = newBattletag.value.trim();
+  if (!tag) return;
+  addingAccount.value = true;
+  accountsError.value = "";
+  overlapWarning.value = "";
+  try {
+    await $fetch("/auth/me/accounts", {
+      method: "POST",
+      baseURL: config.public.apiBase,
+      credentials: "include",
+      body: { battletag: tag },
+    });
+    if (await checkOverlap(tag)) {
+      overlapWarning.value =
+        "Ce compte a joué des parties avec un de tes comptes : ces parties compteront deux fois dans les vues fusionnées.";
+    }
+    newBattletag.value = "";
+    await refreshAuth();
+  } catch (err) {
+    accountsError.value = (err as { data?: { error?: string } })?.data?.error ?? "Liaison impossible";
+  } finally {
+    addingAccount.value = false;
+  }
+}
+
+async function makePrimary(tag: string) {
+  accountBusy.value = tag;
+  accountsError.value = "";
+  try {
+    await $fetch("/auth/me/accounts/" + encodeURIComponent(tag), {
+      method: "PATCH",
+      baseURL: config.public.apiBase,
+      credentials: "include",
+      body: { isPrimary: true },
+    });
+    await refreshAuth();
+    accountsStore.reset();
+  } catch (err) {
+    accountsError.value = (err as { data?: { error?: string } })?.data?.error ?? "Changement impossible";
+  } finally {
+    accountBusy.value = null;
+  }
+}
+
+async function unlinkAccount(tag: string) {
+  const primaryTag = accounts.value.find((account) => account.isPrimary)?.battletag ?? null;
+  const remaining = accounts.value.filter((account) => account.battletag !== tag);
+  if (primaryTag === tag && remaining.length === 0) return; // never unlink the last account
+  const promote = primaryTag === tag ? remaining[0]?.battletag : undefined;
+  accountBusy.value = tag;
+  accountsError.value = "";
+  try {
+    const suffix = promote ? "?promote=" + encodeURIComponent(promote) : "";
+    await $fetch("/auth/me/accounts/" + encodeURIComponent(tag) + suffix, {
+      method: "DELETE",
+      baseURL: config.public.apiBase,
+      credentials: "include",
+    });
+    await refreshAuth();
+    accountsStore.reset();
+  } catch (err) {
+    accountsError.value = (err as { data?: { error?: string } })?.data?.error ?? "Suppression impossible";
+  } finally {
+    accountBusy.value = null;
+  }
+}
+
+async function loadSuggestion() {
+  try {
+    const res = await $fetch<{ suggestion: string | null }>("/auth/me/battletag-suggestion", {
+      baseURL: config.public.apiBase,
+      credentials: "include",
+    });
+    suggestion.value = res.suggestion;
+  } catch {
+    suggestion.value = null;
+  }
+}
+onMounted(loadSuggestion);
+
+function linkSuggestion() {
+  if (!suggestion.value) return;
+  newBattletag.value = suggestion.value;
+  addAccount();
+}
+
+
+
 const publicHandle = ref(
   authData.value?.user?.publicHandle || (pseudo.value ? slugify(pseudo.value) : ""),
 );
@@ -160,14 +277,66 @@ async function confirmReset() {
     </section>
 
     <section class="space-y-4 rounded-lg border border-border p-4 sm:p-6">
-      <h2 class="font-heading text-lg">BattleTag</h2>
+      <h2 class="font-heading text-lg">Comptes liés</h2>
+      <p class="text-sm text-muted">
+        Tous les BattleTags dont les parties t'appartiennent (compte principal et smurfs).
+        Coche-les dans l'en-tête du site pour choisir ce que le tableau de bord affiche — tu peux
+        en fusionner plusieurs.
+      </p>
+
+      <ul class="space-y-2">
+        <li
+          v-for="account in accounts"
+          :key="account.battletag"
+          class="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-3"
+        >
+          <div class="min-w-0">
+            <p class="truncate font-mono text-sm">{{ account.battletag }}</p>
+            <p class="text-xs text-muted">
+              {{ account.isPrimary ? "Compte principal" : "Compte secondaire" }} ·
+              {{ account.source === "daemon" ? "vérifié par le démon" : "non vérifié" }}
+            </p>
+          </div>
+          <div class="flex items-center gap-2">
+            <UButton
+              v-if="!account.isPrimary"
+              size="xs"
+              variant="soft"
+              color="neutral"
+              :loading="accountBusy === account.battletag"
+              @click="makePrimary(account.battletag)"
+            >
+              Définir principal
+            </UButton>
+            <UButton
+              size="xs"
+              variant="soft"
+              color="error"
+              :loading="accountBusy === account.battletag"
+              @click="unlinkAccount(account.battletag)"
+            >
+              Délier
+            </UButton>
+          </div>
+        </li>
+      </ul>
+
       <div class="flex flex-col gap-2 sm:flex-row">
-        <UInput v-model="battletag" placeholder="Pseudo#12345" class="flex-1 font-mono" />
-        <UButton :loading="savingBattletag" icon="i-heroicons-check" block class="sm:w-auto" @click="saveBattletag">
-          Enregistrer
+        <UInput v-model="newBattletag" placeholder="Autre compte : Pseudo#12345" class="flex-1 font-mono" />
+        <UButton :loading="addingAccount" icon="i-heroicons-plus" block class="sm:w-auto" @click="addAccount">
+          Lier
         </UButton>
       </div>
-      <p v-if="battletagError" class="text-sm text-danger">{{ battletagError }}</p>
+      <p v-if="accountsError" class="text-sm text-danger">{{ accountsError }}</p>
+      <p v-if="overlapWarning" class="text-sm text-warning">{{ overlapWarning }}</p>
+      <p v-if="suggestion" class="text-sm text-muted">
+        Compte détecté dans tes parties : <span class="font-mono">{{ suggestion }}</span>
+        <UButton size="xs" variant="link" @click="linkSuggestion">Lier</UButton>
+      </p>
+      <p class="text-xs text-muted">
+        Le champ « BattleTag » ci-dessus définit le compte <strong>principal</strong>, celui qui
+        t'identifie sur le site (profil public, amis).
+      </p>
     </section>
 
     <section class="space-y-4 rounded-lg border border-border p-4 sm:p-6">
