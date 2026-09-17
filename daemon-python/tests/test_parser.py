@@ -1904,3 +1904,52 @@ def test_build_payload_omits_trajectories_key_without_calibration():
     )
 
     assert "spatial" not in payload
+
+def test_build_payload_carries_self_battletag_for_the_expected_toon():
+    # The HotS account folder *is* the toon handle (see accounts_discovery.py),
+    # so "which player am I" is a lookup -- this is the value the API uses to
+    # auto-link the account to the token's user.
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=_base_tracker_events(),
+        attributes_events=_base_attributes_events(),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+        expected_toon_handle="1-Hero-1-1001",
+    )
+
+    assert payload["selfBattletag"] == "Foo#1111"
+
+
+def test_build_payload_omits_self_battletag_for_an_unknown_toon():
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=_base_tracker_events(),
+        attributes_events=_base_attributes_events(),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+        expected_toon_handle="9-Hero-9-999999",
+    )
+
+    # Absent, not None: the API schema's optional() rejects null, and a null
+    # here would get the whole replay rejected.
+    assert "selfBattletag" not in payload
+
+
+def test_build_payload_omits_self_battletag_when_no_toon_is_given():
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=_base_tracker_events(),
+        attributes_events=_base_attributes_events(),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+    )
+
+    assert "selfBattletag" not in payload
+

@@ -1209,7 +1209,11 @@ def _read_archive_file(archive: mpyq.MPQArchive, filename: str) -> bytes:
     return contents
 
 
-def parse_replay(path: Path, calibrations: dict[str, dict[str, dict[str, float]]] | None = None) -> dict[str, Any]:
+def parse_replay(
+    path: Path,
+    calibrations: dict[str, dict[str, dict[str, float]]] | None = None,
+    expected_toon_handle: str | None = None,
+) -> dict[str, Any]:
     """Parses a `.StormReplay` file into a dict matching `replayPayloadSchema`.
 
     Raises `ReplayParseError` for anything we can't confidently extract
@@ -1252,6 +1256,7 @@ def parse_replay(path: Path, calibrations: dict[str, dict[str, dict[str, float]]
             battletags=battletags,
             replay_hash=hash_replay_file(path),
             calibrations_by_map=calibrations,
+            expected_toon_handle=expected_toon_handle,
         )
     except ReplayParseError:
         raise
@@ -1272,6 +1277,11 @@ def build_payload(
     battletags: dict[str, str],
     replay_hash: str,
     calibrations_by_map: dict[str, dict[str, dict[str, float]]] | None = None,
+    # The toon handle of the HotS account folder this replay came from (see
+    # accounts_discovery.py). When given, the payload carries the matching
+    # player's BattleTag as `selfBattletag`, which is how the API
+    # auto-links an account to the token's user.
+    expected_toon_handle: str | None = None,
 ) -> dict[str, Any]:
     """Pure transformation from decoded replay structures to the API payload.
 
@@ -1515,6 +1525,22 @@ def build_payload(
     )
     pending_points = None if calibrations else _collect_calibration_samples(tracker_events, tracker_id_to_toon)
 
+    # Which player is "me": the account folder names the toon handle, so this
+    # is a lookup, not a guess. Absent when the folder's account did not play
+    # in this replay (a replay copied in from elsewhere), in which case the
+    # key is omitted entirely -- the API's field is optional, not nullable.
+    self_battletag: str | None = None
+    if expected_toon_handle:
+        owner = players.get(expected_toon_handle)
+        if owner is None:
+            logger.info(
+                "Account folder toon %s is not in this replay's player list; "
+                "no selfBattletag will be sent.",
+                expected_toon_handle,
+            )
+        else:
+            self_battletag = owner["battletag"]
+
     payload = {
         # Blizzard's own field name, kept as-is (not camelCased) since
         # that's what `POST /ingest` reads at the payload root to route
@@ -1545,6 +1571,11 @@ def build_payload(
             for p in players.values()
         ],
     }
+    # Only set when the folder's account actually played in this replay, so
+    # the key is absent (not null) otherwise -- the API's optional() rejects
+    # null, and a null here would get the whole replay rejected.
+    if self_battletag:
+        payload["selfBattletag"] = self_battletag
     if spatial is not None:
         if trajectories:
             spatial["trajectories"] = trajectories
