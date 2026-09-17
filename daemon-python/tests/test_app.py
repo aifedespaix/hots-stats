@@ -4,6 +4,7 @@ import time
 from unittest.mock import MagicMock, patch
 
 from src import app
+from src.accounts_discovery import WatchDir
 from src.app import (
     _PERSISTENT_FAILURE_THRESHOLD,
     _DaemonRunner,
@@ -32,7 +33,7 @@ def test_run_sync_loop_ingests_existing_replays_before_watching(tmp_path):
     stop_event = threading.Event()
 
     with patch("src.app.watch_replays") as watch:
-        _run_sync_loop(tmp_path, ingested.append, stop_event, status)
+        _run_sync_loop([WatchDir(tmp_path, None)], lambda p, _t: ingested.append(p), stop_event, status)
 
     # The initial backlog is now ingested by a small thread pool (see
     # _INITIAL_SYNC_WORKERS), so both are still ingested exactly once each,
@@ -52,7 +53,9 @@ def test_run_sync_loop_calls_on_initial_scan_once_with_the_found_count(tmp_path)
     on_initial_scan = MagicMock()
 
     with patch("src.app.watch_replays"):
-        _run_sync_loop(tmp_path, lambda _p: None, stop_event, status, on_initial_scan=on_initial_scan)
+        _run_sync_loop(
+            [WatchDir(tmp_path, None)], lambda _p, _t: None, stop_event, status, on_initial_scan=on_initial_scan
+        )
 
     on_initial_scan.assert_called_once_with(2)
 
@@ -63,7 +66,9 @@ def test_run_sync_loop_calls_on_initial_scan_with_zero_when_folder_is_empty(tmp_
     on_initial_scan = MagicMock()
 
     with patch("src.app.watch_replays"):
-        _run_sync_loop(tmp_path, lambda _p: None, stop_event, status, on_initial_scan=on_initial_scan)
+        _run_sync_loop(
+            [WatchDir(tmp_path, None)], lambda _p, _t: None, stop_event, status, on_initial_scan=on_initial_scan
+        )
 
     on_initial_scan.assert_called_once_with(0)
 
@@ -77,7 +82,7 @@ def test_run_sync_loop_stops_early_when_stop_event_set(tmp_path):
     stop_event.set()
 
     with patch("src.app.watch_replays") as watch:
-        _run_sync_loop(tmp_path, ingested.append, stop_event, status)
+        _run_sync_loop([WatchDir(tmp_path, None)], lambda p, _t: ingested.append(p), stop_event, status)
 
     assert ingested == []
     assert status.snapshot().found == 2  # still reported, just not ingested
@@ -90,7 +95,7 @@ def test_run_sync_loop_new_replay_callback_bumps_found_and_ingests(tmp_path):
     stop_event = threading.Event()
 
     with patch("src.app.watch_replays") as watch:
-        _run_sync_loop(tmp_path, ingested.append, stop_event, status)
+        _run_sync_loop([WatchDir(tmp_path, None)], lambda p, _t: ingested.append(p), stop_event, status)
         on_replay_ready = watch.call_args.kwargs["on_replay_ready"]
         new_file = tmp_path / "New.StormReplay"
         on_replay_ready(new_file)
@@ -422,6 +427,6 @@ def test_run_sync_loop_initial_pool_uses_the_priority_initializer(tmp_path):
 
     with patch("src.app.watch_replays"), patch("src.app.ThreadPoolExecutor") as pool_cls:
         pool_cls.return_value.__enter__.return_value.submit.return_value = MagicMock()
-        _run_sync_loop(tmp_path, lambda _p: None, stop_event, status)
+        _run_sync_loop([WatchDir(tmp_path, None)], lambda _p, _t: None, stop_event, status)
 
     assert pool_cls.call_args.kwargs["initializer"] is app._lower_worker_priority

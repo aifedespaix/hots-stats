@@ -76,7 +76,7 @@ def test_watch_replays_does_not_redispatch_known_paths_on_first_poll(tmp_path):
     with patch("src.watcher._POLL_INTERVAL_SECONDS", 0.05):
         thread = threading.Thread(
             target=watch_replays,
-            args=(tmp_path,),
+            args=([tmp_path],),
             kwargs={
                 "on_replay_ready": ready.append,
                 "stop_event": stop_event,
@@ -116,7 +116,7 @@ def test_watch_replays_poll_detects_a_file_the_observer_never_reported(tmp_path)
     with patch("src.watcher.Observer", _NoOpObserver), patch("src.watcher._POLL_INTERVAL_SECONDS", 0.05):
         thread = threading.Thread(
             target=watch_replays,
-            args=(tmp_path,),
+            args=([tmp_path],),
             kwargs={"on_replay_ready": ready.append, "stop_event": stop_event},
         )
         thread.start()
@@ -136,7 +136,7 @@ def test_watch_replays_detects_a_new_file_via_filesystem_event(tmp_path):
     with patch("src.watcher._POLL_INTERVAL_SECONDS", 3600):  # keep the poll from firing during the test
         thread = threading.Thread(
             target=watch_replays,
-            args=(tmp_path,),
+            args=([tmp_path],),
             kwargs={"on_replay_ready": ready.append, "stop_event": stop_event},
         )
         thread.start()

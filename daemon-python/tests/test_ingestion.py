@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 from src import api_client, constants
 from src.config import Config
+from src.accounts_discovery import WatchDir
 from src.ingestion import IngestOutcome, ingest_file, resync, sync_spatial_calibrations
 from src.parser import ReplaySkipped
 from src.sync_state import SyncState
@@ -558,7 +559,7 @@ def test_resync_logs_summary(tmp_path, caplog):
     outcomes = iter([IngestOutcome("uploaded"), IngestOutcome("error", "boom")])
     with patch("src.ingestion.ingest_file", side_effect=lambda _c, _p, _s=None, **_kwargs: next(outcomes)):
         with caplog.at_level("INFO"):
-            resync(client, tmp_path)
+            resync(client, [WatchDir(tmp_path, None)])
 
     assert "1 uploaded, 0 already up to date, 1 failed" in caplog.text
 
@@ -569,7 +570,7 @@ def test_resync_passes_calibrations_through_to_ingest_file(tmp_path):
     calibrations = {"dragon-shire": {"minX": 0.0, "maxX": 1.0, "minY": 0.0, "maxY": 1.0}}
 
     with patch("src.ingestion.ingest_file", return_value=IngestOutcome("uploaded")) as ingest:
-        resync(client, tmp_path, calibrations=calibrations)
+        resync(client, [WatchDir(tmp_path, None)], calibrations=calibrations)
 
     assert ingest.call_args.kwargs["calibrations"] == calibrations
 
