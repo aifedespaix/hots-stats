@@ -1,6 +1,7 @@
 import { db, users } from "@hots-stats/db";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
+import { type Scope, linkedBattletags } from "../lib/account-scope";
 import { getStatsSummary } from "../services/stats.service";
 import { getHeroSummaries } from "../services/talents.service";
 
@@ -13,7 +14,12 @@ export const publicRoute = new Hono().get("/u/:handle", async (c) => {
     return c.json({ error: "Profile not found" }, 404);
   }
 
-  const [summary, heroes] = await Promise.all([getStatsSummary(user.id), getHeroSummaries(user.id)]);
+  // A public profile shows every account the owner has linked, merged.
+  const profileScope: Scope = { mode: "personal", battletags: await linkedBattletags(user.id) };
+  const [summary, heroes] = await Promise.all([
+    getStatsSummary(profileScope),
+    getHeroSummaries(profileScope),
+  ]);
 
   const topHeroes = [...heroes].sort((a, b) => b.gamesPlayed - a.gamesPlayed).slice(0, 5);
 

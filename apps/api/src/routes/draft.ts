@@ -3,6 +3,8 @@ import { draftPreferenceInputSchema, draftSnapshotInputSchema } from "@hots-stat
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
+import type { Scope } from "../lib/account-selection";
+import { accountScope } from "../middleware/account-scope";
 import { authSession, requireUser } from "../middleware/auth-session";
 import { authToken } from "../middleware/auth-token";
 import {
@@ -22,7 +24,7 @@ const teamThreatsQuerySchema = z.object({ battletags: z.string().min(1) });
 
 const battletagSearchQuerySchema = z.object({ q: z.string().default("") });
 
-type Env = { Variables: { user: User } };
+type Env = { Variables: { user: User; scope: Scope } };
 
 // How often a ping keeps the connection alive through idle-timeout proxies
 // between pushes -- pushes themselves (see draft.service.ts's `publish`)
@@ -89,12 +91,12 @@ export const draftRoute = new Hono<Env>()
     const battletags = await searchBattletags(parsed.data.q);
     return c.json({ battletags });
   })
-  .get("/players/:battletag", authSession, requireUser, async (c) => {
+  .get("/players/:battletag", authSession, requireUser, accountScope, async (c) => {
     const user = c.get("user");
-    const stats = await getPlayerDraftStats(user.id, c.req.param("battletag"));
+    const stats = await getPlayerDraftStats(user.id, c.get("scope"), c.req.param("battletag"));
     return c.json({ stats });
   })
-  .get("/teams/threats", authSession, requireUser, async (c) => {
+  .get("/teams/threats", authSession, requireUser, accountScope, async (c) => {
     const user = c.get("user");
     const parsed = teamThreatsQuerySchema.safeParse(c.req.query());
     if (!parsed.success) {
@@ -108,6 +110,6 @@ export const draftRoute = new Hono<Env>()
           .filter(Boolean),
       ),
     ].slice(0, 5);
-    const threats = await getTeamThreats(user.id, battletags);
+    const threats = await getTeamThreats(user.id, c.get("scope"), battletags);
     return c.json({ threats });
   });

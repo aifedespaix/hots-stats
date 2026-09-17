@@ -2,6 +2,7 @@ import type { User } from "@hots-stats/db";
 import { daemonErrorReportInputSchema } from "@hots-stats/shared-types";
 import { Hono } from "hono";
 import { API_VERSION, MIN_PARSER_VERSION } from "../constants";
+import { resolveScope } from "../lib/account-scope";
 import { authToken } from "../middleware/auth-token";
 import { recordDaemonError } from "../services/daemon-errors.service";
 import { listAccounts } from "../services/player-accounts.service";
@@ -29,7 +30,7 @@ export const ingestRoute = new Hono<Env>()
     // browser session — same summary as the web dashboard's /stats/summary,
     // just reachable with the token the daemon already has.
     const user = c.get("user");
-    return c.json(await getStatsSummary(user.id));
+    return c.json(await getStatsSummary(await resolveScope(user.id)));
   })
   .get("/version", (c) => {
     // Checked by the daemon on every startup (see sync_state.py /

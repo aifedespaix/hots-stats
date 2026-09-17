@@ -2,7 +2,6 @@ import { db, matchPlayers, matches, talentPicks } from "@hots-stats/db";
 import {
   TALENT_TIERS,
   type GameMode,
-  type HeroStatsScope,
   type TalentAnalyzerBuild,
   type TalentAnalyzerPin,
   type TalentAnalyzerResponse,
@@ -11,13 +10,14 @@ import {
 } from "@hots-stats/shared-types";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import { type Scope, scopeConditions } from "../lib/account-selection";
 import { wilsonLowerBound } from "../lib/wilson";
 
 export interface TalentAnalyzerParams {
-  userId: string;
   heroId: string;
   mapId?: string;
-  scope: HeroStatsScope;
+  /** Personal (BattleTag set) or global -- see lib/account-selection.ts. */
+  scope: Scope;
   mode?: GameMode[];
   pins: TalentAnalyzerPin[];
   minGames: number;
@@ -32,9 +32,8 @@ export interface TalentAnalyzerParams {
  * just any two talent_picks rows.
  */
 async function getPopulationMatchPlayerIds(params: TalentAnalyzerParams): Promise<string[]> {
-  const conditions = [eq(matchPlayers.heroId, params.heroId)];
+  const conditions = scopeConditions([eq(matchPlayers.heroId, params.heroId)], params.scope, matchPlayers.battletag);
   if (params.mapId) conditions.push(eq(matches.mapId, params.mapId));
-  if (params.scope === "personal") conditions.push(eq(matchPlayers.userId, params.userId));
   if (params.mode && params.mode.length > 0) conditions.push(inArray(matches.gameMode, params.mode));
 
   let query = db

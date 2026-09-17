@@ -8,16 +8,19 @@ import {
 } from "@hots-stats/shared-types";
 import { Hono } from "hono";
 import { z } from "zod";
+import { type Scope, accountsQuerySchema, withStatsScope } from "../lib/account-selection";
 import { gameModeListSchema } from "../lib/query";
+import { accountScope } from "../middleware/account-scope";
 import { authSession, requireUser } from "../middleware/auth-session";
 import { getTalentAnalysis } from "../services/talent-analyzer.service";
 
-type Env = { Variables: { user: User } };
+type Env = { Variables: { user: User; scope: Scope } };
 
 const querySchema = z.object({
   heroId: z.string().min(1),
   mapId: z.string().min(1).optional(),
   scope: heroStatsScopeSchema.optional(),
+  accounts: accountsQuerySchema,
   mode: gameModeListSchema.optional(),
   // "tier:talentId,tier:talentId" -- see `parsePins`.
   pins: z.string().optional(),
@@ -45,17 +48,18 @@ function parsePins(raw: string | undefined): TalentAnalyzerPin[] {
  * both, with cascading recompute as the player pins talents tier by tier,
  * plus a top-builds leaderboard. See the "Talents & Terrain" design doc's
  * Mission 1. */
-export const talentAnalyzerRoute = new Hono<Env>().use("*", authSession, requireUser).get("/", async (c) => {
+export const talentAnalyzerRoute = new Hono<Env>()
+  .use("*", authSession, requireUser, accountScope)
+  .get("/", async (c) => {
   const user = c.get("user");
   const parsed = querySchema.safeParse(c.req.query());
   if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
 
   const { heroId, mapId, scope, mode, pins, minGames } = parsed.data;
   const result = await getTalentAnalysis({
-    userId: user.id,
     heroId,
     mapId,
-    scope: scope ?? user.heroStatsScope,
+    scope: withStatsScope(c.get("scope"), scope, user.heroStatsScope),
     mode,
     pins: parsePins(pins),
     minGames: minGames ?? TALENT_ANALYZER_MIN_GAMES_DEFAULT,

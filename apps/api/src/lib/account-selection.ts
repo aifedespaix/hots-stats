@@ -82,6 +82,20 @@ export function intersectSelection(
 }
 
 /**
+ * Combines the request's resolved personal scope with the legacy
+ * `?scope=personal|global` toggle (per-user default in users.heroStatsScope).
+ * "global" wins and ignores accounts entirely.
+ */
+export function withStatsScope(
+  scope: Scope,
+  requested?: "personal" | "global",
+  fallback?: "personal" | "global",
+): Scope {
+  const effective = requested ?? fallback ?? "personal";
+  return effective === "global" ? { mode: "global" } : scope;
+}
+
+/**
  * SQL condition restricting a `match_players` reference to a scope. Returns
  * `undefined` for the global scope so callers can spread it into an `and()`.
  * An empty personal scope compiles to `false` -- matches nothing, rather than

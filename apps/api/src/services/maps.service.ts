@@ -17,6 +17,7 @@ import {
   type TeamImpactStats,
 } from "@hots-stats/shared-types";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { type Scope, scopeConditions } from "../lib/account-selection";
 import { normalCdf } from "../lib/normal-cdf";
 import { wilsonLowerBound } from "../lib/wilson";
 import { getMapWeaknesses } from "./weaknesses.service";
@@ -41,13 +42,12 @@ function rankedModeCondition(mode?: GameMode[]) {
  * the app knows about.
  */
 async function getRecentFormByMap(
-  userId: string,
+  scope: Scope,
   mode?: GameMode[],
   heroId?: string,
-  scope: HeroStatsScope = "personal",
 ): Promise<Map<string, boolean[]>> {
   const conditions = [rankedModeCondition(mode)];
-  if (scope === "personal") conditions.push(eq(matchPlayers.userId, userId));
+  conditions.push(...scopeConditions([], scope, matchPlayers.battletag));
   if (heroId) conditions.push(eq(matchPlayers.heroId, heroId));
 
   const ranked = db.$with("ranked_map_games").as(
@@ -88,13 +88,12 @@ async function getRecentFormByMap(
  * browse, not a leaderboard of maps already played.
  */
 export async function getMapHub(
-  userId: string,
+  scope: Scope,
   mode?: GameMode[],
   heroId?: string,
-  scope: HeroStatsScope = "personal",
 ): Promise<MapHubEntry[]> {
   const scopedConditions = [rankedModeCondition(mode)];
-  if (scope === "personal") scopedConditions.push(eq(matchPlayers.userId, userId));
+  scopedConditions.push(...scopeConditions([], scope, matchPlayers.battletag));
   if (heroId) scopedConditions.push(eq(matchPlayers.heroId, heroId));
 
   const scoped = db.$with("scoped_map_stats").as(
@@ -121,7 +120,7 @@ export async function getMapHub(
       })
       .from(maps)
       .leftJoin(scoped, eq(scoped.mapId, maps.id)),
-    getRecentFormByMap(userId, mode, heroId, scope),
+    getRecentFormByMap(scope, mode, heroId),
   ]);
 
   return rows
@@ -176,7 +175,7 @@ export async function getMapMetaHeroes(mapId: string): Promise<MapMetaHeroStats[
 }
 
 /** The connected user's own heroes played on this map, most-played first. */
-export async function getMapPersonalHeroes(userId: string, mapId: string): Promise<MapPersonalHeroStats[]> {
+export async function getMapPersonalHeroes(scope: Scope, mapId: string): Promise<MapPersonalHeroStats[]> {
   const rows = await db
     .select({
       heroId: matchPlayers.heroId,
@@ -190,7 +189,7 @@ export async function getMapPersonalHeroes(userId: string, mapId: string): Promi
     .from(matchPlayers)
     .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
     .innerJoin(heroes, eq(heroes.id, matchPlayers.heroId))
-    .where(and(eq(matchPlayers.userId, userId), eq(matches.mapId, mapId), rankedModeCondition()))
+    .where(and(...scopeConditions([eq(matches.mapId, mapId), rankedModeCondition()], scope, matchPlayers.battletag)))
     .groupBy(matchPlayers.heroId, heroes.name);
 
   return rows
@@ -201,8 +200,8 @@ export async function getMapPersonalHeroes(userId: string, mapId: string): Promi
 /** Reuses `getMapWeaknesses` (already the personal, ranked-only, per-map
  * winrate list used by the Diagnostic page) so the Hub, the Diagnostic
  * synthesis, and this ranking never disagree on "your winrate on map X". */
-export async function getMapPersonalRanking(userId: string, mapId: string): Promise<MapPersonalRanking> {
-  const byWinrate = (await getMapWeaknesses(userId)).sort((a, b) => b.winrate - a.winrate);
+export async function getMapPersonalRanking(scope: Scope, mapId: string): Promise<MapPersonalRanking> {
+  const byWinrate = (await getMapWeaknesses(scope)).sort((a, b) => b.winrate - a.winrate);
   const index = byWinrate.findIndex((entry) => entry.mapId === mapId);
   const thisMap = index >= 0 ? byWinrate[index] : undefined;
 
@@ -243,13 +242,13 @@ interface RoleMapAggregate {
 
 /**
  * Mean and population stddev of the four Team Impact rate stats, for every
- * ranked game played with `role` on `mapId` -- app-wide when `userId` is
+ * ranked game played with `role` on `mapId` -- app-wide when `scope` is
  * omitted (the reference population), or just this user's when given. Rates
  * are computed inline in SQL (per-minute, kill-participation against that
  * match's team total kills) and aggregated directly with `avg`/`stddev_pop`
  * rather than fetched per-row, since only the two moments are needed.
  */
-async function roleMapAggregate(mapId: string, role: HeroRole, userId?: string): Promise<RoleMapAggregate> {
+async function roleMapAggregate(mapId: string, role: HeroRole, scope?: Scope): Promise<RoleMapAggregate> {
   const teamKills = db.$with("team_kills_impact").as(
     db
       .select({
@@ -268,7 +267,7 @@ async function roleMapAggregate(mapId: string, role: HeroRole, userId?: string):
   const roleStatPerMinExpr = sql`(${roleStatSql(role)})::float / ${perMinute}`;
 
   const conditions = [eq(matches.mapId, mapId), eq(heroes.role, role), rankedModeCondition()];
-  if (userId) conditions.push(eq(matchPlayers.userId, userId));
+  if (scope) conditions.push(...scopeConditions([], scope, matchPlayers.battletag));
 
   const [row] = await db
     .with(teamKills)
@@ -326,13 +325,13 @@ function zScore(value: number, mean: number, std: number): number {
  * doc comment for the caveat about `roleImpact` not being teamfight-scoped
  * yet. Returns null below `TEAM_IMPACT_MIN_GAMES` in that role on this map.
  */
-export async function getTeamImpactStats(userId: string, mapId: string): Promise<TeamImpactStats | null> {
+export async function getTeamImpactStats(scope: Scope, mapId: string): Promise<TeamImpactStats | null> {
   const [dominantRole] = await db
     .select({ role: heroes.role, gamesPlayed: sql<number>`count(*)::int` })
     .from(matchPlayers)
     .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
     .innerJoin(heroes, eq(heroes.id, matchPlayers.heroId))
-    .where(and(eq(matchPlayers.userId, userId), eq(matches.mapId, mapId), rankedModeCondition()))
+    .where(and(...scopeConditions([eq(matches.mapId, mapId), rankedModeCondition()], scope, matchPlayers.battletag)))
     .groupBy(heroes.role)
     .orderBy(sql`count(*) desc`)
     .limit(1);
@@ -340,7 +339,7 @@ export async function getTeamImpactStats(userId: string, mapId: string): Promise
   const role = dominantRole?.role;
   if (!role) return null;
 
-  const [group, mine] = await Promise.all([roleMapAggregate(mapId, role), roleMapAggregate(mapId, role, userId)]);
+  const [group, mine] = await Promise.all([roleMapAggregate(mapId, role), roleMapAggregate(mapId, role, scope)]);
   if (mine.n < TEAM_IMPACT_MIN_GAMES) return null;
 
   const zKillPart = zScore(mine.killPartAvg, group.killPartAvg, group.killPartStd);
@@ -373,7 +372,7 @@ interface SoakRow {
   killPart: number;
 }
 
-async function getSoakRows(userId: string, mapId: string): Promise<SoakRow[]> {
+async function getSoakRows(scope: Scope, mapId: string): Promise<SoakRow[]> {
   const teamKills = db.$with("team_kills_soak").as(
     db
       .select({
@@ -395,7 +394,7 @@ async function getSoakRows(userId: string, mapId: string): Promise<SoakRow[]> {
     .from(matchPlayers)
     .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
     .innerJoin(teamKills, and(eq(teamKills.matchId, matchPlayers.matchId), eq(teamKills.team, matchPlayers.team)))
-    .where(and(eq(matchPlayers.userId, userId), eq(matches.mapId, mapId), rankedModeCondition()));
+    .where(and(...scopeConditions([eq(matches.mapId, mapId), rankedModeCondition()], scope, matchPlayers.battletag)));
 }
 
 function mean(values: number[]): number {
@@ -412,8 +411,8 @@ function populationStd(values: number[], avg: number): number {
  * comment for the formula and its caveat. Returns null under `SOAK_MIN_GAMES`
  * (too few matches to split into three meaningful buckets).
  */
-export async function getSoakWinrate(userId: string, mapId: string): Promise<SoakWinrateStats | null> {
-  const rows = await getSoakRows(userId, mapId);
+export async function getSoakWinrate(scope: Scope, mapId: string): Promise<SoakWinrateStats | null> {
+  const rows = await getSoakRows(scope, mapId);
   if (rows.length < SOAK_MIN_GAMES) return null;
 
   const xpValues = rows.map((row) => row.xpPerMin);
@@ -450,16 +449,16 @@ export async function getSoakWinrate(userId: string, mapId: string): Promise<Soa
   };
 }
 
-export async function getMapDetail(userId: string, mapId: string): Promise<MapDetailResponse | null> {
+export async function getMapDetail(scope: Scope, mapId: string): Promise<MapDetailResponse | null> {
   const [mapRow] = await db.select({ id: maps.id, name: maps.name }).from(maps).where(eq(maps.id, mapId)).limit(1);
   if (!mapRow) return null;
 
   const [metaHeroes, personalHeroes, personalRanking, teamImpact, soak, calibrationRows] = await Promise.all([
     getMapMetaHeroes(mapId),
-    getMapPersonalHeroes(userId, mapId),
-    getMapPersonalRanking(userId, mapId),
-    getTeamImpactStats(userId, mapId),
-    getSoakWinrate(userId, mapId),
+    getMapPersonalHeroes(scope, mapId),
+    getMapPersonalRanking(scope, mapId),
+    getTeamImpactStats(scope, mapId),
+    getSoakWinrate(scope, mapId),
     db.select({ mapId: mapCalibrations.mapId }).from(mapCalibrations).where(eq(mapCalibrations.mapId, mapId)).limit(1),
   ]);
 

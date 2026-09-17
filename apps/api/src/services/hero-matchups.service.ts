@@ -1,6 +1,7 @@
 import { db, heroes, matchPlayers, matches } from "@hots-stats/db";
-import { HERO_MATCHUP_MIN_GAMES, type GameMode, type HeroMatchupEntry, type HeroStatsScope } from "@hots-stats/shared-types";
+import { HERO_MATCHUP_MIN_GAMES, type GameMode, type HeroMatchupEntry } from "@hots-stats/shared-types";
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { type Scope, scopeConditions } from "../lib/account-selection";
 import { alias } from "drizzle-orm/pg-core";
 import { wilsonLowerBound, wilsonUpperBound } from "../lib/wilson";
 
@@ -30,7 +31,7 @@ const emptyBaseline: Baseline = {
  * heroDamage/damageTaken/experienceContribution averages that query doesn't
  * select, and touching its shape would ripple into the Heroes list/detail
  * pages that already depend on it. */
-async function getBaseline(userId: string, heroId: string, scope: HeroStatsScope, mode?: GameMode[]): Promise<Baseline> {
+async function getBaseline(scope: Scope, heroId: string, mode?: GameMode[]): Promise<Baseline> {
   const teamKills = db.$with("team_kills").as(
     db
       .select({
@@ -42,8 +43,7 @@ async function getBaseline(userId: string, heroId: string, scope: HeroStatsScope
       .groupBy(matchPlayers.matchId, matchPlayers.team),
   );
 
-  const conditions = [eq(matchPlayers.heroId, heroId)];
-  if (scope === "personal") conditions.push(eq(matchPlayers.userId, userId));
+  const conditions = scopeConditions([eq(matchPlayers.heroId, heroId)], scope, matchPlayers.battletag);
   if (mode && mode.length > 0) conditions.push(inArray(matches.gameMode, mode));
 
   const [row] = await db
@@ -98,9 +98,8 @@ function relativeDelta(matchupValue: number, baselineValue: number): number {
  * across the whole scope, not two specific players.
  */
 async function getAllMatchupEntries(
-  userId: string,
+  scope: Scope,
   heroId: string,
-  scope: HeroStatsScope,
   baseline: Baseline,
   mode?: GameMode[],
 ): Promise<HeroMatchupEntry[]> {
@@ -118,8 +117,7 @@ async function getAllMatchupEntries(
       .groupBy(matchPlayers.matchId, matchPlayers.team),
   );
 
-  const conditions = [eq(a.heroId, heroId)];
-  if (scope === "personal") conditions.push(eq(a.userId, userId));
+  const conditions = scopeConditions([eq(a.heroId, heroId)], scope, a.battletag);
   if (mode && mode.length > 0) conditions.push(inArray(matches.gameMode, mode));
 
   const rows = await db
@@ -217,13 +215,12 @@ export interface HeroMatchupsResult {
  * *upper* bound (confidently bad).
  */
 export async function getHeroMatchups(
-  userId: string,
+  scope: Scope,
   heroId: string,
-  scope: HeroStatsScope,
   mode?: GameMode[],
 ): Promise<HeroMatchupsResult> {
-  const baseline = await getBaseline(userId, heroId, scope, mode);
-  const entries = await getAllMatchupEntries(userId, heroId, scope, baseline, mode);
+  const baseline = await getBaseline(scope, heroId, mode);
+  const entries = await getAllMatchupEntries(scope, heroId, baseline, mode);
 
   const bestMatchups = pickTopMatchups(entries, (entry) => wilsonLowerBound(entry.wins, entry.gamesPlayed));
   // Excludes whatever `bestMatchups` already claimed: with few distinct
@@ -256,14 +253,13 @@ export interface HeroMatchupResult {
  * (never an error) when the two heroes have never been on opposing teams,
  * so the search always renders a card. */
 export async function getHeroMatchup(
-  userId: string,
+  scope: Scope,
   heroId: string,
   opponentHeroId: string,
-  scope: HeroStatsScope,
   mode?: GameMode[],
 ): Promise<HeroMatchupResult | null> {
-  const baseline = await getBaseline(userId, heroId, scope, mode);
-  const entries = await getAllMatchupEntries(userId, heroId, scope, baseline, mode);
+  const baseline = await getBaseline(scope, heroId, mode);
+  const entries = await getAllMatchupEntries(scope, heroId, baseline, mode);
   const found = entries.find((entry) => entry.heroId === opponentHeroId);
   if (found) return { baselineWinrate: baseline.winrate, baselineGamesPlayed: baseline.gamesPlayed, opponent: found };
 

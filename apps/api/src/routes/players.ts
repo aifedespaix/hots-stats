@@ -2,7 +2,10 @@ import type { User } from "@hots-stats/db";
 import { type GameMode, playerAnnotationInputSchema } from "@hots-stats/shared-types";
 import { Hono } from "hono";
 import { z } from "zod";
+import { type Scope, accountsQuerySchema } from "../lib/account-selection";
+import { linkedBattletags } from "../lib/account-scope";
 import { gameModeListSchema } from "../lib/query";
+import { accountScope } from "../middleware/account-scope";
 import { authSession, requireUser } from "../middleware/auth-session";
 import {
   getPlayerAnnotation,
@@ -19,7 +22,7 @@ import {
 import { getStatsSummary } from "../services/stats.service";
 import { getHeroSummaries } from "../services/talents.service";
 
-type Env = { Variables: { user: User } };
+type Env = { Variables: { user: User; scope: Scope } };
 
 const listQuerySchema = z.object({
   sortBy: z
@@ -27,13 +30,14 @@ const listQuerySchema = z.object({
     .default("gamesTogether"),
   sortDir: z.enum(["asc", "desc"]).default("desc"),
   mode: gameModeListSchema.optional(),
+  accounts: accountsQuerySchema,
 });
 
 // Comma-joined battletags, same convention as draft.ts's team-threats query.
 const annotationsBulkQuerySchema = z.object({ battletags: z.string().min(1) });
 
 export const playersRoute = new Hono<Env>()
-  .use("*", authSession, requireUser)
+  .use("*", authSession, requireUser, accountScope)
   .get("/", async (c) => {
     const user = c.get("user");
     const parsed = listQuerySchema.safeParse(c.req.query());
@@ -42,6 +46,7 @@ export const playersRoute = new Hono<Env>()
     }
     const players = await listPlayerEncounters(
       user.id,
+      c.get("scope"),
       parsed.data.sortBy,
       parsed.data.sortDir,
       parsed.data.mode,
@@ -89,18 +94,20 @@ export const playersRoute = new Hono<Env>()
   })
   .get("/:battletag", async (c) => {
     const user = c.get("user");
-    const parsed = z.object({ mode: gameModeListSchema.optional() }).safeParse(c.req.query());
+    const parsed = z
+      .object({ mode: gameModeListSchema.optional(), accounts: accountsQuerySchema })
+      .safeParse(c.req.query());
     if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
     const mode = parsed.data.mode;
     const battletag = c.req.param("battletag");
-    const encounter = await getPlayerEncounter(user.id, battletag, mode);
+    const encounter = await getPlayerEncounter(user.id, c.get("scope"), battletag, mode);
     if (!encounter) {
       return c.json({ error: "No shared games with this player" }, 404);
     }
     const [heroBreakdown, opponentHeroBreakdown, mapBreakdown, ownStats] = await Promise.all([
-      getPlayerHeroBreakdown(user.id, battletag, mode),
-      getOpponentHeroBreakdown(user.id, battletag, mode),
-      getPlayerMapBreakdown(user.id, battletag, mode),
+      getPlayerHeroBreakdown(c.get("scope"), battletag, mode),
+      getOpponentHeroBreakdown(c.get("scope"), battletag, mode),
+      getPlayerMapBreakdown(c.get("scope"), battletag, mode),
       getOwnStats(encounter, mode),
     ]);
     return c.json({ player: encounter, ownStats, heroBreakdown, opponentHeroBreakdown, mapBreakdown });
@@ -116,9 +123,15 @@ async function getOwnStats(encounter: { accountUserId: string | null; friendship
   if (!encounter.accountUserId) return null;
   if (encounter.friendshipStatus !== "friends" && encounter.friendshipStatus !== "self") return null;
 
+  // The friend's own stats span every account they linked, not just the one
+  // BattleTag the viewer happens to be looking at.
+  const friendScope: Scope = {
+    mode: "personal",
+    battletags: await linkedBattletags(encounter.accountUserId),
+  };
   const [summary, heroes] = await Promise.all([
-    getStatsSummary(encounter.accountUserId, "personal", mode),
-    getHeroSummaries(encounter.accountUserId, mode, "personal"),
+    getStatsSummary(friendScope, mode),
+    getHeroSummaries(friendScope, mode),
   ]);
   return { summary, topHeroes: heroes.sort((a, b) => b.gamesPlayed - a.gamesPlayed) };
 }

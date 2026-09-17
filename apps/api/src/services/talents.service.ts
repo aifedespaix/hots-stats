@@ -1,6 +1,7 @@
 import { db, heroes, matchPlayers, matches, talentPicks } from "@hots-stats/db";
-import type { GameMode, HeroStatsScope, TalentTierStats } from "@hots-stats/shared-types";
+import type { GameMode, TalentTierStats } from "@hots-stats/shared-types";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { type Scope, scopeConditions } from "../lib/account-selection";
 
 export interface HeroStatsRow {
   heroId: string;
@@ -20,10 +21,9 @@ export interface HeroStatsRow {
  * per (match, team) first and join back onto the connected user's rows.
  */
 async function heroStatsQuery(
-  userId: string,
+  scope: Scope,
   heroId?: string,
   mode?: GameMode[],
-  scope: HeroStatsScope = "personal",
   mapId?: string,
 ) {
   const teamKills = db.$with("team_kills").as(
@@ -37,7 +37,7 @@ async function heroStatsQuery(
       .groupBy(matchPlayers.matchId, matchPlayers.team),
   );
 
-  const conditions = scope === "personal" ? [eq(matchPlayers.userId, userId)] : [];
+  const conditions = scopeConditions([], scope, matchPlayers.battletag);
   if (heroId) conditions.push(eq(matchPlayers.heroId, heroId));
   if (mapId) conditions.push(eq(matches.mapId, mapId));
   if (mode && mode.length > 0) conditions.push(inArray(matches.gameMode, mode));
@@ -69,12 +69,11 @@ async function heroStatsQuery(
 }
 
 export async function getHeroSummaries(
-  userId: string,
+  scope: Scope,
   mode?: GameMode[],
-  scope: HeroStatsScope = "personal",
   mapId?: string,
 ): Promise<HeroStatsRow[]> {
-  const rows = await heroStatsQuery(userId, undefined, mode, scope, mapId);
+  const rows = await heroStatsQuery(scope, undefined, mode, mapId);
   return rows.map((row) => ({
     ...row,
     winrate: row.gamesPlayed > 0 ? row.wins / row.gamesPlayed : 0,
@@ -82,12 +81,11 @@ export async function getHeroSummaries(
 }
 
 export async function getHeroSummary(
-  userId: string,
+  scope: Scope,
   heroId: string,
-  scope: HeroStatsScope = "personal",
   mode?: GameMode[],
 ): Promise<HeroStatsRow | null> {
-  const rows = await heroStatsQuery(userId, heroId, mode, scope);
+  const rows = await heroStatsQuery(scope, heroId, mode);
   const row = rows[0];
   if (!row) return null;
   return { ...row, winrate: row.gamesPlayed > 0 ? row.wins / row.gamesPlayed : 0 };
@@ -95,8 +93,8 @@ export async function getHeroSummary(
 
 const TALENT_TIERS = [1, 4, 7, 10, 13, 16, 20] as const;
 
-export async function getTalentTierStats(userId: string, heroId: string, mode?: GameMode[]): Promise<TalentTierStats[]> {
-  const conditions = [eq(matchPlayers.heroId, heroId), eq(matchPlayers.userId, userId)];
+export async function getTalentTierStats(scope: Scope, heroId: string, mode?: GameMode[]): Promise<TalentTierStats[]> {
+  const conditions = [...scopeConditions([], scope, matchPlayers.battletag), eq(matchPlayers.heroId, heroId)];
   if (mode && mode.length > 0) conditions.push(inArray(matches.gameMode, mode));
 
   const rows = await db

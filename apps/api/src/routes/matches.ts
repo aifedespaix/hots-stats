@@ -19,14 +19,16 @@ import { alias } from "drizzle-orm/pg-core";
 import { Hono } from "hono";
 import { z } from "zod";
 import { MIN_RELIABLE_STATS_PARSER_VERSION } from "../constants";
+import { type Scope, scopeConditions } from "../lib/account-selection";
 import { gameModeListSchema, gameVersionListSchema } from "../lib/query";
 import { isVersionAtLeast } from "../lib/parser-version";
 import { isAllZeroCombat } from "../lib/replay-plausibility";
 import { fromDbLayer } from "../lib/spatial-layer";
+import { accountScope } from "../middleware/account-scope";
 import { authSession, requireUser } from "../middleware/auth-session";
 import { getFriendshipStatuses } from "../services/friendships.service";
 
-type Env = { Variables: { user: User } };
+type Env = { Variables: { user: User; scope: Scope } };
 
 /** Column a `/matches` list result can be sorted by -- kept to columns already selected in the row shape below. */
 const SORTABLE_COLUMNS = {
@@ -98,13 +100,13 @@ function compareGameVersionsDesc(a: string, b: string): number {
  * shared with `GET /matches/trend` (win-rate evolution chart) so both
  * always agree on what a given set of filters matches.
  */
-function buildMatchConditions(userId: string, filters: z.infer<typeof filtersQuerySchema>) {
+function buildMatchConditions(scope: Scope, filters: z.infer<typeof filtersQuerySchema>) {
   const { mode, heroId, mapId, dateFrom, dateTo, opponentBattletag, allyBattletag, opponentHeroId, gameVersion } =
     filters;
   const opponent = alias(matchPlayers, "opponent");
   const ally = alias(matchPlayers, "ally");
 
-  const conditions = [eq(matchPlayers.userId, userId)];
+  const conditions = scopeConditions([], scope, matchPlayers.battletag);
   if (mode && mode.length > 0) conditions.push(inArray(matches.gameMode, mode));
   if (heroId) conditions.push(eq(matchPlayers.heroId, heroId));
   if (mapId) conditions.push(eq(matches.mapId, mapId));
@@ -171,7 +173,7 @@ function buildMatchConditions(userId: string, filters: z.infer<typeof filtersQue
 }
 
 export const matchesRoute = new Hono<Env>()
-  .use("*", authSession, requireUser)
+  .use("*", authSession, requireUser, accountScope)
   .get("/", async (c) => {
     const user = c.get("user");
     const parsed = listQuerySchema.safeParse(c.req.query());
@@ -179,7 +181,7 @@ export const matchesRoute = new Hono<Env>()
       return c.json({ error: parsed.error.flatten() }, 400);
     }
     const { sortBy, sortDir, page, pageSize, ...filters } = parsed.data;
-    const where = buildMatchConditions(user.id, filters);
+    const where = buildMatchConditions(c.get("scope"), filters);
 
     const [rows, countRows] = await Promise.all([
       db
@@ -225,20 +227,20 @@ export const matchesRoute = new Hono<Env>()
         .selectDistinct({ id: heroes.id, name: heroes.name })
         .from(matchPlayers)
         .innerJoin(heroes, eq(heroes.id, matchPlayers.heroId))
-        .where(eq(matchPlayers.userId, user.id))
+        .where(and(...scopeConditions([], c.get("scope"), matchPlayers.battletag)))
         .orderBy(asc(heroes.name)),
       db
         .selectDistinct({ id: maps.id, name: maps.name })
         .from(matchPlayers)
         .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
         .innerJoin(maps, eq(maps.id, matches.mapId))
-        .where(eq(matchPlayers.userId, user.id))
+        .where(and(...scopeConditions([], c.get("scope"), matchPlayers.battletag)))
         .orderBy(asc(maps.name)),
       db
         .selectDistinct({ gameVersion: matches.gameVersion })
         .from(matchPlayers)
         .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
-        .where(eq(matchPlayers.userId, user.id)),
+        .where(and(...scopeConditions([], c.get("scope"), matchPlayers.battletag))),
     ]);
 
     // Sorted newest-first, with the `UNKNOWN_GAME_VERSION` sentinel
@@ -272,7 +274,7 @@ export const matchesRoute = new Hono<Env>()
       .selectDistinct({ battletag: other.battletag })
       .from(matchPlayers)
       .innerJoin(other, and(eq(other.matchId, matchPlayers.matchId), ne(other.battletag, matchPlayers.battletag)))
-      .where(and(eq(matchPlayers.userId, user.id), ilike(other.battletag, likeTerm(parsed.data.q))))
+      .where(and(...scopeConditions([ilike(other.battletag, likeTerm(parsed.data.q))], c.get("scope"), matchPlayers.battletag)))
       .orderBy(asc(other.battletag))
       .limit(PLAYER_SEARCH_LIMIT + 1);
 
@@ -294,7 +296,7 @@ export const matchesRoute = new Hono<Env>()
       return c.json({ error: parsed.error.flatten() }, 400);
     }
     const { limit, ...filters } = parsed.data;
-    const where = buildMatchConditions(user.id, filters);
+    const where = buildMatchConditions(c.get("scope"), filters);
 
     if (limit) {
       const lastN = await db
@@ -326,7 +328,7 @@ export const matchesRoute = new Hono<Env>()
     if (!parsed.success) {
       return c.json({ error: parsed.error.flatten() }, 400);
     }
-    const where = buildMatchConditions(user.id, parsed.data);
+    const where = buildMatchConditions(c.get("scope"), parsed.data);
 
     // Per-match rate expressions shared by both the filtered aggregate and
     // the all-time range query below, so the radar chart's normalization
@@ -415,7 +417,7 @@ export const matchesRoute = new Hono<Env>()
         })
         .from(matchPlayers)
         .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
-        .where(eq(matchPlayers.userId, user.id)),
+        .where(and(...scopeConditions([], c.get("scope"), matchPlayers.battletag))),
     ]);
 
     const overview = overviewRows[0] ?? { gamesPlayed: 0, wins: 0, avgKills: 0, avgDeaths: 0, avgAssists: 0 };

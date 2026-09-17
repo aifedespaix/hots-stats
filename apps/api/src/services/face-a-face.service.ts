@@ -10,19 +10,25 @@ import {
   type FaceAFaceSynergyStats,
   type GameMode,
 } from "@hots-stats/shared-types";
-import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import { type Scope, scopeConditions } from "../lib/account-selection";
 
 /**
- * Identifies one side of a comparison: a registered account (complete
- * history, survives battletag changes) or a bare battletag (anyone ever seen
- * in a recorded match, account or not) -- comparisons work for any player,
- * not just friends.
+ * Identifies one side of a comparison: a set of BattleTags (every account the
+ * site account owns -- see lib/account-scope.ts) or a bare battletag (anyone
+ * ever seen in a recorded match, account or not). Comparisons work for any
+ * player, not just friends.
  */
-export type FaceAFaceTarget = { userId: string } | { battletag: string };
+export type FaceAFaceTarget = { battletags: string[] } | { battletag: string };
 
 function targetCondition(target: FaceAFaceTarget, mode?: GameMode[]) {
-  const base = "userId" in target ? eq(matchPlayers.userId, target.userId) : eq(matchPlayers.battletag, target.battletag);
+  let base: SQL | undefined;
+  if ("battletags" in target) {
+    base = target.battletags.length > 0 ? inArray(matchPlayers.battletag, target.battletags) : sql`false`;
+  } else {
+    base = eq(matchPlayers.battletag, target.battletag);
+  }
   return mode && mode.length > 0 ? and(base, inArray(matches.gameMode, mode)) : base;
 }
 
@@ -218,7 +224,7 @@ function pickTopCombos(
  * or not.
  */
 async function getPairedComboStats(
-  userId: string,
+  scope: Scope,
   targetBattletag: string,
   sameTeam: boolean,
   mode?: GameMode[],
@@ -229,7 +235,9 @@ async function getPairedComboStats(
   const heroB = alias(heroes, "hero_b");
 
   const join = and(eq(b.matchId, a.matchId), sameTeam ? eq(b.team, a.team) : ne(b.team, a.team), ne(b.id, a.id));
-  const pairConditions = [eq(a.userId, userId), eq(b.battletag, targetBattletag)];
+  // scopeConditions already excludes nothing on the "other" side, but a
+  // BattleTag shared between accounts would otherwise pair with itself.
+  const pairConditions = scopeConditions([eq(b.battletag, targetBattletag)], scope, a.battletag);
   if (mode && mode.length > 0) pairConditions.push(inArray(matches.gameMode, mode));
   const pairWhere = and(...pairConditions);
 
@@ -265,13 +273,13 @@ async function getPairedComboStats(
   return { gamesPlayed: overview.gamesPlayed, wins: overview.wins, combos: comboRows };
 }
 
-/** Stats for games where `userId` and `targetBattletag` were on the same team. */
+/** Stats for games where the viewer's accounts and `targetBattletag` were on the same team. */
 export async function getSynergyStats(
-  userId: string,
+  scope: Scope,
   targetBattletag: string,
   mode?: GameMode[],
 ): Promise<FaceAFaceSynergyStats> {
-  const { gamesPlayed, wins, combos } = await getPairedComboStats(userId, targetBattletag, true, mode);
+  const { gamesPlayed, wins, combos } = await getPairedComboStats(scope, targetBattletag, true, mode);
 
   const withWinrate: FaceAFaceHeroCombo[] = combos.map((combo) => ({
     ...combo,
@@ -294,11 +302,11 @@ export async function getSynergyStats(
  * winrate combos) and "what do they beat me with" (worst winrate combos).
  */
 export async function getMatchupStats(
-  userId: string,
+  scope: Scope,
   targetBattletag: string,
   mode?: GameMode[],
 ): Promise<FaceAFaceMatchupStats> {
-  const { gamesPlayed, wins, combos } = await getPairedComboStats(userId, targetBattletag, false, mode);
+  const { gamesPlayed, wins, combos } = await getPairedComboStats(scope, targetBattletag, false, mode);
 
   const withWinrate: FaceAFaceHeroCombo[] = combos.map((combo) => ({
     ...combo,

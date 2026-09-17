@@ -1,4 +1,4 @@
-import { db, draftPseudoPreferences, heroes, matchPlayers, matches, users } from "@hots-stats/db";
+import { db, draftPseudoPreferences, heroes, matchPlayers, matches, userAccounts } from "@hots-stats/db";
 import {
   DRAFT_MIN_RANKED_GAMES_FOR_RANKING,
   DRAFT_RANKED_MODES,
@@ -13,6 +13,7 @@ import {
   type TeamThreatEntry,
 } from "@hots-stats/shared-types";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import type { Scope } from "../lib/account-selection";
 import { getPlayerEncounter } from "./players.service";
 import { getMatchupWeaknesses } from "./weaknesses.service";
 
@@ -232,7 +233,10 @@ export async function ingestDraftSnapshot(submitterUserId: string, input: DraftS
   const candidateBattletags = [...new Set(resolvedSlots.flatMap((slot) => slot.candidates))];
   const matchedUsers =
     candidateBattletags.length > 0
-      ? await db.select({ id: users.id }).from(users).where(inArray(users.battletag, candidateBattletags))
+      ? await db
+          .selectDistinct({ id: userAccounts.userId })
+          .from(userAccounts)
+          .where(inArray(userAccounts.battletag, candidateBattletags))
       : [];
 
   const audience = new Set<string>([submitterUserId, ...matchedUsers.map((row) => row.id)]);
@@ -306,9 +310,13 @@ export async function setDraftPseudoPreference(
  * selected player, computed from every ranked match they've ever appeared
  * in across the whole app, regardless of who uploaded it.
  */
-export async function getPlayerDraftStats(viewerUserId: string, battletag: string): Promise<DraftPlayerStats> {
+export async function getPlayerDraftStats(
+  viewerUserId: string,
+  scope: Scope,
+  battletag: string,
+): Promise<DraftPlayerStats> {
   const [encounter, heroRows, recentRows] = await Promise.all([
-    getPlayerEncounter(viewerUserId, battletag),
+    getPlayerEncounter(viewerUserId, scope, battletag),
     db
       .select({
         heroId: matchPlayers.heroId,
@@ -386,7 +394,11 @@ export async function getPlayerDraftStats(viewerUserId: string, battletag: strin
  * pooled top-N -- during a timed draft, "who specifically should I watch"
  * is more actionable than an anonymous hero list.
  */
-export async function getTeamThreats(viewerUserId: string, battletags: string[]): Promise<TeamThreatEntry[]> {
+export async function getTeamThreats(
+  viewerUserId: string,
+  scope: Scope,
+  battletags: string[],
+): Promise<TeamThreatEntry[]> {
   if (battletags.length === 0) return [];
 
   const [rows, personalWeaknesses] = await Promise.all([
@@ -403,7 +415,7 @@ export async function getTeamThreats(viewerUserId: string, battletags: string[])
       .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
       .where(and(inArray(matchPlayers.battletag, battletags), inArray(matches.gameMode, [...DRAFT_RANKED_MODES])))
       .groupBy(matchPlayers.battletag, matchPlayers.heroId, heroes.name),
-    getMatchupWeaknesses(viewerUserId),
+    getMatchupWeaknesses(scope),
   ]);
 
   const rowsByBattletag = new Map<string, typeof rows>();

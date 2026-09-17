@@ -3,6 +3,8 @@ import { heroStatsScopeSchema } from "@hots-stats/shared-types";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
+import { withStatsScope, type Scope } from "../lib/account-selection";
+import { linkedBattletags } from "../lib/account-scope";
 import { gameModeListSchema } from "../lib/query";
 import { authSession, requireUser } from "../middleware/auth-session";
 import {
@@ -121,11 +123,17 @@ export const friendsRoute = new Hono<Env>()
 
     const parsed = scopeQuerySchema.safeParse(c.req.query());
     if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
-    const scope = parsed.data.scope ?? user.heroStatsScope;
+    // This endpoint reports on the FRIEND, so the personal scope is every
+    // account *they* linked -- not the viewer's selection.
+    const friendScope: Scope = {
+      mode: "personal",
+      battletags: await linkedBattletags(friendId),
+    };
+    const scope = withStatsScope(friendScope, parsed.data.scope, user.heroStatsScope);
 
     const [summary, heroSummaries] = await Promise.all([
-      getStatsSummary(friendId, scope, parsed.data.mode),
-      getHeroSummaries(friendId, parsed.data.mode, scope),
+      getStatsSummary(scope, parsed.data.mode),
+      getHeroSummaries(scope, parsed.data.mode),
     ]);
 
     return c.json({ friend, summary, heroes: heroSummaries, scope });
@@ -141,7 +149,8 @@ export const friendsRoute = new Hono<Env>()
     const parsed = matchesQuerySchema.safeParse(c.req.query());
     if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
     const { page, pageSize, mode } = parsed.data;
-    const conditions = [eq(matchPlayers.userId, friendId)];
+    const friendTags = await linkedBattletags(friendId);
+    const conditions = [friendTags.length > 0 ? inArray(matchPlayers.battletag, friendTags) : sql`false`];
     if (mode && mode.length > 0) conditions.push(inArray(matches.gameMode, mode));
     const where = and(...conditions);
 

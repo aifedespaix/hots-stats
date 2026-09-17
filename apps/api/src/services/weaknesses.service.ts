@@ -11,6 +11,7 @@ import {
 } from "@hots-stats/shared-types";
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import { type Scope, scopeConditions } from "../lib/account-selection";
 
 /**
  * Personal weakness diagnostics for the connected user, always scoped to
@@ -27,7 +28,7 @@ function rankedModeCondition() {
 /** Win rate per map, worst first -- no minimum-games floor here (the full
  * list is meant to be browsable like the Heroes page); callers that need a
  * reliable "biggest leak" pick their own floor over the result. */
-export async function getMapWeaknesses(userId: string): Promise<MapWeaknessStats[]> {
+export async function getMapWeaknesses(scope: Scope): Promise<MapWeaknessStats[]> {
   const rows = await db
     .select({
       mapId: matches.mapId,
@@ -38,7 +39,7 @@ export async function getMapWeaknesses(userId: string): Promise<MapWeaknessStats
     .from(matchPlayers)
     .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
     .innerJoin(maps, eq(maps.id, matches.mapId))
-    .where(and(eq(matchPlayers.userId, userId), rankedModeCondition()))
+    .where(and(...scopeConditions([rankedModeCondition()], scope, matchPlayers.battletag)))
     .groupBy(matches.mapId, maps.name);
 
   return rows
@@ -52,7 +53,7 @@ export async function getMapWeaknesses(userId: string): Promise<MapWeaknessStats
  * hero is never picked twice in one match, so this never double-counts a
  * single game against a given hero).
  */
-export async function getMatchupWeaknesses(userId: string): Promise<MatchupWeaknessStats[]> {
+export async function getMatchupWeaknesses(scope: Scope): Promise<MatchupWeaknessStats[]> {
   const other = alias(matchPlayers, "other");
 
   const rows = await db
@@ -66,7 +67,7 @@ export async function getMatchupWeaknesses(userId: string): Promise<MatchupWeakn
     .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
     .innerJoin(other, and(eq(other.matchId, matchPlayers.matchId), ne(other.team, matchPlayers.team)))
     .innerJoin(heroes, eq(heroes.id, other.heroId))
-    .where(and(eq(matchPlayers.userId, userId), rankedModeCondition()))
+    .where(and(...scopeConditions([rankedModeCondition()], scope, matchPlayers.battletag)))
     .groupBy(other.heroId, heroes.name);
 
   return rows
@@ -93,7 +94,7 @@ interface TalentHabitGap {
  * pick diluting its own baseline: at 90% pick rate, "overall win rate on
  * this hero" is mostly *this talent's* results already.
  */
-async function getTalentHabitGaps(userId: string): Promise<TalentHabitGap[]> {
+async function getTalentHabitGaps(scope: Scope): Promise<TalentHabitGap[]> {
   const [talentRows, heroRows] = await Promise.all([
     db
       .select({
@@ -109,7 +110,7 @@ async function getTalentHabitGaps(userId: string): Promise<TalentHabitGap[]> {
       .innerJoin(matchPlayers, eq(matchPlayers.id, talentPicks.matchPlayerId))
       .innerJoin(heroes, eq(heroes.id, matchPlayers.heroId))
       .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
-      .where(and(eq(matchPlayers.userId, userId), rankedModeCondition()))
+      .where(and(...scopeConditions([rankedModeCondition()], scope, matchPlayers.battletag)))
       .groupBy(matchPlayers.heroId, heroes.name, talentPicks.tier, talentPicks.talentId, talentPicks.talentName),
     db
       .select({
@@ -119,7 +120,7 @@ async function getTalentHabitGaps(userId: string): Promise<TalentHabitGap[]> {
       })
       .from(matchPlayers)
       .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
-      .where(and(eq(matchPlayers.userId, userId), rankedModeCondition()))
+      .where(and(...scopeConditions([rankedModeCondition()], scope, matchPlayers.battletag)))
       .groupBy(matchPlayers.heroId),
   ]);
 
@@ -170,8 +171,8 @@ async function getTalentHabitGaps(userId: string): Promise<TalentHabitGap[]> {
  * `TALENT_HABIT_MIN_WINRATE_GAP`, worst gap first -- a habit worth
  * reconsidering, not a one-off bad game.
  */
-export async function getUnderperformingTalents(userId: string): Promise<UnderperformingTalentStats[]> {
-  const gaps = await getTalentHabitGaps(userId);
+export async function getUnderperformingTalents(scope: Scope): Promise<UnderperformingTalentStats[]> {
+  const gaps = await getTalentHabitGaps(scope);
   return gaps
     .filter((g) => g.gapVsOtherPicks >= TALENT_HABIT_MIN_WINRATE_GAP)
     .sort((a, b) => b.gapVsOtherPicks - a.gapVsOtherPicks)
@@ -184,8 +185,8 @@ export async function getUnderperformingTalents(userId: string): Promise<Underpe
  * first -- the "keep doing this" counterpart used for the Diagnostic page's
  * strengths panel.
  */
-export async function getOverperformingTalents(userId: string): Promise<OverperformingTalentStats[]> {
-  const gaps = await getTalentHabitGaps(userId);
+export async function getOverperformingTalents(scope: Scope): Promise<OverperformingTalentStats[]> {
+  const gaps = await getTalentHabitGaps(scope);
   return gaps
     .filter((g) => g.gapVsOtherPicks <= -TALENT_HABIT_MIN_WINRATE_GAP)
     .sort((a, b) => a.gapVsOtherPicks - b.gapVsOtherPicks)
