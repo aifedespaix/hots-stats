@@ -12,7 +12,8 @@ import argparse
 import logging
 from pathlib import Path
 
-from . import api_client, updater
+from . import accounts_discovery, api_client, updater
+from .accounts_discovery import WatchDir
 from .config import ConfigError, load_config
 from .ingestion import resync, sync_spatial_calibrations
 from .sync_state import SyncState
@@ -41,7 +42,11 @@ def main(argv: list[str] | None = None) -> int:
             logger.error("%s", err)
             return 1
         client = api_client.ApiClient(config)
-        target_dir = Path(args.resync) if isinstance(args.resync, str) else config.replays_dir
+        if isinstance(args.resync, str):
+            # An explicit folder wins over discovery: still "just this one".
+            watch_dirs = [WatchDir(Path(args.resync), None)]
+        else:
+            watch_dirs = accounts_discovery.watch_dirs(config.hots_dir, config.extra_replay_dirs)
         sync_state = SyncState()
         # Reuses the same calibration sync as the tray daemon's startup
         # (ingestion.sync_spatial_calibrations) instead of a bare fetch, so
@@ -49,7 +54,7 @@ def main(argv: list[str] | None = None) -> int:
         # that was newly or re-calibrated since the last run, not just
         # fetch calibrations for parsing replays that were already pending.
         calibrations = sync_spatial_calibrations(config, sync_state)
-        resync(client, target_dir, sync_state, calibrations=calibrations)
+        resync(client, watch_dirs, sync_state, calibrations=calibrations)
         return 0
 
     # One-time pre-Velopack -> Velopack migration shim (TEMPORARY -- see

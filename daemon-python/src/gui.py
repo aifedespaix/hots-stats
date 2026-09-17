@@ -36,10 +36,11 @@ from typing import Callable
 from PIL import Image, ImageTk
 
 from . import api_client, autostart, draft_capture, hotkey, updater
+from .accounts_discovery import discover_account_folders
 from .config import (
     DEFAULT_DRAFT_HOTKEY,
     config_file_path,
-    default_replays_dir,
+    default_hots_dir,
     open_config_folder,
     open_path,
     read_config_file,
@@ -1652,15 +1653,18 @@ class _SettingsWindow:
         self._api_var.set(existing.get("apiBaseUrl") or DEFAULT_API_BASE_URL)
         self._token_var.set(existing.get("accessToken") or "")
 
-        replays_dir = existing.get("replaysDir")
-        if not replays_dir or not Path(replays_dir).is_dir():
+        # The field now holds the HotS *root* (Documents/Heroes of the Storm),
+        # from which every account folder is discovered -- see
+        # accounts_discovery.py.
+        hots_dir = existing.get("hotsDir")
+        if not hots_dir or not (Path(hots_dir) / "Accounts").is_dir():
             # Nothing saved, or the saved folder no longer exists (e.g. the
             # game/account moved) -- re-run autodetection rather than
             # prefilling a path that's known to be wrong. Left blank if that
             # doesn't find anything either, so the user browses manually.
-            guessed = default_replays_dir()
-            replays_dir = str(guessed) if guessed else ""
-        self._replays_var.set(replays_dir)
+            guessed = default_hots_dir()
+            hots_dir = str(guessed) if guessed else ""
+        self._replays_var.set(hots_dir)
         self._check_replays_dir()
 
         self._draft_enabled_var.set(bool(existing.get("draftFeatureEnabled", True)))
@@ -1682,10 +1686,24 @@ class _SettingsWindow:
         if not value:
             self._set_status(self._replays_status, "Sélectionnez un dossier", _ERROR)
             return
-        if Path(value).is_dir():
-            self._set_status(self._replays_status, "✓ Dossier trouvé", _OK)
-        else:
+        if not Path(value).is_dir():
             self._set_status(self._replays_status, "✗ Introuvable", _ERROR)
+            return
+        # Must be the HotS root, not one account's Replays folder: everything
+        # is discovered under Accounts/<id>/<toon>/Replays from here.
+        accounts = discover_account_folders(Path(value))
+        if accounts:
+            self._set_status(
+                self._replays_status,
+                f"✓ {len(accounts)} compte(s) détecté(s)",
+                _OK,
+            )
+        elif (Path(value) / "Accounts").is_dir():
+            self._set_status(self._replays_status, "✓ Dossier trouvé (aucun compte)", _OK)
+        else:
+            self._set_status(
+                self._replays_status, "✗ Pas un dossier Heroes of the Storm", _ERROR
+            )
 
     def _browse_replays_dir(self) -> None:
         chosen = filedialog.askdirectory(
@@ -2037,7 +2055,7 @@ class _SettingsWindow:
 
         api_base_url = self._api_var.get().strip()
         access_token = self._token_var.get().strip()
-        replays_dir = self._replays_var.get().strip()
+        hots_dir = self._replays_var.get().strip()
 
         if not api_base_url:
             self._show_error("L'URL de l'API est requise.")
@@ -2045,8 +2063,10 @@ class _SettingsWindow:
         if not access_token:
             self._show_error("Le token d'accès est requis.")
             return
-        if not replays_dir or not Path(replays_dir).is_dir():
-            self._show_error("Le dossier des replays est invalide ou introuvable.")
+        if not hots_dir or not (Path(hots_dir) / "Accounts").is_dir():
+            self._show_error(
+                "Le dossier Heroes of the Storm est invalide (il doit contenir un sous-dossier Accounts)."
+            )
             return
 
         draft_feature_enabled = self._draft_enabled_var.get()
@@ -2068,7 +2088,8 @@ class _SettingsWindow:
         save_config(
             api_base_url,
             access_token,
-            replays_dir,
+            hots_dir,
+            existing.get("extraReplayDirs", ()) or (),
             draft_feature_enabled=draft_feature_enabled,
             draft_hotkey=draft_hotkey,
             auto_update_enabled=auto_update_enabled,

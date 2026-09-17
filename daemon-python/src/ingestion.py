@@ -12,9 +12,10 @@ import logging
 import traceback
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Sequence
 
 from . import api_client, constants
+from .accounts_discovery import WatchDir
 from . import parser as replay_parser
 from .config import Config
 from .hasher import hash_replay_file
@@ -80,6 +81,7 @@ def ingest_file(
     sync_state: SyncState | None = None,
     api_version: str | None = None,
     calibrations: dict[str, dict] | None = None,
+    toon_handle: str | None = None,
 ) -> IngestOutcome:
     """Parses and uploads one replay.
 
@@ -177,7 +179,9 @@ def ingest_file(
 
     payload: dict | None = None
     try:
-        payload = replay_parser.parse_replay(path, calibrations=calibrations)
+        payload = replay_parser.parse_replay(
+            path, calibrations=calibrations, expected_toon_handle=toon_handle
+        )
         pending_sample = payload.pop("_pendingSpatialSample", None)
         if pending_sample is not None:
             client.post_samples(pending_sample["mapId"], pending_sample["points"])
@@ -318,23 +322,31 @@ def ingest_file(
 
 def resync(
     client: api_client.ApiClient,
-    replays_dir: Path,
+    watch_dirs: Sequence[WatchDir],
     sync_state: SyncState | None = None,
     calibrations: dict[str, dict] | None = None,
 ) -> None:
-    """Parses and (re-)uploads every replay in `replays_dir`.
+    """Parses and (re-)uploads every replay in every watched folder.
 
     Safe to run repeatedly: the API upserts by `replayHash`, so re-posting
     an already-ingested replay is a no-op rather than a duplicate. Passing
     `sync_state` also skips replays already known to be up to date, instead
     of reparsing and reposting all of them every time. `calibrations` is
-    passed through to `ingest_file` -- see its docstring.
+    passed through to `ingest_file` -- see its docstring. Each folder's toon
+    handle (see accounts_discovery.watch_dirs) is forwarded so replays are
+    attributed to the account that wrote them.
     """
-    replay_files = sorted(replays_dir.glob("*.StormReplay"))
-    logger.info("Resyncing %d replay(s) from %s", len(replay_files), replays_dir)
+    replay_files: list[tuple[Path, str | None]] = []
+    for watch_dir in watch_dirs:
+        replay_files.extend(
+            (path, watch_dir.toon_handle) for path in sorted(watch_dir.path.glob("*.StormReplay"))
+        )
+    logger.info("Resyncing %d replay(s) from %d folder(s)", len(replay_files), len(watch_dirs))
     uploaded = skipped = failed = 0
-    for path in replay_files:
-        outcome = ingest_file(client, path, sync_state, calibrations=calibrations)
+    for path, toon_handle in replay_files:
+        outcome = ingest_file(
+            client, path, sync_state, calibrations=calibrations, toon_handle=toon_handle
+        )
         if outcome.status == "uploaded":
             uploaded += 1
         elif outcome.status == "skipped":

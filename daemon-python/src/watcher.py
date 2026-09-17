@@ -6,7 +6,7 @@ import logging
 import threading
 import time
 from pathlib import Path
-from typing import Callable, Iterable
+from typing import Callable, Iterable, Sequence
 
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
@@ -86,7 +86,7 @@ def _scan_for_new_replays(replays_dir: Path, seen: set[str]) -> list[Path]:
 
 
 def watch_replays(
-    replays_dir: Path,
+    replays_dirs: Sequence[Path],
     on_replay_ready: Callable[[Path], None],
     stop_event: threading.Event | None = None,
     known_paths: Iterable[str] | None = None,
@@ -110,11 +110,15 @@ def watch_replays(
     seen: set[str] = set(known_paths) if known_paths else set()
     handler = _ReplayHandler(on_replay_ready, seen, seen_lock)
     observer = Observer()
-    observer.schedule(handler, str(replays_dir), recursive=False)
+    # One schedule per folder (every account, every queue subfolder -- see
+    # accounts_discovery.watch_dirs), sharing a single seen-set since paths
+    # are absolute.
+    for replays_dir in replays_dirs:
+        observer.schedule(handler, str(replays_dir), recursive=False)
     observer.start()
     logger.info(
-        "Watching %s for new replays (re-scanning every %.0fs as a fallback)...",
-        replays_dir,
+        "Watching %d folder(s) for new replays (re-scanning every %.0fs as a fallback)...",
+        len(replays_dirs),
         _POLL_INTERVAL_SECONDS,
     )
     event = stop_event or threading.Event()
@@ -126,7 +130,11 @@ def watch_replays(
                 continue
             next_poll = time.monotonic() + _POLL_INTERVAL_SECONDS
             with seen_lock:
-                missed = _scan_for_new_replays(replays_dir, seen)
+                missed = [
+                    path
+                    for replays_dir in replays_dirs
+                    for path in _scan_for_new_replays(replays_dir, seen)
+                ]
             for path in missed:
                 if event.is_set():
                     break
@@ -140,4 +148,4 @@ def watch_replays(
     finally:
         observer.stop()
         observer.join()
-        logger.info("Stopped watching %s", replays_dir)
+        logger.info("Stopped watching %d folder(s)", len(replays_dirs))

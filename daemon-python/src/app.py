@@ -17,14 +17,15 @@ import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Sequence
 
-from . import api_client, draft_capture, draft_layout, hotkey, ocr, single_instance
+from . import accounts_discovery, api_client, draft_capture, draft_layout, hotkey, ocr, single_instance
 from .config import Config, ConfigError, config_exists, is_auto_update_enabled, load_config
 from .ingestion import ingest_file, sync_spatial_calibrations
 from .status import StatusTracker
 from .sync_state import SyncState
 from .updater import AvailableUpdate, UpdateStatusTracker, watch_for_updates
+from .accounts_discovery import WatchDir
 from .watcher import watch_replays
 
 # gui/tray need tkinter/pystray (a display), same as main.py's lazy `from
@@ -79,8 +80,8 @@ def _lower_worker_priority() -> None:
 
 
 def _run_sync_loop(
-    replays_dir: Path,
-    ingest: Callable[[Path], None],
+    watch_dirs: Sequence[WatchDir],
+    ingest: Callable[[Path, str | None], None],
     stop_event: threading.Event,
     status: StatusTracker,
     sync_state: SyncState | None = None,
@@ -101,9 +102,20 @@ def _run_sync_loop(
     the settings window just closing with no visible sign anything is
     happening (see tasks/daemon-audit-2026-08-12.md, 2.1).
     """
-    existing = sorted(replays_dir.glob("*.StormReplay"))
+    # Every account folder, every queue subfolder (see accounts_discovery) --
+    # the first path each replay is seen at also tells us which account wrote
+    # it, which is what the API links on.
+    existing: list[Path] = []
+    toon_by_path: dict[str, str | None] = {}
+    for watch_dir in watch_dirs:
+        for path in sorted(watch_dir.path.glob("*.StormReplay")):
+            existing.append(path)
+            toon_by_path[str(path)] = watch_dir.toon_handle
+    toon_by_dir = {str(watch_dir.path): watch_dir.toon_handle for watch_dir in watch_dirs}
     status.set_found(len(existing))
-    logger.info("Found %d replay(s) already on disk in %s", len(existing), replays_dir)
+    logger.info(
+        "Found %d replay(s) already on disk in %d folder(s)", len(existing), len(watch_dirs)
+    )
     if on_initial_scan is not None:
         on_initial_scan(len(existing))
     if sync_state is not None:
@@ -128,7 +140,7 @@ def _run_sync_loop(
             for path in existing:
                 if stop_event.is_set():
                     break
-                futures.append(pool.submit(ingest, path))
+                futures.append(pool.submit(ingest, path, toon_by_path.get(str(path))))
             for future in futures:
                 future.result()  # propagate anything unexpected; ingest_file itself never raises
     if stop_event.is_set():
@@ -136,10 +148,11 @@ def _run_sync_loop(
 
     def _on_new_replay(path: Path) -> None:
         status.bump_found()
-        ingest(path)
+        toon_handle = toon_by_path.get(str(path), toon_by_dir.get(str(path.parent)))
+        ingest(path, toon_handle)
 
     watch_replays(
-        replays_dir,
+        [watch_dir.path for watch_dir in watch_dirs],
         on_replay_ready=_on_new_replay,
         stop_event=stop_event,
         known_paths={str(path) for path in existing},
@@ -326,7 +339,7 @@ class _DaemonRunner:
         api_version_box: dict[str, str | None] = {"value": None}
         calibrations_box: dict[str, dict | None] = {"value": None}
 
-        def _ingest_and_track(path: Path) -> None:
+        def _ingest_and_track(path: Path, toon_handle: str | None) -> None:
             self.status.start_syncing(path.name)
             outcome = ingest_file(
                 client,
@@ -334,6 +347,7 @@ class _DaemonRunner:
                 sync_state,
                 api_version=api_version_box["value"],
                 calibrations=calibrations_box["value"],
+                toon_handle=toon_handle,
             )
             self.status.finish_syncing(
                 path.name,
@@ -350,11 +364,21 @@ class _DaemonRunner:
                     "HotS Analytics",
                 )
 
+        # Resolved once per start: every HotS account found on disk, plus any
+        # manually configured extra folder.
+        watch_dirs = accounts_discovery.watch_dirs(config.hots_dir, config.extra_replay_dirs)
+        if not watch_dirs:
+            logger.warning(
+                "No replay folder found (hotsDir=%s, extra=%s)",
+                config.hots_dir,
+                config.extra_replay_dirs,
+            )
+
         def _run() -> None:
             api_version_box["value"] = _sync_api_version(config, sync_state)
             calibrations_box["value"] = sync_spatial_calibrations(config, sync_state)
             _run_sync_loop(
-                config.replays_dir,
+                watch_dirs,
                 _ingest_and_track,
                 stop_event,
                 self.status,
