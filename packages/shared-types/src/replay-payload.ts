@@ -185,6 +185,13 @@ export type Spatial = z.infer<typeof spatialSchema>;
  */
 export const replayPayloadSchema = z.object({
   replayHash: z.string().min(32),
+  // BattleTag of the player whose machine wrote this replay, derived by the
+  // daemon from the HotS account folder name (the folder *is* the toon
+  // handle -- see daemon-python/src/accounts_discovery.py). Drives account
+  // auto-linking at ingest; never stored on the match itself. Absent for
+  // older daemon builds and for replays whose folder toon handle is not in
+  // the player list, so it must stay optional.
+  selfBattletag: z.string().optional(),
   parserVersion: z.string(),
   map: z.string(),
   gameMode: gameModeSchema,
