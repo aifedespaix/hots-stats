@@ -21,23 +21,22 @@ function isSelf(slot: DraftPlayerSlot) {
   return Boolean(slot.effectiveBattletag) && slot.effectiveBattletag === props.ownBattletag;
 }
 
-// Slots (by number) currently showing the correction combobox instead of
-// their label -- a resolved or unknown pseudo starts collapsed behind an
-// edit button so the common case (nothing to fix) stays uncluttered; an
-// ambiguous pseudo (candidates but no effectiveBattletag yet) always needs
-// picking one, so it's never collapsed.
-const editingSlots = reactive(new Set<number>());
-
-function isEditing(slot: DraftPlayerSlot) {
-  return editingSlots.has(slot.slot) || (slot.candidates.length > 1 && !slot.effectiveBattletag);
+// A slot shows the correction combobox only while it is still *unresolved*:
+// no candidate at all (OCR matched nothing) or several (the pseudo is
+// ambiguous). As soon as an `effectiveBattletag` exists -- the single
+// candidate, or the viewer's remembered preference among several -- the slot
+// is solved, so it links straight to that player's account instead of
+// offering a search field. A correctly-resolved pseudo therefore never
+// invites a correction.
+function needsPicking(slot: DraftPlayerSlot) {
+  return !slot.effectiveBattletag;
 }
 
-function startEditing(slotNumber: number) {
-  editingSlots.add(slotNumber);
+function playerAccountUrl(battletag: string) {
+  return `/players/${encodeURIComponent(battletag)}`;
 }
 
 function onPick(slot: DraftPlayerSlot, battletag: string) {
-  editingSlots.delete(slot.slot);
   emit("disambiguate", slot, battletag);
 }
 </script>
@@ -81,37 +80,25 @@ function onPick(slot: DraftPlayerSlot, battletag: string) {
               <span class="truncate">{{ slot.rawName }}</span>
               <span v-if="isSelf(slot)" class="text-[10px] font-normal uppercase tracking-wide text-muted">(toi)</span>
               <PlayersAnnotationBadges v-if="slot.effectiveBattletag" :battletag="slot.effectiveBattletag" />
-              <UButton
-                v-if="!isEditing(slot)"
-                icon="i-heroicons-pencil-square"
-                size="xs"
-                variant="ghost"
-                color="neutral"
-                :padded="false"
-                class="shrink-0 text-muted"
-                @click.stop="startEditing(slot.slot)"
-              />
+              <NuxtLink
+                v-if="slot.effectiveBattletag"
+                :to="playerAccountUrl(slot.effectiveBattletag)"
+                class="shrink-0 text-muted transition-colors hover:text-brand"
+                title="Ouvrir le compte de ce joueur"
+                @click.stop
+                @keydown.enter.stop
+              >
+                <UIcon name="i-heroicons-user-circle" class="h-3.5 w-3.5" />
+              </NuxtLink>
             </p>
-            <p
-              v-if="slot.candidates.length === 0 && !slot.effectiveBattletag && !isEditing(slot)"
-              class="text-[11px] text-muted"
-            >
+            <p v-if="needsPicking(slot) && slot.candidates.length === 0" class="text-[11px] text-muted">
               Joueur inconnu
             </p>
-            <div v-else-if="isEditing(slot)" class="mt-1 flex max-w-[180px] items-center gap-1">
+            <div v-if="needsPicking(slot)" class="mt-1 flex max-w-[180px] items-center gap-1">
               <DraftPseudoCombobox
                 :seed-candidates="slot.candidates"
                 placeholder="Quel battletag ?"
                 @pick="onPick(slot, $event)"
-              />
-              <UButton
-                v-if="!(slot.candidates.length > 1 && !slot.effectiveBattletag)"
-                icon="i-heroicons-x-mark"
-                size="xs"
-                variant="ghost"
-                color="neutral"
-                :padded="false"
-                @click.stop="editingSlots.delete(slot.slot)"
               />
             </div>
           </template>
