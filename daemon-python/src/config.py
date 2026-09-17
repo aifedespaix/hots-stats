@@ -1,11 +1,19 @@
-"""Daemon configuration: API endpoint, access token, and replays folder.
+"""Daemon configuration: API endpoint, access token, and HotS install folder.
 
 Resolution order (highest priority first):
-1. Environment variables (`HOTS_API_BASE_URL`, `HOTS_ACCESS_TOKEN`, `HOTS_REPLAYS_DIR`).
+1. Environment variables (`HOTS_API_BASE_URL`, `HOTS_ACCESS_TOKEN`,
+   `HOTS_DIR`, and the legacy `HOTS_REPLAYS_DIR`).
 2. A local JSON config file (`%APPDATA%/hots-analytics/config.json` on
    Windows, `~/.config/hots-analytics/config.json` elsewhere).
-3. For the replays folder only: an autodetected default under the user's
+3. For the HotS folder only: an autodetected default under the user's
    Documents folder. There is no safe default for the API URL or token.
+
+`hotsDir` is the `Documents/Heroes of the Storm` *root*: every account found
+under `Accounts/<id>/<toon>/Replays/<queue>` is watched (see
+accounts_discovery.py). A pre-multi-account config only had `replaysDir`
+(one account's `Replays/<queue>`); it is still honoured as an extra folder and
+the root is derived from it when possible, so an existing install keeps
+uploading with no user action.
 """
 
 from __future__ import annotations
@@ -36,7 +44,11 @@ DEFAULT_DRAFT_HOTKEY = "ctrl+shift+d"
 class Config:
     api_base_url: str
     access_token: str
-    replays_dir: Path
+    # Documents/Heroes of the Storm, or None when the install only ever
+    # configured a legacy single Replays folder (see extra_replay_dirs).
+    hots_dir: Path | None
+    # Folders watched verbatim, each with no known account (see WatchDir).
+    extra_replay_dirs: tuple[Path, ...] = ()
     draft_feature_enabled: bool = True
     draft_hotkey: str = DEFAULT_DRAFT_HOTKEY
     auto_update_enabled: bool = True
@@ -104,7 +116,8 @@ def read_config_file() -> dict:
 def save_config(
     api_base_url: str,
     access_token: str,
-    replays_dir: str,
+    hots_dir: str,
+    extra_replay_dirs: tuple[str, ...] = (),
     draft_feature_enabled: bool = True,
     draft_hotkey: str = DEFAULT_DRAFT_HOTKEY,
     auto_update_enabled: bool = True,
@@ -113,46 +126,44 @@ def save_config(
     parent directory (`%APPDATA%\\hots-analytics\\`) if needed."""
     path = config_file_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
+    payload: dict[str, object] = {
         "apiBaseUrl": api_base_url.rstrip("/"),
         "accessToken": access_token,
-        "replaysDir": replays_dir,
+        "hotsDir": hots_dir,
         "draftFeatureEnabled": draft_feature_enabled,
         "draftHotkey": draft_hotkey,
         "autoUpdateEnabled": auto_update_enabled,
     }
+    if extra_replay_dirs:
+        payload["extraReplayDirs"] = list(extra_replay_dirs)
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
-def default_replays_dir() -> Path | None:
-    """Best-effort guess at the default HotS replays folder, e.g.
-    `C:\\Users\\<account>\\Documents\\Heroes of the Storm\\Accounts\\<account-id>\\<region-id>\\Replays\\Multiplayer`.
+def default_hots_dir() -> Path | None:
+    """`~/Documents/Heroes of the Storm` when it exists, else None.
 
-    `Path.home()` already resolves to the real Windows account name (there's
-    no separate lookup needed for that). The account-id/region-id segments
-    vary per installation -- and a player can have several, e.g. smurf
-    accounts -- so we glob for all of them and prefer, in order: one that
-    already has replays in it, then the most recently modified, then
-    whichever sorts first. Returns None if none exist, so callers (the
-    settings window) can leave the field empty rather than prefill a guess
-    that doesn't exist on disk.
+    The whole root is returned, not one account's replays folder: every
+    account under it is watched (see accounts_discovery.py), which is what
+    makes a smurf's replays show up without configuring anything extra.
+    Returns None when absent, so the settings window can leave the field
+    empty rather than prefill a guess that doesn't exist on disk.
     """
-    documents = Path.home() / "Documents"
-    matches = list(documents.glob("Heroes of the Storm/Accounts/*/*/Replays/Multiplayer"))
-    if not matches:
-        return None
-    if len(matches) == 1:
-        return matches[0]
+    candidate = Path.home() / "Documents" / "Heroes of the Storm"
+    return candidate if candidate.is_dir() else None
 
-    def _rank(folder: Path) -> tuple[bool, float, str]:
-        has_replays = next(folder.glob("*.StormReplay"), None) is not None
-        try:
-            mtime = folder.stat().st_mtime
-        except OSError:
-            mtime = 0.0
-        return (has_replays, mtime, str(folder))
 
-    return max(matches, key=_rank)
+def derive_hots_dir_from_replays_dir(replays_dir: Path) -> Path | None:
+    """Walks up from a legacy `.../Replays/<queue>` path to the HotS root.
+
+    A pre-multi-account config stored one account's `Replays/<queue>` folder
+    as `replaysDir`; the root is the parent of the folder named `Accounts`.
+    Returns None when the path has no `Accounts` segment, so the caller falls
+    back to autodetection.
+    """
+    for parent in [replays_dir, *replays_dir.parents]:
+        if parent.name == "Accounts":
+            return parent.parent
+    return None
 
 
 def load_config() -> Config:
@@ -160,7 +171,8 @@ def load_config() -> Config:
 
     api_base_url = os.environ.get("HOTS_API_BASE_URL") or file_values.get("apiBaseUrl")
     access_token = os.environ.get("HOTS_ACCESS_TOKEN") or file_values.get("accessToken")
-    replays_dir_value = os.environ.get("HOTS_REPLAYS_DIR") or file_values.get("replaysDir")
+    hots_dir_value = os.environ.get("HOTS_DIR") or file_values.get("hotsDir")
+    legacy_value = os.environ.get("HOTS_REPLAYS_DIR") or file_values.get("replaysDir")
 
     if not api_base_url:
         raise ConfigError(
@@ -173,15 +185,41 @@ def load_config() -> Config:
             f"{config_file_path()} (generate one from the dashboard's Settings page)."
         )
 
-    if replays_dir_value:
-        replays_dir = Path(replays_dir_value)
+    if hots_dir_value:
+        hots_dir: Path | None = Path(hots_dir_value)
+    elif legacy_value:
+        # Migration: a config saved before hotsDir existed pointed at one
+        # account's Replays/<queue>; derive the root from it so every other
+        # account (the smurf's, notably) starts being watched too.
+        hots_dir = derive_hots_dir_from_replays_dir(Path(legacy_value)) or default_hots_dir()
     else:
-        replays_dir = default_replays_dir()
-        if replays_dir is None:
-            raise ConfigError(
-                "Could not autodetect the HotS replays folder. Set HOTS_REPLAYS_DIR or "
-                f"`replaysDir` in {config_file_path()}."
-            )
+        hots_dir = default_hots_dir()
+
+    # The legacy folder keeps being watched, so an install that only ever had
+    # replaysDir configured does not silently stop uploading.
+    extra_replay_dirs: list[Path] = []
+    if legacy_value:
+        legacy_path = Path(legacy_value)
+        if legacy_path.is_dir() and (hots_dir is None or not legacy_path.is_relative_to(hots_dir)):
+            extra_replay_dirs.append(legacy_path)
+
+    # Manually configured extra folders (Settings' "dossiers supplémentaires"),
+    # kept in sync with save_config's `extraReplayDirs` key.
+    configured_extra = file_values.get("extraReplayDirs")
+    if isinstance(configured_extra, list):
+        for value in configured_extra:
+            extra_path = Path(str(value))
+            if not extra_path.is_dir() or extra_path in extra_replay_dirs:
+                continue
+            if hots_dir is not None and extra_path.is_relative_to(hots_dir):
+                continue
+            extra_replay_dirs.append(extra_path)
+
+    if hots_dir is None and not extra_replay_dirs:
+        raise ConfigError(
+            "Could not autodetect the Heroes of the Storm folder. Set HOTS_DIR or "
+            f"`hotsDir` in {config_file_path()}."
+        )
 
     draft_feature_enabled = file_values.get("draftFeatureEnabled")
     draft_hotkey = os.environ.get("HOTS_DRAFT_HOTKEY") or file_values.get("draftHotkey") or DEFAULT_DRAFT_HOTKEY
@@ -190,7 +228,8 @@ def load_config() -> Config:
     return Config(
         api_base_url=api_base_url.rstrip("/"),
         access_token=access_token,
-        replays_dir=replays_dir,
+        hots_dir=hots_dir,
+        extra_replay_dirs=tuple(extra_replay_dirs),
         draft_feature_enabled=True if draft_feature_enabled is None else bool(draft_feature_enabled),
         draft_hotkey=draft_hotkey,
         auto_update_enabled=True if auto_update_enabled is None else bool(auto_update_enabled),

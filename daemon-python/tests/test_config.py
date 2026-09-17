@@ -9,7 +9,8 @@ from src.config import (
     ConfigError,
     config_exists,
     config_file_path,
-    default_replays_dir,
+    default_hots_dir,
+    derive_hots_dir_from_replays_dir,
     is_auto_update_enabled,
     load_config,
     open_config_folder,
@@ -19,7 +20,7 @@ from src.config import (
 
 @pytest.fixture(autouse=True)
 def _clear_env(monkeypatch):
-    for key in ("HOTS_API_BASE_URL", "HOTS_ACCESS_TOKEN", "HOTS_REPLAYS_DIR", "APPDATA"):
+    for key in ("HOTS_API_BASE_URL", "HOTS_ACCESS_TOKEN", "HOTS_DIR", "HOTS_REPLAYS_DIR", "APPDATA"):
         monkeypatch.delenv(key, raising=False)
 
 
@@ -32,7 +33,8 @@ def test_load_config_from_env_vars(monkeypatch, tmp_path):
 
     assert config.api_base_url == "https://api.example.com"  # trailing slash stripped
     assert config.access_token == "hots_pat_abc"
-    assert config.replays_dir == tmp_path
+    # A legacy HOTS_REPLAYS_DIR is still watched, just as an "extra" folder.
+    assert config.extra_replay_dirs == (tmp_path,)
 
 
 def test_load_config_missing_token_raises(monkeypatch, tmp_path):
@@ -85,32 +87,31 @@ def test_load_config_env_overrides_file(monkeypatch, tmp_path):
     assert config.api_base_url == "https://from-file.example.com"
 
 
-def test_default_replays_dir_globs_account_folders(monkeypatch, tmp_path):
+def test_default_hots_dir_returns_the_root_when_present(monkeypatch, tmp_path):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    replay_dir = tmp_path / "Documents" / "Heroes of the Storm" / "Accounts" / "12345" / "1-Hero-1-1" / "Replays" / "Multiplayer"
-    replay_dir.mkdir(parents=True)
+    root = tmp_path / "Documents" / "Heroes of the Storm"
+    (root / "Accounts" / "1" / "1-Hero-1-1" / "Replays" / "Multiplayer").mkdir(parents=True)
 
-    assert default_replays_dir() == replay_dir
-
-
-def test_default_replays_dir_prefers_account_with_replays(monkeypatch, tmp_path):
-    monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    accounts = tmp_path / "Documents" / "Heroes of the Storm" / "Accounts"
-    empty_dir = accounts / "11111" / "1-Hero-1-1" / "Replays" / "Multiplayer"
-    populated_dir = accounts / "99999" / "1-Hero-1-2" / "Replays" / "Multiplayer"
-    empty_dir.mkdir(parents=True)
-    populated_dir.mkdir(parents=True)
-    (populated_dir / "Game.StormReplay").write_bytes(b"")
-
-    assert default_replays_dir() == populated_dir
+    assert default_hots_dir() == root
 
 
-def test_default_replays_dir_returns_none_when_absent(monkeypatch, tmp_path):
+def test_default_hots_dir_returns_none_when_absent(monkeypatch, tmp_path):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
-    assert default_replays_dir() is None
+    assert default_hots_dir() is None
 
 
+def test_derive_hots_dir_from_legacy_replays_dir(tmp_path):
+    legacy = (
+        tmp_path / "Documents" / "Heroes of the Storm" / "Accounts" / "415612224"
+        / "2-Hero-1-4929240" / "Replays" / "Multiplayer"
+    )
+
+    assert derive_hots_dir_from_replays_dir(legacy) == tmp_path / "Documents" / "Heroes of the Storm"
+
+
+def test_derive_hots_dir_returns_none_without_an_accounts_segment(tmp_path):
+    assert derive_hots_dir_from_replays_dir(tmp_path / "somewhere" / "else") is None
 def test_config_exists_false_before_save_true_after(monkeypatch, tmp_path):
     monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
 
