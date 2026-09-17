@@ -4,6 +4,7 @@ import { Hono } from "hono";
 import { API_VERSION, MIN_PARSER_VERSION } from "../constants";
 import { authToken } from "../middleware/auth-token";
 import { recordDaemonError } from "../services/daemon-errors.service";
+import { listAccounts } from "../services/player-accounts.service";
 import { ingestReplayPayload } from "../services/replay-ingest.service";
 import { getStatsSummary } from "../services/stats.service";
 
@@ -17,6 +18,12 @@ type Env = { Variables: { user: User } };
  */
 export const ingestRoute = new Hono<Env>()
   .use("*", authToken)
+  // Lets the daemon's settings window list the accounts linked to its token
+  // (multi-account support) without needing a browser session.
+  .get("/accounts", async (c) => {
+    const user = c.get("user");
+    return c.json({ accounts: await listAccounts(user.id) });
+  })
   .get("/summary", async (c) => {
     // Lets the daemon's settings window show "games recorded" without a
     // browser session — same summary as the web dashboard's /stats/summary,

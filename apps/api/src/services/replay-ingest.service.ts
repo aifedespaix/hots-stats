@@ -1,5 +1,6 @@
 import { DefaultAdapter, ReplayValidationError, resolveAdapter } from "../adapters";
 import type { ReplayAdapter } from "../adapters";
+import { linkSelfBattletag } from "./player-accounts.service";
 import { checkReplayPlausibility } from "../lib/replay-plausibility";
 import { quarantineRawReplay } from "./quarantine.service";
 import type { UpsertResult } from "./replay-upsert.service";
@@ -68,6 +69,19 @@ export async function ingestReplayPayload(
   const implausibilityReason = checkReplayPlausibility(parsed);
   if (implausibilityReason !== null) {
     return { status: "invalid", detail: implausibilityReason };
+  }
+
+  // Account auto-linking: the daemon stamps each payload with the BattleTag of
+  // the HotS account folder the replay came from (see accounts_discovery.py).
+  // Best-effort -- a linking hiccup must never fail the replay upload, and an
+  // ingest from an older daemon simply has no selfBattletag.
+  const selfBattletag = typeof record.selfBattletag === "string" ? record.selfBattletag : undefined;
+  if (selfBattletag) {
+    try {
+      await linkSelfBattletag(userId, selfBattletag, null, "daemon");
+    } catch (err) {
+      console.warn("Could not auto-link self battletag %s: %s", selfBattletag, err);
+    }
   }
 
   const result = await upsertReplay(parsed, userId);

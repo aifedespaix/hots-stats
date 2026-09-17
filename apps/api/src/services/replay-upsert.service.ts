@@ -9,7 +9,7 @@ import {
   matchStructureEvents,
   matches,
   talentPicks,
-  users,
+  userAccounts,
 } from "@hots-stats/db";
 import {
   type Grid,
@@ -134,13 +134,29 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
   }
 
   const battletags = payload.players.map((p) => p.battletag);
-  const linkedUsers = await db
-    .select({ id: users.id, battletag: users.battletag })
-    .from(users)
-    .where(inArray(users.battletag, battletags));
-  const userIdByBattletag = new Map(
-    linkedUsers.filter((u): u is { id: string; battletag: string } => u.battletag !== null).map((u) => [u.battletag, u.id]),
-  );
+  // match_players.userId is informational after multi-account support (personal
+  // stats are scoped by BattleTag set), but it must still be populated or the
+  // admin uploads-diagnostics page reads every secondary account as unlinked.
+  // A BattleTag can belong to several site accounts, so pick deterministically:
+  // whoever holds it as primary, else whoever linked it first.
+  const linkedAccounts = await db
+    .select({
+      id: userAccounts.userId,
+      battletag: userAccounts.battletag,
+      isPrimary: userAccounts.isPrimary,
+      createdAt: userAccounts.createdAt,
+    })
+    .from(userAccounts)
+    .where(inArray(userAccounts.battletag, battletags));
+  const userIdByBattletag = new Map<string, string>();
+  for (const account of linkedAccounts.sort(
+    (a, b) =>
+      Number(b.isPrimary) - Number(a.isPrimary) || a.createdAt.getTime() - b.createdAt.getTime(),
+  )) {
+    if (!userIdByBattletag.has(account.battletag)) {
+      userIdByBattletag.set(account.battletag, account.id);
+    }
+  }
 
   // `replayHash` alone doesn't catch a duplicate: it's a hash of the raw
   // replay file's bytes, and each participant's game client writes its own
