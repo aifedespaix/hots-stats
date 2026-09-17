@@ -11,7 +11,9 @@ useSeoMeta({
 });
 
 const { data: authData } = await useAuthUser();
-const ownBattletag = computed(() => authData.value?.user?.battletag ?? null);
+const ownBattletags = computed(() =>
+  myBattletagSet(authData.value?.user?.accounts, authData.value?.user?.battletag ?? null),
+);
 
 const { snapshot, connected } = useDraftStream();
 const config = useRuntimeConfig();
@@ -53,8 +55,8 @@ watch(
 // bans/threats. Empty (panel hidden) when the viewer's own slot isn't
 // resolved yet, since "enemy team" is meaningless without it.
 const enemyBattletags = computed<string[]>(() => {
-  if (!ownBattletag.value) return [];
-  const ownInLeft = teamLeft.value.some((slot) => slot.effectiveBattletag === ownBattletag.value);
+  if (ownBattletags.value.size === 0) return [];
+  const ownInLeft = teamLeft.value.some((slot) => isMine(slot.effectiveBattletag, ownBattletags.value));
   const enemyTeam = ownInLeft ? teamRight.value : teamLeft.value;
   return enemyTeam
     .map((slot) => slot.effectiveBattletag)
@@ -97,7 +99,7 @@ watch(snapshot, (next) => {
   const stillValid = selectedBattletag.value && allSlots.some((slot) => slot.effectiveBattletag === selectedBattletag.value);
   if (stillValid) return;
 
-  const own = ownBattletag.value && allSlots.find((slot) => slot.effectiveBattletag === ownBattletag.value);
+  const own = allSlots.find((slot) => isMine(slot.effectiveBattletag, ownBattletags.value));
   selectedBattletag.value = own ? own.effectiveBattletag : null;
 });
 
@@ -165,7 +167,7 @@ watch(snapshot, updateCapturedAgoLabel);
             title="Équipe gauche"
             :slots="teamLeft"
             :selected-battletag="selectedBattletag"
-            :own-battletag="ownBattletag"
+            :own-battletags="ownBattletags"
             @select="select"
             @disambiguate="disambiguate"
           />
@@ -173,7 +175,7 @@ watch(snapshot, updateCapturedAgoLabel);
             title="Équipe droite"
             :slots="teamRight"
             :selected-battletag="selectedBattletag"
-            :own-battletag="ownBattletag"
+            :own-battletags="ownBattletags"
             @select="select"
             @disambiguate="disambiguate"
           />
@@ -195,7 +197,7 @@ watch(snapshot, updateCapturedAgoLabel);
             title="Équipe gauche"
             :slots="teamLeft"
             :selected-battletag="selectedBattletag"
-            :own-battletag="ownBattletag"
+            :own-battletags="ownBattletags"
             @select="select"
             @disambiguate="disambiguate"
           />
@@ -204,7 +206,7 @@ watch(snapshot, updateCapturedAgoLabel);
             title="Équipe droite"
             :slots="teamRight"
             :selected-battletag="selectedBattletag"
-            :own-battletag="ownBattletag"
+            :own-battletags="ownBattletags"
             @select="select"
             @disambiguate="disambiguate"
           />

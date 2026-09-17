@@ -14,8 +14,12 @@ const props = defineProps<{ battletag: string }>();
 const config = useRuntimeConfig();
 const gameModeStore = useGameModeStore();
 const { data: authData } = await useAuthUser();
-const ownBattletag = computed(() => authData.value?.user?.battletag ?? null);
-const isSelf = computed(() => Boolean(ownBattletag.value) && ownBattletag.value === props.battletag);
+// A shared BattleTag is "me" for every account that linked it, and the
+// viewer's own smurf is "me" too -- hence a set, not one tag.
+const myTags = computed(() =>
+  myBattletagSet(authData.value?.user?.accounts, authData.value?.user?.battletag ?? null),
+);
+const isSelf = computed(() => isMine(props.battletag, myTags.value));
 
 const {
   data,

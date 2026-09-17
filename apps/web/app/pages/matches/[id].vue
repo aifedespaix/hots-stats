@@ -40,7 +40,11 @@ useSeoMeta({
   robots: "noindex, follow",
 });
 
-const myBattletag = computed(() => authData.value?.user?.battletag ?? null);
+// Every account the viewer owns -- a merged view means "me" is a set, not a
+// single BattleTag (see utils/myAccounts.ts).
+const myBattletags = computed(() =>
+  myBattletagSet(authData.value?.user?.accounts, authData.value?.user?.battletag ?? null),
+);
 const allPlayers = computed(() => data.value?.teams.flatMap((team) => team.players) ?? []);
 
 const annotationsStore = usePlayerAnnotationsStore();
@@ -59,7 +63,7 @@ const tabItems = [
 
 // --- Tab 1: enriched scoreboard -------------------------------------------
 
-const scoreboardRows = computed(() => buildScoreboardRows(allPlayers.value, myBattletag.value));
+const scoreboardRows = computed(() => buildScoreboardRows(allPlayers.value, myBattletags.value));
 const performerBadges = computed(() => topPerformerBadges(scoreboardRows.value));
 const viewerAllyRows = computed(() => scoreboardRows.value.filter((r) => r.isAlly));
 const viewerEnemyRows = computed(() => scoreboardRows.value.filter((r) => !r.isAlly));
@@ -210,7 +214,7 @@ const displayedInsights = computed(() =>
             :match-heroes="spatialMatchHeroes"
             :match-deaths="data.timeline?.deaths ?? []"
             :hero-options="spatialHeroOptions"
-            :my-battletag="myBattletag"
+            :my-battletag="authData?.user?.battletag ?? null"
           />
           <CoachHeatmapsPlaceholder v-else :calibrated="data.spatialCalibrated" />
         </div>

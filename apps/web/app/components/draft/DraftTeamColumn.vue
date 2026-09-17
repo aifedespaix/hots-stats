@@ -5,7 +5,8 @@ const props = defineProps<{
   title: string;
   slots: DraftPlayerSlot[];
   selectedBattletag: string | null;
-  ownBattletag: string | null;
+  /** Every BattleTag the viewer owns -- a Set, since accounts can be merged. */
+  ownBattletags: Set<string>;
 }>();
 
 const emit = defineEmits<{
@@ -18,7 +19,7 @@ function isSelected(slot: DraftPlayerSlot) {
 }
 
 function isSelf(slot: DraftPlayerSlot) {
-  return Boolean(slot.effectiveBattletag) && slot.effectiveBattletag === props.ownBattletag;
+  return isMine(slot.effectiveBattletag, props.ownBattletags);
 }
 
 // A slot shows the correction combobox only while it is still *unresolved*:

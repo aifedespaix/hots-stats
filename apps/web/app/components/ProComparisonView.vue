@@ -31,7 +31,11 @@ const {
 } = await useApiFetch<MatchDetailResponse>(`/matches/${props.matchIdB}`, { withGameMode: false });
 
 const { data: authData } = useAuthUser();
-const myBattletag = computed(() => authData.value?.user?.battletag ?? null);
+// The heatmap slot holds one BattleTag, so this defaults to whichever of the
+// viewer's accounts appears in the match -- not just the primary.
+const myTags = computed(() =>
+  myBattletagSet(authData.value?.user?.accounts, authData.value?.user?.battletag ?? null),
+);
 
 function toHeatmapGameData(response: MatchDetailResponse | null | undefined): HeatmapGameData | null {
   if (!response) return null;
@@ -78,7 +82,8 @@ watch(
   heroOptionsA,
   (options) => {
     if (heatmap.selectedBattletagA.value || options.length === 0) return;
-    heatmap.selectedBattletagA.value = options.find((o) => o.battletag === myBattletag.value)?.battletag ?? options[0]!.battletag;
+    heatmap.selectedBattletagA.value =
+      options.find((o) => isMine(o.battletag, myTags.value))?.battletag ?? options[0]!.battletag;
   },
   { immediate: true },
 );

@@ -34,7 +34,7 @@ const STAGGER_THRESHOLD_SECONDS = 8;
 
 /** Enriches the raw per-player box score with match-relative ratios (kill
  * participation, damage/death, XP share) and the viewer's ally/self flags. */
-export function buildScoreboardRows(players: MatchDetailPlayer[], myBattletag: string | null): ScoreboardRow[] {
+export function buildScoreboardRows(players: MatchDetailPlayer[], myBattletags: Set<string>): ScoreboardRow[] {
   const teamKills = new Map<number, number>();
   const teamXp = new Map<number, number>();
   for (const p of players) {
@@ -45,7 +45,7 @@ export function buildScoreboardRows(players: MatchDetailPlayer[], myBattletag: s
   // a participant at all (e.g. browsing a friend's match via the friend
   // access rule in `GET /matches/:id`) -- keeps the team split coherent
   // instead of rendering all 10 players as "enemy".
-  const myTeam = players.find((p) => p.battletag === myBattletag)?.team ?? 0;
+  const myTeam = players.find((p) => myBattletags.has(p.battletag.toLowerCase()))?.team ?? 0;
 
   return players.map((p) => {
     const teamKillTotal = teamKills.get(p.team) ?? 0;
@@ -56,7 +56,7 @@ export function buildScoreboardRows(players: MatchDetailPlayer[], myBattletag: s
       damagePerDeath: p.heroDamage / Math.max(p.deaths, 1),
       xpShare: teamXpTotal > 0 ? p.experienceContribution / teamXpTotal : 0,
       isAlly: p.team === myTeam,
-      isMe: p.battletag === myBattletag,
+      isMe: myBattletags.has(p.battletag.toLowerCase()),
     };
   });
 }
