@@ -224,3 +224,35 @@ describe("timeline geometry", () => {
     expect(deathMarkerRadius(100)).toBe(10);
   });
 });
+
+import { computed } from "vue";
+import { useMatchTimelineSeries } from "./useMatchTimelineSeries";
+
+describe("useMatchTimelineSeries", () => {
+  it("starts at the end of the match and converts a scrubbed second back to a percent", () => {
+    const source = computed(() => input({ durationSeconds: 200 }));
+    const { scrubPercent, scrubSeconds, durationSeconds } = useMatchTimelineSeries(source);
+    expect(durationSeconds.value).toBe(200);
+    expect(scrubSeconds.value).toBe(200);
+
+    scrubSeconds.value = 50;
+    expect(scrubPercent.value).toBe(25);
+    expect(scrubSeconds.value).toBe(50);
+  });
+
+  it("clamps the scrub position to the match's bounds", () => {
+    const source = computed(() => input({ durationSeconds: 200 }));
+    const { scrubSeconds } = useMatchTimelineSeries(source);
+    scrubSeconds.value = 500;
+    expect(scrubSeconds.value).toBe(200);
+    scrubSeconds.value = -50;
+    expect(scrubSeconds.value).toBe(0);
+  });
+
+  it("stays at 0 for a match with no duration", () => {
+    const source = computed(() => input({ durationSeconds: 0 }));
+    const { scrubSeconds } = useMatchTimelineSeries(source);
+    scrubSeconds.value = 30;
+    expect(scrubSeconds.value).toBe(0);
+  });
+});

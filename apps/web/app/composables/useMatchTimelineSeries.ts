@@ -1,3 +1,7 @@
+// Explicit vue import (not Nuxt auto-import) so the pure logic is testable
+// with plain vitest -- see useHeatmapSync.ts's own comment, the repo's
+// precedent for this split.
+import { computed, type ComputedRef, type Ref, type WritableComputedRef, ref } from "vue";
 import type {
   MatchTimelineData,
   MatchTimelineDeathMarker,
@@ -196,4 +200,32 @@ const DEATH_MARKER_MAX_RADIUS = 10;
 /** Death-marker radius: one step per extra death in the cluster, capped so a huge teamfight stays on its track. */
 export function deathMarkerRadius(deaths: number): number {
   return Math.min(DEATH_MARKER_MAX_RADIUS, DEATH_MARKER_BASE_RADIUS + Math.max(0, deaths - 1) * DEATH_MARKER_RADIUS_STEP);
+}
+
+export interface UseMatchTimelineSeriesResult {
+  series: ComputedRef<MatchTimelineSeries>;
+  durationSeconds: ComputedRef<number>;
+  /** 0-100, the scrubber's own scale (a native range input's value). */
+  scrubPercent: Ref<number>;
+  /** Writable: the page shares this with the heatmap tab's highlightAtSeconds. */
+  scrubSeconds: WritableComputedRef<number>;
+}
+
+/**
+ * Reactive wrapper around the pure derivation plus the C2 scrubber state.
+ * scrubSeconds is writable so the match page can bind it with
+ * v-model:scrub-seconds and pass the same value to the heatmap tab.
+ */
+export function useMatchTimelineSeries(input: ComputedRef<MatchTimelineInput>): UseMatchTimelineSeriesResult {
+  const series = computed(() => buildMatchTimelineSeries(input.value));
+  const scrubPercent = ref(100);
+  const durationSeconds = computed(() => Math.max(0, input.value.durationSeconds));
+  const scrubSeconds = computed({
+    get: () => (scrubPercent.value / 100) * durationSeconds.value,
+    set: (value: number) => {
+      scrubPercent.value =
+        durationSeconds.value > 0 ? Math.min(100, Math.max(0, (value / durationSeconds.value) * 100)) : 0;
+    },
+  });
+  return { series, durationSeconds, scrubPercent, scrubSeconds };
 }
