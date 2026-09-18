@@ -1,6 +1,15 @@
 <script setup lang="ts">
 import type { Grid } from "@hots-stats/shared-types";
+import type { MatchTimelineDeath } from "~/types/coach";
 import type { SpatialEventCluster } from "~/utils/deathClustering";
+import type { HeatmapCellDetail, HeatmapPlayerLabels, PlayerSide } from "~/utils/heatmapCellDetails";
+import {
+  buildCellDetail,
+  buildDeathCellIndex,
+  cellIndexFromRect,
+  computeCellTotals,
+  isCellDetailEmpty,
+} from "~/utils/heatmapCellDetails";
 import { DEATH_MARKER_RGB, KILL_MARKER_RGB } from "~/utils/spatialColors";
 
 // Static approximations of this app's --raw-info/--raw-success/--raw-danger
@@ -18,6 +27,10 @@ export interface SpatialPresenceLayer {
   /** Overrides `presenceOpacity` for this one layer; omit to use the shared slider value. */
   opacity?: number;
   label?: string;
+  /** Set only when this layer is one known player ("me"/"ally"/"enemy") -- drives
+   * the hover panel's "Toi (Jaina)" / "(ennemi)" decoration. Omitted for a merged
+   * ("Mon équipe") or aggregate layer, which keeps its plain label. */
+  side?: PlayerSide;
 }
 
 const props = withDefaults(
@@ -38,6 +51,19 @@ const props = withDefaults(
     showKills?: boolean;
     showDeaths?: boolean;
     presenceOpacity?: number;
+    /** Deaths of the match in context, already filtered by the caller to the active
+     * heroes and layer -- lets a hovered cell spell out who killed whom. Omit for
+     * an aggregate ("Historique") view, which only has counts. */
+    deaths?: MatchTimelineDeath[];
+    /** BattleTag -> hero name + side, so a hover line reads "Toi (Jaina)" /
+     * "Raynor (allié)" instead of a raw BattleTag. */
+    playerLabels?: HeatmapPlayerLabels;
+    /** The selected heroes' BattleTags: only their kills/deaths count toward a
+     * cell's totals (everyone else is still listed for context). Omit to count
+     * every participant. */
+    activeBattletags?: string[];
+    /** Matches behind an aggregate view, shown as context ("Sur 12 parties"). */
+    matchCount?: number;
     /** Timeline scrub position, in seconds -- forwarded to SpatialMarkerLayer so the match page's chronology can highlight the deaths around it. */
     highlightAtSeconds?: number | null;
   }>(),
@@ -71,6 +97,77 @@ function onImageLoad() {
   naturalHeight.value = imgEl.value?.naturalHeight ?? 0;
 }
 
+// --- Per-cell hover panel -------------------------------------------------
+
+const hoverCellIndex = ref<number | null>(null);
+const hoverPoint = ref({ x: 0, y: 0 });
+const hoverContainerSize = ref({ width: 0, height: 0 });
+
+const activeBattletagSet = computed(() =>
+  props.activeBattletags ? new Set(props.activeBattletags) : undefined,
+);
+
+// The death->cell index and the whole-view totals are both derived once per
+// data change, never per pointer move: a hover only ever reads one map entry.
+const deathCellIndex = computed(() => buildDeathCellIndex(props.deaths ?? [], props.gridCols, props.gridRows));
+const cellTotals = computed(() =>
+  computeCellTotals({
+    layers: props.layers,
+    killsGrid: props.killsGrid,
+    deathsGrid: props.deathsGrid,
+    deaths: props.deaths,
+    activeBattletags: activeBattletagSet.value,
+  }),
+);
+
+/** Null while nothing is hovered *and* for an empty cell -- most of the map is
+ * empty, and a card following the cursor everywhere would be noise. */
+const cellDetail = computed<HeatmapCellDetail | null>(() => {
+  const cellIndex = hoverCellIndex.value;
+  if (cellIndex === null) return null;
+  const detail = buildCellDetail({
+    cellIndex,
+    layers: props.layers,
+    totals: cellTotals.value,
+    killsGrid: props.killsGrid,
+    deathsGrid: props.deathsGrid,
+    cellDeaths: props.deaths ? deathCellIndex.value.get(cellIndex) : undefined,
+    playerLabels: props.playerLabels,
+    activeBattletags: activeBattletagSet.value,
+  });
+  return isCellDetailEmpty(detail) ? null : detail;
+});
+
+/** The hovered cell comes from the map image's own rect -- the very box the grid
+ * was bucketed against -- so the cell under the pointer is the cell described. */
+function onPointerMove(event: PointerEvent) {
+  const img = imgEl.value;
+  const container = mapContainerEl.value;
+  if (!img || !container) return;
+  const cellIndex = cellIndexFromRect(
+    event.clientX,
+    event.clientY,
+    img.getBoundingClientRect(),
+    props.gridCols,
+    props.gridRows,
+  );
+  if (cellIndex === null) {
+    hoverCellIndex.value = null;
+    return;
+  }
+  const containerRect = container.getBoundingClientRect();
+  hoverCellIndex.value = cellIndex;
+  hoverPoint.value = { x: event.clientX - containerRect.left, y: event.clientY - containerRect.top };
+  hoverContainerSize.value = { width: containerRect.width, height: containerRect.height };
+}
+
+function onPointerLeave(event: PointerEvent) {
+  // A touch pointer leaves right after the tap that placed it; keeping the panel
+  // up is what makes "tap a cell" work on a phone.
+  if (event.pointerType === "touch") return;
+  hoverCellIndex.value = null;
+}
+
 function sumGridValues(grid: Grid): number {
   return Object.values(grid).reduce((sum, v) => sum + v, 0);
 }
@@ -85,7 +182,13 @@ function rgbCss(rgb: [number, number, number]): string {
 
 <template>
   <div class="space-y-2">
-    <div ref="mapContainerEl" class="relative w-full overflow-hidden rounded-lg border border-border bg-background">
+    <div
+      ref="mapContainerEl"
+      class="relative w-full overflow-hidden rounded-lg border border-border bg-background"
+      @pointermove="onPointerMove"
+      @pointerdown="onPointerMove"
+      @pointerleave="onPointerLeave"
+    >
       <img
         ref="imgEl"
         :src="`/images/maps/original/${imageSlug}.jpg`"
@@ -130,6 +233,15 @@ function rgbCss(rgb: [number, number, number]): string {
         :aspect-ratio="naturalWidth / naturalHeight"
         :highlight-at-seconds="highlightAtSeconds"
         @select-cluster="(c) => emit('select-cluster', c)"
+      />
+      <SpatialHeatmapCellTooltip
+        v-if="cellDetail"
+        :detail="cellDetail"
+        :x="hoverPoint.x"
+        :y="hoverPoint.y"
+        :container-width="hoverContainerSize.width"
+        :container-height="hoverContainerSize.height"
+        :match-count="matchCount"
       />
     </div>
 

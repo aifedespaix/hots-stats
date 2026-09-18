@@ -235,6 +235,7 @@ const displayedInsights = computed(() =>
             :highlight-at-seconds="timelineScrubSeconds"
             :hero-options="spatialHeroOptions"
             :my-battletag="authData?.user?.battletag ?? null"
+            :my-battletags="[...myBattletags]"
           />
           <CoachHeatmapsPlaceholder v-else :calibrated="data.spatialCalibrated" />
         </div>

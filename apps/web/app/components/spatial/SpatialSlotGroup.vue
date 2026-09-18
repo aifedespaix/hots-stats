@@ -2,10 +2,11 @@
 import type { Grid } from "@hots-stats/shared-types";
 import { sumGrids } from "@hots-stats/shared-types";
 import { useMatchSpatialSlot } from "~/composables/useMatchSpatialSlot";
-import { useSpatialHistorySlot } from "~/composables/useSpatialHistorySlot";
+import { HISTORY_ROLE_LABELS, useSpatialHistorySlot } from "~/composables/useSpatialHistorySlot";
 import type { MatchTimelineDeath } from "~/types/coach";
 import type { MatchSlotHero } from "~/types/spatial";
 import { exportSpatialImageElement } from "~/utils/exportSpatialImage";
+import type { HeatmapPlayerLabels } from "~/utils/heatmapCellDetails";
 import { SLOT_A_RGB, SLOT_B_RGB } from "~/utils/spatialColors";
 import type { SpatialPresenceLayer } from "./SpatialHeatmapView.vue";
 
@@ -29,14 +30,20 @@ const props = withDefaults(
     matchDeaths?: MatchTimelineDeath[];
     heroOptions: { id: string; name: string }[];
     myBattletag?: string | null;
+    /** Every account the viewer owns (see utils/myAccounts.ts), so the hover
+     * panel can say "Toi (Jaina)" even when the match's BattleTag and the
+     * account list disagree on capitalization. Omit when the viewer is unknown. */
+    myBattletags?: string[];
     /** Timeline scrub position, in seconds, forwarded to every heatmap so the match page's chronology can highlight the deaths around it. */
     highlightAtSeconds?: number | null;
   }>(),
-  { matchHeroes: () => [], matchDeaths: () => [], highlightAtSeconds: null },
+  { matchHeroes: () => [], matchDeaths: () => [], myBattletags: () => [], highlightAtSeconds: null },
 );
 
 const allowMatchScope = computed(() => props.matchHeroes.length > 0);
 const myBattletagRef = computed(() => props.myBattletag ?? null);
+// Lowercased, matching `isMine`'s own comparison convention.
+const myBattletagsRef = computed(() => new Set(props.myBattletags.map((tag) => tag.toLowerCase())));
 
 // Every distinct layer this match's heroes have data on -- empty when no
 // match is in context (e.g. /maps/:mapId), single-entry [null] for a
@@ -72,7 +79,9 @@ const colorB = ref<[number, number, number] | undefined>(SLOT_B_RGB);
 // Slot A: "Cette partie" when a match is in context, "Historique" otherwise
 // (e.g. the Hub des Cartes) -- a single long-lived instance so toggling
 // comparison on/off never resets the user's hero/config selection.
-const matchSlotA = allowMatchScope.value ? useMatchSpatialSlot(props.matchHeroes, props.matchDeaths, activeLayer, colorA) : null;
+const matchSlotA = allowMatchScope.value
+  ? useMatchSpatialSlot(props.matchHeroes, props.matchDeaths, activeLayer, colorA, myBattletagsRef)
+  : null;
 const historySlotA = !allowMatchScope.value
   ? useSpatialHistorySlot(props.mapId, props.heroOptions[0]?.id, myBattletagRef, activeLayer)
   : null;
@@ -81,7 +90,9 @@ const historySlotA = !allowMatchScope.value
 // still created eagerly (composables can only be called unconditionally at
 // setup time), but `historySlotB`'s fetch is gated by `enabled` so it never
 // fires while Slot B is on "Cette partie" scope or comparison is off.
-const matchSlotB = allowMatchScope.value ? useMatchSpatialSlot(props.matchHeroes, props.matchDeaths, activeLayer, colorB) : null;
+const matchSlotB = allowMatchScope.value
+  ? useMatchSpatialSlot(props.matchHeroes, props.matchDeaths, activeLayer, colorB, myBattletagsRef)
+  : null;
 const historySlotBEnabled = computed(() => comparisonEnabled.value && slotBScope.value === "history");
 const historySlotB = useSpatialHistorySlot(props.mapId, props.heroOptions[0]?.id, myBattletagRef, activeLayer, historySlotBEnabled);
 
@@ -93,17 +104,59 @@ const historySlotB = useSpatialHistorySlot(props.mapId, props.heroOptions[0]?.id
 const effectiveGridCols = computed(() => props.gridCols ?? historySlotA?.data.value?.grid?.cols ?? historySlotB.data.value?.grid?.cols ?? 128);
 const effectiveGridRows = computed(() => props.gridRows ?? historySlotA?.data.value?.grid?.rows ?? historySlotB.data.value?.grid?.rows ?? 128);
 
+/** Names a "Historique" Slot's aggregate layer after its own filter, so the
+ * legend and the hover panel read "Jaina"/"Tanks" instead of a bare "Présence". */
+function historyLayerLabel(slot: ReturnType<typeof useSpatialHistorySlot> | null): string | undefined {
+  if (!slot) return undefined;
+  if (slot.heroSelector.value === "hero") return props.heroOptions.find((h) => h.id === slot.selectedHeroId.value)?.name;
+  return HISTORY_ROLE_LABELS[slot.selectedRole.value];
+}
+
 const slotALayers = computed<SpatialPresenceLayer[]>(() =>
-  matchSlotA ? matchSlotA.presenceLayers.value : [{ grid: historySlotA!.presenceGrid.value, colorRgb: SLOT_A_RGB }],
+  matchSlotA
+    ? matchSlotA.presenceLayers.value
+    : [{ grid: historySlotA!.presenceGrid.value, colorRgb: SLOT_A_RGB, label: historyLayerLabel(historySlotA) }],
 );
 const slotBLayers = computed<SpatialPresenceLayer[]>(() =>
   slotBScope.value === "match" && matchSlotB
     ? matchSlotB.presenceLayers.value
-    : [{ grid: historySlotB.presenceGrid.value, colorRgb: colorB.value! }],
+    : [{ grid: historySlotB.presenceGrid.value, colorRgb: colorB.value!, label: historyLayerLabel(historySlotB) }],
 );
 
 const slotAMarkers = computed(() => (matchSlotA ? matchSlotA.markerClusters.value : undefined));
 const slotBMarkers = computed(() => (slotBScope.value === "match" && matchSlotB ? matchSlotB.markerClusters.value : undefined));
+
+type MatchSlot = ReturnType<typeof useMatchSpatialSlot>;
+
+/** Hover-panel inputs for one or more "Cette partie" Slots -- merged when two
+ * Slots overlay the same map, so a cell still reads as a single story. */
+function hoverFor(slots: (MatchSlot | null)[]): {
+  deaths: MatchTimelineDeath[];
+  playerLabels: HeatmapPlayerLabels;
+  battletags: string[];
+} | undefined {
+  const active = slots.filter((slot): slot is MatchSlot => slot !== null);
+  if (active.length === 0) return undefined;
+  return {
+    deaths: active.flatMap((slot) => slot.cellDeaths.value),
+    playerLabels: Object.assign({}, ...active.map((slot) => slot.playerLabels.value)),
+    battletags: [...new Set(active.flatMap((slot) => slot.activeBattletagList.value))],
+  };
+}
+
+const hoverA = computed(() => hoverFor([matchSlotA]));
+const hoverB = computed(() => hoverFor([slotBScope.value === "match" ? matchSlotB : null]));
+const hoverOverlay = computed(() => hoverFor([matchSlotA, slotBScope.value === "match" ? matchSlotB : null]));
+
+// Matches behind an aggregate Slot, shown as context in the hover panel.
+const historyMatchCountA = computed(() => historySlotA?.data.value?.matchCount ?? 0);
+const historyMatchCountB = computed(() => historySlotB.data.value?.matchCount ?? 0);
+const matchCountA = computed(() => (matchSlotA ? undefined : historyMatchCountA.value || undefined));
+const matchCountB = computed(() => (slotBScope.value === "match" ? undefined : historyMatchCountB.value || undefined));
+const matchCountOverlay = computed(() => {
+  const total = (matchSlotA ? 0 : historyMatchCountA.value) + (slotBScope.value === "history" ? historyMatchCountB.value : 0);
+  return total > 0 ? total : undefined;
+});
 
 // History-scope kills/deaths are density grids (no per-event coordinates),
 // so unlike "Cette partie" markers they can't carry a per-Slot color or
@@ -200,6 +253,10 @@ function exportView(heatmapViewRef: { mapContainerEl: HTMLElement | null } | nul
         :show-kills="showKills"
         :show-deaths="showDeaths"
         :presence-opacity="presenceOpacity"
+        :deaths="hoverA?.deaths"
+        :player-labels="hoverA?.playerLabels"
+        :active-battletags="hoverA?.battletags"
+        :match-count="matchCountA"
       />
 
       <UButton class="mt-4" size="xs" variant="soft" color="neutral" icon="i-heroicons-plus" @click="comparisonEnabled = true">
@@ -283,6 +340,10 @@ function exportView(heatmapViewRef: { mapContainerEl: HTMLElement | null } | nul
           :show-kills="showKills"
           :show-deaths="showDeaths"
           :presence-opacity="presenceOpacity"
+          :deaths="hoverOverlay?.deaths"
+          :player-labels="hoverOverlay?.playerLabels"
+          :active-battletags="hoverOverlay?.battletags"
+          :match-count="matchCountOverlay"
         />
       </template>
       <div v-else class="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -304,6 +365,10 @@ function exportView(heatmapViewRef: { mapContainerEl: HTMLElement | null } | nul
             :show-kills="showKills"
             :show-deaths="showDeaths"
             :presence-opacity="presenceOpacity"
+            :deaths="hoverA?.deaths"
+            :player-labels="hoverA?.playerLabels"
+            :active-battletags="hoverA?.battletags"
+            :match-count="matchCountA"
           />
         </div>
         <div>
@@ -324,6 +389,10 @@ function exportView(heatmapViewRef: { mapContainerEl: HTMLElement | null } | nul
             :show-kills="showKills"
             :show-deaths="showDeaths"
             :presence-opacity="presenceOpacity"
+            :deaths="hoverB?.deaths"
+            :player-labels="hoverB?.playerLabels"
+            :active-battletags="hoverB?.battletags"
+            :match-count="matchCountB"
           />
         </div>
       </div>

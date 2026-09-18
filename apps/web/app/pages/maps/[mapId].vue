@@ -11,6 +11,8 @@ const { data: authData } = useAuthUser();
 
 const mapName = computed(() => data.value?.mapName ?? "Carte");
 const spatialHeroOptions = computed(() => (data.value?.metaHeroes ?? []).map((h) => ({ id: h.heroId, name: h.heroName })));
+// Every account the viewer owns, so the spatial hover panel can say "Toi (Jaina)".
+const myBattletags = computed(() => myBattletagSet(authData.value?.user?.accounts, authData.value?.user?.battletag ?? null));
 
 useSeoMeta({
   title: () => mapName.value,
@@ -293,6 +295,7 @@ const teamImpactChartOptions = computed(() => ({
           :map-id="mapId"
           :hero-options="spatialHeroOptions"
           :my-battletag="authData?.user?.battletag ?? null"
+          :my-battletags="[...myBattletags]"
         />
       </template>
     </div>

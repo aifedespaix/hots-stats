@@ -74,6 +74,7 @@ const unknownKillTypes = computed(() => {
           :deaths-grid="deathsGrid"
           :show-presence="false"
           :show-kills="false"
+          :match-count="data.matches"
         />
 
         <div v-if="data.clusters.length > 0" class="space-y-1.5">
