@@ -320,9 +320,29 @@ Légende : `[ ]` à faire · `[~]` en cours · `[x]` terminé · `[!]` bloqué
   - Limite assumée : l'UI ne lit que la couche par défaut (layer omis). Aucun
     endpoint n'expose la liste des couches calibrées d'une carte ; un
     sélecteur de couche demanderait une modif d'API hors C1.
-- [ ] **C2 — Onglet Chronologie sur `/matches/[id]`**
+- [x] **C2 — Onglet Chronologie sur `/matches/[id]`**
   Courbe d'avance/retard d'XP d'équipe (`match_level_snapshots`) + marqueurs
   de morts et de structures. Spec § C2.
+  **Fait** (2026-09-18). Écarts / précisions vs spec :
+  - Le calcul (courbe d'avance, regroupement des morts par équipe, texte
+    alternatif, géométrie SVG) vit dans un module pur sans Nuxt
+    `apps/web/app/composables/useMatchTimelineSeries.ts`, testé par
+    `useMatchTimelineSeries.test.ts` ; le composant
+    `MatchTimelineChart.vue` ne fait que rendre.
+  - Aucun changement d'API, de base ni de migration : `GET /matches/:id`
+    renvoyait déjà `timeline.levelSnapshots` / `deaths` /
+    `structureEvents`.
+  - Le curseur de chronologie partage sa position avec l'onglet Heatmaps via
+    une prop additive `highlightAtSeconds` (SpatialSlotGroup →
+    SpatialHeatmapView → SpatialMarkerLayer) et la règle pure
+    `isClusterHighlighted` (`deathClustering.ts`) : sans la prop, le rendu
+    existant est inchangé.
+  - Courbe = moyenne des niveaux de chaque équipe aux timestamps réels des
+    snapshots, report du dernier niveau connu entre deux montées — jamais de
+    point interpolé/inventé. Sans snapshot des deux côtés : état explicite
+    « Données de niveau absentes », pas de graphique vide.
+  - Graphique en SVG maison (pas de nouvelle dépendance), comme
+    `sparkline.ts` ; alternative textuelle = niveau final + écart.
 - [ ] **C3 — "Ton bourreau"** · `GET /stats/killers`
   Qui te tue, à partir de `match_deaths.killers` et `killType`. Spec § C3.
 - [x] **C4 — Contexte de victoire** · `GET /stats/context`

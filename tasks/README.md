@@ -274,6 +274,13 @@ rappelle donc le contexte nécessaire plutôt que de supposer une continuité.
   section « Où meurs-tu sur cette carte ? » sur /maps/[mapId]
   (SpatialDeathAggregateView.vue), filtre héros, états vide/erreur, couche par
   défaut seulement.
+- **Suite Progression — C2 (onglet Chronologie)** : onglet « Chronologie » sur
+  /matches/[id] (composant `MatchTimelineChart.vue` + composable pur
+  `useMatchTimelineSeries.ts`) — courbe d'avance/retard de niveau des deux
+  équipes depuis `timeline.levelSnapshots`, marqueurs de morts par équipe
+  (taille = morts groupées), marqueurs de structures best-effort, curseur
+  partagé avec l'onglet Heatmaps (`highlightAtSeconds`) et état explicite
+  « Données de niveau absentes ». Aucun changement d'API/DB ; SVG maison.
 
 ## À faire
 
