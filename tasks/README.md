@@ -235,3 +235,13 @@ coordonnées→pixels responsive, et le wireframe/UX (concept de "Slot" de
 comparaison réutilisable). Prérequis non satisfait aujourd'hui : le daemon
 n'extrait pas encore `SUnitPositionsEvent` (aucune coordonnée nulle part
 dans le pipeline actuel) — c'est le premier chantier avant tout le reste.
+
+Voir aussi `tasks/progression-roadmap.md` : suite "Progression joueur" —
+transformer l'analyse Coach (aujourd'hui limitée à une partie) en couche de
+progression agrégée sur N parties (patterns récurrents, tendance glissante,
+facteurs de victoire, contexte de session, carte des morts), plus un lot
+ergonomie/accessibilité. Le dossier contient la file d'attente des chantiers
+(numérotés A1…G1, avec leurs dépendances), les règles de sortie, et un
+**prompt de session générique** à copier-coller pour traiter un chantier par
+session. Conception détaillée :
+`docs/superpowers/specs/2026-09-18-player-progression-design.md`.
