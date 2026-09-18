@@ -9,6 +9,7 @@ import { accountScope } from "../middleware/account-scope";
 import { authSession, requireUser } from "../middleware/auth-session";
 import { getContext } from "../services/context.service";
 import { getDrivers } from "../services/drivers.service";
+import { getKillers } from "../services/killers.service";
 import { getPatterns } from "../services/patterns.service";
 import { getStatsSummary } from "../services/stats.service";
 import { getTrend } from "../services/trend.service";
@@ -66,6 +67,16 @@ const contextQuerySchema = z.object({
   // buckets never depend on the server's own timezone. Required: an omitted
   // value would silently bucket everyone at UTC.
   tzOffsetMinutes: z.coerce.number().int().min(-840).max(840),
+});
+
+const killersQuerySchema = z.object({
+  scope: heroStatsScopeSchema.optional(),
+  accounts: accountsQuerySchema,
+  mode: gameModeListSchema.optional(),
+  heroId: z.string().optional(),
+  mapId: z.string().optional(),
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
 });
 
 export const statsRoute = new Hono<Env>()
@@ -174,5 +185,31 @@ export const statsRoute = new Hono<Env>()
         },
         parsed.data.tzOffsetMinutes,
       ),
+    );
+  })
+  .get("/killers", async (c) => {
+    const parsed = killersQuerySchema.safeParse(c.req.query());
+    if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+
+    // "Who kills me?" has no coherent community subject, so an explicit global
+    // scope is refused rather than faked (same rule as /patterns, /trend,
+    // /drivers and /context). An omitted scope always falls back to the caller's
+    // accounts.
+    const scope = withStatsScope(c.get("scope"), parsed.data.scope ?? "personal");
+    if (scope.mode === "global") {
+      return c.json(
+        { error: "Ton bourreau n'est disponible que pour ton profil (scope=personal)." },
+        400,
+      );
+    }
+
+    return c.json(
+      await getKillers(scope, {
+        mode: parsed.data.mode,
+        heroId: parsed.data.heroId,
+        mapId: parsed.data.mapId,
+        from: parsed.data.from,
+        to: parsed.data.to,
+      }),
     );
   });
