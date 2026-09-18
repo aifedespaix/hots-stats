@@ -296,5 +296,17 @@ const teamImpactChartOptions = computed(() => ({
         />
       </template>
     </div>
+
+    <!-- G. Carte des morts agrégée -->
+    <div class="rounded-lg border border-border bg-surface p-4">
+      <div class="mb-3 flex items-center gap-1.5">
+        <UIcon name="i-heroicons-map" class="h-4 w-4 text-danger" />
+        <h2 class="font-heading text-sm font-medium">Où meurs-tu sur cette carte ?</h2>
+      </div>
+      <p class="mb-4 text-xs text-muted">
+        Toutes tes morts enregistrées sur cette carte, cumulées : les zones où tu meurs le plus, par héros.
+      </p>
+      <SpatialDeathAggregateView :map-id="mapId" :hero-options="spatialHeroOptions" />
+    </div>
   </div>
 </template>
