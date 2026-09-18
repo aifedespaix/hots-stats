@@ -27,6 +27,7 @@ import { fromDbLayer } from "../lib/spatial-layer";
 import { accountScope } from "../middleware/account-scope";
 import { authSession, requireUser } from "../middleware/auth-session";
 import { getFriendshipStatuses } from "../services/friendships.service";
+import { normalizeMetrics } from "../services/metrics.service";
 
 type Env = { Variables: { user: User; scope: Scope } };
 
@@ -348,6 +349,16 @@ export const matchesRoute = new Hono<Env>()
           avgKills: sql<number>`coalesce(avg(${matchPlayers.kills}), 0)::float`,
           avgDeaths: sql<number>`coalesce(avg(${matchPlayers.deaths}), 0)::float`,
           avgAssists: sql<number>`coalesce(avg(${matchPlayers.assists}), 0)::float`,
+          // Raw sums feeding the duration-weighted overview rates below (A2).
+          durationSeconds: sql<number>`coalesce(sum(${matches.durationSeconds}), 0)::int`,
+          experienceContribution: sql<number>`coalesce(sum(${matchPlayers.experienceContribution}), 0)::float`,
+          heroDamage: sql<number>`coalesce(sum(${matchPlayers.heroDamage}), 0)::float`,
+          siegeDamage: sql<number>`coalesce(sum(${matchPlayers.siegeDamage}), 0)::float`,
+          healing: sql<number>`coalesce(sum(${matchPlayers.healing}), 0)::float`,
+          damageTaken: sql<number>`coalesce(sum(${matchPlayers.damageTaken}), 0)::float`,
+          kills: sql<number>`coalesce(sum(${matchPlayers.kills}), 0)::int`,
+          deaths: sql<number>`coalesce(sum(${matchPlayers.deaths}), 0)::int`,
+          assists: sql<number>`coalesce(sum(${matchPlayers.assists}), 0)::int`,
         })
         .from(matchPlayers)
         .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
@@ -420,7 +431,22 @@ export const matchesRoute = new Hono<Env>()
         .where(and(...scopeConditions([], c.get("scope"), matchPlayers.battletag))),
     ]);
 
-    const overview = overviewRows[0] ?? { gamesPlayed: 0, wins: 0, avgKills: 0, avgDeaths: 0, avgAssists: 0 };
+    const overview = overviewRows[0] ?? {
+      gamesPlayed: 0,
+      wins: 0,
+      avgKills: 0,
+      avgDeaths: 0,
+      avgAssists: 0,
+      durationSeconds: 0,
+      experienceContribution: 0,
+      heroDamage: 0,
+      siegeDamage: 0,
+      healing: 0,
+      damageTaken: 0,
+      kills: 0,
+      deaths: 0,
+      assists: 0,
+    };
     const gamesPlayed = overview.gamesPlayed;
     const wins = overview.wins;
 
@@ -442,6 +468,17 @@ export const matchesRoute = new Hono<Env>()
         avgDeaths: overview.avgDeaths,
         avgAssists: overview.avgAssists,
         kda: overview.avgDeaths > 0 ? (overview.avgKills + overview.avgAssists) / overview.avgDeaths : null,
+        normalized: normalizeMetrics({
+          durationSeconds: overview.durationSeconds,
+          experienceContribution: overview.experienceContribution,
+          heroDamage: overview.heroDamage,
+          siegeDamage: overview.siegeDamage,
+          healing: overview.healing,
+          damageTaken: overview.damageTaken,
+          kills: overview.kills,
+          deaths: overview.deaths,
+          assists: overview.assists,
+        }),
       },
       roles: roleRows
         .map((row) => ({ ...row, winrate: row.gamesPlayed > 0 ? row.wins / row.gamesPlayed : 0 }))

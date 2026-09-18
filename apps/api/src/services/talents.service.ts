@@ -1,7 +1,8 @@
 import { db, heroes, matchPlayers, matches, talentPicks } from "@hots-stats/db";
-import type { GameMode, TalentTierStats } from "@hots-stats/shared-types";
+import type { GameMode, NormalizedMetrics, TalentTierStats } from "@hots-stats/shared-types";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { type Scope, scopeConditions } from "../lib/account-selection";
+import { normalizeMetrics } from "./metrics.service";
 
 export interface HeroStatsRow {
   heroId: string;
@@ -14,6 +15,8 @@ export interface HeroStatsRow {
   avgDeaths: number;
   avgAssists: number;
   avgKillParticipation: number;
+  /** Duration-weighted rates over the same filtered match set (A2). */
+  normalized: NormalizedMetrics;
 }
 
 /**
@@ -59,6 +62,16 @@ async function heroStatsQuery(
           else 0
         end
       ), 0)::float`,
+      // Raw sums feeding the duration-weighted rates below (A2), grouped by hero.
+      durationSeconds: sql<number>`coalesce(sum(${matches.durationSeconds}), 0)::int`,
+      experienceContribution: sql<number>`coalesce(sum(${matchPlayers.experienceContribution}), 0)::float`,
+      heroDamage: sql<number>`coalesce(sum(${matchPlayers.heroDamage}), 0)::float`,
+      siegeDamage: sql<number>`coalesce(sum(${matchPlayers.siegeDamage}), 0)::float`,
+      healing: sql<number>`coalesce(sum(${matchPlayers.healing}), 0)::float`,
+      damageTaken: sql<number>`coalesce(sum(${matchPlayers.damageTaken}), 0)::float`,
+      kills: sql<number>`coalesce(sum(${matchPlayers.kills}), 0)::int`,
+      deaths: sql<number>`coalesce(sum(${matchPlayers.deaths}), 0)::int`,
+      assists: sql<number>`coalesce(sum(${matchPlayers.assists}), 0)::int`,
     })
     .from(matchPlayers)
     .innerJoin(heroes, eq(heroes.id, matchPlayers.heroId))
@@ -74,10 +87,7 @@ export async function getHeroSummaries(
   mapId?: string,
 ): Promise<HeroStatsRow[]> {
   const rows = await heroStatsQuery(scope, undefined, mode, mapId);
-  return rows.map((row) => ({
-    ...row,
-    winrate: row.gamesPlayed > 0 ? row.wins / row.gamesPlayed : 0,
-  }));
+  return rows.map(toHeroStatsRow);
 }
 
 export async function getHeroSummary(
@@ -88,7 +98,41 @@ export async function getHeroSummary(
   const rows = await heroStatsQuery(scope, heroId, mode);
   const row = rows[0];
   if (!row) return null;
-  return { ...row, winrate: row.gamesPlayed > 0 ? row.wins / row.gamesPlayed : 0 };
+  return toHeroStatsRow(row);
+}
+
+type HeroStatsQueryRow = Awaited<ReturnType<typeof heroStatsQuery>>[number];
+
+/** Keeps the raw SUM columns out of the API response -- only the derived
+ * duration-weighted rates are exposed (A2). */
+function toHeroStatsRow(row: HeroStatsQueryRow): HeroStatsRow {
+  const {
+    durationSeconds,
+    experienceContribution,
+    heroDamage,
+    siegeDamage,
+    healing,
+    damageTaken,
+    kills,
+    deaths,
+    assists,
+    ...hero
+  } = row;
+  return {
+    ...hero,
+    winrate: hero.gamesPlayed > 0 ? hero.wins / hero.gamesPlayed : 0,
+    normalized: normalizeMetrics({
+      durationSeconds,
+      experienceContribution,
+      heroDamage,
+      siegeDamage,
+      healing,
+      damageTaken,
+      kills,
+      deaths,
+      assists,
+    }),
+  };
 }
 
 const TALENT_TIERS = [1, 4, 7, 10, 13, 16, 20] as const;
