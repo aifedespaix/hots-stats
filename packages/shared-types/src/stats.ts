@@ -594,3 +594,44 @@ export interface DriversResponse {
   methodology: string;
 }
 
+// --- Player progression suite (C4 — context breakdown) ---
+
+/** Two consecutive matches belong to the same session while their start times
+ * are at most this many minutes apart; beyond it the next match starts a new
+ * session (89 minutes = one session, 91 = two). Shared so the API's clustering
+ * and any UI copy cannot disagree. */
+export const CONTEXT_SESSION_GAP_MINUTES = 90;
+
+/** One bucket of a C4 context breakdown. `winrate` is 0 for an empty bucket --
+ * `insufficientSample` is the flag the UI must honour instead of the rate. */
+export interface ContextBucket {
+  key: string;
+  /** French display label. */
+  label: string;
+  gamesPlayed: number;
+  wins: number;
+  winrate: number;
+  /** True when gamesPlayed < PROGRESSION_MIN_MATCHES (20). */
+  insufficientSample: boolean;
+}
+
+/** One dimension of the C4 context breakdown. `dimension` is one of
+ * "hour" | "weekday" | "sessionPosition" | "sessionSize" | "patch" |
+ * "teamComposition". */
+export interface ContextBreakdown {
+  dimension: string;
+  /** French display label. */
+  label: string;
+  buckets: ContextBucket[];
+}
+
+/** Response for `GET /stats/context` (C4). `tzOffsetMinutes` is the offset
+ * east of UTC the buckets were computed in, echoed back so the UI can label
+ * them. */
+export interface ContextResponse {
+  scope: "personal" | "global";
+  matches: number;
+  tzOffsetMinutes: number;
+  breakdowns: ContextBreakdown[];
+}
+
