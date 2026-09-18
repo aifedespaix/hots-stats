@@ -256,6 +256,13 @@ rappelle donc le contexte nécessaire plutôt que de supposer une continuité.
   session partagé via `packages/shared-types/src/sessions.ts`. Écarts :
   « Dernière session » dérivée de `/stats/trend` (E1 pas encore livré) ;
   `StatsAccountSummaryStats` rend 3 tuiles + slot côté autres appelants.
+- **Suite Progression — B3 (extension du Diagnostic)** : `/analysis` intègre
+  désormais le tableau des patterns récurrents (A1) et la liste des facteurs de
+  victoire (A4) au-dessus des points faibles/forts ; carte-stub « Winrate par
+  carte » supprimée (`/maps` restait accessible depuis la grille du Dashboard et
+  la sidebar). Règles d'affichage des drivers partagées avec `WorkAxesCard` via
+  `apps/web/app/utils/driverDisplay.ts`, override classé unique via
+  `rankedModeQuery()`. Aucun changement d'API ni de migration.
 
 ## À faire
 

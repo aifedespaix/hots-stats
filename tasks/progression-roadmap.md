@@ -248,9 +248,32 @@ Légende : `[ ]` à faire · `[~]` en cours · `[x]` terminé · `[!]` bloqué
     exagérer visuellement une petite variation.
   - Le teaser « Tes parties uploadées » est conservé (non redondant avec les
     axes de travail) ; seuls les deux teasers point fort/faible sont retirés.
-- [ ] **B3 — Extension de `/analysis`** · dépend de A1, A4
+- [x] **B3 — Extension de `/analysis`** · dépend de A1, A4
   Intégrer patterns + drivers au Diagnostic, supprimer le stub "winrate par
-  carte". Spec § B3.
+  carte". Spec § B3. **Fait** (2026-09-18). Écarts / précisions vs spec :
+  - `DriverList.vue` (composant A4 resté non créé jusqu'ici) est livré en
+    `apps/web/app/components/progress/DriverList.vue` : tous les drivers, `n`
+    par côté, `d` de Cohen, lignes non fiables estompées (mais affichées avec
+    leurs comptes). B1 n'affichait que les 3 axes fiables (`WorkAxesCard`) ;
+    le Diagnostic montre la liste complète, conformément au critère A4 n°2.
+  - Les règles d'affichage des drivers (`formatDriverMetric`, `driverTone`,
+    `buildDriverRows`) vivent dans `apps/web/app/utils/driverDisplay.ts` et
+    sont partagées par `WorkAxesCard.vue` et `DriverList.vue` : l'ancien
+    `formatMetric` local de `WorkAxesCard` a été supprimé (règle « une règle =
+    un seul endroit »). Verrouillé par `driverDisplay.test.ts`.
+  - `rankedModeQuery()` (`apps/web/app/composables/useProgression.ts`)
+    centralise l'override classé (`DRAFT_RANKED_MODES`), désormais utilisé par
+    `/stats/patterns`, `/stats/drivers` et `/matches/trend` de la page. Le
+    Diagnostic reste classé de bout en bout, quel que soit le filtre de mode
+    global. Verrouillé par `useProgression.test.ts`.
+  - Le stub « Winrate par carte » est supprimé ; la copie SEO de la page ne
+    l'annonce plus. `/maps` était déjà une carte de la grille de navigation du
+    Dashboard (`statsCards` de `pages/index.vue`) et une entrée de la sidebar :
+    le critère 1 (accessibilité) était donc déjà satisfait, aucune navigation
+    n'a été modifiée.
+  - Aucun changement d'API, de base ou de migration ; aucune logique de calcul
+    nouvelle (elle reste dans A1/A4), donc pas de nouveau test d'agrégat côté
+    API.
 
 ### Lot C — Analyses avancées
 
