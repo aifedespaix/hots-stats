@@ -461,6 +461,23 @@ export const PROGRESSION_MIN_MATCHES = 20;
  * state a conclusion. Shared for the same reason. */
 export const PROGRESSION_MIN_PER_SIDE = 10;
 
+/** Duration-weighted per-minute (and per-10-minute) rates (A2). Every field is
+ * computed as `sum(stat) / (sum(durationSeconds) / unit)` across the matches in
+ * the aggregate -- a weighted rate, never an average of per-match ratios, so a
+ * 5-minute game and a 30-minute game do not weigh the same. All fields are 0
+ * when the summed duration is not a positive number (empty scope, or corrupt
+ * zero-duration rows), never NaN/Infinity. */
+export interface NormalizedMetrics {
+  xpPerMinute: number;
+  heroDamagePerMinute: number;
+  siegeDamagePerMinute: number;
+  healingPerMinute: number;
+  damageTakenPerMinute: number;
+  deathsPer10Min: number;
+  killsPer10Min: number;
+  assistsPer10Min: number;
+}
+
 /** One match's contribution to the recurring combat-pattern aggregate (A1).
  * `perMatch` is chronological: it powers the trend line and lets the client
  * recompute a window without a second round-trip. */
