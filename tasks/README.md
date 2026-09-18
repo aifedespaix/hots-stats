@@ -263,6 +263,17 @@ rappelle donc le contexte nécessaire plutôt que de supposer une continuité.
   la sidebar). Règles d'affichage des drivers partagées avec `WorkAxesCard` via
   `apps/web/app/utils/driverDisplay.ts`, override classé unique via
   `rankedModeQuery()`. Aucun changement d'API ni de migration.
+- **Suite Progression — C1 (carte des morts agrégée)** : contrat partagé
+  DeathMapResponse + conversion cells->Grid (packages/shared-types/src/spatial-grid.ts),
+  agrégat pur sans DB apps/api/src/lib/death-map-aggregate.ts (filtre de couche,
+  buckets de position, hotspots 4-connexes, split hero/other, carte non calibrée
+  -> cells vides) et route GET /spatial/death-map (scopée compte via
+  accountScope ; scope=global autorisé pour la heatmap communautaire). Corrige au
+  passage le masquage préexistant de /spatial/aggregate (deux routeurs /spatial en
+  use("*")) : middleware web par route et routeur web monté avant le daemon. UI :
+  section « Où meurs-tu sur cette carte ? » sur /maps/[mapId]
+  (SpatialDeathAggregateView.vue), filtre héros, états vide/erreur, couche par
+  défaut seulement.
 
 ## À faire
 

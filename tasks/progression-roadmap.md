@@ -277,8 +277,49 @@ Légende : `[ ]` à faire · `[~]` en cours · `[x]` terminé · `[!]` bloqué
 
 ### Lot C — Analyses avancées
 
-- [ ] **C1 — Carte des morts agrégée** · `GET /spatial/death-map`
+- [x] **C1 — Carte des morts agrégée** · `GET /spatial/death-map`
   Où meurs-tu, par héros/carte, à partir de `match_deaths.x/y`. Spec § C1.
+  **Fait** (2026-09-18). Écarts / précisions vs spec :
+  - Le calcul (filtre de couche, position -> cellule, hotspots, split du type
+    de kill, court-circuit carte non calibrée) vit dans un module pur sans DB
+    apps/api/src/lib/death-map-aggregate.ts ; son test est
+    death-map-aggregate.test.ts et non services/death-map.service.test.ts
+    comme listé dans la spec (même scission pure/DB que A1/A3/A4/C4).
+  - La route vit dans routes/spatial-aggregate.ts (pas routes/spatial.ts, qui
+    porte .use("*", authToken) pour le daemon) : /spatial/death-map est une
+    route web session. **Bug préexistant corrigé au passage** : les deux
+    routeurs montés au même préfixe /spatial utilisaient chacun use("*"), donc
+    le authToken du routeur daemon (monté en premier) interceptait aussi
+    /spatial/aggregate et le renvoyait en 401. Les routes web portent
+    désormais leur middleware par route (authSession, requireUser,
+    accountScope) et index.ts monte le routeur web avant le daemon ; les
+    routes daemon (/calibrations, /calibrations/by-layer, /samples) restent
+    gardées par le wildcard Bearer. Vérifié par un probe Hono isolé couvrant
+    les 9 combinaisons web/daemon x auth, puis supprimé.
+  - positionedDeaths ne compte que les morts à x/y finis ; sans calibration
+    pour la couche demandée : calibrated:false, cells:[], clusters:[] et
+    positionedDeaths:0 (critères 1 et 2), mais totalDeaths/matches/
+    killTypeSplit restent honnêtes.
+  - Le filtre de couche est pur : la sentinelle DB "", null et l'absence de
+    couche sont équivalentes (normalizeLayer).
+  - clusters = composantes 4-connexes de cellules occupées, centroïde = la
+    cellule la plus dense, share = morts / positionedDeaths, plafonné à
+    DEATH_MAP_CLUSTER_LIMIT = 8. La grille 128x128 vient de
+    SPATIAL_GRID_COLS/ROWS déclarées dans shared-types (accordées à la
+    constante du daemon).
+  - killTypeSplit ne compte que les killType connus ; une mort de type null
+    n'entre dans aucun bucket et l'UI affiche le reste comme « cause
+    inconnue » (pas de donnée inventée).
+  - Isolation multi-comptes : SQL via scopeConditions (matchPlayers.battletag)
+    + re-vérification pure rowInScope (défense en profondeur), verrouillée par
+    test.
+  - La page /maps/[mapId] gagne une section « Où meurs-tu sur cette carte ? »
+    (SpatialDeathAggregateView.vue) : filtre héros, états vide/erreur
+    (UiStateCard), heatmap des morts. scope=global reste autorisé côté API
+    (heatmap communautaire, comme /spatial/aggregate).
+  - Limite assumée : l'UI ne lit que la couche par défaut (layer omis). Aucun
+    endpoint n'expose la liste des couches calibrées d'une carte ; un
+    sélecteur de couche demanderait une modif d'API hors C1.
 - [ ] **C2 — Onglet Chronologie sur `/matches/[id]`**
   Courbe d'avance/retard d'XP d'équipe (`match_level_snapshots`) + marqueurs
   de morts et de structures. Spec § C2.
