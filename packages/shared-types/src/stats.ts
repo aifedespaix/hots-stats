@@ -449,3 +449,62 @@ export interface TalentAnalyzerResponse {
  * Analyzer is an exploration tool the player tunes themselves rather than a
  * fixed diagnostic. */
 export const TALENT_ANALYZER_MIN_GAMES_DEFAULT = 10;
+// --- Player progression suite (Lot A) ---
+// Design: docs/superpowers/specs/2026-09-18-player-progression-design.md
+
+/** Minimum matches before a progression aggregate may state a conclusion
+ * instead of only its raw count. Shared so the API and the web can never
+ * disagree on the gate. */
+export const PROGRESSION_MIN_MATCHES = 20;
+
+/** Minimum matches per side before a period-A-vs-period-B comparison may
+ * state a conclusion. Shared for the same reason. */
+export const PROGRESSION_MIN_PER_SIDE = 10;
+
+/** One match's contribution to the recurring combat-pattern aggregate (A1).
+ * `perMatch` is chronological: it powers the trend line and lets the client
+ * recompute a window without a second round-trip. */
+export interface PatternMatchPoint {
+  matchId: string;
+  playedAt: string;
+  winner: boolean;
+  durationSeconds: number;
+  deaths: number;
+  isFirstDeath: boolean;
+  earlyDeaths: number;
+  outnumberedDeaths: number;
+  staggeredDeaths: number;
+  talentDelayFights: number;
+}
+
+/** Aggregated recurring combat patterns over a set of matches (A1). Every
+ * per-pattern rate exposes its evaluated denominator through the accompanying
+ * counts, and `coverage` records what the underlying replays could not
+ * provide ("what we could not evaluate and why"). */
+export interface PatternAggregate {
+  /** Matches that contributed (all patterns share this denominator unless noted). */
+  matches: number;
+  /** True when matches < PROGRESSION_MIN_MATCHES (20): the UI must show the
+   * count instead of a verdict. */
+  insufficientSample: boolean;
+  firstDeathRate: number;
+  earlyDeathRate: number;
+  outnumberedDeathRate: number;
+  outnumberedDeaths: number;
+  staggeredDeathRate: number;
+  staggeredDeaths: number;
+  talentDelayRate: number;
+  talentDelayFights: number;
+  timeDeadShare: number;
+  deathsPer10Min: number;
+  perMatch: PatternMatchPoint[];
+  coverage: { withTimeline: number; withLevelSnapshots: number; withPositions: number };
+}
+
+export interface PatternsResponse {
+  scope: "personal" | "global";
+  aggregate: PatternAggregate;
+  /** Set when the user filtered by hero/map/date. */
+  filter: { heroId?: string; mapId?: string; from?: string; to?: string };
+}
+
