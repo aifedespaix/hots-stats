@@ -25,10 +25,16 @@ export const useAccountsStore = defineStore("accounts", {
     accountsQueryParam(available: string[], primary: string | null): string | undefined {
       const tags = this.effectiveAccounts(available, primary);
       if (tags.length === 0) return undefined;
-      // BattleTags contain "#", which would truncate the query string as a
-      // fragment -- encode each tag, then comma-join so the API's split(",")
-      // sees exactly what we meant.
-      return tags.map((tag) => encodeURIComponent(tag)).join(",");
+      // Raw tags, comma-joined. Nuxt's useFetch serializes this query object
+      // with ofetch/ufo, which percent-encodes each value exactly once; Hono
+      // then decodes it exactly once on the way in. Pre-encoding here would
+      // therefore double-encode: "aife#21170" would go out as
+      // "aife%252321170" and arrive server-side as the literal "aife%2321170",
+      // which never matches a linked BattleTag -- resolveScope then 400s
+      // ("Compte non lié") and every personal page reads as empty. The "#"
+      // needs no manual escaping: the query object is never rendered into a
+      // URL by hand, so a raw "#" cannot truncate the query string.
+      return tags.join(",");
     },
 
     setSelection(tags: string[]) {

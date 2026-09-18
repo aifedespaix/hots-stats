@@ -35,11 +35,16 @@ describe("useAccountsStore", () => {
     expect(store.effectiveAccounts(["aife#21170"], "aife#21170")).toEqual(["aife#21170"]);
   });
 
-  test("query param is comma-joined and URL-safe", () => {
+  test("query param is the raw tags comma-joined (the fetch layer encodes once)", () => {
     const store = useAccountsStore();
     store.setSelection(available);
+    // Returning pre-encoded tags double-encodes them: Nuxt's useFetch serializes
+    // the query object with ofetch/ufo, so "aife%2321170" hits the wire as
+    // "aife%252321170" and Hono decodes it back to the literal "aife%2321170".
+    // That never matches a linked BattleTag, so resolveScope 400s and every
+    // personal page reads as empty. The store must hand over the raw tag.
     expect(store.accountsQueryParam(available, "aife#21170")).toBe(
-      encodeURIComponent("aife#21170") + "," + encodeURIComponent("JeanPichet#2126"),
+      "aife#21170,JeanPichet#2126",
     );
   });
 
