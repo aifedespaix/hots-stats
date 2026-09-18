@@ -191,8 +191,29 @@ Légende : `[ ]` à faire · `[~]` en cours · `[x]` terminé · `[!]` bloqué
 
 ### Lot B — Hub de progression
 
-- [ ] **B1 — Page `/progress`** · dépend de A1, A3, A4, C4
+- [x] **B1 — Page `/progress`** · dépend de A1, A3, A4, C4
   Tendance, 3 axes de travail, patterns, contexte, liens. Spec § B1.
+  **Fait** (2026-09-18), dans la même session que C4 (prérequis direct de sa
+  section « Ton contexte »). Écarts / précisions vs spec :
+  - **C4 livré dans la même session** (décision explicite de l'utilisateur) :
+    la section 5 de B1 consomme `GET /stats/context`, qui n'existait pas.
+  - La page est **personnelle uniquement** : `/stats/patterns`, `/trend`,
+    `/drivers` et `/context` refusent tous `scope=global` en 400 (décisions
+    A1/A3/A4/C4). Le sélecteur de portée réutilise `UiStatsScopeToggle` et sert
+    de garde honnête : en mode global, la page affiche un état vide expliquant
+    que l'analyse est personnelle, au lieu de déclencher quatre erreurs 400.
+  - Section 6 (liens) : seuls `/analysis` et `/matches` sont liés. Les liens
+    `/carte-morts` (C1) et `/objectifs` (E2) sont **omis** tant que ces pages
+    n'existent pas — pas de lien vers un 404.
+  - `DriverList.vue` (report de A4) n'a pas été créé : la section 3 de B1 est
+    un `WorkAxesCard.vue` (3 axes fiables), comme listé dans la spec B1. Les
+    `TrendChart.vue`/`useProgressionTrend.ts` reportés par A3 sont livrés et
+    fusionnés dans `TrendChart.vue` + `useProgression.ts`.
+  - La comparaison de périodes (A3) est exposée via un champ date optionnel
+    « Comparer deux périodes », à l'intérieur de la période choisie.
+  - `tzOffsetMinutes` est initialisé à 0 côté SSR puis corrigé au montage
+    client (`-new Date().getTimezoneOffset()`) : le rendu serveur n'utilise
+    jamais le fuseau du serveur.
 - [ ] **B2 — Nettoyage du Dashboard**
   Retirer durée moyenne, teasers redondants, grille de navigation desktop ;
   ajouter sparkline, "chantier n°1", résumé de dernière session. Spec § B2.
@@ -209,9 +230,33 @@ Légende : `[ ]` à faire · `[~]` en cours · `[x]` terminé · `[!]` bloqué
   de morts et de structures. Spec § C2.
 - [ ] **C3 — "Ton bourreau"** · `GET /stats/killers`
   Qui te tue, à partir de `match_deaths.killers` et `killType`. Spec § C3.
-- [ ] **C4 — Contexte de victoire** · `GET /stats/context`
+- [x] **C4 — Contexte de victoire** · `GET /stats/context`
   Winrate par heure, jour, rang/taille de session, patch, composition d'équipe.
-  *Débloque E1.* Spec § C4.
+  *Débloque E1.* Spec § C4. **Fait** (2026-09-18). Écarts / précisions vs spec :
+  - Le calcul (clustering de session, 6 dimensions) vit dans un module pur sans
+    DB `apps/api/src/lib/context-aggregate.ts` ; son test est
+    `context-aggregate.test.ts` et non `services/context.service.test.ts`
+    (même scission pure/DB que A1/A3/A4). `context.service.ts` ne fait que
+    scoper/filtrer/assembler les lignes.
+  - `scope=global` refusé en 400 (même règle que A1/A3/A4 : la composition
+    d'équipe exige un sujet). Le scope omis retombe sur les comptes de
+    l'appelant.
+  - Le seuil de session est une constante partagée
+    `CONTEXT_SESSION_GAP_MINUTES = 90` ; le gap est mesuré entre les heures de
+    début (seul repère dérivable sans inventer une heure de fin). 89 min = une
+    session, 91 min = deux.
+  - `tzOffsetMinutes` (offset **est de l'UTC**, ex. UTC+2 = 120) est requis par
+    la route : aucune hypothèse sur le fuseau du serveur. Les buckets utilisent
+    les accesseurs `getUTC*` après décalage.
+  - Les 24 heures et les 7 jours sont toujours présents (buckets vides inclus),
+    chaque bucket non vide portant `gamesPlayed` + `insufficientSample` ; les
+    autres dimensions (`sessionPosition`, `sessionSize`, `patch`,
+    `teamComposition`) ne listent que les buckets observés. Le patch null tombe
+    dans un bucket « Version inconnue ».
+  - `ContextBreakdown.vue` n'affiche que les 3 graphiques nommés par B1 §5
+    (heure, jour, taille de session) + des tableaux compacts pour le rang de
+    session, le patch et la composition — les 6 dimensions restent exposées par
+    l'API pour E1.
 
 ### Lot D — Draft
 

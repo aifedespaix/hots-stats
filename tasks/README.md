@@ -233,6 +233,22 @@ rappelle donc le contexte nécessaire plutôt que de supposer une continuité.
   compte ; filtres mode/héros/carte/période). Écarts : `scope=global` refusé
   en 400, `teamCompHasHealer` non implémenté (C4 pas encore livré), et
   `DriverList.vue` reporté à B1.
+- **Suite Progression — C4 (contexte de victoire)** : contrat partagé
+  `ContextBucket`/`ContextBreakdown`/`ContextResponse` + constante
+  `CONTEXT_SESSION_GAP_MINUTES = 90`, agrégat pur sans DB
+  `apps/api/src/lib/context-aggregate.ts` (6 dimensions : heure, jour, rang et
+  taille de session, patch, composition d'équipe ; buckets sous
+  `PROGRESSION_MIN_MATCHES` flaggés, session = écart de début <= 90 min), service
+  `apps/api/src/services/context.service.ts` et route `GET /stats/context`
+  (scopée compte ; `tzOffsetMinutes` est-de-l'UTC explicite requis ;
+  `scope=global` refusé en 400).
+- **Suite Progression — B1 (hub `/progress`)** : page
+  `apps/web/app/pages/progress.vue` + composants `progress/` (TrendChart,
+  WorkAxesCard, PatternTable, ContextBreakdown) + composable
+  `useProgression.ts`, entrée nav après Diagnostic et carte Dashboard. Écarts :
+  page personnelle uniquement (les 4 endpoints refusent global) ; liens
+  `/carte-morts` et `/objectifs` omis tant que C1/E2 n'existent pas ;
+  `DriverList.vue` remplacé par `WorkAxesCard.vue`.
 
 ## À faire
 
