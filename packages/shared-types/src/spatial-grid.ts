@@ -101,3 +101,69 @@ export function incrementCell(grid: Grid, cellIndex: number): Grid {
 export function cellRowCol(cellIndex: number, cols: number): { col: number; row: number } {
   return { col: cellIndex % cols, row: Math.floor(cellIndex / cols) };
 }
+
+/**
+ * Canonical grid resolution for C1's aggregated death map. Matches the
+ * daemon's SPATIAL_GRID_COLS/SPATIAL_GRID_ROWS (daemon-python/src/constants.py)
+ * and the per-payload spatial.grid every replay carries today, so a death
+ * bucketed here lands in the same cell as the rollup's deathsGrid. Named so
+ * the API reads it from one place instead of hardcoding 128.
+ */
+export const SPATIAL_GRID_COLS = 128;
+export const SPATIAL_GRID_ROWS = 128;
+
+/** How many hotspots DeathMapResponse.clusters keeps (densest first). */
+export const DEATH_MAP_CLUSTER_LIMIT = 8;
+
+/** One grid cell and how many positioned deaths fell in it. */
+export interface DeathMapCell {
+  cellIndex: number;
+  deaths: number;
+}
+
+/**
+ * One contiguous death hotspot. cellIndex is the cluster's peak cell (most
+ * deaths; lowest index on a tie) -- the weighted centroid is not a cell
+ * index, so the peak stands in as the labelled centre. share is
+ * deaths / positionedDeaths (0 when nothing is positioned).
+ */
+export interface DeathMapCluster {
+  cellIndex: number;
+  deaths: number;
+  share: number;
+}
+
+/**
+ * Deaths split by kill_type. A death whose killType is null (unknown) counts
+ * in neither bucket: hero + other may be below totalDeaths, and the UI shows
+ * the remainder as unknown rather than inventing an "other" label.
+ */
+export interface DeathMapKillTypeSplit {
+  hero: number;
+  other: number;
+}
+
+/** GET /spatial/death-map response (spec section C1). */
+export interface DeathMapResponse {
+  mapId: string;
+  layer: string | null;
+  grid: { cols: number; rows: number };
+  totalDeaths: number;
+  matches: number;
+  /** Deaths with a usable x/y only -- the honest denominator. */
+  positionedDeaths: number;
+  cells: DeathMapCell[];
+  /** Cluster centroids, from the existing death-clustering util. */
+  clusters: DeathMapCluster[];
+  killTypeSplit: DeathMapKillTypeSplit;
+  calibrated: boolean;
+}
+
+/** Wire cells array -> the Grid shape the heatmap components consume. */
+export function deathCellsToGrid(cells: DeathMapCell[]): Grid {
+  const grid: Grid = {};
+  for (const cell of cells) {
+    grid[cell.cellIndex] = (grid[cell.cellIndex] ?? 0) + cell.deaths;
+  }
+  return grid;
+}
