@@ -3,7 +3,6 @@ interface AccountSummary {
   winrate: number | null;
   gamesPlayed: number;
   wins: number;
-  avgDurationSeconds: number;
 }
 
 // The summary can be undefined while it's still loading (most callers await
@@ -29,7 +28,10 @@ const props = withDefaults(
       />
       <UiStatTile label="Parties jouées" :value="summary ? String(summary.gamesPlayed) : '-'" />
       <UiStatTile label="Victoires" :value="summary ? String(summary.wins) : '-'" />
-      <UiStatTile label="Durée moyenne" :value="summary ? formatDuration(summary.avgDurationSeconds) : '-'" />
+      <!-- The Dashboard fills this 4th cell (sparkline tile) so the 4-column
+      grid keeps its shape without the removed duration tile. Callers without
+      slot content simply render three tiles. -->
+      <slot />
     </template>
   </div>
 </template>
