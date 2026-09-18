@@ -1,4 +1,10 @@
-import type { HeroMatchupEntry, HeroStatsScope, PlayerEncounterStats, TalentTierStats } from "@hots-stats/shared-types";
+import type {
+  HeroMatchupEntry,
+  HeroStatsScope,
+  NormalizedMetrics,
+  PlayerEncounterStats,
+  TalentTierStats,
+} from "@hots-stats/shared-types";
 import type { StatsSummary } from "./matches";
 
 export interface HeroStats {
@@ -12,6 +18,8 @@ export interface HeroStats {
   avgDeaths: number;
   avgAssists: number;
   avgKillParticipation: number;
+  /** Duration-weighted rates over the same filtered match set (A2). */
+  normalized: NormalizedMetrics;
 }
 
 export interface HeroListResponse {

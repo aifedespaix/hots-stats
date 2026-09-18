@@ -1,4 +1,4 @@
-import type { GameMode } from "@hots-stats/shared-types";
+import type { GameMode, NormalizedMetrics } from "@hots-stats/shared-types";
 import type { MatchTimelineData } from "./coach";
 import type { MatchSpatialData } from "./spatial";
 
@@ -29,6 +29,8 @@ export interface StatsSummary {
   wins: number;
   winrate: number;
   avgDurationSeconds: number;
+  /** Duration-weighted rates over the same filtered match set (A2). */
+  normalized: NormalizedMetrics;
 }
 
 export interface MatchDetailPlayer {
@@ -101,6 +103,8 @@ export interface DashboardOverviewStats {
   avgAssists: number;
   /** (kills+assists)/deaths averaged per game; null when the average death count is 0 (a "perfect" KDA). */
   kda: number | null;
+  /** Duration-weighted rates over the same filtered match set (A2). */
+  normalized: NormalizedMetrics;
 }
 
 export interface DashboardRoleStats {
