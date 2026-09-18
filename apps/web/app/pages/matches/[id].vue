@@ -2,6 +2,7 @@
 import type { MatchDetailResponse } from "~/types/matches";
 import type { ScoreboardRow } from "~/types/coach";
 import type { MatchSlotHero } from "~/types/spatial";
+import type { MatchTimelineInput } from "~/composables/useMatchTimelineSeries";
 
 definePageMeta({ middleware: "auth" });
 
@@ -59,6 +60,7 @@ watch(
 const tabItems = [
   { label: "Statistiques & Scoreboard", icon: "i-heroicons-table-cells", slot: "scoreboard" as const },
   { label: "Heatmaps & Placement", icon: "i-heroicons-viewfinder-circle", slot: "heatmaps" as const },
+  { label: "Chronologie", icon: "i-heroicons-clock", slot: "chronology" as const },
 ];
 
 // --- Tab 1: enriched scoreboard -------------------------------------------
@@ -67,6 +69,23 @@ const scoreboardRows = computed(() => buildScoreboardRows(allPlayers.value, myBa
 const performerBadges = computed(() => topPerformerBadges(scoreboardRows.value));
 const viewerAllyRows = computed(() => scoreboardRows.value.filter((r) => r.isAlly));
 const viewerEnemyRows = computed(() => scoreboardRows.value.filter((r) => !r.isAlly));
+
+// --- Tab 3: chronology -----------------------------------------------------
+
+const timelineInput = computed<MatchTimelineInput>(() => ({
+  timeline: data.value?.timeline ?? null,
+  players: allPlayers.value.map((player) => ({ battletag: player.battletag, team: player.team })),
+  durationSeconds: data.value?.match.durationSeconds ?? 0,
+}));
+
+const { series: timelineSeries, scrubSeconds: timelineScrubSeconds } = useMatchTimelineSeries(timelineInput);
+
+/** The team the viewer played on, so the chronology says "mon équipe" rather
+ * than "équipe 0"; null when the viewer isn't in this match. */
+const viewerTeam = computed<0 | 1 | null>(() => {
+  const mine = scoreboardRows.value.find((row) => row.isMe);
+  return mine ? (mine.team === 0 ? 0 : 1) : null;
+});
 
 // --- Tab 2: spatial analysis ------------------------------------------------
 
@@ -217,6 +236,18 @@ const displayedInsights = computed(() =>
             :my-battletag="authData?.user?.battletag ?? null"
           />
           <CoachHeatmapsPlaceholder v-else :calibrated="data.spatialCalibrated" />
+        </div>
+      </template>
+
+      <template #chronology>
+        <div class="mt-4">
+          <ChartsMatchTimelineChart
+            :series="timelineSeries"
+            :duration-seconds="data.match.durationSeconds"
+            :scrub-seconds="timelineScrubSeconds"
+            :ally-team="viewerTeam"
+            @update:scrub-seconds="timelineScrubSeconds = $event"
+          />
         </div>
       </template>
     </UTabs>
