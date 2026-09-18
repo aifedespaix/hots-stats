@@ -101,7 +101,7 @@ export function buildMatchTimelineSeries(input: MatchTimelineInput): MatchTimeli
         cursors[team]! += 1;
       }
     }
-    if (latest[0] === null || latest[1] === null) continue;
+    if (latest[0] === null || latest[0] === undefined || latest[1] === null || latest[1] === undefined) continue;
     points.push({ atSeconds, team0Level: latest[0], team1Level: latest[1], lead: latest[0] - latest[1] });
   }
 
