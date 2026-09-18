@@ -94,6 +94,13 @@ const statsCards = computed<NavCardConfig[]>(() => [
 
 const progressCards = computed<NavCardConfig[]>(() => [
   {
+    to: "/progress",
+    icon: "i-heroicons-arrow-trending-up",
+    title: "Progression",
+    description: "Tendance, patterns récurrents et axes de travail sur tes parties.",
+    color: "accent",
+  },
+  {
     to: "/analysis",
     icon: "i-heroicons-chart-bar",
     title: "Diagnostic",

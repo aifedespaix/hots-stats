@@ -28,6 +28,7 @@ const navItems = computed<NavItem[]>(() => [
   { to: "/talents", label: "Talents", icon: "i-heroicons-sparkles" },
   { to: "/players", label: "Joueurs", icon: "i-heroicons-user-group" },
   { to: "/analysis", label: "Diagnostic", icon: "i-heroicons-chart-bar" },
+  { to: "/progress", label: "Progression", icon: "i-heroicons-arrow-trending-up" },
   { to: "/friends", label: "Amis", icon: "i-heroicons-users" },
   { to: "/settings", label: "Paramètres", icon: "i-heroicons-cog-6-tooth" },
   ...(isAdmin.value ? [{ to: "/admin", label: "Admin", icon: "i-heroicons-shield-check" }] : []),
