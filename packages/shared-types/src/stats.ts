@@ -635,3 +635,35 @@ export interface ContextResponse {
   breakdowns: ContextBreakdown[];
 }
 
+// --- Player progression suite (C3 — "Ton bourreau") ---
+
+/** One killer identity in the C3 aggregation. `deaths` counts the subject deaths
+ * this identity is credited with; a death with several credited killers counts
+ * once per killer, so per-entry counts can sum above the total (the daemon emits
+ * a single killer today, but the schema stores a list). `killerHeroId` /
+ * `killerHeroName` are null when the credited battletag could not be matched to
+ * the hero it played in that match. */
+export interface KillerEntry {
+  killerBattletag: string | null;
+  killerHeroId: string | null;
+  killerHeroName: string | null;
+  deaths: number;
+  /** Deaths credited to this killer as a share of totalDeaths (0..1). */
+  share: number;
+  /** Winrate of the subject over the matches where this killer killed them. */
+  winrateWhenKilledBy: number;
+}
+
+/** Response for `GET /stats/killers` (C3). `totalDeaths` counts the subject's
+ * death rows inside the requested scope/filters; the unattributed gap is
+ * `totalDeaths - deathsWithKiller` (a death with an empty `killers` list, i.e.
+ * `killType: "other"`). */
+export interface KillersResponse {
+  scope: "personal" | "global";
+  totalDeaths: number;
+  /** Deaths with at least one credited killer battletag. */
+  deathsWithKiller: number;
+  topKillers: KillerEntry[];
+  topKillerHeroes: KillerEntry[];
+}
+
