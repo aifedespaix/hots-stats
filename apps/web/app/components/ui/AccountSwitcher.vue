@@ -36,6 +36,13 @@ const items = computed(() => [
   })),
 ]);
 
+// Reka's `UDropdownMenu` is modal by default, and a modal menu locks the body
+// with `overflow: hidden` while it is open. Because `html` carries
+// `overflow-x: hidden` (see globals.css), that turns <body> into its own scroll
+// container, detaching the `sticky` site header from the viewport: scrolling
+// while the menu is open pushes the header off-screen. A plain account picker
+// never needs a modal focus trap, so opting out keeps the header pinned.
+//
 // Same stale-hydration issue as UiGameModeFilter: the persisted selection is
 // restored while Vue is still hydrating this subtree, so the trigger label can
 // keep a server-rendered value forever unless the subtree is re-rendered once
@@ -48,7 +55,7 @@ onMounted(() => {
 
 <template>
   <div v-if="available.length > 1" :key="renderKey" class="flex items-center">
-    <UDropdownMenu :items="items">
+    <UDropdownMenu :items="items" :modal="false">
       <UButton
         size="xs"
         variant="soft"
