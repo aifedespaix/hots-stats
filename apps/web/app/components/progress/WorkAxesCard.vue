@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { PROGRESSION_MIN_MATCHES, type DriverMetric } from "@hots-stats/shared-types";
 import { selectWorkAxes } from "~/composables/useProgression";
+import { formatDriverMetric } from "~/utils/driverDisplay";
 
 const props = withDefaults(
   defineProps<{
@@ -32,10 +33,6 @@ function drillFor(key: string): string {
   return DRILLS[key] ?? "Regarde ce chiffre de plus près : c'est lui qui sépare le plus tes victoires de tes défaites.";
 }
 
-function formatMetric(key: string, value: number): string {
-  if (key === "timeDeadShare" || key === "firstDeath") return formatPercent(value);
-  return value.toFixed(2);
-}
 </script>
 
 <template>
@@ -71,9 +68,9 @@ function formatMetric(key: string, value: number): string {
 
         <dl class="grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
           <dt class="text-muted">En victoire</dt>
-          <dd class="text-right font-mono">{{ formatMetric(axis.key, axis.meanInWins) }}</dd>
+          <dd class="text-right font-mono">{{ formatDriverMetric(axis.key, axis.meanInWins) }}</dd>
           <dt class="text-muted">En défaite</dt>
-          <dd class="text-right font-mono">{{ formatMetric(axis.key, axis.meanInLosses) }}</dd>
+          <dd class="text-right font-mono">{{ formatDriverMetric(axis.key, axis.meanInLosses) }}</dd>
         </dl>
 
         <p class="text-xs text-muted">
