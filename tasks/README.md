@@ -214,6 +214,15 @@ rappelle donc le contexte nécessaire plutôt que de supposer une continuité.
   sur `/stats/summary`, `/heroes`, `/heroes/:heroId`, `/matches/dashboard`
   et le `ownStats.summary` du profil joueur ; taux pondérés par la durée
   cumulée (jamais une moyenne de ratios), garde durée nulle -> `0`.
+- **Suite Progression — A3 (tendance glissante)** : contrat partagé
+  `TrendPoint`/`PeriodStats`/`TrendResponse`
+  (`packages/shared-types/src/stats.ts`), série pure sans DB
+  `apps/api/src/lib/trend-series.ts` (fenêtre 20, taux pondérés par la durée
+  via `normalizeMetrics`, KDA `null` sans mort) et route `GET /stats/trend`
+  (scopée compte ; filtres mode/héros/carte/période/version ; marqueurs de
+  patch ; comparaison A/B via `compareTo`). Écarts : `scope=global` refusé en
+  400, et `TrendChart.vue`/`useProgressionTrend.ts` reportés à B1 (aucun
+  consommateur avant `/progress`).
 
 ## À faire
 

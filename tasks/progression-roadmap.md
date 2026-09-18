@@ -135,9 +135,33 @@ Légende : `[ ]` à faire · `[~]` en cours · `[x]` terminé · `[!]` bloqué
   - Aucune migration, aucun changement d'UI : l'affichage des nouveaux taux
     relève de B1/B2. Les champs et expressions existants gardent exactement
     leurs valeurs précédentes (changement purement additif).
-- [ ] **A3 — Tendance glissante + comparaison de périodes** · `GET /stats/trend`
+- [x] **A3 — Tendance glissante + comparaison de périodes** · `GET /stats/trend`
   Winrate glissant (fenêtre 20), KDA glissant, morts/10 min glissant,
   marqueurs de patch, comparaison période A vs B. Spec § A3.
+  **Fait** (2026-09-18). Écarts / précisions vs spec :
+  - Le calcul (fenêtre glissante, marqueurs de version, comparaison A/B) vit
+    dans un module pur sans DB `apps/api/src/lib/trend-series.ts` ; son test
+    est donc `trend-series.test.ts` et non `services/trend.service.test.ts`
+    comme listé dans la spec (même scission que A1). `trend.service.ts` ne
+    fait que scoper/filtrer/ordonner les lignes et résoudre le sujet via
+    `resolveSubject`.
+  - `scope=global` refusé en 400 : une tendance communautaire n'a pas de ligne
+    "joueur observé" à agréger (même règle que `/patterns`). Le scope omis
+    retombe sur les comptes de l'appelant.
+  - Les taux par minute sont des taux pondérés par la durée cumulée,
+    réutilisant `normalizeMetrics` (A2) — jamais une moyenne de ratios. Toute
+    durée cumulée non positive retombe sur des taux à `0`.
+  - `rollingKda` et `PeriodStats.kda` valent `null` quand la fenêtre/la
+    période ne contient aucune mort (jamais `Infinity`).
+  - `versionChanges` ne marque que les versions connues (non nulles) : un trou
+    "version inconnue" ne crée pas de marqueur et ne duplique pas celui de la
+    version suivante.
+  - Les deux fichiers web listés dans la spec (`useProgressionTrend.ts`,
+    `TrendChart.vue`) sont reportés à B1 : aucune page ne les consomme tant que
+    `/progress` n'existe pas, et aucun critère d'acceptation A3 ne porte sur
+    l'UI (même arbitrage que A2, qui avait laissé l'affichage à B1/B2).
+  - `GET /matches/trend` n'est pas modifié : `GET /stats/trend` est une
+    nouvelle route, pas un remplacement.
 - [ ] **A4 — Facteurs de victoire** · `GET /stats/drivers`
   Moyennes conditionnelles victoires/défaites + taille d'effet (Cohen's d) +
   n. Pas de modèle ajusté. Spec § A4.
