@@ -567,3 +567,30 @@ export interface TrendResponse {
   versionChanges: Array<{ atIndex: number; gameVersion: string; playedAt: string }>;
 }
 
+/** One metric's win-vs-loss contrast in the A4 outcome-driver analysis. */
+export interface DriverMetric {
+  key: string;
+  /** French display label. */
+  label: string;
+  /** Direction in which the metric is "good" -- drives the colour, not the maths. */
+  betterWhen: "higher" | "lower";
+  meanInWins: number;
+  meanInLosses: number;
+  /** Cohen's d. Positive means the metric is higher in wins. */
+  effectSize: number;
+  winsSample: number;
+  lossesSample: number;
+  /** False when either side has fewer than PROGRESSION_MIN_PER_SIDE (10) matches. */
+  reliable: boolean;
+}
+
+/** Outcome-driver response (A4). `drivers` never carries a metric whose source
+ * data is entirely absent for the scope. */
+export interface DriversResponse {
+  scope: "personal" | "global";
+  matches: number;
+  /** Sorted by |effectSize| descending, reliable entries first. */
+  drivers: DriverMetric[];
+  methodology: string;
+}
+
