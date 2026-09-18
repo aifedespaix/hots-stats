@@ -124,7 +124,7 @@ def test_config_exists_false_before_save_true_after(monkeypatch, tmp_path):
     assert saved == {
         "apiBaseUrl": "https://api.example.com",
         "accessToken": "hots_pat_abc",
-        "replaysDir": str(tmp_path),
+        "hotsDir": str(tmp_path),
         "draftFeatureEnabled": True,
         "draftHotkey": "ctrl+shift+d",
         "autoUpdateEnabled": True,

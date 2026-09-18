@@ -59,3 +59,17 @@ def test_watch_dirs_dedupes_a_repeated_extra(tmp_path):
     dirs = watch_dirs(tmp_path, [extra, extra])
 
     assert [d.path for d in dirs] == [extra]
+
+
+def test_watch_dirs_handles_a_missing_hots_root(tmp_path):
+    """A config that only ever had a legacy single Replays folder has
+    `hots_dir = None` (see `Config.hots_dir`), so there is no root to
+    discover accounts under. `watch_dirs` must still return the configured
+    extras rather than crashing on `None / "Accounts"`."""
+    extra = tmp_path / "elsewhere" / "Replays" / "Multiplayer"
+    extra.mkdir(parents=True)
+
+    dirs = watch_dirs(None, [extra])
+
+    assert [d.path for d in dirs] == [extra]
+    assert dirs[0].toon_handle is None

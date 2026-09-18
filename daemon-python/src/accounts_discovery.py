@@ -65,18 +65,29 @@ def replay_queues(replays_dir: Path) -> list[Path]:
     return queues or [replays_dir]
 
 
-def watch_dirs(hots_dir: Path, extra_replay_dirs: Iterable[Path] = ()) -> list[WatchDir]:
-    """Every directory to watch, deduped, each tagged with its account toon."""
+def watch_dirs(
+    hots_dir: Path | None, extra_replay_dirs: Iterable[Path] = ()
+) -> list[WatchDir]:
+    """Every directory to watch, deduped, each tagged with its account toon.
+
+    `hots_dir` is None when a config only ever had a legacy single `Replays`
+    folder and no HotS root could be derived (see `Config.hots_dir`): there
+    are no accounts to discover, so only the extras are watched. Passing
+    None through to `discover_account_folders` used to crash the daemon at
+    startup (and `python -m src.main --resync`) instead of simply watching
+    the folder that *was* configured.
+    """
     dirs: list[WatchDir] = []
     seen: set[str] = set()
 
-    for folder in discover_account_folders(hots_dir):
-        for queue in replay_queues(folder.replays_dir):
-            key = str(queue)
-            if key in seen:
-                continue
-            seen.add(key)
-            dirs.append(WatchDir(queue, folder.toon_handle))
+    if hots_dir is not None:
+        for folder in discover_account_folders(hots_dir):
+            for queue in replay_queues(folder.replays_dir):
+                key = str(queue)
+                if key in seen:
+                    continue
+                seen.add(key)
+                dirs.append(WatchDir(queue, folder.toon_handle))
 
     for extra in extra_replay_dirs:
         if not extra.is_dir() or str(extra) in seen:

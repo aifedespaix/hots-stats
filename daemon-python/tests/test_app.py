@@ -41,7 +41,9 @@ def test_run_sync_loop_ingests_existing_replays_before_watching(tmp_path):
     assert sorted(ingested) == sorted([a, b])
     assert status.snapshot().found == 2
     watch.assert_called_once()
-    assert watch.call_args.args[0] == tmp_path
+    # Every watch dir is handed over at once (multi-account support), not
+    # as one path per call.
+    assert watch.call_args.args[0] == [tmp_path]
     assert watch.call_args.kwargs["stop_event"] is stop_event
 
 
