@@ -232,6 +232,7 @@ const displayedInsights = computed(() =>
             :grid-rows="spatialGrid.rows"
             :match-heroes="spatialMatchHeroes"
             :match-deaths="data.timeline?.deaths ?? []"
+            :highlight-at-seconds="timelineScrubSeconds"
             :hero-options="spatialHeroOptions"
             :my-battletag="authData?.user?.battletag ?? null"
           />

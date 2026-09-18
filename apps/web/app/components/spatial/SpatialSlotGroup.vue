@@ -29,8 +29,10 @@ const props = withDefaults(
     matchDeaths?: MatchTimelineDeath[];
     heroOptions: { id: string; name: string }[];
     myBattletag?: string | null;
+    /** Timeline scrub position, in seconds, forwarded to every heatmap so the match page's chronology can highlight the deaths around it. */
+    highlightAtSeconds?: number | null;
   }>(),
-  { matchHeroes: () => [], matchDeaths: () => [] },
+  { matchHeroes: () => [], matchDeaths: () => [], highlightAtSeconds: null },
 );
 
 const allowMatchScope = computed(() => props.matchHeroes.length > 0);
@@ -190,6 +192,7 @@ function exportView(heatmapViewRef: { mapContainerEl: HTMLElement | null } | nul
         :layer="activeLayer"
         :grid-cols="effectiveGridCols"
         :grid-rows="effectiveGridRows"
+        :highlight-at-seconds="highlightAtSeconds"
         :layers="slotALayers"
         :marker-clusters="slotAMarkers"
         :kills-grid="matchSlotA ? undefined : historySlotA?.killsGrid.value"
@@ -272,6 +275,7 @@ function exportView(heatmapViewRef: { mapContainerEl: HTMLElement | null } | nul
           :layer="activeLayer"
           :grid-cols="effectiveGridCols"
           :grid-rows="effectiveGridRows"
+          :highlight-at-seconds="highlightAtSeconds"
           :layers="[...slotALayers, ...slotBLayers]"
           :marker-clusters="overlayMarkerClusters"
           :kills-grid="overlayKillsGrid"
@@ -292,6 +296,7 @@ function exportView(heatmapViewRef: { mapContainerEl: HTMLElement | null } | nul
             :layer="activeLayer"
             :grid-cols="effectiveGridCols"
             :grid-rows="effectiveGridRows"
+            :highlight-at-seconds="highlightAtSeconds"
             :layers="slotALayers"
             :marker-clusters="slotAMarkers"
             :kills-grid="matchSlotA ? undefined : historySlotA?.killsGrid.value"
@@ -311,6 +316,7 @@ function exportView(heatmapViewRef: { mapContainerEl: HTMLElement | null } | nul
             :layer="activeLayer"
             :grid-cols="effectiveGridCols"
             :grid-rows="effectiveGridRows"
+            :highlight-at-seconds="highlightAtSeconds"
             :layers="slotBLayers"
             :marker-clusters="slotBMarkers"
             :kills-grid="slotBScope === 'match' ? undefined : historySlotB.killsGrid.value"

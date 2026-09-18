@@ -38,6 +38,8 @@ const props = withDefaults(
     showKills?: boolean;
     showDeaths?: boolean;
     presenceOpacity?: number;
+    /** Timeline scrub position, in seconds -- forwarded to SpatialMarkerLayer so the match page's chronology can highlight the deaths around it. */
+    highlightAtSeconds?: number | null;
   }>(),
   {
     layer: null,
@@ -48,6 +50,7 @@ const props = withDefaults(
     showKills: true,
     showDeaths: true,
     presenceOpacity: 0.75,
+    highlightAtSeconds: null,
   },
 );
 
@@ -125,6 +128,7 @@ function rgbCss(rgb: [number, number, number]): string {
         v-if="markerClusters && (showKills || showDeaths) && naturalHeight > 0"
         :clusters="markerClusters.filter((c) => (c.kind === 'kill' ? showKills : showDeaths))"
         :aspect-ratio="naturalWidth / naturalHeight"
+        :highlight-at-seconds="highlightAtSeconds"
         @select-cluster="(c) => emit('select-cluster', c)"
       />
     </div>

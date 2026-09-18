@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { SpatialEventCluster } from "~/utils/deathClustering";
+import { isClusterHighlighted, type SpatialEventCluster } from "~/utils/deathClustering";
 import { DEATH_MARKER_RGB, KILL_MARKER_RGB } from "~/utils/spatialColors";
 
 /**
@@ -15,8 +15,10 @@ const props = withDefaults(
     clusters: SpatialEventCluster[];
     /** `naturalWidth / naturalHeight` of the map image -- most HotS maps aren't square, so drawing a marker's own geometry directly in the (non-uniformly stretched, see below) viewBox would distort it into an ellipse/rhombus. Each marker's `<g>` counter-scales its local Y axis by this ratio so its shape stays visually undistorted regardless of the map's aspect ratio. */
     aspectRatio?: number;
+    /** Timeline scrub position, in seconds; clusters within the clustering window of it are emphasised. Null = nothing highlighted. */
+    highlightAtSeconds?: number | null;
   }>(),
-  { aspectRatio: 1 },
+  { aspectRatio: 1, highlightAtSeconds: null },
 );
 
 const emit = defineEmits<{ "select-cluster": [cluster: SpatialEventCluster] }>();
@@ -46,9 +48,21 @@ function colorFor(kind: SpatialEventCluster["kind"]): string {
       v-for="(cluster, i) in props.clusters"
       :key="i"
       class="pointer-events-auto cursor-pointer"
-      :transform="`translate(${cluster.x} ${toSvgY(cluster.y)}) scale(1 ${aspectRatio})`"
+      :transform="'translate(' + cluster.x + ' ' + toSvgY(cluster.y) + ') scale(1 ' + aspectRatio + ')'"
+      :opacity="highlightAtSeconds === null || isClusterHighlighted(cluster, highlightAtSeconds) ? 1 : 0.25"
       @click="emit('select-cluster', cluster)"
     >
+      <!-- Ring on the cluster the chronology scrubber is currently over. -->
+      <circle
+        v-if="isClusterHighlighted(cluster, highlightAtSeconds)"
+        cx="0"
+        cy="0"
+        r="0.028"
+        fill="none"
+        stroke="white"
+        stroke-width="0.004"
+        vector-effect="non-scaling-stroke"
+      />
       <!-- Kills: triangle. Deaths: diamond. Shape carries the kind so color alone isn't the only signal (accessibility). Coordinates below are local to this marker's own (undistorted) frame. -->
       <polygon
         v-if="cluster.kind === 'kill'"

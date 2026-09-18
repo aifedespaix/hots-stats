@@ -100,3 +100,21 @@ export function clusterSpatialEvents(
     points: members,
   }));
 }
+
+/** How close (seconds) a cluster's mean timestamp must be to the chronology
+ * scrub position for the heatmap to highlight it -- the same 8s window the
+ * clustering itself uses, so a highlighted blob is a real cluster, not a
+ * coincidental neighbour. */
+export const HIGHLIGHT_WINDOW_SECONDS = CLUSTER_TIME_WINDOW_SECONDS;
+
+/**
+ * True when `cluster` happened within `HIGHLIGHT_WINDOW_SECONDS` of the
+ * timeline's scrub position. A null/absent position highlights nothing.
+ */
+export function isClusterHighlighted(
+  cluster: SpatialEventCluster,
+  atSeconds: number | null | undefined,
+): boolean {
+  if (atSeconds === null || atSeconds === undefined || !Number.isFinite(atSeconds)) return false;
+  return Math.abs(cluster.atSeconds - atSeconds) <= HIGHLIGHT_WINDOW_SECONDS;
+}

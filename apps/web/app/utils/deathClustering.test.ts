@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MatchTimelineDeath } from "~/types/coach";
-import { buildSpatialEventPoints, clusterSpatialEvents, type SpatialEventPoint } from "./deathClustering";
+import { buildSpatialEventPoints, clusterSpatialEvents, isClusterHighlighted, type SpatialEventPoint } from "./deathClustering";
 
 function point(overrides: Partial<SpatialEventPoint> = {}): SpatialEventPoint {
   return { kind: "death", battletag: "Foo#1111", atSeconds: 0, x: 0.5, y: 0.5, layer: null, ...overrides };
@@ -74,5 +74,24 @@ describe("clusterSpatialEvents", () => {
     expect(clusters[0]!.atSeconds).toBeCloseTo(102);
     expect(clusters[0]!.x).toBeCloseTo(0.42);
     expect(clusters[0]!.y).toBeCloseTo(0.42);
+  });
+});
+
+describe("isClusterHighlighted", () => {
+  const cluster = { kind: "death" as const, x: 0.5, y: 0.5, atSeconds: 100, points: [point({ atSeconds: 100 })] };
+
+  it("highlights a cluster within the window of the scrubbed time", () => {
+    expect(isClusterHighlighted(cluster, 100)).toBe(true);
+    expect(isClusterHighlighted(cluster, 108)).toBe(true);
+  });
+
+  it("does not highlight a cluster outside the window", () => {
+    expect(isClusterHighlighted(cluster, 109)).toBe(false);
+    expect(isClusterHighlighted(cluster, 50)).toBe(false);
+  });
+
+  it("highlights nothing while the scrubber has no position", () => {
+    expect(isClusterHighlighted(cluster, null)).toBe(false);
+    expect(isClusterHighlighted(cluster, undefined)).toBe(false);
   });
 });
