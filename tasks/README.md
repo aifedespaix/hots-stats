@@ -281,6 +281,12 @@ rappelle donc le contexte nécessaire plutôt que de supposer une continuité.
   (taille = morts groupées), marqueurs de structures best-effort, curseur
   partagé avec l'onglet Heatmaps (`highlightAtSeconds`) et état explicite
   « Données de niveau absentes ». Aucun changement d'API/DB ; SVG maison.
+- **Suite Progression — C3 (ton bourreau)** : contrat partagé
+  `KillerEntry`/`KillersResponse`, agrégat pur sans DB
+  `apps/api/src/lib/killer-aggregate.ts` (attribution des morts, top tueurs par
+  battletag et par héros, part des morts, winrate quand tué par ce tueur) et route
+  `GET /stats/killers` (scopée compte ; filtres mode/héros/carte/période ;
+  `scope=global` refusé en 400). Écart : aucune UI (la spec C3 n'en liste pas).
 
 ## À faire
 

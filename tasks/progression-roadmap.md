@@ -343,8 +343,34 @@ Légende : `[ ]` à faire · `[~]` en cours · `[x]` terminé · `[!]` bloqué
     « Données de niveau absentes », pas de graphique vide.
   - Graphique en SVG maison (pas de nouvelle dépendance), comme
     `sparkline.ts` ; alternative textuelle = niveau final + écart.
-- [ ] **C3 — "Ton bourreau"** · `GET /stats/killers`
+- [x] **C3 — "Ton bourreau"** · `GET /stats/killers`
   Qui te tue, à partir de `match_deaths.killers` et `killType`. Spec § C3.
+  **Fait** (2026-09-18). Écarts / précisions vs spec :
+  - Le calcul (attribution des morts, regroupement par tueur et par héros, part,
+    winrate) vit dans un module pur sans DB
+    `apps/api/src/lib/killer-aggregate.ts` ; son test est
+    `killer-aggregate.test.ts` (même scission pure/DB que A1/A3/A4/C1/C4).
+    `killers.service.ts` ne fait que scoper/filtrer/joindre les lignes et
+    résoudre le sujet via `resolveSubject`.
+  - `scope=global` refusé en 400 (même règle que `/patterns`, `/trend`,
+    `/drivers`, `/context` : « qui me tue » n'a pas de sujet communautaire).
+  - `totalDeaths` compte les lignes `match_deaths` du sujet dans le périmètre
+    (la source même de l'attribution, donc `deathsWithKiller <= totalDeaths`
+    toujours) ; le trou non attribué est `totalDeaths - deathsWithKiller`. Une
+    mort `killType: "other"` (killers vide) reste donc dans `totalDeaths` mais
+    sort des deux listes.
+  - Une mort créditée à plusieurs tueurs compte une fois par tueur (le daemon
+    n'en émet qu'un aujourd'hui, le schéma stocke une liste) ;
+    `deathsWithKiller` ne compte la mort qu'une fois.
+  - `topKillerHeroes` n'agrège que les morts `killType: "hero"` dont le tueur a
+    pu être relié à un héros via le roster du match ; un battletag crédité sans
+    héros résolu reste dans `topKillers` avec `killerHeroId`/`killerHeroName`
+    à `null`. Le héros (resp. battletag) représentatif d'une entrée est le plus
+    fréquent, égalité départagée lexicographiquement, pour un tri stable
+    (morts décroissantes puis battletag croissant).
+  - Aucune UI livrée : la spec C3 ne liste aucun fichier web (contrairement à
+    B1/B2/B3/D1/E2/F*), l'endpoint est vérifié au niveau de l'agrégat pur comme
+    A1/A3/A4. Aucune migration, aucune dépendance nouvelle.
 - [x] **C4 — Contexte de victoire** · `GET /stats/context`
   Winrate par heure, jour, rang/taille de session, patch, composition d'équipe.
   *Débloque E1.* Spec § C4. **Fait** (2026-09-18). Écarts / précisions vs spec :
