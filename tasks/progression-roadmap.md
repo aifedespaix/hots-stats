@@ -162,9 +162,32 @@ Légende : `[ ]` à faire · `[~]` en cours · `[x]` terminé · `[!]` bloqué
     l'UI (même arbitrage que A2, qui avait laissé l'affichage à B1/B2).
   - `GET /matches/trend` n'est pas modifié : `GET /stats/trend` est une
     nouvelle route, pas un remplacement.
-- [ ] **A4 — Facteurs de victoire** · `GET /stats/drivers`
+- [x] **A4 — Facteurs de victoire** · `GET /stats/drivers`
   Moyennes conditionnelles victoires/défaites + taille d'effet (Cohen's d) +
   n. Pas de modèle ajusté. Spec § A4.
+  **Fait** (2026-09-18). Écarts / précisions vs spec :
+  - Le calcul (définitions des métriques, d de Cohen, tri) vit dans un module
+    pur sans DB `apps/api/src/lib/driver-analysis.ts` ; son test est
+    `driver-analysis.test.ts` et non `services/drivers.service.test.ts` comme
+    listé dans la spec (même scission pure/DB que A1 et A3).
+    `drivers.service.ts` ne fait que scoper/filtrer/assembler les lignes.
+  - `scope=global` refusé en 400 : "quels de mes chiffres corrèlent avec mes
+    victoires ?" n'a pas de sujet communautaire cohérent (même règle que
+    `/patterns` et `/trend`). Le scope omis retombe sur les comptes de
+    l'appelant.
+  - `teamCompHasHealer` (données C4) n'est pas implémenté : C4 n'existe pas
+    encore, et un chiffre sans source est un bug.
+  - `avgHeroLevelAt10Min` n'est lu que pour les parties d'au moins 10 minutes
+    (sinon le "niveau à 10 min" d'une partie écourtée serait une donnée
+    inventée) ; toute métrique dont la source est absente du scope est omise
+    (critère d'acceptation 5), jamais renvoyée à zéro.
+  - `DriverList.vue` reporté à B1 : aucune page ne le consomme tant que
+    `/progress` n'existe pas (même arbitrage que A2/A3).
+  - d de Cohen : écart des moyennes / écart-type regroupé. Quand la variance
+    regroupée est nulle mais que les moyennes diffèrent (séparation parfaite),
+    le signe de la différence est renvoyé (±1) pour ne pas perdre la direction
+    sans inventer de magnitude ; distributions identiques -> `0`, jamais
+    `NaN`/`Infinity`.
 
 ### Lot B — Hub de progression
 

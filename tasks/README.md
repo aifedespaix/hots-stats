@@ -224,6 +224,16 @@ rappelle donc le contexte nécessaire plutôt que de supposer une continuité.
   400, et `TrendChart.vue`/`useProgressionTrend.ts` reportés à B1 (aucun
   consommateur avant `/progress`).
 
+- **Suite Progression — A4 (facteurs de victoire)** : contrat partagé
+  `DriverMetric`/`DriversResponse` (`packages/shared-types/src/stats.ts`),
+  analyse pure sans DB `apps/api/src/lib/driver-analysis.ts` (métriques
+  earlyDeaths/deathsPer10Min/firstDeath/outnumberedDeaths/xpPerMinute/
+  heroDamagePerMinute/killParticipation/timeDeadShare/avgHeroLevelAt10Min,
+  d de Cohen, tri fiables d'abord) et route `GET /stats/drivers` (scopée
+  compte ; filtres mode/héros/carte/période). Écarts : `scope=global` refusé
+  en 400, `teamCompHasHealer` non implémenté (C4 pas encore livré), et
+  `DriverList.vue` reporté à B1.
+
 ## À faire
 
 Tous les epics du roadmap initial (1 à 6), plus les Epics 7 à 9, sont
