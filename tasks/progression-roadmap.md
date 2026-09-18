@@ -86,12 +86,32 @@ Légende : `[ ]` à faire · `[~]` en cours · `[x]` terminé · `[!]` bloqué
 
 ### Lot A — Socle d'agrégation (prérequis de B1)
 
-- [ ] **A1 — Patterns de combat récurrents** · `GET /stats/patterns`
+- [x] **A1 — Patterns de combat récurrents** · `GET /stats/patterns`
   Extrait les règles pures de `coachAnalysis.ts` vers
   `packages/shared-types/src/coach-rules.ts` (source unique partagée web/API),
   puis agrège sur N parties : première mort, morts < 5 min, sous-nombre,
   staggering, retard de palier, temps mort, morts/10 min.
   *Bloque B1 et B3.* Spec § A1.
+  **Fait** (2026-09-18). Écarts / précisions vs spec :
+  - `GET /stats/patterns` refuse `scope=global` en 400 : un agrégat de
+    patterns n'a pas de sujet cohérent à l'échelle communautaire (aucune ligne
+    "joueur observé"), donc on ne fabrique pas de série. Le scope omis retombe
+    toujours sur les comptes de l'appelant.
+  - L'agrégat pur vit dans `apps/api/src/lib/pattern-aggregate.ts` (sans
+    import DB, donc testable sans `DATABASE_URL`) ; `patterns.service.ts` ne
+    fait que scoper/filtrer/assembler les lignes. `bun test apps/api` couvre
+    l'agrégat et `resolveSubject` (isolation multi-comptes).
+  - `earlyDeathsCount` n'évalue que les parties ayant un journal de morts ET
+    durant >= 300 s (la fenêtre n'a sinon pas eu lieu) : une partie sans
+    timeline ne compte jamais comme "pas de première mort".
+  - Constantes nommées dans `coach-rules.ts` :
+    `EARLY_DEATH_BEFORE_SECONDS = 300`, `RESPAWN_ESTIMATE_SECONDS = 25`
+    (= `RESPAWN_PRESENCE_WINDOW_SECONDS`).
+  - `PROGRESSION_MIN_PER_SIDE` est déclarée dans `shared-types` (règle
+    transverse) mais pas encore consommée : A1 n'utilise que
+    `PROGRESSION_MIN_MATCHES`.
+  - Le chantier ne livre aucune page (le hub `/progress` est B1) : l'endpoint
+    est vérifié au niveau de l'agrégat, pas via une UI.
 - [ ] **A2 — Normalisation par durée**
   XP/min, dégâts/min, soins/min, morts/10 min, pondérés par durée (jamais une
   moyenne de ratios). Branché sur `/stats/summary`, `/heroes`,

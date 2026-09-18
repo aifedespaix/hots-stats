@@ -200,6 +200,14 @@ rappelle donc le contexte nécessaire plutôt que de supposer une continuité.
   portée réutilise le composable `useHeroStatsScope()` partagé par le
   reste de l'app (persisté sur le compte) plutôt qu'un état local à la
   section.
+- **Suite Progression — A1 (patterns de combat récurrents)** : règles de
+  combat extraites dans `packages/shared-types/src/coach-rules.ts`
+  (source unique partagée web/API), agrégat pur sans DB
+  `apps/api/src/lib/pattern-aggregate.ts` et route `GET /stats/patterns`
+  (scopée compte, filtres mode/héros/carte/période) ; le coach web délègue
+  désormais à ces règles, verrouillé par un test de non-régression des 6
+  piliers. Écart : `scope=global` refusé en 400 (pas de sujet cohérent pour
+  un agrégat communautaire).
 
 ## À faire
 
