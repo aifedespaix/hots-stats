@@ -7,6 +7,7 @@ import { accountsQuerySchema, withStatsScope } from "../lib/account-selection";
 import { gameModeListSchema, gameVersionListSchema } from "../lib/query";
 import { accountScope } from "../middleware/account-scope";
 import { authSession, requireUser } from "../middleware/auth-session";
+import { getContext } from "../services/context.service";
 import { getDrivers } from "../services/drivers.service";
 import { getPatterns } from "../services/patterns.service";
 import { getStatsSummary } from "../services/stats.service";
@@ -51,6 +52,20 @@ const driversQuerySchema = z.object({
   mapId: z.string().optional(),
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
+});
+
+const contextQuerySchema = z.object({
+  scope: heroStatsScopeSchema.optional(),
+  accounts: accountsQuerySchema,
+  mode: gameModeListSchema.optional(),
+  heroId: z.string().optional(),
+  mapId: z.string().optional(),
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+  // Offset east of UTC (UTC+2 -> 120), sent explicitly by the web client so the
+  // buckets never depend on the server's own timezone. Required: an omitted
+  // value would silently bucket everyone at UTC.
+  tzOffsetMinutes: z.coerce.number().int().min(-840).max(840),
 });
 
 export const statsRoute = new Hono<Env>()
@@ -130,5 +145,34 @@ export const statsRoute = new Hono<Env>()
         from: parsed.data.from,
         to: parsed.data.to,
       }),
+    );
+  })
+  .get("/context", async (c) => {
+    const parsed = contextQuerySchema.safeParse(c.req.query());
+    if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+
+    // Context buckets are personal for the same reason as /patterns, /trend and
+    // /drivers: team composition needs a subject. An explicit global scope is
+    // refused; an omitted scope falls back to the caller's own accounts.
+    const scope = withStatsScope(c.get("scope"), parsed.data.scope ?? "personal");
+    if (scope.mode === "global") {
+      return c.json(
+        { error: "Le contexte de victoire n'est disponible que pour ton profil (scope=personal)." },
+        400,
+      );
+    }
+
+    return c.json(
+      await getContext(
+        scope,
+        {
+          mode: parsed.data.mode,
+          heroId: parsed.data.heroId,
+          mapId: parsed.data.mapId,
+          from: parsed.data.from,
+          to: parsed.data.to,
+        },
+        parsed.data.tzOffsetMinutes,
+      ),
     );
   });
