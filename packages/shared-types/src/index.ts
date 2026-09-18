@@ -2,6 +2,7 @@ export * from "./account";
 export * from "./replay-payload";
 export * from "./match-filters";
 export * from "./stats";
+export * from "./sessions";
 export * from "./coach-rules";
 export * from "./draft";
 export * from "./daemon-error";

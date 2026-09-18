@@ -1,10 +1,11 @@
 import {
-  CONTEXT_SESSION_GAP_MINUTES,
   PROGRESSION_MIN_MATCHES,
   UNKNOWN_GAME_VERSION,
+  sessionizeMatches,
   type ContextBreakdown,
   type ContextBucket,
   type ContextResponse,
+  type SessionPlacement,
 } from "@hots-stats/shared-types";
 
 /** One scope-resolved match feeding the C4 context breakdown. */
@@ -17,14 +18,6 @@ export interface ContextMatchInput {
   /** Role counts on the subject's OWN team only (heroes.role -> count); heroes
    * with an unknown role are keyed "unknown". */
   teamRoleCounts: Record<string, number>;
-}
-
-/** Where a match sits inside its session. */
-export interface SessionPlacement {
-  /** 1-based rank of the match within its session. */
-  position: number;
-  /** Number of matches in that session. */
-  size: number;
 }
 
 const ROLE_ORDER = ["Tank", "Bruiser", "RangedAssassin", "MeleeAssassin", "Healer", "Support", "unknown"] as const;
@@ -64,42 +57,6 @@ function groupBy<T, K>(items: T[], key: (item: T) => K): Map<K, T[]> {
  * server's own timezone. */
 function localDate(playedAt: string, tzOffsetMinutes: number): Date {
   return new Date(Date.parse(playedAt) + tzOffsetMinutes * 60_000);
-}
-
-/**
- * Clusters consecutive matches whose start times are at most `gapMinutes` apart
- * into sessions (89 minutes apart = one session, 91 = two). Pure and
- * deterministic: the set is sorted first, so input order does not matter. The
- * start-time gap is the only boundary derivable from the stored timestamps
- * without inventing an end time.
- */
-export function sessionizeMatches(
-  matches: Array<{ matchId: string; playedAt: string }>,
-  gapMinutes: number = CONTEXT_SESSION_GAP_MINUTES,
-): Map<string, SessionPlacement> {
-  const ordered = [...matches].sort(
-    (a, b) => Date.parse(a.playedAt) - Date.parse(b.playedAt) || a.matchId.localeCompare(b.matchId),
-  );
-  const gapMs = gapMinutes * 60_000;
-  const sessions: string[][] = [];
-  let current: string[] = [];
-  let previousMs: number | null = null;
-  for (const entry of ordered) {
-    const ms = Date.parse(entry.playedAt);
-    if (previousMs !== null && ms - previousMs > gapMs && current.length > 0) {
-      sessions.push(current);
-      current = [];
-    }
-    current.push(entry.matchId);
-    previousMs = ms;
-  }
-  if (current.length > 0) sessions.push(current);
-
-  const placements = new Map<string, SessionPlacement>();
-  for (const session of sessions) {
-    session.forEach((matchId, index) => placements.set(matchId, { position: index + 1, size: session.length }));
-  }
-  return placements;
 }
 
 function bucket(key: string, label: string, matches: ContextMatchInput[]): ContextBucket {
