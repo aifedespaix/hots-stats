@@ -249,6 +249,13 @@ rappelle donc le contexte nécessaire plutôt que de supposer une continuité.
   page personnelle uniquement (les 4 endpoints refusent global) ; liens
   `/carte-morts` et `/objectifs` omis tant que C1/E2 n'existent pas ;
   `DriverList.vue` remplacé par `WorkAxesCard.vue`.
+- **Suite Progression — B2 (nettoyage du Dashboard)** : tuile « Durée moyenne »
+  et teasers point fort/faible retirés, grille de navigation masquée dès `lg`,
+  ajout de la sparkline `ProgressSparklineTile`, de la carte « Ton chantier n°1 »
+  et du résumé « Dernière session » (`SessionSummaryCard`) ; clustering de
+  session partagé via `packages/shared-types/src/sessions.ts`. Écarts :
+  « Dernière session » dérivée de `/stats/trend` (E1 pas encore livré) ;
+  `StatsAccountSummaryStats` rend 3 tuiles + slot côté autres appelants.
 
 ## À faire
 

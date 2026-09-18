@@ -214,9 +214,40 @@ Légende : `[ ]` à faire · `[~]` en cours · `[x]` terminé · `[!]` bloqué
   - `tzOffsetMinutes` est initialisé à 0 côté SSR puis corrigé au montage
     client (`-new Date().getTimezoneOffset()`) : le rendu serveur n'utilise
     jamais le fuseau du serveur.
-- [ ] **B2 — Nettoyage du Dashboard**
+- [x] **B2 — Nettoyage du Dashboard**
   Retirer durée moyenne, teasers redondants, grille de navigation desktop ;
   ajouter sparkline, "chantier n°1", résumé de dernière session. Spec § B2.
+  **Fait** (2026-09-18). Écarts / précisions vs spec :
+  - Le clustering de session (règle des 90 min) a été déplacé de
+    `apps/api/src/lib/context-aggregate.ts` vers
+    `packages/shared-types/src/sessions.ts` (`clusterSessions` /
+    `sessionizeMatches`) : la carte « Dernière session » du Dashboard et le
+    breakdown C4 partagent désormais une seule implémentation, comme l'exige la
+    règle « une règle = un seul endroit ». `context-aggregate.test.ts` ne teste
+    plus le clustering (désormais couvert par `sessions.test.ts`).
+  - « Dernière session » est dérivée des points de `GET /stats/trend`, déjà
+    appelé pour la sparkline : E1 (`/stats/session`) n'existe pas encore. La
+    session affichée est le dernier cluster de parties à <= 90 min d'écart, et
+    la série A3 couvre tout l'historique scopé (pas de troncature liée à
+    `pageSize`). Quand E1 arrivera, la carte pourra être branchée dessus.
+  - `StatsAccountSummaryStats` perd sa tuile « Durée moyenne » et expose un
+    slot pour la 4e tuile : le Dashboard y place `ProgressSparklineTile`
+    (grille toujours à 4 tuiles, pas de décalage de colonnes). Les autres
+    appelants (profil public, amis, joueurs) affichent 3 tuiles — conséquence
+    assumée de la suppression demandée ; aucune donnée n'est perdue.
+  - Le Dashboard garde un seul `GET /stats/summary` + un seul
+    `GET /matches?pageSize=8` ; s'y ajoutent `GET /stats/trend` (sparkline +
+    dernière session, un seul appel partagé) et `GET /stats/drivers` (chantier
+    n°1). La sparkline ne refait pas l'appel, et aucun des deux nouveaux appels
+    n'est attendu en SSR : la charge de base reste identique.
+  - La grille de navigation est masquée à partir de `lg` (`lg:hidden`) : la
+    sidebar couvre déjà toutes les destinations ; sous `lg` la barre mobile est
+    limitée à 4 liens, les cartes restent donc la navigation principale.
+  - Sparkline en SVG maison (pas de nouvelle dépendance) : géométrie pure
+    testée dans `app/utils/sparkline.ts`, domaine y fixe 0-100 % pour ne pas
+    exagérer visuellement une petite variation.
+  - Le teaser « Tes parties uploadées » est conservé (non redondant avec les
+    axes de travail) ; seuls les deux teasers point fort/faible sont retirés.
 - [ ] **B3 — Extension de `/analysis`** · dépend de A1, A4
   Intégrer patterns + drivers au Diagnostic, supprimer le stub "winrate par
   carte". Spec § B3.
