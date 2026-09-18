@@ -525,3 +525,45 @@ export interface PatternsResponse {
   filter: { heroId?: string; mapId?: string; from?: string; to?: string };
 }
 
+/** Default rolling window (in games) for the A3 trend series. Shared so the
+ * API default and the web's later chart/legend cannot disagree. */
+export const DEFAULT_TREND_WINDOW = 20;
+
+/** One match's point on the rolling trend (A3). */
+export interface TrendPoint {
+  matchId: string;
+  playedAt: string;
+  winner: boolean;
+  /** 1-based index within the returned series. */
+  index: number;
+  /** Rolling winrate over the last window games; null before it fills. */
+  rollingWinrate: number | null;
+  /** Rolling KDA over the same trailing window; null before it fills or when
+   * the window has no death (never Infinity). */
+  rollingKda: number | null;
+  /** Rolling deaths per 10 minutes in the same trailing window; null before it
+   * fills. Duration-weighted, like every A2 rate. */
+  rollingDeathsPer10Min: number | null;
+  gameVersion: string | null;
+}
+
+/** Duration-weighted aggregate over one period of the series (A3). kda is
+ * null when the period has no death -- never Infinity. */
+export interface PeriodStats {
+  gamesPlayed: number;
+  winrate: number;
+  kda: number | null;
+  deathsPer10Min: number;
+  xpPerMinute: number;
+}
+
+/** Rolling trend response (A3). `comparison` is present only when the caller
+ * passed a comparison boundary; `versionChanges` marks every known
+ * gameVersion change inside the series. */
+export interface TrendResponse {
+  window: number;
+  points: TrendPoint[];
+  comparison?: { label: string; from: string; to: string; stats: PeriodStats }[];
+  versionChanges: Array<{ atIndex: number; gameVersion: string; playedAt: string }>;
+}
+
