@@ -52,8 +52,11 @@ app.route("/maps", mapsRoute);
 app.route("/talent-analyzer", talentAnalyzerRoute);
 app.route("/public", publicRoute);
 app.route("/_internal", internalRoute);
-app.route("/spatial", spatialRoute);
+// The dashboard /spatial router is mounted first so its exact routes win
+// over the daemon router's use("*") Bearer middleware; the daemon's wildcard
+// still guards every other /spatial path. See routes/spatial-aggregate.ts.
 app.route("/spatial", spatialAggregateRoute);
+app.route("/spatial", spatialRoute);
 app.route("/admin/spatial", adminSpatialRoute);
 
 startQuarantineVerificationJob();
