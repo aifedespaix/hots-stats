@@ -26,8 +26,8 @@ function select(value: HeroStatsScope) {
 </script>
 
 <template>
-  <div class="flex flex-col gap-3 rounded-lg border border-border bg-surface px-4 py-3 sm:flex-row sm:items-center">
-    <div class="flex-1">
+  <div class="flex min-w-0 flex-col gap-3 rounded-lg border border-border bg-surface px-4 py-3 sm:flex-row sm:items-center">
+    <div class="min-w-0 flex-1">
       <p class="text-sm font-medium">Portée des statistiques</p>
       <p class="text-xs text-muted">
         {{ isGlobal ? "Toutes les parties enregistrées par l'application" : personalDescription }}
@@ -35,7 +35,7 @@ function select(value: HeroStatsScope) {
     </div>
 
     <div
-      class="flex shrink-0 items-center gap-1 rounded-full border border-border bg-elevated p-1"
+      class="flex shrink-0 flex-wrap items-center gap-1 rounded-full border border-border bg-elevated p-1"
       role="group"
       aria-label="Portée des statistiques"
     >

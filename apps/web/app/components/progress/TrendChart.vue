@@ -2,8 +2,14 @@
 import type { TrendResponse } from "@hots-stats/shared-types";
 
 const props = withDefaults(
-  defineProps<{ trend?: TrendResponse | null; loading?: boolean; error?: boolean }>(),
-  { trend: null, loading: false, error: false },
+  defineProps<{
+    trend?: TrendResponse | null;
+    loading?: boolean;
+    error?: boolean;
+    /** Forwarded to `UiPanel`: false lets the panel grow with the page instead of scrolling on its own. */
+    scrollable?: boolean;
+  }>(),
+  { trend: null, loading: false, error: false, scrollable: true },
 );
 
 const themeColor = useChartThemeColor();
@@ -96,7 +102,7 @@ const isEmpty = computed(() => !props.loading && !props.error && points.value.le
 </script>
 
 <template>
-  <UiPanel title="Tendance" :count="points.length">
+  <UiPanel title="Tendance" :count="points.length" :scrollable="scrollable">
     <UiStateCard v-if="loading" state="loading" size="sm" />
     <UiStateCard v-else-if="error" state="error" size="sm" message="Impossible de charger la tendance." />
     <UiStateCard
@@ -106,7 +112,7 @@ const isEmpty = computed(() => !props.loading && !props.error && points.value.le
       message="Aucune partie pour cette période — la tendance apparaîtra après quelques games."
     />
     <div v-else class="space-y-3">
-      <div class="h-64">
+      <div class="h-64 w-full min-w-0">
         <ChartsLineChart :data="chartData" :options="chartOptions" />
       </div>
 
@@ -132,7 +138,7 @@ const isEmpty = computed(() => !props.loading && !props.error && points.value.le
           <div
             v-for="period in comparison"
             :key="period.label"
-            class="rounded-lg border border-border bg-background p-3 text-sm"
+            class="min-w-0 rounded-lg border border-border bg-background p-3 text-sm"
           >
             <p class="font-medium">{{ period.label }}</p>
             <dl class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">

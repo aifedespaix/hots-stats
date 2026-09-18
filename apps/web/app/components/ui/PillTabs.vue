@@ -20,7 +20,7 @@ defineEmits<{ (e: "update:modelValue", value: T): void }>();
 
 <template>
   <div
-    class="flex items-center gap-1 border border-border bg-surface p-1"
+    class="flex flex-wrap items-center gap-1 border border-border bg-surface p-1"
     :class="shape === 'pill' ? 'rounded-full' : 'rounded-md'"
   >
     <template v-if="iconOnly">

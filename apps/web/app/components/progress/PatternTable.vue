@@ -2,8 +2,14 @@
 import { PROGRESSION_MIN_MATCHES, type PatternAggregate } from "@hots-stats/shared-types";
 
 const props = withDefaults(
-  defineProps<{ aggregate?: PatternAggregate | null; loading?: boolean; error?: boolean }>(),
-  { aggregate: null, loading: false, error: false },
+  defineProps<{
+    aggregate?: PatternAggregate | null;
+    loading?: boolean;
+    error?: boolean;
+    /** Forwarded to `UiPanel`: false lets the panel grow with the page instead of scrolling on its own. */
+    scrollable?: boolean;
+  }>(),
+  { aggregate: null, loading: false, error: false, scrollable: true },
 );
 
 const columns = [
@@ -45,7 +51,7 @@ const isEmpty = computed(() => !props.loading && !props.error && (props.aggregat
 </script>
 
 <template>
-  <UiPanel title="Tes patterns récurrents" :count="aggregate?.matches ?? 0">
+  <UiPanel title="Tes patterns récurrents" :count="aggregate?.matches ?? 0" :scrollable="scrollable">
     <UiStateCard v-if="loading" state="loading" size="sm" />
     <UiStateCard v-else-if="error" state="error" size="sm" message="Impossible de charger tes patterns." />
     <UiStateCard

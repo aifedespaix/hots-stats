@@ -63,16 +63,16 @@ const { trend, patterns, drivers, context } = useProgression(query);
 </script>
 
 <template>
-  <div class="flex flex-col gap-4">
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-      <div>
+  <div class="flex min-w-0 flex-col gap-4">
+    <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-4">
+      <div class="min-w-0">
         <h1 class="font-heading text-2xl font-semibold">Progression</h1>
         <p class="mt-1 text-sm text-muted">
           Où tu en es et sur quoi travailler : tendance, axes de travail, patterns récurrents et contexte.
         </p>
       </div>
 
-      <UiPillTabs v-model="period" :options="periodOptions" class="shrink-0" />
+      <UiPillTabs v-model="period" :options="periodOptions" />
     </div>
 
     <UiStatsScopeToggle v-model="scope" />
@@ -85,16 +85,20 @@ const { trend, patterns, drivers, context } = useProgression(query);
 
     <template v-else>
       <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-        <p class="text-sm text-muted">
+        <p class="min-w-0 text-sm text-muted">
           Comparer deux périodes (la courbe reste sur la période choisie ci-dessus).
         </p>
-        <UInput v-model="compareTo" type="date" size="sm" class="w-full sm:w-44" />
+        <UInput v-model="compareTo" type="date" size="sm" class="w-full shrink-0 sm:w-44" />
       </div>
 
+      <!-- The hub is a single reading flow: `scrollable: false` keeps each panel
+      at its natural height so the page has exactly one scrollbar, instead of one
+      nested scroll region per panel (which also clipped the charts). -->
       <ProgressTrendChart
         :trend="trend.data.value"
         :loading="trend.pending.value"
         :error="Boolean(trend.error.value)"
+        :scrollable="false"
       />
 
       <ProgressWorkAxesCard
@@ -103,18 +107,21 @@ const { trend, patterns, drivers, context } = useProgression(query);
         :insufficient-sample="(drivers.data.value?.matches ?? 0) < PROGRESSION_MIN_MATCHES"
         :loading="drivers.pending.value"
         :error="Boolean(drivers.error.value)"
+        :scrollable="false"
       />
 
       <ProgressPatternTable
         :aggregate="patterns.data.value?.aggregate ?? null"
         :loading="patterns.pending.value"
         :error="Boolean(patterns.error.value)"
+        :scrollable="false"
       />
 
       <ProgressContextBreakdown
         :context="context.data.value ?? null"
         :loading="context.pending.value"
         :error="Boolean(context.error.value)"
+        :scrollable="false"
       />
 
       <div class="flex flex-wrap gap-3">

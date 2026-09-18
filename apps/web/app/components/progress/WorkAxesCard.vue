@@ -10,8 +10,10 @@ const props = withDefaults(
     insufficientSample?: boolean;
     loading?: boolean;
     error?: boolean;
+    /** Forwarded to `UiPanel`: false lets the panel grow with the page instead of scrolling on its own. */
+    scrollable?: boolean;
   }>(),
-  { drivers: () => [], matches: 0, insufficientSample: true, loading: false, error: false },
+  { drivers: () => [], matches: 0, insufficientSample: true, loading: false, error: false, scrollable: true },
 );
 
 const axes = computed(() => selectWorkAxes(props.drivers));
@@ -36,7 +38,7 @@ function drillFor(key: string): string {
 </script>
 
 <template>
-  <UiPanel title="Tes 3 axes de travail" :count="axes.length">
+  <UiPanel title="Tes 3 axes de travail" :count="axes.length" :scrollable="scrollable">
     <UiStateCard v-if="loading" state="loading" size="sm" />
     <UiStateCard v-else-if="error" state="error" size="sm" message="Impossible de charger les axes de travail." />
     <UiStateCard
@@ -57,7 +59,7 @@ function drillFor(key: string): string {
       <article
         v-for="axis in axes"
         :key="axis.key"
-        class="flex flex-col gap-3 rounded-lg border border-border bg-background p-3 sm:p-4"
+        class="flex min-w-0 flex-col gap-3 rounded-lg border border-border bg-background p-3 sm:p-4"
       >
         <div>
           <p class="font-heading text-sm font-semibold">{{ axis.label }}</p>

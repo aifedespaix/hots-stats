@@ -183,7 +183,11 @@ async function handleLogout() {
         </button>
       </aside>
 
-      <main class="flex-1 p-4 pb-24 sm:p-6 md:pb-6 lg:p-8">
+      <!-- `min-w-0` is what keeps a page-wide overflow contained: without it this
+      flex item's automatic minimum width is its widest descendant (a table, a
+      chart canvas), so it refuses to shrink and the right-hand side of the page
+      is silently clipped by `html { overflow-x: hidden }` instead. -->
+      <main class="min-w-0 flex-1 p-4 pb-24 sm:p-6 md:pb-6 lg:p-8">
         <slot />
       </main>
     </div>

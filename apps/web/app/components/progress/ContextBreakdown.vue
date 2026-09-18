@@ -2,8 +2,14 @@
 import type { ContextBreakdown, ContextBucket, ContextResponse } from "@hots-stats/shared-types";
 
 const props = withDefaults(
-  defineProps<{ context?: ContextResponse | null; loading?: boolean; error?: boolean }>(),
-  { context: null, loading: false, error: false },
+  defineProps<{
+    context?: ContextResponse | null;
+    loading?: boolean;
+    error?: boolean;
+    /** Forwarded to `UiPanel`: false lets the panel grow with the page instead of scrolling on its own. */
+    scrollable?: boolean;
+  }>(),
+  { context: null, loading: false, error: false, scrollable: true },
 );
 
 const themeColor = useChartThemeColor();
@@ -100,7 +106,7 @@ const isEmpty = computed(() => !props.loading && !props.error && (props.context?
 </script>
 
 <template>
-  <UiPanel title="Ton contexte" :count="context?.matches ?? 0">
+  <UiPanel title="Ton contexte" :count="context?.matches ?? 0" :scrollable="scrollable">
     <UiStateCard v-if="loading" state="loading" size="sm" />
     <UiStateCard v-else-if="error" state="error" size="sm" message="Impossible de charger ton contexte." />
     <UiStateCard
@@ -110,32 +116,32 @@ const isEmpty = computed(() => !props.loading && !props.error && (props.context?
       message="Aucune partie pour cette période — le contexte apparaîtra après quelques games."
     />
     <div v-else class="space-y-5">
-      <section>
+      <section class="min-w-0">
         <h3 class="mb-2 font-heading text-sm font-medium">Heure de la journée</h3>
-        <div class="h-56">
+        <div class="h-56 w-full min-w-0">
           <ChartsBarChart :data="hourChart.data" :options="hourChart.options" />
         </div>
         <p class="mt-2 text-sm text-muted">{{ summarize(findBreakdown("hour")) }}</p>
       </section>
 
-      <section>
+      <section class="min-w-0">
         <h3 class="mb-2 font-heading text-sm font-medium">Jour de la semaine</h3>
-        <div class="h-56">
+        <div class="h-56 w-full min-w-0">
           <ChartsBarChart :data="weekdayChart.data" :options="weekdayChart.options" />
         </div>
         <p class="mt-2 text-sm text-muted">{{ summarize(findBreakdown("weekday")) }}</p>
       </section>
 
-      <section>
+      <section class="min-w-0">
         <h3 class="mb-2 font-heading text-sm font-medium">Taille de session</h3>
-        <div class="h-56">
+        <div class="h-56 w-full min-w-0">
           <ChartsBarChart :data="sessionSizeChart.data" :options="sessionSizeChart.options" />
         </div>
         <p class="mt-2 text-sm text-muted">{{ summarize(findBreakdown("sessionSize")) }}</p>
       </section>
 
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <section>
+        <section class="min-w-0">
           <h3 class="mb-2 font-heading text-sm font-medium">Rang dans la session</h3>
           <UiDataTable
             :columns="contextColumns"
@@ -146,7 +152,7 @@ const isEmpty = computed(() => !props.loading && !props.error && (props.context?
           />
         </section>
 
-        <section>
+        <section class="min-w-0">
           <h3 class="mb-2 font-heading text-sm font-medium">Patch</h3>
           <UiDataTable
             :columns="contextColumns"
@@ -158,7 +164,7 @@ const isEmpty = computed(() => !props.loading && !props.error && (props.context?
         </section>
       </div>
 
-      <section>
+      <section class="min-w-0">
         <h3 class="mb-2 font-heading text-sm font-medium">Composition d'équipe</h3>
         <UiDataTable
           :columns="contextColumns"

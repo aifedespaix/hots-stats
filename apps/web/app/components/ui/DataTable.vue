@@ -60,7 +60,7 @@ function toggleSortDir() {
 </script>
 
 <template>
-  <div>
+  <div class="min-w-0">
     <!-- Mobile sort control: table headers aren't visible in card mode, so sorting needs its own control. -->
     <div v-if="sortableColumns.length > 0" class="mb-3 flex items-center gap-2 md:hidden">
       <USelectMenu
@@ -82,7 +82,7 @@ function toggleSortDir() {
     </div>
 
     <!-- Desktop/tablet: standard table -->
-    <div class="hidden overflow-x-auto rounded-lg border border-border md:block">
+    <div class="hidden min-w-0 max-w-full overflow-x-auto rounded-lg border border-border md:block">
       <table class="w-full border-collapse text-sm">
         <thead>
           <tr class="border-b border-border bg-surface">
@@ -141,7 +141,7 @@ function toggleSortDir() {
     </div>
 
     <!-- Mobile: stacked cards -->
-    <div class="space-y-3 md:hidden">
+    <div class="min-w-0 space-y-3 md:hidden">
       <div
         v-for="row in rows"
         :key="String(row[props.rowKey])"
