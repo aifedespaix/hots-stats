@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import type { DriversResponse, TrendResponse } from "@hots-stats/shared-types";
 import type { MatchListResponse, StatsSummary } from "~/types/matches";
-import type { WeaknessesResponse } from "~/types/weaknesses";
 import type { NavCardColor } from "~/components/ui/NavCard.vue";
+import { selectWorkAxes } from "~/composables/useProgression";
 
 definePageMeta({ middleware: "auth" });
 
@@ -141,9 +142,24 @@ const { data: recentMatches } = await useApiFetch<MatchListResponse>("/matches",
   query: { page: 1, pageSize: 8 },
 });
 
-const { data: weaknesses } = await useApiFetch<WeaknessesResponse>("/weaknesses");
-const topLeak = computed(() => (weaknesses.value ? getTopWeaknesses(weaknesses.value, { limit: 1 })[0] : undefined));
-const topStrength = computed(() => (weaknesses.value ? getTopStrengths(weaknesses.value, { limit: 1 })[0] : undefined));
+// Both additive B2 calls are personal for the same reason as `summary` above:
+// the Dashboard must never inherit the global `heroStatsScope` preference.
+// Neither is awaited, so the base load stays the single
+// `/stats/summary` + `/matches?pageSize=8` round-trip it was before B2.
+// `/stats/trend` is fetched once and shared by the sparkline tile and the
+// last-session card; `/stats/drivers` powers the #1 work-axis card.
+const { data: trend, pending: trendPending, error: trendError } = useApiFetch<TrendResponse>(
+  "/stats/trend",
+  { query: { scope: "personal" } },
+);
+const { data: drivers, pending: driversPending, error: driversError } = useApiFetch<DriversResponse>(
+  "/stats/drivers",
+  { query: { scope: "personal" } },
+);
+
+const topAxis = computed(() =>
+  drivers.value ? (selectWorkAxes(drivers.value.drivers)[0] ?? null) : null,
+);
 
 const columns = [
   { key: "playedAt", label: "Date" },
@@ -173,31 +189,43 @@ function goToMatch(row: Record<string, unknown>) {
       compte — envoie les prochaines
     </UiTeaserLink>
 
-    <StatsAccountSummaryStats :summary="summary" />
+    <StatsAccountSummaryStats :summary="summary">
+      <ProgressSparklineTile
+        :trend="trend"
+        :loading="trendPending"
+        :error="Boolean(trendError)"
+      />
+    </StatsAccountSummaryStats>
 
-    <div v-if="topLeak || topStrength" class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <UiStateCard
+        v-if="driversPending && !topAxis"
+        state="loading"
+        size="sm"
+      />
+      <UiStateCard
+        v-else-if="driversError"
+        state="error"
+        size="sm"
+        message="Impossible de charger ton chantier n°1."
+      />
       <UiTeaserLink
-        v-if="topStrength"
-        to="/analysis"
-        icon="i-heroicons-sparkles"
-        tone="success"
-        eyebrow="Ton point fort du moment"
+        v-else
+        to="/progress"
+        icon="i-heroicons-arrow-trending-up"
+        eyebrow="Ton chantier n°1"
       >
-        {{ topStrength.label }}
+        {{ topAxis ? topAxis.label : "Pas encore assez de parties — découvre la page Progression" }}
       </UiTeaserLink>
 
-      <UiTeaserLink
-        v-if="topLeak"
-        to="/analysis"
-        icon="i-heroicons-exclamation-triangle"
-        tone="danger"
-        eyebrow="Ton point faible du moment"
-      >
-        {{ topLeak.label }}
-      </UiTeaserLink>
+      <ProgressSessionSummaryCard
+        :points="trend?.points ?? []"
+        :loading="trendPending"
+        :error="Boolean(trendError)"
+      />
     </div>
 
-    <div class="space-y-6">
+    <div class="space-y-6 lg:hidden">
       <div>
         <h2 class="font-heading text-lg font-medium">Navigation</h2>
         <p class="mt-1 text-sm text-muted">Accède rapidement à toutes les pages de l'application.</p>
