@@ -1,6 +1,6 @@
 import type { DriverMetric } from "@hots-stats/shared-types";
 import { describe, expect, test } from "vitest";
-import { selectWorkAxes } from "./useProgression";
+import { rankedModeQuery, selectWorkAxes } from "./useProgression";
 
 function driver(overrides: Partial<DriverMetric>): DriverMetric {
   return {
@@ -42,5 +42,16 @@ describe("selectWorkAxes", () => {
 
   test("returns an empty list when nothing is reliable", () => {
     expect(selectWorkAxes([driver({ key: "a", reliable: false })])).toEqual([]);
+  });
+});
+
+describe("rankedModeQuery", () => {
+  test("covers exactly the ranked draft modes and no casual one", () => {
+    const modes = rankedModeQuery().mode.split(",");
+    expect(modes).toEqual(["UnrankedDraft", "HeroLeague", "TeamLeague", "StormLeague"]);
+    expect(modes).not.toContain("QuickMatch");
+    expect(modes).not.toContain("ARAM");
+    expect(modes).not.toContain("Brawl");
+    expect(modes).not.toContain("Custom");
   });
 });

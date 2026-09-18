@@ -1,6 +1,11 @@
 <script setup lang="ts">
-import { DRAFT_MIN_RANKED_GAMES_FOR_RANKING, DRAFT_RANKED_MODES } from "@hots-stats/shared-types";
+import {
+  DRAFT_MIN_RANKED_GAMES_FOR_RANKING,
+  type DriversResponse,
+  type PatternsResponse,
+} from "@hots-stats/shared-types";
 import type { WeaknessesResponse } from "~/types/weaknesses";
+import { rankedModeQuery } from "~/composables/useProgression";
 import type { WeaknessTrend } from "~/utils/weaknesses";
 
 definePageMeta({ middleware: "auth" });
@@ -8,10 +13,10 @@ definePageMeta({ middleware: "auth" });
 useSeoMeta({
   title: "Diagnostic",
   description:
-    "Tes points faibles en un coup d'œil : winrate par carte, matchups défavorables et talents sous-performants sur tes parties classées.",
+    "Tes patterns de combat récurrents, ce qui sépare tes victoires de tes défaites, tes matchups défavorables et tes talents sous-performants sur tes parties classées.",
   ogTitle: "Diagnostic - HotS Analytics",
   ogDescription:
-    "Tes points faibles en un coup d'œil : winrate par carte, matchups défavorables et talents sous-performants sur tes parties classées.",
+    "Tes patterns de combat récurrents, ce qui sépare tes victoires de tes défaites, tes matchups défavorables et tes talents sous-performants sur tes parties classées.",
   ogImage: "/og/analysis-index.png",
   twitterCard: "summary_large_image",
   twitterImage: "/og/analysis-index.png",
@@ -30,8 +35,22 @@ const RECENT_TREND_WINDOW = 20;
 
 const { data: weaknesses } = await useApiFetch<WeaknessesResponse>("/weaknesses");
 const { data: trendData } = await useApiFetch<{ points: TrendPoint[] }>("/matches/trend", {
-  query: { mode: DRAFT_RANKED_MODES.join(",") },
+  query: rankedModeQuery(),
 });
+
+// B3: fold A1 (patterns) and A4 (drivers) into the Diagnostic. Both are
+// personal-only endpoints, fetched with the same ranked override as the trend
+// above -- the page never follows the global game-mode header filter. Neither is
+// awaited, so the base /weaknesses + /matches/trend load is unchanged; the two
+// panels render their own loading state.
+const { data: patterns, pending: patternsPending, error: patternsError } = useApiFetch<PatternsResponse>(
+  "/stats/patterns",
+  { query: rankedModeQuery() },
+);
+const { data: drivers, pending: driversPending, error: driversError } = useApiFetch<DriversResponse>(
+  "/stats/drivers",
+  { query: rankedModeQuery() },
+);
 
 const trend = computed<WeaknessTrend | undefined>(() => {
   const points = trendData.value?.points ?? [];
@@ -117,6 +136,22 @@ const talentColumns = [
       </p>
     </div>
 
+    <!-- B3: recurring combat patterns (A1) and win/loss drivers (A4), ranked-only
+    like the rest of the page. Kept above the leaks/strengths synthesis so the
+    Diagnostic reads as the full picture. -->
+    <ProgressPatternTable
+      :aggregate="patterns?.aggregate ?? null"
+      :loading="patternsPending"
+      :error="Boolean(patternsError)"
+    />
+
+    <ProgressDriverList
+      :drivers="drivers?.drivers ?? []"
+      :matches="drivers?.matches ?? 0"
+      :loading="driversPending"
+      :error="Boolean(driversError)"
+    />
+
     <!-- Points faibles / points forts: kept compact and side by side on wide screens so the
     synthesis doesn't push the browsable tables below the fold. -->
     <div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
@@ -180,22 +215,6 @@ const talentColumns = [
         "
       />
     </div>
-
-    <!-- Winrate par carte now lives on its own page (Hub des cartes), with the meta,
-    l'historique et l'impact d'équipe qui n'ont pas leur place dans ce diagnostic compact. -->
-    <NuxtLink
-      to="/maps"
-      class="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface p-4 transition-colors hover:border-brand/40"
-    >
-      <div class="flex items-center gap-2">
-        <UIcon name="i-heroicons-map" class="h-5 w-5 text-brand" />
-        <div>
-          <p class="text-sm font-medium">Winrate par carte</p>
-          <p class="text-xs text-muted">Déplacé vers le Hub des cartes -- méta, ton historique et l'impact d'équipe</p>
-        </div>
-      </div>
-      <UIcon name="i-heroicons-arrow-right" class="h-4 w-4 shrink-0 text-muted" />
-    </NuxtLink>
 
     <!-- Browsable table: never collapsed, panel scrolls its own content (header pinned)
     from lg up so it doesn't stretch the whole page. -->

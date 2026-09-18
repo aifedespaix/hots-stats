@@ -1,13 +1,24 @@
-import type {
-  ContextResponse,
-  DriverMetric,
-  DriversResponse,
-  PatternsResponse,
-  TrendResponse,
+import {
+  DRAFT_RANKED_MODES,
+  type ContextResponse,
+  type DriverMetric,
+  type DriversResponse,
+  type PatternsResponse,
+  type TrendResponse,
 } from "@hots-stats/shared-types";
 
 /** How many work axes the hub surfaces (B1 section 3). */
 export const WORK_AXES_LIMIT = 3;
+
+/**
+ * The Diagnostic page (`/analysis`) is ranked-only end to end: it overrides the
+ * global game-mode header filter with this exact `mode` query for every
+ * progression endpoint it calls (patterns/drivers/trend). One place, so a future
+ * caller cannot half-apply the rule.
+ */
+export function rankedModeQuery(): { mode: string } {
+  return { mode: DRAFT_RANKED_MODES.join(",") };
+}
 
 /**
  * Picks the work axes shown at the top of the hub: only drivers whose win/loss
