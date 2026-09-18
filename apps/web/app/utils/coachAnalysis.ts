@@ -4,31 +4,26 @@ import type {
   CoachInsightResult,
   CoachOccurrence,
   CoachVerdict,
-  MatchTimelineDeath,
-  MatchTimelineLevelSnapshot,
   ScoreboardRow,
   TopPerformerBadge,
   TopPerformerCategory,
 } from "../types/coach";
 import type { MatchDetailPlayer } from "../types/matches";
+import {
+  RESPAWN_PRESENCE_WINDOW_SECONDS,
+  STAGGER_THRESHOLD_SECONDS,
+  firstDeathCount,
+  outnumberedDeaths,
+  staggeredDeathEvents,
+  talentDelayFightEvents,
+  type RuleSubject,
+} from "@hots-stats/shared-types";
 
-/** HotS talent tiers are always unlocked at these character levels, in pick order. */
-export const TALENT_TIER_LEVELS = [1, 4, 7, 10, 13, 16, 20] as const;
-
-/** Deaths (across both teams) within this many seconds of the previous one
- * are treated as the same team fight -- a standard heuristic for turning a
- * flat death log into discrete engagements without needing position data. */
-const FIGHT_CLUSTER_GAP_SECONDS = 15;
-
-/** How long a dead player is presumed "not yet back" for the sous-nombre
- * pillar. Approximation: HotS respawn timers actually scale with hero level
- * and game time; a flat window is a deliberate simplification pending that
- * exact data (see the pillar's `methodology` string). */
-const RESPAWN_PRESENCE_WINDOW_SECONDS = 25;
-
-/** A death arriving more than this long after the first teammate death in
- * the same fight cluster counts as "staggered" (isolated regroupment). */
-const STAGGER_THRESHOLD_SECONDS = 8;
+// Rules and constants live in @hots-stats/shared-types (see coach-rules.ts)
+// so the API's aggregation services consume the exact same predicates.
+// Re-exported here because Nuxt auto-imports this utils module's exports
+// (PlayerTalents.vue relies on TALENT_TIER_LEVELS without importing it).
+export { TALENT_TIER_LEVELS } from "@hots-stats/shared-types";
 
 // --- Scoreboard (Tab 1) ------------------------------------------------
 
@@ -100,45 +95,10 @@ export function topPerformerBadges(rows: ScoreboardRow[]): Map<string, TopPerfor
 
 // --- Coach insights (Tab 2) ---------------------------------------------
 
-function talentTierForLevel(level: number): number {
-  let tier = 0;
-  for (const t of TALENT_TIER_LEVELS) {
-    if (level >= t) tier = t;
-  }
-  return tier;
-}
-
-interface FightCluster {
-  startSeconds: number;
-  deaths: MatchTimelineDeath[];
-}
-
-function buildFightClusters(deaths: MatchTimelineDeath[]): FightCluster[] {
-  const sorted = [...deaths].sort((a, b) => a.atSeconds - b.atSeconds);
-  const clusters: FightCluster[] = [];
-
-  for (const death of sorted) {
-    const current = clusters.at(-1);
-    const previousDeath = current?.deaths.at(-1);
-    if (current && previousDeath && death.atSeconds - previousDeath.atSeconds <= FIGHT_CLUSTER_GAP_SECONDS) {
-      current.deaths.push(death);
-    } else {
-      clusters.push({ startSeconds: death.atSeconds, deaths: [death] });
-    }
-  }
-
-  return clusters;
-}
-
-/** Latest level snapshot for `battletag` at or before `atSeconds`, or null
- * when no snapshot that early exists yet. */
-function levelAt(snapshots: MatchTimelineLevelSnapshot[], battletag: string, atSeconds: number): number | null {
-  let best: MatchTimelineLevelSnapshot | null = null;
-  for (const s of snapshots) {
-    if (s.battletag !== battletag || s.atSeconds > atSeconds) continue;
-    if (!best || s.atSeconds > best.atSeconds) best = s;
-  }
-  return best?.level ?? null;
+/** Minimal subject shape the shared rules consume, normalized to their 0/1
+ * team encoding (match_players.team is a raw smallint). */
+function subjectOf(me: ScoreboardRow): RuleSubject {
+  return { battletag: me.battletag, team: me.team === 1 ? 1 : 0, kills: me.kills, deaths: me.deaths, assists: me.assists };
 }
 
 function computeEfficiencyInsight({ me, myTeam }: CoachAnalysisInput): CoachInsightResult {
@@ -229,37 +189,10 @@ function computeOutnumberedFightsInsight({ me, timeline }: CoachAnalysisInput): 
     return { ...meta, status: "ready", verdict: "positive", summary: "Aucune mort ce match : impossible d'avoir combattu en sous-nombre en mourant." };
   }
 
-  const occurrences: CoachOccurrence[] = [];
-  for (const death of myDeaths) {
-    // Distinct battletags, not raw death counts: a player can die more than
-    // once inside the same window at low levels, where respawn timers are
-    // shortest -- counting deaths instead of players would double-count them.
-    const teammatesDown = new Set(
-      timeline.deaths
-        .filter(
-          (d) =>
-            d.team === death.team &&
-            d.battletag !== death.battletag &&
-            d.atSeconds < death.atSeconds &&
-            death.atSeconds - d.atSeconds <= RESPAWN_PRESENCE_WINDOW_SECONDS,
-        )
-        .map((d) => d.battletag),
-    ).size;
-    const enemiesDown = new Set(
-      timeline.deaths
-        .filter((d) => d.team !== death.team && d.atSeconds < death.atSeconds && death.atSeconds - d.atSeconds <= RESPAWN_PRESENCE_WINDOW_SECONDS)
-        .map((d) => d.battletag),
-    ).size;
-
-    const myTeamPresent = 5 - teammatesDown;
-    const enemyPresent = 5 - enemiesDown;
-    if (myTeamPresent < enemyPresent) {
-      occurrences.push({
-        atLabel: formatDuration(death.atSeconds),
-        detail: `Mort en infériorité estimée (~${myTeamPresent} vs ${enemyPresent}).`,
-      });
-    }
-  }
+  const occurrences: CoachOccurrence[] = outnumberedDeaths(timeline.deaths, subjectOf(me)).map((event) => ({
+    atLabel: formatDuration(event.atSeconds),
+    detail: `Mort en infériorité estimée (~${event.myTeamPresent} vs ${event.enemyPresent}).`,
+  }));
 
   if (occurrences.length === 0) {
     return { ...meta, status: "ready", verdict: "positive", summary: `${myDeaths.length} mort(s) ce match, aucune en infériorité numérique détectée.` };
@@ -292,30 +225,17 @@ function computeTalentDelayInsight({ me, enemyTeam, timeline }: CoachAnalysisInp
     };
   }
 
-  const clusters = buildFightClusters(timeline.deaths).filter(
-    (c) => c.deaths.some((d) => d.team === me.team) && c.deaths.some((d) => d.team !== me.team),
+  const { events, evaluated } = talentDelayFightEvents(
+    timeline.deaths,
+    timeline.levelSnapshots,
+    subjectOf(me),
+    enemyTeam.map((p) => p.battletag),
   );
 
-  const occurrences: CoachOccurrence[] = [];
-  let evaluated = 0;
-  for (const cluster of clusters) {
-    const myLevel = levelAt(timeline.levelSnapshots, me.battletag, cluster.startSeconds);
-    const enemyLevels = enemyTeam
-      .map((p) => levelAt(timeline.levelSnapshots, p.battletag, cluster.startSeconds))
-      .filter((l): l is number => l !== null);
-    if (myLevel === null || enemyLevels.length === 0) continue;
-
-    evaluated += 1;
-    const enemyAvgLevel = enemyLevels.reduce((sum, l) => sum + l, 0) / enemyLevels.length;
-    const myTier = talentTierForLevel(myLevel);
-    const enemyTier = talentTierForLevel(enemyAvgLevel);
-    if (myTier < enemyTier) {
-      occurrences.push({
-        atLabel: formatDuration(cluster.startSeconds),
-        detail: `Palier ${myTier} (niveau ${myLevel}) engagé contre palier ${enemyTier} (niveau adverse moyen ${enemyAvgLevel.toFixed(1)}).`,
-      });
-    }
-  }
+  const occurrences: CoachOccurrence[] = events.map((event) => ({
+    atLabel: formatDuration(event.atSeconds),
+    detail: `Palier ${event.myTier} (niveau ${event.myLevel}) engagé contre palier ${event.enemyTier} (niveau adverse moyen ${event.enemyAvgLevel.toFixed(1)}).`,
+  }));
 
   if (evaluated === 0) {
     return { ...meta, status: "unavailable", reason: "Aucun combat exploitable (niveau inconnu au moment des morts recensées)." };
@@ -357,31 +277,13 @@ function computeStaggeredDeathsInsight({ me, timeline }: CoachAnalysisInput): Co
     return { ...meta, status: "ready", verdict: "positive", summary: "Aucune mort ce match : rien à décaler." };
   }
 
-  const clusters = buildFightClusters(timeline.deaths);
-  const occurrences: CoachOccurrence[] = [];
-  // Only deaths sharing a fight with >= 1 other teammate death are
-  // meaningful for "staggering" -- a lone death in its cluster has nothing
-  // to be staggered relative to, so it's excluded from the denominator too.
-  let evaluated = 0;
-
-  for (const death of myDeaths) {
-    const cluster = clusters.find((c) => c.deaths.includes(death));
-    if (!cluster) continue;
-    const teamDeathsInCluster = cluster.deaths.filter((d) => d.team === me.team).sort((a, b) => a.atSeconds - b.atSeconds);
-    if (teamDeathsInCluster.length < 2) continue;
-
-    evaluated += 1;
-    const firstTeamDeath = teamDeathsInCluster[0]!;
-    if (firstTeamDeath.battletag === death.battletag) continue;
-
-    const delay = death.atSeconds - firstTeamDeath.atSeconds;
-    if (delay > STAGGER_THRESHOLD_SECONDS) {
-      occurrences.push({
-        atLabel: formatDuration(death.atSeconds),
-        detail: `Mort ${delay.toFixed(0)}s après le premier coéquipier tombé dans ce fight.`,
-      });
-    }
-  }
+  // Only deaths sharing a fight with >= 1 other teammate death are evaluated:
+  // a lone death in its cluster has nothing to be staggered relative to.
+  const { events, evaluated } = staggeredDeathEvents(timeline.deaths, subjectOf(me));
+  const occurrences: CoachOccurrence[] = events.map((event) => ({
+    atLabel: formatDuration(event.atSeconds),
+    detail: `Mort ${event.delaySeconds.toFixed(0)}s après le premier coéquipier tombé dans ce fight.`,
+  }));
 
   if (evaluated === 0) {
     return { ...meta, status: "ready", verdict: "positive", summary: `${myDeaths.length} mort(s), aucune ne partageait un fight avec un autre décès allié à comparer.` };
@@ -418,16 +320,17 @@ function computeFirstDeathInsight({ me, timeline }: CoachAnalysisInput): CoachIn
     };
   }
 
-  const firstDeath = [...timeline.deaths].sort((a, b) => a.atSeconds - b.atSeconds)[0]!;
+  const first = firstDeathCount(timeline.deaths, subjectOf(me));
+  const firstDeathAt = first.atSeconds!;
 
-  if (firstDeath.battletag === me.battletag) {
+  if (first.isFirst) {
     return {
       ...meta,
       status: "ready",
       verdict: "negative",
-      summary: `Tu es le premier tombé de la partie, à ${formatDuration(firstDeath.atSeconds)}.`,
+      summary: `Tu es le premier tombé de la partie, à ${formatDuration(firstDeathAt)}.`,
       metricLabel: "Premier mort à",
-      metricValue: formatDuration(firstDeath.atSeconds),
+      metricValue: formatDuration(firstDeathAt),
     };
   }
 
@@ -435,7 +338,7 @@ function computeFirstDeathInsight({ me, timeline }: CoachAnalysisInput): CoachIn
     ...meta,
     status: "ready",
     verdict: "positive",
-    summary: `Tu n'es pas le premier tombé de la partie (à ${formatDuration(firstDeath.atSeconds)}).`,
+    summary: `Tu n'es pas le premier tombé de la partie (à ${formatDuration(firstDeathAt)}).`,
   };
 }
 
