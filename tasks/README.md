@@ -208,6 +208,12 @@ rappelle donc le contexte nécessaire plutôt que de supposer une continuité.
   désormais à ces règles, verrouillé par un test de non-régression des 6
   piliers. Écart : `scope=global` refusé en 400 (pas de sujet cohérent pour
   un agrégat communautaire).
+- **Suite Progression — A2 (normalisation par durée)** : contrat partagé
+  `NormalizedMetrics` (`packages/shared-types/src/stats.ts`) + règle pure
+  `normalizeMetrics` (`apps/api/src/services/metrics.service.ts`) branchée
+  sur `/stats/summary`, `/heroes`, `/heroes/:heroId`, `/matches/dashboard`
+  et le `ownStats.summary` du profil joueur ; taux pondérés par la durée
+  cumulée (jamais une moyenne de ratios), garde durée nulle -> `0`.
 
 ## À faire
 

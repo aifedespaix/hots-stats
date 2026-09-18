@@ -112,10 +112,29 @@ Légende : `[ ]` à faire · `[~]` en cours · `[x]` terminé · `[!]` bloqué
     `PROGRESSION_MIN_MATCHES`.
   - Le chantier ne livre aucune page (le hub `/progress` est B1) : l'endpoint
     est vérifié au niveau de l'agrégat, pas via une UI.
-- [ ] **A2 — Normalisation par durée**
+- [x] **A2 — Normalisation par durée**
   XP/min, dégâts/min, soins/min, morts/10 min, pondérés par durée (jamais une
   moyenne de ratios). Branché sur `/stats/summary`, `/heroes`,
   `/heroes/:heroId`, `/matches/dashboard`. Spec § A2.
+  **Fait** (2026-09-18). Écarts / précisions vs spec :
+  - La règle pure `normalizeMetrics` vit dans
+    `apps/api/src/services/metrics.service.ts` (sans import DB, donc testable
+    sans `DATABASE_URL`) et calcule `sum(stat) / (sum(durationSeconds) / unité)` :
+    un taux pondéré, jamais une moyenne de ratios par partie. Elle est
+    verrouillée par `metrics.service.test.ts`.
+  - Toute durée cumulée non positive (scope vide, partie à durée 0) retombe
+    sur des taux à `0` : pas de `NaN`/`Infinity`.
+  - Le contrat partagé `NormalizedMetrics` vit dans
+    `packages/shared-types/src/stats.ts`. Les sommes brutes ajoutées aux
+    requêtes Drizzle alimentent le calcul mais ne sont pas exposées : seuls
+    les taux dérivés sortent dans la réponse.
+  - `apps/api/src/routes/heroes.ts` n'a **pas** eu besoin d'être modifié
+    (contrairement à la liste de fichiers de la spec) : le champ `normalized`
+    est attaché par `talents.service.ts` et propagé tel quel par les
+    `c.json({ heroes })` / `c.json({ hero, other, scope })` existants.
+  - Aucune migration, aucun changement d'UI : l'affichage des nouveaux taux
+    relève de B1/B2. Les champs et expressions existants gardent exactement
+    leurs valeurs précédentes (changement purement additif).
 - [ ] **A3 — Tendance glissante + comparaison de périodes** · `GET /stats/trend`
   Winrate glissant (fenêtre 20), KDA glissant, morts/10 min glissant,
   marqueurs de patch, comparaison période A vs B. Spec § A3.
