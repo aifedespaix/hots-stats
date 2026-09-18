@@ -4,6 +4,7 @@ import type {
   MatchTimelineLeadPoint,
   MatchTimelineSeries,
   MatchTimelineStructureEvent,
+  MatchTimelineTeamLabels,
 } from "~/types/coach";
 import { CLUSTER_TIME_WINDOW_SECONDS } from "~/utils/deathClustering";
 
@@ -121,4 +122,78 @@ export function buildMatchTimelineSeries(input: MatchTimelineInput): MatchTimeli
     deaths,
     structures,
   };
+}
+
+/**
+ * French labels for the two sides. The viewer's own team is only knowable
+ * when the match page resolved it (the viewer is in the match); otherwise
+ * neutral team numbers avoid pretending to know whose side each is.
+ */
+export function timelineTeamLabels(allyTeam: 0 | 1 | null): MatchTimelineTeamLabels {
+  if (allyTeam === 0) return { team0: "mon équipe", team1: "les adversaires" };
+  if (allyTeam === 1) return { team0: "les adversaires", team1: "mon équipe" };
+  return { team0: "l'équipe 1", team1: "l'équipe 2" };
+}
+
+/** Levels are integers in practice, but the mean of several snapshots at one
+ * timestamp can land on .5 -- show it rather than round a real difference away. */
+export function formatTimelineLevel(level: number): string {
+  return Number.isInteger(level) ? String(level) : level.toFixed(1);
+}
+
+/**
+ * The chart's text alternative (acceptance criterion 3): it names the side
+ * ahead and by how much at the last shared snapshot. Deliberately avoids
+ * verb agreement traps ("mon équipe" / "les adversaires" cannot both take
+ * the same verb), so it stays correct whichever side leads.
+ */
+export function buildMatchTimelineSummary(series: MatchTimelineSeries, labels: MatchTimelineTeamLabels): string {
+  if (series.points.length === 0 || series.finalLead === null) {
+    return "Chronologie indisponible : aucune donnée de niveau comparable.";
+  }
+  const last = series.points[series.points.length - 1]!;
+  const level0 = formatTimelineLevel(last.team0Level);
+  const level1 = formatTimelineLevel(last.team1Level);
+  const lead = series.finalLead;
+  if (lead > 0) {
+    return (
+      "Niveau final : " + level0 + " – " + level1 + ", " + labels.team0 + " devant " + labels.team1 +
+      " (avance de " + formatTimelineLevel(lead) + (lead > 1 ? " niveaux)." : " niveau).")
+    );
+  }
+  if (lead < 0) {
+    const gap = Math.abs(lead);
+    return (
+      "Niveau final : " + level1 + " – " + level0 + ", " + labels.team1 + " devant " + labels.team0 +
+      " (avance de " + formatTimelineLevel(gap) + (gap > 1 ? " niveaux)." : " niveau).")
+    );
+  }
+  return "Niveau final : égalité " + level0 + " – " + level1 + ".";
+}
+
+/** Maps atSeconds onto [0, width], clamped -- a duration of 0 maps everything to 0. */
+export function timelineX(atSeconds: number, durationSeconds: number, width: number): number {
+  if (durationSeconds <= 0) return 0;
+  return Math.min(width, Math.max(0, (atSeconds / durationSeconds) * width));
+}
+
+/** Symmetric lead domain from the series, with a 1-level floor so a 0.5 lead is not stretched. */
+export function timelineLeadMax(points: MatchTimelineLeadPoint[]): number {
+  return Math.max(1, ...points.map((point) => Math.abs(point.lead)));
+}
+
+/** Maps a lead onto a symmetric y domain: 0 -> midY, +/-leadMax -> topY/bottomY, clamped. */
+export function timelineLeadY(lead: number, leadMax: number, midY: number, halfHeight: number): number {
+  if (leadMax <= 0) return midY;
+  const clamped = Math.min(leadMax, Math.max(-leadMax, lead));
+  return midY - (clamped / leadMax) * halfHeight;
+}
+
+const DEATH_MARKER_BASE_RADIUS = 3;
+const DEATH_MARKER_RADIUS_STEP = 1.5;
+const DEATH_MARKER_MAX_RADIUS = 10;
+
+/** Death-marker radius: one step per extra death in the cluster, capped so a huge teamfight stays on its track. */
+export function deathMarkerRadius(deaths: number): number {
+  return Math.min(DEATH_MARKER_MAX_RADIUS, DEATH_MARKER_BASE_RADIUS + Math.max(0, deaths - 1) * DEATH_MARKER_RADIUS_STEP);
 }
