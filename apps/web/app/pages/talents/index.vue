@@ -42,6 +42,10 @@ const { data: mapsData } = await useApiFetch<MapHubResponse>("/maps", {
 
 // Enriched selector items: games/winrate/KDA (or recent form for maps) shown
 // directly in the dropdown so a player can pick without leaving the menu.
+// `rankSelectorOptions` (utils/talentSelectors.ts) then orders both lists
+// most-played-first and, once the other select has a value, drops entries with
+// zero games -- so picking a hero shows their maps (games for that hero) and
+// picking a map shows its heroes, both ranked by games and sorted the same way.
 // `disabled` hard-locks heroes/maps with zero recorded games; `reliable`
 // (Wilson lower bound close enough to the raw winrate, see utils/wilson.ts)
 // only mutes the option -- the data is still real, just not to be trusted yet.
@@ -72,8 +76,8 @@ interface MapSelectItem {
 // selecting it. "No selection" is instead the select's own placeholder
 // state (heroId/mapId stays "") plus the built-in clear ("x") button.
 const heroOptions = computed<HeroSelectItem[]>(() =>
-  (heroesData.value?.heroes ?? [])
-    .map((h) => ({
+  rankSelectorOptions(
+    (heroesData.value?.heroes ?? []).map((h) => ({
       value: h.heroId,
       label: h.heroName,
       heroRole: h.heroRole,
@@ -82,12 +86,13 @@ const heroOptions = computed<HeroSelectItem[]>(() =>
       kda: computeKdaRatio(h.avgKills, h.avgDeaths, h.avgAssists),
       reliable: isStatReliable(h.wins, h.gamesPlayed),
       disabled: h.gamesPlayed === 0,
-    }))
-    .sort((a, b) => a.label.localeCompare(b.label)),
+    })),
+    { hideUnplayed: Boolean(mapId.value) },
+  ),
 );
 const mapOptions = computed<MapSelectItem[]>(() =>
-  (mapsData.value?.maps ?? [])
-    .map((m) => ({
+  rankSelectorOptions(
+    (mapsData.value?.maps ?? []).map((m) => ({
       value: m.mapId,
       label: m.mapName,
       gamesPlayed: m.gamesPlayed,
@@ -95,8 +100,9 @@ const mapOptions = computed<MapSelectItem[]>(() =>
       recentForm: m.recentForm,
       reliable: isStatReliable(m.wins, m.gamesPlayed),
       disabled: m.gamesPlayed === 0,
-    }))
-    .sort((a, b) => a.label.localeCompare(b.label)),
+    })),
+    { hideUnplayed: Boolean(heroId.value) },
+  ),
 );
 
 const selectedHeroName = computed(() => heroesData.value?.heroes.find((h) => h.heroId === heroId.value)?.heroName ?? "");
