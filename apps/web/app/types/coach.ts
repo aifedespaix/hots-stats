@@ -49,6 +49,50 @@ export interface MatchTimelineData {
   structureEvents?: MatchTimelineStructureEvent[];
 }
 
+/** One point of the C2 chronology lead curve: both teams' mean level at
+ * `atSeconds` (HotS levels are shared team-wide, so several snapshots at the
+ * same timestamp are averaged) and their difference. */
+export interface MatchTimelineLeadPoint {
+  atSeconds: number;
+  team0Level: number;
+  team1Level: number;
+  /** team0Level - team1Level; positive = team 0 ahead. */
+  lead: number;
+}
+
+/** One death cluster on the chronology: one team's deaths within
+ * `CLUSTER_TIME_WINDOW_SECONDS` of each other, collapsed into one marker
+ * sized by `deaths`. Time-only (unlike `SpatialEventCluster`): a death with
+ * no x/y still belongs on a chronology. */
+export interface MatchTimelineDeathMarker {
+  team: 0 | 1;
+  /** Mean timestamp of the cluster's deaths. */
+  atSeconds: number;
+  deaths: number;
+}
+
+/** Everything `MatchTimelineChart.vue` draws for one match, derived only
+ * from `MatchTimelineData` (no fabricated timeline). */
+export interface MatchTimelineSeries {
+  /** True only when both teams share a level snapshot in time; false makes
+   * the tab show an explicit "données de niveau absentes" state instead of
+   * an empty chart. */
+  hasLevelData: boolean;
+  /** Lead curve, ascending by `atSeconds`. */
+  points: MatchTimelineLeadPoint[];
+  /** Lead at the last shared snapshot; null when there is no point. */
+  finalLead: number | null;
+  deaths: MatchTimelineDeathMarker[];
+  structures: MatchTimelineStructureEvent[];
+}
+
+/** French labels for the two sides, so the text alternative can name the
+ * viewer's team instead of "équipe 0". */
+export interface MatchTimelineTeamLabels {
+  team0: string;
+  team1: string;
+}
+
 /** A player row enriched with match-relative ratios no single raw stat conveys on its own. */
 export interface ScoreboardRow extends MatchDetailPlayer {
   /** (kills + assists) / team total kills -- 0 when the team has 0 kills. */
