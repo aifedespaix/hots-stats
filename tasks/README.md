@@ -320,6 +320,13 @@ rappelle donc le contexte nécessaire plutôt que de supposer une continuité.
   observation). Page `/objectifs` + entrée sidebar ; les définitions de
   métriques et le chargement des lignes A4 sont partagés (aucune règle
   dupliquée). Aucune dépendance.
+- **Suite Progression — F1 (palette de commandes)** : palette Ctrl+K / Cmd+K
+  client-only (`ui/CommandPalette.vue`) montée dans le layout, sources = pages
+  (nav existante), héros, cartes et amis (endpoints existants, chargés
+  paresseusement à la première ouverture), plus les lignes de la page courante
+  (`useCommandPaletteEntries`, exercé par `/matches`). Règles pures de
+  correspondance/regroupement dans `utils/commandPalette.ts` (18 tests).
+  Aucun nouvel endpoint, aucune migration, aucune dépendance.
 
 ## À faire
 

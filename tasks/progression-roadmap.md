@@ -545,8 +545,32 @@ Légende : `[ ]` à faire · `[~]` en cours · `[x]` terminé · `[!]` bloqué
 
 ### Lot F — Ergonomie et accessibilité
 
-- [ ] **F1 — Palette de commandes Ctrl+K**
+- [x] **F1 — Palette de commandes Ctrl+K**
   Navigation clavier vers page/héros/carte/ami. Client uniquement. Spec § F1.
+  **Fait** (2026-09-19). Écarts / précisions vs spec :
+  - Les règles pures (normalisation de texte sans accents, score
+    exact/préfixe/mot/sous-chaîne, regroupement ordonné, navigation clavier
+    cyclique) vivent dans `apps/web/app/utils/commandPalette.ts`, verrouillées
+    par `commandPalette.test.ts` (18 tests) — même scission pure/UI que
+    A1/A3/A4/C1/C3/C4/E1.
+  - Les sources distantes sont les endpoints **existants** `/heroes`,
+    `/maps` et `/friends`, chargés **une seule fois à la première ouverture**
+    (jamais au rendu d'une page) grâce à un passage `lazy`/`immediate`
+    additif sur `useApiFetch`. Aucune nouvelle route, aucune migration,
+    aucune dépendance.
+  - Les lignes de la page courante passent par `useCommandPaletteEntries`,
+    exercé par `/matches` (les parties affichées deviennent des entrées
+    « Sur cette page »). L'enregistrement est client-only (`onMounted`) : un
+    enregistrement SSR aurait fait grossir un tableau partagé à chaque
+    requête.
+  - AC2 (`role="dialog"`, `aria-modal`) est fourni par `UModal` ; le champ
+    porte `role="combobox"` + `aria-activedescendant` et la liste
+    `role="listbox"`/`role="option"`. Le setup web est un vitest node sans
+    jsdom : ce point est vérifié à la lecture du markup rendu, pas par un
+    test DOM.
+  - Un bouton « Rechercher · Ctrl K » dans l'en-tête desktop ouvre la même
+    palette que le raccourci, pour que l'affordance soit découvrable sans
+    connaître le raccourci.
 - [ ] **F2 — Filtres dans l'URL**
   L'URL reproduit la vue ; le store Pinia reste la source de vérité. Spec § F2.
 - [ ] **F3 — Passe accessibilité**
