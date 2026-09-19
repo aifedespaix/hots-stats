@@ -155,6 +155,17 @@ watch(snapshot, updateCapturedAgoLabel);
     <template v-else>
       <p v-if="capturedAgoLabel" class="text-xs text-muted">{{ capturedAgoLabel }}</p>
 
+      <!-- Composition/picks/bans for the viewer's own team. One instance only:
+           it fires its own one-shot fetches, so the CSS-hidden mobile/desktop
+           duplication used for DraftTeamThreats would double them. -->
+      <DraftAssistPanel
+        class="shrink-0"
+        :team-left="teamLeft"
+        :team-right="teamRight"
+        :map-id="snapshot.mapId"
+        :own-battletags="ownBattletags"
+      />
+
       <!-- Mobile: draft (both teams side by side) on top, stats below -- roughly 50/50 -->
       <div class="flex flex-col gap-3 md:hidden" style="height: calc(100dvh - 19rem)">
         <DraftTeamThreats
