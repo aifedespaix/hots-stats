@@ -302,6 +302,15 @@ rappelle donc le contexte nécessaire plutôt que de supposer une continuité.
   battletag et par héros, part des morts, winrate quand tué par ce tueur) et route
   `GET /stats/killers` (scopée compte ; filtres mode/héros/carte/période ;
   `scope=global` refusé en 400). Écart : aucune UI (la spec C3 n'en liste pas).
+- **Suite Progression — E1 (récap de session)** : contrat partagé
+  `SessionRecapResponse`, module pur `apps/api/src/lib/session-recap.ts`
+  (sélection de la session via le clustering 90 min partagé, stats pondérées par
+  la durée, baseline antérieure, deltas) et route `GET /stats/session`
+  (`scope=global` refusé en 400 ; deltas seulement si session et baseline
+  atteignent `PROGRESSION_MIN_MATCHES`). Page `/session` (états vide/erreur,
+  entrée sidebar + carte mobile) et carte « Dernière session » du Dashboard
+  branchée sur l'endpoint (l'ancien util client `sessionSummary.ts` est
+  supprimé). Aucune migration, aucune dépendance.
 
 ## À faire
 

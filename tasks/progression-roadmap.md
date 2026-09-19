@@ -472,8 +472,34 @@ Légende : `[ ]` à faire · `[~]` en cours · `[x]` terminé · `[!]` bloqué
 
 ### Lot E — Sessions et objectifs
 
-- [ ] **E1 — Récap de session** · `GET /stats/session` · dépend de C4
+- [x] **E1 — Récap de session** · `GET /stats/session` · dépend de C4
   Bilan de la dernière session + delta vs baseline. Spec § E1.
+  **Fait** (2026-09-19). Écarts / précisions vs spec :
+  - Le calcul (sélection de session, stats, baseline, deltas) vit dans un module
+    pur sans DB `apps/api/src/lib/session-recap.ts` ; son test est
+    `session-recap.test.ts` (même scission pure/DB que A1/A3/A4/C1/C3/C4).
+    `session.service.ts` ne fait que scoper/filtrer/assembler les lignes.
+  - La frontière de session réutilise `clusterSessions` de
+    `packages/shared-types/src/sessions.ts` : aucune réimplémentation web ou API.
+  - `scope=global` refusé en 400 (même règle que /patterns, /trend, /drivers,
+    /context, /killers) : « ma session versus ma moyenne » n'a pas de sujet
+    communautaire.
+  - `baseline` = les parties du périmètre **strictement antérieures** au début de
+    la session (elle ne se compte pas elle-même). `baselineDelta` n'est exposé
+    que si la session **et** la baseline atteignent `PROGRESSION_MIN_MATCHES`
+    (20) ; `insufficientSample` porte ce seuil. Une session d'une partie rend
+    toujours des stats finies (pas de division par zéro) et aucun delta.
+  - La page `/session` affiche le récap de la dernière session (défaut de
+    l'API) ; le paramètre `at` est supporté et testé côté API mais n'a pas
+    encore de sélecteur de date côté UI.
+  - L'endpoint accepte le filtre `mode` (comme les autres routes stats) :
+    `useApiFetch` propage donc le filtre de mode global, et la session est
+    clusterisée sur ce sous-ensemble.
+  - La carte « Dernière session » du Dashboard (B2) consomme désormais
+    `GET /stats/session` au lieu de re-clusteriser les points de
+    `GET /stats/trend` : `apps/web/app/utils/sessionSummary.ts` et son test ont
+    été supprimés (doublon de la règle serveur). Un appel `/stats/session` non
+    attendu s'ajoute au Dashboard.
 - [ ] **E2 — Objectifs** · `/objectifs` + table `player_goals` (migration)
   Objectif mesurable, échéance, suivi. Spec § E2.
 
