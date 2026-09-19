@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import type { DriversResponse, TrendResponse } from "@hots-stats/shared-types";
+import type { DriversResponse, SessionRecapResponse, TrendResponse } from "@hots-stats/shared-types";
 import type { MatchListResponse, StatsSummary } from "~/types/matches";
 import type { NavCardColor } from "~/components/ui/NavCard.vue";
 import { selectWorkAxes } from "~/composables/useProgression";
+import { useSessionRecap } from "~/composables/useSessionRecap";
 
 definePageMeta({ middleware: "auth" });
 
@@ -157,6 +158,15 @@ const { data: drivers, pending: driversPending, error: driversError } = useApiFe
   { query: { scope: "personal" } },
 );
 
+// The "Dernière session" card now reads the E1 endpoint (GET /stats/session)
+// instead of re-clustering the trend points client-side: one source of truth
+// for the 90-minute rule. Not awaited, like the other additive B2 calls.
+const {
+  data: sessionRecap,
+  pending: sessionPending,
+  error: sessionError,
+} = useSessionRecap({ scope: "personal" });
+
 const topAxis = computed(() =>
   drivers.value ? (selectWorkAxes(drivers.value.drivers)[0] ?? null) : null,
 );
@@ -219,9 +229,9 @@ function goToMatch(row: Record<string, unknown>) {
       </UiTeaserLink>
 
       <ProgressSessionSummaryCard
-        :points="trend?.points ?? []"
-        :loading="trendPending"
-        :error="Boolean(trendError)"
+        :recap="sessionRecap"
+        :loading="sessionPending"
+        :error="Boolean(sessionError)"
       />
     </div>
 
