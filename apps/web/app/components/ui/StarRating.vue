@@ -28,11 +28,11 @@ function onClick(star: number) {
       :key="star"
       type="button"
       :tabindex="props.readonly ? -1 : 0"
-      class="text-accent outline-none"
+      class="text-accent"
       :class="
         props.readonly
           ? 'cursor-default'
-          : 'cursor-pointer rounded transition-transform hover:scale-110 focus-visible:ring-1 focus-visible:ring-brand'
+          : 'cursor-pointer rounded transition-transform hover:scale-110'
       "
       @click.stop.prevent="onClick(star)"
     >

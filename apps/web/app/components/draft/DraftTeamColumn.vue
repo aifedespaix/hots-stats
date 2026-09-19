@@ -51,10 +51,10 @@ function onPick(slot: DraftPlayerSlot, battletag: string) {
       <li
         v-for="slot in slots"
         :key="slot.slot"
-        class="flex items-center gap-2.5 rounded-md px-2.5 py-2 outline-none transition-colors"
+        class="flex items-center gap-2.5 rounded-md px-2.5 py-2 transition-colors"
         :class="[
           slot.effectiveBattletag
-            ? 'cursor-pointer hover:bg-background focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-brand'
+            ? 'cursor-pointer hover:bg-background focus-visible:bg-background'
             : '',
           isSelected(slot) ? 'bg-brand/15 ring-1 ring-inset ring-brand/40' : '',
         ]"

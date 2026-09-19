@@ -115,7 +115,7 @@ function toggleSortDir() {
             class="border-b border-border last:border-0"
             :class="[
               clickable
-                ? 'cursor-pointer outline-none transition-colors hover:bg-surface focus-visible:bg-surface focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-brand'
+                ? 'cursor-pointer transition-colors hover:bg-surface focus-visible:bg-surface focus-visible:[outline-offset:-2px]'
                 : '',
               rowClass ? rowClass(row) : '',
             ]"
@@ -148,7 +148,7 @@ function toggleSortDir() {
         class="rounded-lg border border-border bg-surface p-4"
         :class="[
           clickable
-            ? 'cursor-pointer outline-none transition-colors hover:border-brand/40 active:bg-background focus-visible:border-brand/40 focus-visible:ring-1 focus-visible:ring-brand'
+            ? 'cursor-pointer transition-colors hover:border-brand/40 active:bg-background'
             : '',
           rowClass ? rowClass(row) : '',
         ]"
