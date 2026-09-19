@@ -20,6 +20,7 @@ const sorted = computed(() => [...props.maps].sort((a, b) => b.gamesPlayed - a.g
         <div class="mb-1 flex items-center justify-between gap-2">
           <span class="min-w-0 truncate font-medium">{{ map.mapName }}</span>
           <span class="shrink-0 font-mono text-xs text-muted">
+            <span aria-hidden="true" :class="TONE_TEXT_CLASS[winrateTone(map.winrate)]">{{ winrateGlyph(map.winrate) }}</span>
             {{ map.wins }}V / {{ map.losses }}D · {{ map.gamesPlayed }} partie{{ map.gamesPlayed > 1 ? "s" : "" }}
           </span>
         </div>
