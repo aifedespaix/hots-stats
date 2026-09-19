@@ -13,6 +13,7 @@ export * from "./user-accounts";
 export * from "./draft-pseudo-preferences";
 export * from "./daemon-ingest-errors";
 export * from "./player-annotations";
+export * from "./player-goals";
 export * from "./spatial-calibration";
 export * from "./match-spatial-grids";
 export * from "./hero-map-spatial-rollup";
