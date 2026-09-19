@@ -667,3 +667,67 @@ export interface KillersResponse {
   topKillerHeroes: KillerEntry[];
 }
 
+// --- Player progression suite (E1 — Session recap) ---
+
+/** One match inside a session recap (E1). Hero and map names are resolved at
+ * the DB boundary so the recap renders without a second round-trip. */
+export interface SessionRecapMatch {
+  matchId: string;
+  /** ISO datetime. */
+  playedAt: string;
+  winner: boolean;
+  durationSeconds: number;
+  heroId: string;
+  heroName: string;
+  mapId: string;
+  mapName: string;
+  kills: number;
+  deaths: number;
+  assists: number;
+}
+
+/** Record plus duration-weighted rates over one match set (E1). The rates reuse
+ * the A2 rule; kda is null when the set has no death (never Infinity). */
+export interface SessionRecapStats {
+  gamesPlayed: number;
+  wins: number;
+  losses: number;
+  winrate: number;
+  kda: number | null;
+  deathsPer10Min: number;
+  xpPerMinute: number;
+}
+
+/** Session-minus-baseline deltas (E1). kda is null when either side has no
+ * death, so a delta is never fabricated from a missing ratio. */
+export interface SessionBaselineDelta {
+  winrate: number;
+  kda: number | null;
+  deathsPer10Min: number;
+  xpPerMinute: number;
+}
+
+/** The selected session, oldest match first. */
+export interface SessionRecap {
+  /** ISO datetime of the first match. */
+  startedAt: string;
+  /** ISO datetime of the last match. */
+  endedAt: string;
+  matches: SessionRecapMatch[];
+  stats: SessionRecapStats;
+}
+
+/** Response for GET /stats/session (E1). session is null when the scope has no
+ * match at or after the requested at (or no match at all). baselineDelta is
+ * null until the session AND its baseline each clear PROGRESSION_MIN_MATCHES,
+ * so the endpoint never claims a trend on a thin sample; insufficientSample
+ * carries that gate for the UI. */
+export interface SessionRecapResponse {
+  scope: "personal" | "global";
+  session: SessionRecap | null;
+  /** One row per pre-session scope match, or null with no session. */
+  baseline: SessionRecapStats | null;
+  baselineDelta: SessionBaselineDelta | null;
+  insufficientSample: boolean;
+}
+
