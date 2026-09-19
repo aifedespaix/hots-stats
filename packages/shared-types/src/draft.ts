@@ -35,6 +35,10 @@ export const draftSlotInputSchema = z.object({
   slot: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
   rawName: z.string().min(1).max(64).nullable(),
   status: draftSlotStatusSchema,
+  // The hero-name line read off the plate, in the game client's own language
+  // (e.g. "LUISAILE" on a French client). Optional so daemons built before
+  // the hero capture shipped keep POSTing a valid snapshot.
+  heroName: z.string().min(1).max(64).nullable().optional(),
 });
 export type DraftSlotInput = z.infer<typeof draftSlotInputSchema>;
 
@@ -45,6 +49,9 @@ const draftTeamInputSchema = z.array(draftSlotInputSchema).length(5);
  * capture hotkey. */
 export const draftSnapshotInputSchema = z.object({
   capturedAt: z.string().datetime(),
+  // The battleground name read off the top of the draft screen; optional for
+  // the same backward-compatibility reason as each slot's `heroName`.
+  mapName: z.string().min(1).max(64).nullable().optional(),
   teamLeft: draftTeamInputSchema,
   teamRight: draftTeamInputSchema,
 });
@@ -62,11 +69,19 @@ export interface DraftPlayerSlot {
   status: DraftSlotStatus;
   candidates: string[];
   effectiveBattletag: string | null;
+  /** The hero-name line as read off the plate, in the client's language (null when unreadable). */
+  heroName: string | null;
+  /** That name resolved against the app's canonical hero names; null when the localized name has no known match. */
+  heroId: string | null;
 }
 
 export interface DraftSnapshot {
   id: string;
   capturedAt: string;
+  /** The battleground name as read off the draft screen (null when unreadable). */
+  mapName: string | null;
+  /** That name resolved against `maps.name`; null when unresolved. */
+  mapId: string | null;
   teamLeft: DraftPlayerSlot[];
   teamRight: DraftPlayerSlot[];
 }
