@@ -331,9 +331,7 @@ function goToMatch(row: Record<string, unknown>) {
         <template #cell-gameMode="{ row }">{{ formatGameMode(row.gameMode as never) }}</template>
         <template #cell-durationSeconds="{ row }">{{ formatDuration(row.durationSeconds as number) }}</template>
         <template #cell-result="{ row }">
-          <span :class="row.winner ? TONE_TEXT_CLASS.success : TONE_TEXT_CLASS.danger">
-            {{ row.winner ? "Victoire" : "Défaite" }}
-          </span>
+          <UiResultBadge :won="Boolean(row.winner)" />
         </template>
       </UiDataTable>
     </div>
