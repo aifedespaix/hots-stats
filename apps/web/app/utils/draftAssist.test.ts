@@ -1,5 +1,11 @@
+import { DRAFT_MIN_RANKED_GAMES_FOR_RANKING } from "@hots-stats/shared-types";
 import { describe, expect, test } from "vitest";
-import { summarizeComposition } from "./draftAssist";
+import {
+  DRAFT_ASSIST_CONTESTED_ROLE_PENALTY,
+  rankPickSuggestions,
+  summarizeComposition,
+} from "./draftAssist";
+import { wilsonLowerBound } from "./wilson";
 
 function team(roles: Array<string | null>) {
   return roles.map((heroRole) => ({ heroRole }));
@@ -51,5 +57,67 @@ describe("summarizeComposition", () => {
   test("returns nothing to warn about for an empty team", () => {
     const summary = summarizeComposition([]);
     expect(summary).toMatchObject({ resolved: 0, total: 0, warnings: [], partial: false });
+  });
+});
+
+function candidate(overrides: Partial<Parameters<typeof rankPickSuggestions>[0][number]>) {
+  return {
+    heroId: "h",
+    heroName: "Hero",
+    heroRole: "RangedAssassin",
+    gamesPlayed: 20,
+    wins: 10,
+    winrate: 0.5,
+    ...overrides,
+  };
+}
+
+describe("rankPickSuggestions", () => {
+  test("keeps confident records ahead of a three-game fluke", () => {
+    const suggestions = rankPickSuggestions(
+      [
+        candidate({ heroId: "lucky", gamesPlayed: 3, wins: 3, winrate: 1 }),
+        candidate({ heroId: "solid", gamesPlayed: 40, wins: 24, winrate: 0.6 }),
+      ],
+      [],
+    );
+    expect(suggestions.map((entry) => entry.heroId)).toEqual(["solid", "lucky"]);
+    expect(suggestions[0]?.score).toBeCloseTo(wilsonLowerBound(24, 40));
+  });
+
+  test("orders confident heroes by their Wilson lower bound", () => {
+    const suggestions = rankPickSuggestions(
+      [
+        candidate({ heroId: "low", gamesPlayed: 20, wins: 8 }),
+        candidate({ heroId: "high", gamesPlayed: 20, wins: 14 }),
+      ],
+      [],
+    );
+    expect(suggestions.map((entry) => entry.heroId)).toEqual(["high", "low"]);
+  });
+
+  test("down-weights a role the team already picked", () => {
+    const suggestions = rankPickSuggestions(
+      [
+        candidate({ heroId: "healer", heroName: "Healer", heroRole: "Healer", gamesPlayed: 20, wins: 11, winrate: 0.55 }),
+        candidate({ heroId: "tank", heroName: "Tank", heroRole: "Tank", gamesPlayed: 20, wins: 10, winrate: 0.5 }),
+      ],
+      ["Healer"],
+    );
+    expect(suggestions.map((entry) => entry.heroId)).toEqual(["tank", "healer"]);
+    expect(suggestions[1]?.score).toBeCloseTo(wilsonLowerBound(11, 20) - DRAFT_ASSIST_CONTESTED_ROLE_PENALTY);
+  });
+
+  test("flags a thin sample while keeping its game count", () => {
+    const below = rankPickSuggestions([candidate({ gamesPlayed: DRAFT_MIN_RANKED_GAMES_FOR_RANKING - 1 })], []);
+    expect(below[0]).toMatchObject({ gamesPlayed: DRAFT_MIN_RANKED_GAMES_FOR_RANKING - 1, smallSample: true });
+
+    const atFloor = rankPickSuggestions([candidate({ gamesPlayed: DRAFT_MIN_RANKED_GAMES_FOR_RANKING })], []);
+    expect(atFloor[0]?.smallSample).toBe(false);
+  });
+
+  test("caps the list at the requested limit", () => {
+    const candidates = ["a", "b", "c", "d"].map((id) => candidate({ heroId: id }));
+    expect(rankPickSuggestions(candidates, [], 2)).toHaveLength(2);
   });
 });

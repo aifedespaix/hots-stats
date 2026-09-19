@@ -1,3 +1,16 @@
+import { DRAFT_MIN_RANKED_GAMES_FOR_RANKING } from "@hots-stats/shared-types";
+import { wilsonLowerBound } from "./wilson";
+
+/** How many pick suggestions the panel shows. */
+export const DRAFT_ASSIST_MAX_PICKS = 3;
+/** How many of the viewer's top picks feed the ban search (one
+ * /heroes/:heroId/matchups call each). */
+export const DRAFT_ASSIST_MAX_LIKELY_HEROES = 3;
+/** Score penalty, per already-picked team-mate sharing the role, applied to
+ * the Wilson bound: a second healer is worse than a fresh role, all else
+ * equal. Expressed on the same 0..1 scale as the bound it subtracts. */
+export const DRAFT_ASSIST_CONTESTED_ROLE_PENALTY = 0.1;
+
 const ASSASSIN_ROLES = ["RangedAssassin", "MeleeAssassin"];
 const HEALER_ROLE = "Healer";
 const TANK_ROLE = "Tank";
@@ -80,4 +93,58 @@ export function summarizeComposition(slots: Array<{ heroRole: string | null }>):
     warnings,
     partial: resolved < total,
   };
+}
+
+export interface PickCandidateInput {
+  heroId: string;
+  heroName: string;
+  heroRole: string | null;
+  gamesPlayed: number;
+  wins: number;
+  winrate: number;
+}
+
+export interface PickSuggestion extends PickCandidateInput {
+  wilsonLowerBound: number;
+  /** Wilson lower bound minus the contested-role penalty; the ranking key. */
+  score: number;
+  /** True under DRAFT_MIN_RANKED_GAMES_FOR_RANKING -- shown, but flagged. */
+  smallSample: boolean;
+}
+
+/**
+ * Ranks the viewer's own heroes on the current battleground. Confidence comes
+ * first: a hero below DRAFT_MIN_RANKED_GAMES_FOR_RANKING is flagged and sorts
+ * after every confident one, so three lucky games never lead the list. Among
+ * confident heroes the key is the Wilson lower bound, not the raw winrate,
+ * and each role the team already picked subtracts
+ * DRAFT_ASSIST_CONTESTED_ROLE_PENALTY -- so a fresh role surfaces over a
+ * duplicate. Ties break on more games, then hero name, for a stable order.
+ */
+export function rankPickSuggestions(
+  candidates: PickCandidateInput[],
+  takenRoles: Array<string | null>,
+  limit = DRAFT_ASSIST_MAX_PICKS,
+): PickSuggestion[] {
+  const taken = takenRoles.filter((role): role is string => Boolean(role));
+  const suggestions: PickSuggestion[] = candidates.map((candidate) => {
+    const bound = wilsonLowerBound(candidate.wins, candidate.gamesPlayed);
+    const duplicates = candidate.heroRole ? taken.filter((role) => role === candidate.heroRole).length : 0;
+    return {
+      ...candidate,
+      wilsonLowerBound: bound,
+      score: bound - duplicates * DRAFT_ASSIST_CONTESTED_ROLE_PENALTY,
+      smallSample: candidate.gamesPlayed < DRAFT_MIN_RANKED_GAMES_FOR_RANKING,
+    };
+  });
+
+  suggestions.sort(
+    (a, b) =>
+      Number(a.smallSample) - Number(b.smallSample) ||
+      b.score - a.score ||
+      b.gamesPlayed - a.gamesPlayed ||
+      a.heroName.localeCompare(b.heroName),
+  );
+
+  return suggestions.slice(0, Math.max(0, limit));
 }
