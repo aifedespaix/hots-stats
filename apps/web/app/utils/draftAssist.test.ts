@@ -2,6 +2,7 @@ import { DRAFT_MIN_RANKED_GAMES_FOR_RANKING } from "@hots-stats/shared-types";
 import { describe, expect, test } from "vitest";
 import {
   DRAFT_ASSIST_CONTESTED_ROLE_PENALTY,
+  rankBanSuggestions,
   rankPickSuggestions,
   summarizeComposition,
 } from "./draftAssist";
@@ -119,5 +120,67 @@ describe("rankPickSuggestions", () => {
   test("caps the list at the requested limit", () => {
     const candidates = ["a", "b", "c", "d"].map((id) => candidate({ heroId: id }));
     expect(rankPickSuggestions(candidates, [], 2)).toHaveLength(2);
+  });
+});
+
+function matchup(overrides: Partial<Parameters<typeof rankBanSuggestions>[0][number]["worstMatchups"][number]>) {
+  return {
+    heroId: "opp",
+    heroName: "Opponent",
+    heroRole: "RangedAssassin",
+    gamesPlayed: 20,
+    winrate: 0.4,
+    deltaWinrate: -0.1,
+    smallSample: false,
+    ...overrides,
+  };
+}
+
+describe("rankBanSuggestions", () => {
+  test("bans the opponent with the most negative winrate delta", () => {
+    const bans = rankBanSuggestions([
+      {
+        heroId: "likely",
+        heroName: "Mon héros",
+        worstMatchups: [
+          matchup({ heroId: "x", heroName: "X", deltaWinrate: -0.1 }),
+          matchup({ heroId: "y", heroName: "Y", deltaWinrate: -0.25 }),
+        ],
+      },
+    ]);
+    expect(bans.map((ban) => ban.heroId)).toEqual(["y", "x"]);
+    expect(bans[0]).toMatchObject({ heroId: "y", counteredHeroId: "likely", counteredHeroName: "Mon héros" });
+  });
+
+  test("prefers a confident entry over a noisier, more negative one", () => {
+    const bans = rankBanSuggestions([
+      {
+        heroId: "likely",
+        heroName: "Mon héros",
+        worstMatchups: [
+          matchup({ heroId: "noisy", deltaWinrate: -0.5, smallSample: true }),
+          matchup({ heroId: "solid", deltaWinrate: -0.1, smallSample: false }),
+        ],
+      },
+    ]);
+    expect(bans[0]?.heroId).toBe("solid");
+  });
+
+  test("collapses the same opponent seen through several likely heroes to its worst entry", () => {
+    const bans = rankBanSuggestions([
+      { heroId: "a", heroName: "A", worstMatchups: [matchup({ heroId: "x", deltaWinrate: -0.05, gamesPlayed: 30 })] },
+      { heroId: "b", heroName: "B", worstMatchups: [matchup({ heroId: "x", deltaWinrate: -0.3, gamesPlayed: 8 })] },
+    ]);
+    expect(bans).toHaveLength(1);
+    expect(bans[0]).toMatchObject({ heroId: "x", deltaWinrate: -0.3, gamesPlayed: 8, counteredHeroId: "b" });
+  });
+
+  test("caps the list at the requested limit", () => {
+    const group = {
+      heroId: "a",
+      heroName: "A",
+      worstMatchups: [matchup({ heroId: "x" }), matchup({ heroId: "y" }), matchup({ heroId: "z" })],
+    };
+    expect(rankBanSuggestions([group], 2)).toHaveLength(2);
   });
 });

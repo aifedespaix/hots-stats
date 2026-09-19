@@ -10,6 +10,8 @@ export const DRAFT_ASSIST_MAX_LIKELY_HEROES = 3;
  * the Wilson bound: a second healer is worse than a fresh role, all else
  * equal. Expressed on the same 0..1 scale as the bound it subtracts. */
 export const DRAFT_ASSIST_CONTESTED_ROLE_PENALTY = 0.1;
+/** How many ban suggestions the panel shows. */
+export const DRAFT_ASSIST_MAX_BANS = 2;
 
 const ASSASSIN_ROLES = ["RangedAssassin", "MeleeAssassin"];
 const HEALER_ROLE = "Healer";
@@ -142,6 +144,79 @@ export function rankPickSuggestions(
     (a, b) =>
       Number(a.smallSample) - Number(b.smallSample) ||
       b.score - a.score ||
+      b.gamesPlayed - a.gamesPlayed ||
+      a.heroName.localeCompare(b.heroName),
+  );
+
+  return suggestions.slice(0, Math.max(0, limit));
+}
+
+export interface MatchupCandidateInput {
+  heroId: string;
+  heroName: string;
+  heroRole: string | null;
+  gamesPlayed: number;
+  winrate: number;
+  /** This matchup's winrate minus the likely hero's own baseline. */
+  deltaWinrate: number;
+  smallSample: boolean;
+}
+
+export interface LikelyHeroMatchups {
+  heroId: string;
+  heroName: string;
+  worstMatchups: MatchupCandidateInput[];
+}
+
+export interface BanSuggestion {
+  heroId: string;
+  heroName: string;
+  heroRole: string | null;
+  gamesPlayed: number;
+  winrate: number;
+  deltaWinrate: number;
+  smallSample: boolean;
+  counteredHeroId: string;
+  counteredHeroName: string;
+}
+
+/**
+ * One ban candidate per opponent hero, taken from the viewer's worst matchups
+ * over their likely picks. deltaWinrate is the drop versus the likely hero's
+ * own baseline, so the most negative value is the biggest threat. The same
+ * opponent seen through several likely heroes collapses to its worst entry.
+ * Confident entries rank first; a flagged one only leads when nothing
+ * confident is available.
+ */
+export function rankBanSuggestions(
+  groups: LikelyHeroMatchups[],
+  limit = DRAFT_ASSIST_MAX_BANS,
+): BanSuggestion[] {
+  const byOpponent = new Map<string, BanSuggestion>();
+  for (const group of groups) {
+    for (const found of group.worstMatchups) {
+      const existing = byOpponent.get(found.heroId);
+      if (!existing || found.deltaWinrate < existing.deltaWinrate) {
+        byOpponent.set(found.heroId, {
+          heroId: found.heroId,
+          heroName: found.heroName,
+          heroRole: found.heroRole,
+          gamesPlayed: found.gamesPlayed,
+          winrate: found.winrate,
+          deltaWinrate: found.deltaWinrate,
+          smallSample: found.smallSample,
+          counteredHeroId: group.heroId,
+          counteredHeroName: group.heroName,
+        });
+      }
+    }
+  }
+
+  const suggestions = [...byOpponent.values()];
+  suggestions.sort(
+    (a, b) =>
+      Number(a.smallSample) - Number(b.smallSample) ||
+      a.deltaWinrate - b.deltaWinrate ||
       b.gamesPlayed - a.gamesPlayed ||
       a.heroName.localeCompare(b.heroName),
   );
