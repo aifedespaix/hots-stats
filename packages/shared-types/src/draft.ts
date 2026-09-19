@@ -73,6 +73,8 @@ export interface DraftPlayerSlot {
   heroName: string | null;
   /** That name resolved against the app's canonical hero names; null when the localized name has no known match. */
   heroId: string | null;
+  /** The resolved hero's `heroes.role` (Tank, Healer, ...); null when `heroId` is null. */
+  heroRole: string | null;
 }
 
 export interface DraftSnapshot {

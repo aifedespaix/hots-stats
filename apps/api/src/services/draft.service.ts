@@ -37,6 +37,9 @@ interface ResolvedSlot extends DraftSlotInput {
   /** That slot's `heroName`, resolved against `heroes.name` once at ingest.
    * Null when the read was unreadable or is a localized name with no alias. */
   heroId: string | null;
+  /** The resolved hero's `heroes.role`, carried so the web composition panel
+   * needs no extra fetch. Null whenever `heroId` is null. */
+  heroRole: string | null;
 }
 
 interface StoredSnapshot {
@@ -133,6 +136,7 @@ async function toViewerSnapshot(viewerUserId: string, stored: StoredSnapshot): P
       effectiveBattletag,
       heroName: slot.heroName ?? null,
       heroId: slot.heroId,
+      heroRole: slot.heroRole,
     };
   }
 
@@ -244,16 +248,19 @@ export async function ingestDraftSnapshot(submitterUserId: string, input: DraftS
   // published to several viewers per capture.
   const [mapRows, heroRows] = await Promise.all([
     db.select({ id: maps.id, name: maps.name }).from(maps),
-    db.select({ id: heroes.id, name: heroes.name }).from(heroes),
+    db.select({ id: heroes.id, name: heroes.name, role: heroes.role }).from(heroes),
   ]);
+  const heroRoleById = new Map(heroRows.map((hero) => [hero.id, hero.role]));
   const mapName = input.mapName ?? null;
   const resolvedSlots: ResolvedSlot[] = await Promise.all(
     allSlots.map(async (slot) => {
       const heroName = slot.heroName ?? null;
+      const heroId = resolveHeroId(heroName, heroRows);
       return {
         ...slot,
         heroName,
-        heroId: resolveHeroId(heroName, heroRows),
+        heroId,
+        heroRole: heroId ? (heroRoleById.get(heroId) ?? null) : null,
         candidates: slot.status === "ok" && slot.rawName ? await resolveCandidates(slot.rawName) : [],
       };
     }),
