@@ -231,3 +231,19 @@ h1, h2, h3, h4, h5, h6 {
     outline-offset: 2px;
   }
 }
+
+/*
+ * F3 -- reduced motion: neutralise the CSS-driven transitions/animations
+ * (spinners, hover/press transitions, the token glow). Chart.js canvas
+ * animations are handled per-wrapper in app/utils/chartMotion.ts.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
