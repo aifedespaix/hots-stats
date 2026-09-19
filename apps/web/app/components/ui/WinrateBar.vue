@@ -11,6 +11,10 @@ const props = withDefaults(
 
 const tone = computed(() => winrateTone(props.winrate));
 const toneBgClass = computed(() => (tone.value === "success" ? "bg-success" : "bg-danger"));
+const toneTextClass = computed(() => TONE_TEXT_CLASS[tone.value]);
+// Redundant glyph so the win/loss side never relies on colour alone (F3).
+const glyph = computed(() => winrateGlyph(props.winrate));
+const ariaLabel = computed(() => `Taux de victoire : ${formatPercent(props.winrate)}`);
 
 const segment = computed(() => {
   const pct = props.winrate * 100;
@@ -26,19 +30,24 @@ const heightClass = computed(() => (props.size === "sm" ? "h-1.5" : "h-2"));
 </script>
 
 <template>
-  <div class="relative w-full" :class="heightClass">
-    <div class="h-full w-full overflow-hidden rounded-full bg-background">
+  <div class="flex w-full items-center gap-1.5">
+    <div class="relative min-w-0 flex-1" :class="heightClass" role="img" :aria-label="ariaLabel">
+      <div class="h-full w-full overflow-hidden rounded-full bg-background">
+        <span
+          class="absolute inset-y-0 rounded-full"
+          :class="toneBgClass"
+          :style="{ left: segment.left, width: segment.width }"
+        />
+        <span v-if="centered" class="absolute inset-y-0 w-px bg-border" style="left: 50%" />
+      </div>
       <span
-        class="absolute inset-y-0 rounded-full"
-        :class="toneBgClass"
-        :style="{ left: segment.left, width: segment.width }"
+        v-if="marker !== undefined"
+        class="absolute -top-0.5 h-[calc(100%+4px)] w-px -translate-x-1/2 bg-foreground/70"
+        :style="{ left: `${Math.min(100, Math.max(0, Math.round(marker * 100)))}%` }"
       />
-      <span v-if="centered" class="absolute inset-y-0 w-px bg-border" style="left: 50%" />
     </div>
-    <span
-      v-if="marker !== undefined"
-      class="absolute -top-0.5 h-[calc(100%+4px)] w-px -translate-x-1/2 bg-foreground/70"
-      :style="{ left: `${Math.min(100, Math.max(0, Math.round(marker * 100)))}%` }"
-    />
+    <span v-if="glyph" class="shrink-0 text-[0.625rem] leading-none" :class="toneTextClass" aria-hidden="true">
+      {{ glyph }}
+    </span>
   </div>
 </template>
