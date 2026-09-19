@@ -9,3 +9,4 @@ export * from "./daemon-error";
 export * from "./player-annotation";
 export * from "./spatial-calibration";
 export * from "./spatial-grid";
+export * from "./goals";
