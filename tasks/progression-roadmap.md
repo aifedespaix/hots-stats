@@ -571,8 +571,40 @@ Légende : `[ ]` à faire · `[~]` en cours · `[x]` terminé · `[!]` bloqué
   - Un bouton « Rechercher · Ctrl K » dans l'en-tête desktop ouvre la même
     palette que le raccourci, pour que l'affordance soit découvrable sans
     connaître le raccourci.
-- [ ] **F2 — Filtres dans l'URL**
+- [x] **F2 — Filtres dans l'URL**
   L'URL reproduit la vue ; le store Pinia reste la source de vérité. Spec § F2.
+  **Fait** (2026-09-19). Écarts / précisions vs spec :
+  - Le moteur (parse / build / merge, détection de boucle) est un module pur
+    sans Nuxt `apps/web/app/utils/urlFilters.ts`, verrouillé par
+    `urlFilters.test.ts` (15 tests) — même scission pure/UI que A1/A3/F1.
+    `composables/useUrlFilterSync.ts` ne fait que brancher `useRoute`/`useRouter`
+    et le timing d'hydratation de `pinia-plugin-persistedstate`.
+  - Pages couvertes : `/matches`, `/heroes`, `/players`. Paramètres :
+    `heroId`, `mapId`, `from`, `to`, `opponent`, `versions` (versions
+    conservées), `sort`, `dir`, `page`, `mode` (tags) et `accounts` (portée
+    multi-comptes) ; `q` pour la recherche héros/joueurs. Les valeurs par
+    défaut sont omises : une URL nue reste propre.
+  - Écart assumé n°1 : la « scope » synchronisée est la **sélection de
+    comptes** (`useAccountsStore`, seul store Pinia de portée personnelle). La
+    portée des stats héros (`useHeroStatsScope`, personal/global) n'est **pas**
+    mise dans l'URL : elle est persistée côté serveur (`PATCH /auth/me`), donc
+    ouvrir un lien partagé la modifierait — hors F2.
+  - Écart assumé n°2 : le chantier ne touche pas `/talents` (AC3). Les liens
+    existants vers `/matches?opponentHeroId=`/`allyBattletag=` ne sont pas
+    consommés par la page ; ces paramètres non gérés sont conservés tels quels.
+  - L'URL gagne sur le stockage **à la clé près** : à l'hydratation, les
+    valeurs présentes dans l'URL écrasent le localStorage, les absentes gardent
+    la préférence persistée. Sur une session neuve (AC1) le résultat est donc
+    entièrement déterminé par l'URL.
+  - SSR : `sync.hydrate()` s'exécute avant le premier `useApiFetch`, donc le
+    rendu serveur honore l'URL. Côté client la ré-application se fait dans
+    `app:suspense:resolve` (moment où `pinia-plugin-persistedstate` restaure
+    localStorage), puis la pagination est ré-appliquée après `nextTick` pour ne
+    pas être écrasée par les watchers « filtre changé -> page = 1 ».
+  - Un paramètre malformé est ignoré puis retiré de l'URL en une seule
+    `router.replace` (`project()` ne réécrit que sur différence réelle : pas de
+    boucle de redirection).
+  - Aucune API, aucune migration, aucune dépendance nouvelle, aucun secret.
 - [ ] **F3 — Passe accessibilité**
   Daltonisme (glyphes), `aria-live` sur le live draft, focus visible,
   `prefers-reduced-motion`. Spec § F3.

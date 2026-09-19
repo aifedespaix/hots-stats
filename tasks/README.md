@@ -327,6 +327,13 @@ rappelle donc le contexte nécessaire plutôt que de supposer une continuité.
   (`useCommandPaletteEntries`, exercé par `/matches`). Règles pures de
   correspondance/regroupement dans `utils/commandPalette.ts` (18 tests).
   Aucun nouvel endpoint, aucune migration, aucune dépendance.
+- **Suite Progression — F2 (filtres dans l'URL)** : `useUrlFilterSync` + moteur
+  pur `utils/urlFilters.ts` (15 tests) projettent les filtres des pages
+  `/matches`, `/heroes` et `/players` (héros, carte, dates, joueur croisé,
+  version, mode, portée multi-comptes, tri, page, recherche) dans la query
+  string ; le store Pinia reste la source de vérité, l'URL gagne sur le
+  stockage à la clé près, un paramètre malformé est ignoré sans boucle de
+  redirection. Aucune API, aucune migration, aucune dépendance.
 
 ## À faire
 
