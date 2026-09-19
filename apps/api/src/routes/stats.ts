@@ -10,6 +10,7 @@ import { authSession, requireUser } from "../middleware/auth-session";
 import { getContext } from "../services/context.service";
 import { getDrivers } from "../services/drivers.service";
 import { getKillers } from "../services/killers.service";
+import { getSessionRecap } from "../services/session.service";
 import { getPatterns } from "../services/patterns.service";
 import { getStatsSummary } from "../services/stats.service";
 import { getTrend } from "../services/trend.service";
@@ -77,6 +78,13 @@ const killersQuerySchema = z.object({
   mapId: z.string().optional(),
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
+});
+
+const sessionQuerySchema = z.object({
+  scope: heroStatsScopeSchema.optional(),
+  accounts: accountsQuerySchema,
+  mode: gameModeListSchema.optional(),
+  at: z.string().datetime().optional(),
 });
 
 export const statsRoute = new Hono<Env>()
@@ -212,4 +220,22 @@ export const statsRoute = new Hono<Env>()
         to: parsed.data.to,
       }),
     );
+  })
+  .get("/session", async (c) => {
+    const parsed = sessionQuerySchema.safeParse(c.req.query());
+    if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+
+    // "My session versus my baseline" has no coherent community subject, so an
+    // explicit global scope is refused rather than faked (same rule as
+    // /patterns, /trend, /drivers, /context and /killers). An omitted scope
+    // always falls back to the caller's own accounts.
+    const scope = withStatsScope(c.get("scope"), parsed.data.scope ?? "personal");
+    if (scope.mode === "global") {
+      return c.json(
+        { error: "Le récap de session n'est disponible que pour ton profil (scope=personal)." },
+        400,
+      );
+    }
+
+    return c.json(await getSessionRecap(scope, { mode: parsed.data.mode, at: parsed.data.at }));
   });
