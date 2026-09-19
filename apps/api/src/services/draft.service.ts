@@ -1,4 +1,4 @@
-import { db, draftPseudoPreferences, heroes, matchPlayers, matches, userAccounts } from "@hots-stats/db";
+import { db, draftPseudoPreferences, heroes, matchPlayers, maps, matches, userAccounts } from "@hots-stats/db";
 import {
   DRAFT_MIN_RANKED_GAMES_FOR_RANKING,
   DRAFT_RANKED_MODES,
@@ -14,6 +14,7 @@ import {
 } from "@hots-stats/shared-types";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Scope } from "../lib/account-selection";
+import { resolveHeroId, resolveMapId } from "../lib/draft-resolution";
 import { getPlayerEncounter } from "./players.service";
 import { getMatchupWeaknesses } from "./weaknesses.service";
 
@@ -33,11 +34,17 @@ interface ResolvedSlot extends DraftSlotInput {
   /** Every full battletag whose name part (before `#`) matches `rawName`,
    * across every match ever recorded -- see `resolveCandidates`. */
   candidates: string[];
+  /** That slot's `heroName`, resolved against `heroes.name` once at ingest.
+   * Null when the read was unreadable or is a localized name with no alias. */
+  heroId: string | null;
 }
 
 interface StoredSnapshot {
   id: string;
   capturedAt: string;
+  /** Raw battleground read and its resolved id, both null when unavailable. */
+  mapName: string | null;
+  mapId: string | null;
   teamLeft: ResolvedSlot[];
   teamRight: ResolvedSlot[];
   createdAtMs: number;
@@ -124,12 +131,16 @@ async function toViewerSnapshot(viewerUserId: string, stored: StoredSnapshot): P
       status: slot.status,
       candidates: slot.candidates,
       effectiveBattletag,
+      heroName: slot.heroName ?? null,
+      heroId: slot.heroId,
     };
   }
 
   return {
     id: stored.id,
     capturedAt: stored.capturedAt,
+    mapName: stored.mapName,
+    mapId: stored.mapId,
     teamLeft: stored.teamLeft.map(resolveSlot),
     teamRight: stored.teamRight.map(resolveSlot),
   };
@@ -189,6 +200,11 @@ function reconcileSnapshot(existing: StoredSnapshot | undefined, incoming: Store
   }
   return {
     ...incoming,
+    // The battleground cannot change mid-draft, so a capture that failed to
+    // read it keeps whatever the previous capture of the same draft had --
+    // unlike the slots, whose stale values are dropped by `mergeTeam`.
+    mapName: incoming.mapName ?? existing.mapName,
+    mapId: incoming.mapId ?? existing.mapId,
     teamLeft: mergeTeam(existing.teamLeft, incoming.teamLeft),
     teamRight: mergeTeam(existing.teamRight, incoming.teamRight),
   };
@@ -223,11 +239,24 @@ async function publish(userId: string, stored: StoredSnapshot): Promise<void> {
  */
 export async function ingestDraftSnapshot(submitterUserId: string, input: DraftSnapshotInput): Promise<void> {
   const allSlots = [...input.teamLeft, ...input.teamRight];
+  // Resolved once per capture, against the seed tables, and then carried on
+  // the in-memory snapshot: the SSE read path stays DB-free, and a snapshot is
+  // published to several viewers per capture.
+  const [mapRows, heroRows] = await Promise.all([
+    db.select({ id: maps.id, name: maps.name }).from(maps),
+    db.select({ id: heroes.id, name: heroes.name }).from(heroes),
+  ]);
+  const mapName = input.mapName ?? null;
   const resolvedSlots: ResolvedSlot[] = await Promise.all(
-    allSlots.map(async (slot) => ({
-      ...slot,
-      candidates: slot.status === "ok" && slot.rawName ? await resolveCandidates(slot.rawName) : [],
-    })),
+    allSlots.map(async (slot) => {
+      const heroName = slot.heroName ?? null;
+      return {
+        ...slot,
+        heroName,
+        heroId: resolveHeroId(heroName, heroRows),
+        candidates: slot.status === "ok" && slot.rawName ? await resolveCandidates(slot.rawName) : [],
+      };
+    }),
   );
 
   const candidateBattletags = [...new Set(resolvedSlots.flatMap((slot) => slot.candidates))];
@@ -244,6 +273,8 @@ export async function ingestDraftSnapshot(submitterUserId: string, input: DraftS
   const incoming: StoredSnapshot = {
     id: crypto.randomUUID(),
     capturedAt: input.capturedAt,
+    mapName,
+    mapId: resolveMapId(mapName, mapRows),
     teamLeft: resolvedSlots.slice(0, 5),
     teamRight: resolvedSlots.slice(5, 10),
     createdAtMs: Date.now(),
