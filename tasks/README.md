@@ -281,6 +281,14 @@ rappelle donc le contexte nécessaire plutôt que de supposer une continuité.
   (taille = morts groupées), marqueurs de structures best-effort, curseur
   partagé avec l'onglet Heatmaps (`highlightAtSeconds`) et état explicite
   « Données de niveau absentes ». Aucun changement d'API/DB ; SVG maison.
+- **Suite Progression — D0 (capture draft enrichie, prérequis de D1)** : le
+  daemon lit désormais la carte et les noms de héros par OCR des plaques
+  (grande ligne au-dessus du pseudo — pas de reconnaissance de portraits),
+  les POSTe en `mapName`/`heroName` additifs, et l'API les résout en
+  `mapId`/`heroId` (normalisation accents/ponctuation). Écart : les noms de
+  héros localisés (client FR) sans alias restent `null` — D1 reste bloqué sur
+  une table d'alias localisés (voie recommandée : apprentissage depuis les
+  replays).
 - **Suite Progression — C3 (ton bourreau)** : contrat partagé
   `KillerEntry`/`KillersResponse`, agrégat pur sans DB
   `apps/api/src/lib/killer-aggregate.ts` (attribution des morts, top tueurs par

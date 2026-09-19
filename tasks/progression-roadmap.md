@@ -401,9 +401,42 @@ Légende : `[ ]` à faire · `[~]` en cours · `[x]` terminé · `[!]` bloqué
 
 ### Lot D — Draft
 
-- [ ] **D1 — Aide au draft**
+- [x] **D0 — Capture draft enrichie (carte + héros)** · prérequis de D1
+  Le snapshot ne portait ni carte ni héros, donc D1 était bloqué à la donnée.
+  Décision utilisateur : étendre d'abord la capture côté daemon. Spec dédiée
+  `docs/superpowers/specs/2026-09-19-draft-capture-enrichment-design.md`.
+  **Fait** (2026-09-19). Écarts / précisions vs spec D1 :
+  - Découverte : la carte et les noms de héros sont rendus en **texte** sur
+    l'écran de draft (le nom du héros est la grande ligne de la plaque,
+    au-dessus du pseudo) — aucune reconnaissance de portraits nécessaire.
+    Vérifié avec le vrai moteur OCR du daemon (`src/ocr.py`) sur
+    `daemon-python/draft-live-test/screenshot.png` : carte
+    `GARDEN OF TERROR CLASSIC`, héros `E.T.C.`/`JAINA`/`LTMORALES`/
+    `LUISAILE`/`ZAGARA` et `MÉPHISTO`/`VALEERA`/`TYCHUS`/`ASMODAN`/
+    `GRISETETE`.
+  - Le daemon capture un crop carte (haut centre) et 5 crops héro par équipe,
+    dans le même système de boîtes relatives et de config AppData que les
+    pseudos (`battlegroundCrop`, `heroCrops`), et POSTe `mapName` plus un
+    `heroName` par slot (additif, optionnel dans le schéma : un daemon
+    antérieur continue de fonctionner).
+  - L'API résout `mapId` (match normalisé exact, sinon préfixe unique — ce qui
+    absorbe le suffixe « CLASSIC ») et `heroId` (match normalisé exact) une
+    seule fois à l'ingest, puis les porte sur le snapshot en mémoire : le
+    chemin SSE reste sans requête DB.
+  - **Blocage restant pour D1** : les noms de héros sont localisés par le
+    client (`LUISAILE`, `GRISETETE`, `ASMODAN` sur un client français)
+    alors que `heroes.name` ne contient que l'anglais ; ces noms restent
+    `heroId: null` (jamais devinés). Il faut une table d'alias localisés —
+    voie recommandée : apprendre depuis les replays (`replay.details.
+    m_playerList[i].m_hero`, que `parser.py` documente déjà comme le nom
+    localisé), chantier séparé touchant l'ingestion.
+  - Aucune UI D1 livrée dans cette session (le brief demandait d'abord la
+    capture) : D1 reste à faire.
+- [ ] **D1 — Aide au draft** · dépend de D0
   Alerte de composition, suggestion de pick par carte + pool perso, suggestion
-  de ban via les pires matchups. Spec § D1.
+  de ban via les pires matchups. Spec § D1. D0 fournit la carte et les noms de
+  héros bruts ; la composition reste dépendante des alias de héros localisés
+  (voir D0).
 
 ### Lot E — Sessions et objectifs
 
