@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import type { HeroListResponse, HeroStats } from "~/types/analytics";
+import { HEROES_SORTABLE_COLUMNS } from "~/stores/useHeroesFiltersStore";
+import { DEFAULT_GAME_MODE_TAG_KEYS, GAME_MODE_TAG_KEYS, type GameModeTagKey } from "~/utils/gameModeTags";
+import type { UrlFilterSpec } from "~/utils/urlFilters";
 
 definePageMeta({ middleware: "auth" });
 
@@ -45,6 +48,39 @@ const sortedHeroes = computed(() => {
 // Pagination slices sortedHeroes, which is already filtered by `search` -
 // the search box keeps matching across the whole list, not just the current page.
 const { page, pageSize, total, paginated: pagedHeroes } = usePagination(sortedHeroes, 20);
+
+const accountsStore = useAccountsStore();
+
+// URL <-> store projection (F2): copying the URL reproduces the filtered view.
+const urlFilterSpecs: UrlFilterSpec[] = [
+  { name: "q", kind: "string" },
+  { name: "sort", kind: "enum", allowed: HEROES_SORTABLE_COLUMNS },
+  { name: "dir", kind: "enum", allowed: ["asc", "desc"] },
+  { name: "page", kind: "int" },
+  { name: "mode", kind: "csv", allowed: GAME_MODE_TAG_KEYS },
+  { name: "accounts", kind: "csv" },
+];
+
+useUrlFilterSync({
+  specs: urlFilterSpecs,
+  defaults: { q: "", sort: "gamesPlayed", dir: "desc", page: 1, mode: [...DEFAULT_GAME_MODE_TAG_KEYS], accounts: [] },
+  read: () => ({
+    q: search.value,
+    sort: sortKey.value,
+    dir: sortDir.value,
+    page: page.value,
+    mode: gameModeStore.activeTags,
+    accounts: accountsStore.selected ?? [],
+  }),
+  write: (values) => {
+    if ("q" in values) search.value = values.q as string;
+    if ("sort" in values) sortKey.value = values.sort as string;
+    if ("dir" in values) sortDir.value = values.dir as "asc" | "desc";
+    if ("page" in values) page.value = values.page as number;
+    if ("mode" in values) gameModeStore.setTags(values.mode as GameModeTagKey[]);
+    if ("accounts" in values) accountsStore.setSelection(values.accounts as string[]);
+  },
+});
 
 watch([() => gameModeStore.activeTags, search], () => {
   page.value = 1;

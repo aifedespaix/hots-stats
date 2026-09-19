@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { UNKNOWN_GAME_VERSION } from "@hots-stats/shared-types";
 import type { MatchListResponse } from "~/types/matches";
-import type { MatchesSortableColumn } from "~/stores/useMatchesFiltersStore";
+import { MATCHES_SORTABLE_COLUMNS, type MatchesSortableColumn } from "~/stores/useMatchesFiltersStore";
+import { DEFAULT_GAME_MODE_TAG_KEYS, GAME_MODE_TAG_KEYS, type GameModeTagKey } from "~/utils/gameModeTags";
+import type { UrlFilterSpec } from "~/utils/urlFilters";
 import { matchCommandEntries } from "~/utils/commandPalette";
 
 definePageMeta({ middleware: "auth" });
@@ -100,6 +102,68 @@ function onSort(key: string) {
 
 const page = ref(1);
 const pageSize = 20;
+
+const accountsStore = useAccountsStore();
+
+// URL <-> store projection (F2): copying the URL reproduces the filtered view.
+// The stores above stay the source of truth; see useUrlFilterSync.
+const urlFilterSpecs: UrlFilterSpec[] = [
+  { name: "heroId", kind: "string" },
+  { name: "mapId", kind: "string" },
+  { name: "from", kind: "date" },
+  { name: "to", kind: "date" },
+  { name: "opponent", kind: "string" },
+  { name: "sort", kind: "enum", allowed: MATCHES_SORTABLE_COLUMNS },
+  { name: "dir", kind: "enum", allowed: ["asc", "desc"] },
+  { name: "page", kind: "int" },
+  { name: "versions", kind: "csv" },
+  { name: "mode", kind: "csv", allowed: GAME_MODE_TAG_KEYS },
+  { name: "accounts", kind: "csv" },
+];
+
+useUrlFilterSync({
+  specs: urlFilterSpecs,
+  defaults: {
+    heroId: "",
+    mapId: "",
+    from: "",
+    to: "",
+    opponent: "",
+    sort: "playedAt",
+    dir: "desc",
+    page: 1,
+    // Every version is included by default; the URL only carries the kept subset.
+    versions: [...allGameVersions.value],
+    mode: [...DEFAULT_GAME_MODE_TAG_KEYS],
+    accounts: [],
+  },
+  read: () => ({
+    heroId: heroId.value,
+    mapId: mapId.value,
+    from: dateFrom.value,
+    to: dateTo.value,
+    opponent: opponentBattletag.value,
+    sort: sortKey.value,
+    dir: sortDir.value,
+    page: page.value,
+    versions: selectedGameVersions.value,
+    mode: gameModeStore.activeTags,
+    accounts: accountsStore.selected ?? [],
+  }),
+  write: (values) => {
+    if ("heroId" in values) heroId.value = values.heroId as string;
+    if ("mapId" in values) mapId.value = values.mapId as string;
+    if ("from" in values) dateFrom.value = values.from as string;
+    if ("to" in values) dateTo.value = values.to as string;
+    if ("opponent" in values) opponentBattletag.value = values.opponent as string;
+    if ("sort" in values) sortKey.value = values.sort as MatchesSortableColumn;
+    if ("dir" in values) sortDir.value = values.dir as "asc" | "desc";
+    if ("versions" in values) gameVersionFilterStore.setIncluded(allGameVersions.value, values.versions as string[]);
+    if ("mode" in values) gameModeStore.setTags(values.mode as GameModeTagKey[]);
+    if ("accounts" in values) accountsStore.setSelection(values.accounts as string[]);
+    if ("page" in values) page.value = values.page as number;
+  },
+});
 
 // The "result" column (shown as Victoire/Défaite) sorts by the underlying
 // `winner` boolean server-side, which isn't its own visible column.

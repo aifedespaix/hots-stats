@@ -5,9 +5,10 @@ import { DEFAULT_GAME_MODE_TAG_KEYS, GAME_MODE_TAGS, type GameModeTagKey } from 
 /**
  * Global header filter: which game-mode tags are active, driving every
  * page's data (dashboard, heroes, matches, players, ...). One source of
- * truth instead of a per-page "mode" filter. Persisted to localStorage only
- * (via the pinia-plugin-persistedstate client plugin) - deliberately never
- * synced to the URL, so it stays a pure client preference.
+ * truth instead of a per-page "mode" filter. Persisted to localStorage via
+ * the pinia-plugin-persistedstate client plugin, and projected into the query
+ * string by the list pages (see useUrlFilterSync) so a copied URL reproduces
+ * the filtered view; the store stays the source of truth.
  */
 export const useGameModeStore = defineStore("game-mode", {
   state: (): { activeTags: GameModeTagKey[] } => ({
