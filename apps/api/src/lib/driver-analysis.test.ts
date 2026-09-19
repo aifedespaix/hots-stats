@@ -26,6 +26,7 @@ describe("cohensD", () => {
 function match(overrides: Partial<DriverMatchInput> = {}): DriverMatchInput {
   return {
     matchId: "m",
+    playedAt: "2026-01-01T00:00:00.000Z",
     winner: true,
     durationSeconds: 1200,
     kills: 5,

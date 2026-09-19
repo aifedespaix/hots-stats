@@ -48,6 +48,7 @@ export async function getDrivers(scope: Scope, filters: DriversFilters): Promise
   const candidateRows = await db
     .select({
       matchId: matchPlayers.matchId,
+      playedAt: matches.playedAt,
       durationSeconds: matches.durationSeconds,
       battletag: matchPlayers.battletag,
       team: matchPlayers.team,
@@ -163,6 +164,7 @@ export async function getDrivers(scope: Scope, filters: DriversFilters): Promise
     const outnumbered = outnumberedDeathsCount(deaths, subject);
     return {
       matchId: row.matchId,
+      playedAt: row.playedAt.toISOString(),
       winner: row.winner,
       durationSeconds: row.durationSeconds,
       kills: row.kills,

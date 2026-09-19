@@ -1,5 +1,5 @@
 import { PROGRESSION_MIN_PER_SIDE, RESPAWN_ESTIMATE_SECONDS } from "@hots-stats/shared-types";
-import type { DriverMetric, DriversResponse } from "@hots-stats/shared-types";
+import type { DriverMetric, DriversResponse, GoalMetricOption } from "@hots-stats/shared-types";
 
 /** Seconds after gates open at which the "hero level at 10 min" metric is read. */
 export const DRIVER_LEVEL_READ_SECONDS = 600;
@@ -45,6 +45,9 @@ export function cohensD(wins: number[], losses: number[]): number {
 /** One scope-resolved match's raw inputs for the A4 driver analysis. */
 export interface DriverMatchInput {
   matchId: string;
+  /** ISO timestamp of the match. The A4 maths ignores it; the E2 goal window
+   * ("matches played after the goal was created") reads it. */
+  playedAt: string;
   winner: boolean;
   durationSeconds: number;
   kills: number;
@@ -142,6 +145,27 @@ const DRIVER_METRICS: DriverMetricDefinition[] = [
     value: (match) => match.levelAt10Min,
   },
 ];
+
+/** The A4 metric catalog, exposed so other features (E2 goals, and the web
+ * form through the API response) reuse the exact same keys and labels instead
+ * of keeping a second copy. */
+export const DRIVER_METRIC_CATALOG: GoalMetricOption[] = DRIVER_METRICS.map(
+  ({ key, label, betterWhen }) => ({ key, label, betterWhen }),
+);
+
+/** The metric's value for one match by A4 definition; null when the match
+ * cannot provide it or the key is unknown. */
+export function driverMetricValue(key: string, match: DriverMatchInput): number | null {
+  const definition = DRIVER_METRICS.find((metric) => metric.key === key);
+  if (!definition) return null;
+  const value = definition.value(match);
+  return value === null || !Number.isFinite(value) ? null : value;
+}
+
+/** Whether `key` is one of the A4 driver metrics a goal may target (E2 AC1). */
+export function isKnownDriverMetricKey(key: string): boolean {
+  return DRIVER_METRICS.some((metric) => metric.key === key);
+}
 
 function sortDrivers(drivers: DriverMetric[]): DriverMetric[] {
   return [...drivers].sort((a, b) => {
