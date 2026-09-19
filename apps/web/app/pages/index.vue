@@ -103,6 +103,13 @@ const progressCards = computed<NavCardConfig[]>(() => [
     color: "accent",
   },
   {
+    to: "/session",
+    icon: "i-heroicons-clipboard-document-list",
+    title: "Récap session",
+    description: "Ton dernier bilan de session et son écart à ta moyenne.",
+    color: "accent",
+  },
+  {
     to: "/analysis",
     icon: "i-heroicons-chart-bar",
     title: "Diagnostic",
