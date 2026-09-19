@@ -5,7 +5,7 @@ import pytest
 from PIL import Image
 
 from src import ocr
-from src.ocr import OcrResult, _choose_reading, read_player_name, warm_up
+from src.ocr import OcrResult, _choose_reading, read_battleground_name, read_player_name, warm_up
 
 _LATIN_CHARSET = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,!?'ÉéÀàÈèÙùÂâÊêÎîÔôÛûËëÏïÜü")
 
@@ -256,3 +256,28 @@ class TestChooseReading:
     def test_unreadable_when_both_are_empty(self):
         result = _choose_reading((None, 0.0), (None, 0.0))
         assert result == (None, 0.0)
+
+# -- battleground name (D1 draft assistance) ---------------------------------
+
+
+def test_read_battleground_name_keeps_word_spaces(fake_engines):
+    multilingual_engine, latin_engine = fake_engines
+    multilingual_engine.return_value = (None, 0.01)
+    latin_engine.return_value = ([["GARDEN OF TERROR CLASSIC", 0.95]], 0.05)
+
+    result = read_battleground_name(_crop())
+
+    assert result == OcrResult("GARDEN OF TERROR CLASSIC", pytest.approx(0.95))
+
+
+def test_read_battleground_name_still_trims_edge_noise(fake_engines):
+    multilingual_engine, latin_engine = fake_engines
+    multilingual_engine.return_value = (None, 0.01)
+    latin_engine.return_value = ([["  GARDEN OF TERROR  ", 0.9]], 0.05)
+
+    assert read_battleground_name(_crop()).text == "GARDEN OF TERROR"
+
+
+def test_read_battleground_name_returns_none_for_missing_crop():
+    assert read_battleground_name(None) == OcrResult(None, 0.0)
+

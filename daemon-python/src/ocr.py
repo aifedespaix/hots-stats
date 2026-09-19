@@ -215,7 +215,7 @@ def _prepare_crop(crop: Image.Image) -> "np.ndarray":
     return np.array(padded)
 
 
-def _read_with_engine(engine, prepared: np.ndarray) -> tuple[str | None, float]:
+def _read_with_engine(engine, prepared: np.ndarray, collapse_whitespace: bool = True) -> tuple[str | None, float]:
     """Runs one engine against an already-prepared (upscaled + padded) crop.
     use_det=False: see `_UPSCALE_FACTOR`'s comment. This also changes each
     result entry's shape from RapidOCR's usual `[box, text, score]` to
@@ -234,7 +234,7 @@ def _read_with_engine(engine, prepared: np.ndarray) -> tuple[str | None, float]:
     # One crop is one line of text; take the highest-confidence read in
     # case the engine still returns more than one candidate.
     best_text, best_score = max(result, key=lambda entry: entry[1])
-    cleaned = _clean_text(best_text)
+    cleaned = _clean_text(best_text) if collapse_whitespace else best_text.strip()
     if not cleaned:
         return None, float(best_score)
     return cleaned, float(best_score)
@@ -280,8 +280,9 @@ def _choose_reading(
     return None, max(multilingual_score, latin_score)
 
 
-def read_player_name(crop: Image.Image | None) -> OcrResult:
-    """Reads a single player-name crop. Returns `OcrResult(None, 0.0)` for a
+def _read_line(crop: Image.Image | None, collapse_whitespace: bool) -> OcrResult:
+    """Reads a single draft-screen crop (a player name, a hero name, or the
+    battleground title). Returns `OcrResult(None, 0.0)` for a
     missing crop or an engine failure, and `OcrResult(None, confidence)` for
     an empty read or one below `_MIN_CONFIDENCE` -- never raises, so one bad
     slot degrades gracefully instead of failing the whole capture (see
@@ -292,14 +293,36 @@ def read_player_name(crop: Image.Image | None) -> OcrResult:
     try:
         prepared = _prepare_crop(crop)
     except Exception:
-        logger.exception("OCR failed on a player-name crop")
+        logger.exception("OCR failed on a draft crop")
         return OcrResult(None, 0.0)
 
     multilingual_engine = _get_multilingual_engine()
-    multilingual = _read_with_engine(multilingual_engine, prepared) if multilingual_engine is not None else (None, 0.0)
+    multilingual = (
+        _read_with_engine(multilingual_engine, prepared, collapse_whitespace)
+        if multilingual_engine is not None
+        else (None, 0.0)
+    )
 
     latin_engine = _get_latin_engine()
-    latin = _read_with_engine(latin_engine, prepared) if latin_engine is not None else (None, 0.0)
+    latin = _read_with_engine(latin_engine, prepared, collapse_whitespace) if latin_engine is not None else (None, 0.0)
 
     text, score = _choose_reading(multilingual, latin)
     return OcrResult(text, score)
+
+
+def read_player_name(crop: Image.Image | None) -> OcrResult:
+    """Reads a single player-name crop, collapsing whitespace (HotS display
+    names never contain any, so OCR picking up stray blanks from the crop
+    edges is always noise) and never raising -- one bad slot degrades
+    gracefully instead of failing the whole capture (see draft_capture.py)."""
+    return _read_line(crop, collapse_whitespace=True)
+
+
+def read_battleground_name(crop: Image.Image | None) -> OcrResult:
+    """Reads the single-line battleground-name crop off the top of the draft
+    screen. Same engines and preparation as `read_player_name`; only the
+    whitespace handling differs. A map name is several words -- collapsing
+    them would leave "GARDENOFTERROR" for the raw value the UI shows and the
+    API resolves, so the interior spaces are kept (only the edges are
+    trimmed)."""
+    return _read_line(crop, collapse_whitespace=False)

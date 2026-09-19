@@ -32,7 +32,8 @@ def _team_result(has_crops: bool = True) -> TeamCropResult:
     strip = Image.new("RGB", (200, 800), color=(1, 2, 3))
     rotated = strip.rotate(30, expand=True)
     crops = [Image.new("RGB", (60, 20), color=(4, 5, 6)) for _ in range(5)] if has_crops else [None] * 5
-    return TeamCropResult(layout=LEFT_TEAM, strip=strip, rotated=rotated, player_crops=crops)
+    hero_crops = [Image.new("RGB", (60, 20), color=(7, 8, 9)) for _ in range(5)] if has_crops else [None] * 5
+    return TeamCropResult(layout=LEFT_TEAM, strip=strip, rotated=rotated, player_crops=crops, hero_crops=hero_crops)
 
 
 def _ocr_results(texts: list[str | None]) -> list[OcrResult]:
@@ -124,6 +125,35 @@ def test_save_capture_clears_stale_files_from_the_previous_capture():
 
     assert not (capture_dir / "left-slot-1.png").exists()
 
+
+def test_save_capture_writes_the_battleground_and_hero_crops():
+    screenshot = Image.new("RGB", (1920, 1080), color=(9, 9, 9))
+    left = _team_result()
+    right = _team_result()
+    battleground = Image.new("RGB", (400, 60), color=(1, 1, 1))
+
+    draft_debug.save_capture(
+        screenshot,
+        "2026-08-12T10:00:00Z",
+        left,
+        right,
+        _ocr_results(["A"] * 5),
+        _ocr_results(["B"] * 5),
+        battleground_crop=battleground,
+        battleground_text="GARDEN OF TERROR",
+        left_hero_results=_ocr_results(["E.T.C.", "JAINA", "LT MORALES", "LUISAILE", "ZAGARA"]),
+        right_hero_results=_ocr_results(["MEPHISTO", "VALEERA", "TYCHUS", "ASMODAN", "GRISETETE"]),
+    )
+
+    capture_dir = draft_debug.debug_dir() / "captures" / "latest"
+    assert (capture_dir / "battleground.png").is_file()
+    assert (capture_dir / "left-hero-1.png").is_file()
+    assert (capture_dir / "right-hero-5.png").is_file()
+
+    info = json.loads((capture_dir / "crop-info.json").read_text(encoding="utf-8"))
+    assert info["battlegroundText"] == "GARDEN OF TERROR"
+    assert info["teamLeft"]["slots"][0]["heroOcrText"] == "E.T.C."
+    assert info["teamRight"]["slots"][4]["heroOcrText"] == "GRISETETE"
 
 def test_install_file_log_handler_writes_warnings_to_log_file():
     draft_debug.install_file_log_handler()

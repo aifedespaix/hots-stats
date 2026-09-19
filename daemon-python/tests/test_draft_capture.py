@@ -17,14 +17,25 @@ def _no_debug_log_handler():
         yield
 
 
+@pytest.fixture(autouse=True)
+def _stub_battleground(monkeypatch):
+    # Almost every capture test exercises player/hero payload building; the
+    # battleground crop has dedicated tests below. Stubbing it here keeps those
+    # tests from depending on a real PIL screenshot.
+    monkeypatch.setattr(draft_capture, "extract_battleground_crop", lambda screenshot: "battleground-crop")
+    monkeypatch.setattr(draft_capture.ocr, "read_battleground_name", lambda crop: OcrResult("GARDEN OF TERROR", 0.9))
+
+
 def _client() -> MagicMock:
     client = MagicMock()
     client.post_draft_snapshot.return_value = True
     return client
 
 
-def _team_result(crops: list) -> TeamCropResult:
-    return TeamCropResult(layout=MagicMock(), strip=MagicMock(), rotated=MagicMock(), player_crops=crops)
+def _team_result(crops: list, hero_crops: list | None = None) -> TeamCropResult:
+    return TeamCropResult(
+        layout=MagicMock(), strip=MagicMock(), rotated=MagicMock(), player_crops=crops, hero_crops=hero_crops or []
+    )
 
 
 def test_capture_and_submit_builds_expected_payload():
@@ -47,9 +58,10 @@ def test_capture_and_submit_builds_expected_payload():
     assert payload["capturedAt"].endswith("Z")
     assert len(payload["teamLeft"]) == 5
     assert len(payload["teamRight"]) == 5
-    assert payload["teamLeft"][0] == {"slot": 1, "rawName": "Name-l1", "status": "ok"}
-    assert payload["teamLeft"][1] == {"slot": 2, "rawName": None, "status": "unreadable"}
-    assert payload["teamRight"][4] == {"slot": 5, "rawName": "Name-r5", "status": "ok"}
+    assert payload["mapName"] == "GARDEN OF TERROR"
+    assert payload["teamLeft"][0] == {"slot": 1, "rawName": "Name-l1", "status": "ok", "heroName": None}
+    assert payload["teamLeft"][1] == {"slot": 2, "rawName": None, "status": "unreadable", "heroName": None}
+    assert payload["teamRight"][4] == {"slot": 5, "rawName": "Name-r5", "status": "ok", "heroName": None}
     save_capture.assert_called_once()
 
 
@@ -310,3 +322,61 @@ def test_capture_and_submit_bails_when_superseded_before_submit():
 
     save_capture.assert_not_called()
     client.post_draft_snapshot.assert_not_called()
+
+# -- battleground + hero names (D1 draft assistance) -------------------------
+
+
+def test_capture_and_submit_includes_hero_names_and_the_battleground(monkeypatch):
+    client = _client()
+    left = _team_result(["l1"] * 5, hero_crops=["lh1", "lh2", "lh3", "lh4", "lh5"])
+    right = _team_result(["r1"] * 5, hero_crops=["rh1", "rh2", "rh3", "rh4", "rh5"])
+    monkeypatch.setattr(draft_capture.ocr, "read_player_name", lambda crop: OcrResult(f"Name-{crop}", 0.9))
+    monkeypatch.setattr(draft_capture, "extract_battleground_crop", lambda screenshot: "battleground-crop")
+    monkeypatch.setattr(draft_capture.ocr, "read_battleground_name", lambda crop: OcrResult("GARDEN OF TERROR", 0.95))
+
+    with patch("src.draft_capture.screen_capture.capture_game_window", return_value="screenshot"):
+        with patch("src.draft_capture.extract_team_crops", return_value=(left, right)):
+            with patch("src.draft_capture.draft_debug.save_capture"):
+                draft_capture.capture_and_submit(client)
+
+    payload = client.post_draft_snapshot.call_args[0][0]
+    assert payload["mapName"] == "GARDEN OF TERROR"
+    assert payload["teamLeft"][0]["heroName"] == "Name-lh1"
+    assert payload["teamRight"][4]["heroName"] == "Name-rh5"
+
+
+def test_capture_and_submit_reports_a_null_hero_name_when_there_is_no_hero_crop():
+    client = _client()
+    left = _team_result(["l1"] * 5)
+    right = _team_result(["r1"] * 5)
+
+    def fake_player(crop):
+        # Mirrors the real read_player_name(None) -> OcrResult(None, 0.0), so a
+        # missing hero crop is reported as unreadable rather than as a name.
+        return OcrResult(None, 0.0) if crop is None else OcrResult("Name", 0.9)
+
+    with patch("src.draft_capture.screen_capture.capture_game_window", return_value="screenshot"):
+        with patch("src.draft_capture.extract_team_crops", return_value=(left, right)):
+            with patch("src.draft_capture.ocr.read_player_name", side_effect=fake_player):
+                with patch("src.draft_capture.draft_debug.save_capture"):
+                    draft_capture.capture_and_submit(client)
+
+    payload = client.post_draft_snapshot.call_args[0][0]
+    assert all(slot["heroName"] is None for slot in payload["teamLeft"] + payload["teamRight"])
+
+
+def test_capture_and_submit_still_submits_when_the_battleground_crop_is_missing(monkeypatch):
+    client = _client()
+    left = _team_result(["l1"] * 5)
+    right = _team_result(["r1"] * 5)
+    monkeypatch.setattr(draft_capture, "extract_battleground_crop", lambda screenshot: None)
+
+    with patch("src.draft_capture.screen_capture.capture_game_window", return_value="screenshot"):
+        with patch("src.draft_capture.extract_team_crops", return_value=(left, right)):
+            with patch("src.draft_capture.ocr.read_player_name", return_value=OcrResult("Name", 0.9)):
+                with patch("src.draft_capture.draft_debug.save_capture"):
+                    draft_capture.capture_and_submit(client)
+
+    payload = client.post_draft_snapshot.call_args[0][0]
+    assert payload["mapName"] is None
+

@@ -4,6 +4,7 @@ import pytest
 from PIL import Image
 
 from src.draft_layout import (
+    BATTLEGROUND_CROP,
     LEFT_TEAM,
     RIGHT_TEAM,
     RelBox,
@@ -11,6 +12,7 @@ from src.draft_layout import (
     crop_config_file_path,
     default_crop_config,
     ensure_crop_config_file,
+    extract_battleground_crop,
     extract_player_crops,
     extract_team_crops,
     load_team_layouts,
@@ -110,6 +112,7 @@ def test_load_team_layouts_reads_custom_config():
         initial_crop=RelBox(0, 0, 0.2, 1),
         rotation_degrees=25,
         player_crops=(RelBox(0.1, 0.1, 0.2, 0.2),) * 5,
+        hero_crops=(RelBox(0.1, 0.1, 0.2, 0.2),) * 5,
     )
     path = crop_config_file_path()
     path.parent.mkdir(parents=True)
@@ -120,6 +123,7 @@ def test_load_team_layouts_reads_custom_config():
                     "initialCrop": [0, 0, 0.2, 1],
                     "rotationDegrees": 25,
                     "playerCrops": [[0.1, 0.1, 0.2, 0.2]] * 5,
+                    "heroCrops": [[0.1, 0.1, 0.2, 0.2]] * 5,
                 },
                 "right": default_crop_config()["right"],
             }
@@ -164,3 +168,92 @@ def test_extract_team_crops_uses_custom_config_when_present():
     left, _right = extract_team_crops(_synthetic_screenshot())
 
     assert left.layout.player_crops[0] == RelBox(0.0, 0.0, 0.1, 0.1)
+
+# -- battleground + hero crops ------------------------------------------------
+
+
+def test_extract_team_crops_exposes_five_hero_crops_per_team():
+    left, right = extract_team_crops(_synthetic_screenshot())
+
+    for result in (left, right):
+        assert len(result.hero_crops) == 5
+        for crop in result.hero_crops:
+            assert crop is not None
+            assert crop.width > 0 and crop.height > 0
+
+
+def test_hero_crops_sit_above_their_player_name_crop():
+    left, _right = extract_team_crops(_synthetic_screenshot())
+
+    for hero_box, player_box in zip(left.layout.hero_crops, left.layout.player_crops):
+        assert hero_box.y2 <= player_box.y1
+
+
+def test_extract_team_crops_degrades_hero_crops_on_a_tiny_screenshot():
+    left, right = extract_team_crops(_synthetic_screenshot(10, 10))
+
+    for result in (left, right):
+        for crop in result.hero_crops:
+            assert crop is None or (crop.width > 0 and crop.height > 0)
+
+
+def test_default_crop_config_includes_the_battleground_and_hero_crops():
+    data = default_crop_config()
+
+    assert data["battlegroundCrop"] == [0.30, 0.005, 0.70, 0.045]
+    assert len(data["left"]["heroCrops"]) == 5
+    assert len(data["right"]["heroCrops"]) == 5
+
+
+def test_battleground_crop_matches_the_current_tuning():
+    assert BATTLEGROUND_CROP == RelBox(0.30, 0.005, 0.70, 0.045)
+
+
+def test_extract_battleground_crop_returns_the_configured_region():
+    crop = extract_battleground_crop(_synthetic_screenshot())
+
+    assert crop is not None
+    x1, y1, x2, y2 = BATTLEGROUND_CROP.to_pixels(1920, 1080)
+    assert crop.size == (x2 - x1, y2 - y1)
+
+
+def test_extract_battleground_crop_is_none_on_a_tiny_screenshot():
+    assert extract_battleground_crop(_synthetic_screenshot(10, 10)) is None
+
+
+def test_left_team_hero_slot_1_matches_the_current_tuning():
+    assert LEFT_TEAM.hero_crops[0] == RelBox(0.100, 0.246, 0.300, 0.278)
+
+
+def test_load_team_layouts_reads_custom_hero_crops():
+    path = crop_config_file_path()
+    path.parent.mkdir(parents=True)
+    data = default_crop_config()
+    data["left"]["heroCrops"][0] = [0.0, 0.0, 0.1, 0.1]
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    left, _right = load_team_layouts()
+
+    assert left.hero_crops[0] == RelBox(0.0, 0.0, 0.1, 0.1)
+
+
+def test_load_team_layouts_keeps_builtin_hero_crops_when_config_omits_them():
+    # An appdata config written before the hero crops existed must keep
+    # working, falling back to the built-in hero tuning rather than to none.
+    path = crop_config_file_path()
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        json.dumps(
+            {
+                "left": {"initialCrop": [0, 0, 0.2, 1], "rotationDegrees": 25, "playerCrops": [[0.1, 0.1, 0.2, 0.2]] * 5},
+                "right": {"initialCrop": [0.8, 0, 1, 1], "rotationDegrees": -25, "playerCrops": [[0.1, 0.1, 0.2, 0.2]] * 5},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    left, right = load_team_layouts()
+
+    assert left.hero_crops == LEFT_TEAM.hero_crops
+    assert right.hero_crops == RIGHT_TEAM.hero_crops
+

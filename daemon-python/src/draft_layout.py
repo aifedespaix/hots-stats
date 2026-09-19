@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from PIL import Image
@@ -56,6 +56,19 @@ class TeamLayout:
     rotation_degrees: float
     # Relative to the *rotated* strip; slot order 1-5, top to bottom on screen.
     player_crops: tuple[RelBox, RelBox, RelBox, RelBox, RelBox]
+    # Same rotated strip and slot order, but targeting the hero-name line the
+    # draft lobby renders in large caps just above the player-name plate
+    # (validated against draft-live-test/screenshot.png with the real OCR
+    # engine). Defaulted so a hand-built TeamLayout stays constructible and an
+    # appdata config written before this field existed keeps working.
+    hero_crops: tuple[RelBox, ...] = ()
+
+
+# The battleground name the draft lobby renders at the top centre. Relative to
+# the full (unrotated) screenshot -- unlike the team strips it needs no
+# rotation, the game draws it flat. Wider than the text on purpose: the OCR
+# step crops to content, and a generous box survives a different UI scale.
+BATTLEGROUND_CROP = RelBox(0.30, 0.005, 0.70, 0.045)
 
 
 LEFT_TEAM = TeamLayout(
@@ -68,6 +81,13 @@ LEFT_TEAM = TeamLayout(
         RelBox(0.572, 0.637, 0.74, 0.653),
         RelBox(0.573, 0.819, 0.741, 0.835),
     ),
+    hero_crops=(
+        RelBox(0.100, 0.246, 0.300, 0.278),
+        RelBox(0.325, 0.334, 0.525, 0.366),
+        RelBox(0.325, 0.514, 0.525, 0.546),
+        RelBox(0.540, 0.604, 0.740, 0.636),
+        RelBox(0.540, 0.786, 0.740, 0.818),
+    ),
 )
 
 RIGHT_TEAM = TeamLayout(
@@ -79,6 +99,13 @@ RIGHT_TEAM = TeamLayout(
         RelBox(0.47, 0.547, 0.65, 0.565),
         RelBox(0.255, 0.638, 0.435, 0.656),
         RelBox(0.25, 0.818, 0.43, 0.836),
+    ),
+    hero_crops=(
+        RelBox(0.720, 0.242, 0.900, 0.274),
+        RelBox(0.530, 0.335, 0.730, 0.367),
+        RelBox(0.470, 0.510, 0.650, 0.545),
+        RelBox(0.300, 0.604, 0.500, 0.636),
+        RelBox(0.250, 0.788, 0.430, 0.824),
     ),
 )
 
@@ -107,6 +134,7 @@ def _team_layout_to_dict(layout: TeamLayout) -> dict:
         "initialCrop": _box_to_list(layout.initial_crop),
         "rotationDegrees": layout.rotation_degrees,
         "playerCrops": [_box_to_list(box) for box in layout.player_crops],
+        "heroCrops": [_box_to_list(box) for box in layout.hero_crops],
     }
 
 
@@ -121,7 +149,18 @@ def _team_layout_from_dict(data: dict, default: TeamLayout) -> TeamLayout:
         if len(player_crops_raw) != 5:
             raise ValueError(f"expected 5 playerCrops, got {len(player_crops_raw)}")
         player_crops = tuple(_box_from_list(box) for box in player_crops_raw)
-        return TeamLayout(initial_crop=initial_crop, rotation_degrees=rotation_degrees, player_crops=player_crops)  # type: ignore[arg-type]
+        # Absent (an appdata file written before hero crops existed) is fine
+        # and falls back to the built-in tuning; present-but-malformed is not.
+        hero_crops_raw = data.get("heroCrops")
+        if hero_crops_raw is None:
+            hero_crops = default.hero_crops
+        else:
+            if len(hero_crops_raw) != 5:
+                raise ValueError(f"expected 5 heroCrops, got {len(hero_crops_raw)}")
+            hero_crops = tuple(_box_from_list(box) for box in hero_crops_raw)
+        return TeamLayout(  # type: ignore[arg-type]
+            initial_crop=initial_crop, rotation_degrees=rotation_degrees, player_crops=player_crops, hero_crops=hero_crops
+        )
     except (KeyError, TypeError, ValueError) as err:
         logger.warning("Invalid draft crop config entry (%s), falling back to the built-in default.", err)
         return default
@@ -131,7 +170,11 @@ def default_crop_config() -> dict:
     """The JSON-serializable form of the built-in `LEFT_TEAM`/`RIGHT_TEAM`
     defaults -- what gets written to disk the first time the crop config
     file is created (see `ensure_crop_config_file`)."""
-    return {"left": _team_layout_to_dict(LEFT_TEAM), "right": _team_layout_to_dict(RIGHT_TEAM)}
+    return {
+        "battlegroundCrop": _box_to_list(BATTLEGROUND_CROP),
+        "left": _team_layout_to_dict(LEFT_TEAM),
+        "right": _team_layout_to_dict(RIGHT_TEAM),
+    }
 
 
 def load_team_layouts() -> tuple[TeamLayout, TeamLayout]:
@@ -192,12 +235,16 @@ class TeamCropResult:
     strip: Image.Image
     rotated: Image.Image
     player_crops: list[Image.Image | None]
+    # Same list shape as `player_crops`, one per slot, for the hero-name line
+    # above each plate. Defaulted so existing callers/tests that only need the
+    # player names stay constructible.
+    hero_crops: list[Image.Image | None] = field(default_factory=list)
 
 
 def _extract_team(screenshot: Image.Image, layout: TeamLayout) -> TeamCropResult:
     strip = _crop_rel(screenshot, layout.initial_crop)
     if strip.width == 0 or strip.height == 0:
-        return TeamCropResult(layout=layout, strip=strip, rotated=strip, player_crops=[None] * 5)
+        return TeamCropResult(layout=layout, strip=strip, rotated=strip, player_crops=[None] * 5, hero_crops=[None] * 5)
 
     # `expand=True` recomputes the bounding box so the rotated strip isn't
     # clipped -- the Pillow equivalent of the reference script's
@@ -210,7 +257,13 @@ def _extract_team(screenshot: Image.Image, layout: TeamLayout) -> TeamCropResult
     for box in layout.player_crops:
         crop = _crop_rel(rotated, box)
         crops.append(crop if crop.width > 0 and crop.height > 0 else None)
-    return TeamCropResult(layout=layout, strip=strip, rotated=rotated, player_crops=crops)
+
+    hero_crops: list[Image.Image | None] = []
+    for box in layout.hero_crops:
+        crop = _crop_rel(rotated, box)
+        hero_crops.append(crop if crop.width > 0 and crop.height > 0 else None)
+
+    return TeamCropResult(layout=layout, strip=strip, rotated=rotated, player_crops=crops, hero_crops=hero_crops)
 
 
 def extract_team_crops(screenshot: Image.Image) -> tuple[TeamCropResult, TeamCropResult]:
@@ -227,6 +280,18 @@ def extract_team_crops(screenshot: Image.Image) -> tuple[TeamCropResult, TeamCro
     """
     left_layout, right_layout = load_team_layouts()
     return _extract_team(screenshot, left_layout), _extract_team(screenshot, right_layout)
+
+
+def extract_battleground_crop(screenshot: Image.Image) -> Image.Image | None:
+    """Crops the battleground-name region off the full (unrotated) screenshot.
+
+    Returns `None` when the screenshot is too small for the relative box to
+    resolve to real pixels, so a bad capture degrades to "no map name" instead
+    of failing the whole snapshot -- same per-region degrade as the player and
+    hero crops.
+    """
+    crop = _crop_rel(screenshot, BATTLEGROUND_CROP)
+    return crop if crop.width > 0 and crop.height > 0 else None
 
 
 def extract_player_crops(screenshot: Image.Image) -> tuple[list[Image.Image | None], list[Image.Image | None]]:

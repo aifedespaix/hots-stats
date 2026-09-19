@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from enum import Enum
 
 from . import api_client, draft_debug, ocr, screen_capture
-from .draft_layout import TeamCropResult, ensure_crop_config_file, extract_team_crops
+from .draft_layout import TeamCropResult, ensure_crop_config_file, extract_battleground_crop, extract_team_crops
 from .ocr import OcrResult
 
 logger = logging.getLogger(__name__)
@@ -102,14 +102,31 @@ class DraftCaptureCoordinator:
             return self._status
 
 
-def _build_team_payload(crops: list) -> tuple[list[dict], list[OcrResult]]:
+def _build_team_payload(crops: list, hero_crops: list) -> tuple[list[dict], list[OcrResult], list[OcrResult]]:
+    """Builds one team's slots, each carrying both the player name and the
+    hero-name line above it. `hero_crops` may be shorter than `crops` (an
+    older TeamCropResult, or a layout without hero boxes): the missing ones
+    simply read as `None` rather than failing the capture."""
     slots = []
     results = []
-    for index, crop in enumerate(crops, start=1):
+    hero_results = []
+    for index, crop in enumerate(crops):
         result = ocr.read_player_name(crop)
-        slots.append({"slot": index, "rawName": result.text, "status": "ok" if result.text else "unreadable"})
+        hero_crop = hero_crops[index] if index < len(hero_crops) else None
+        # The hero-name line is the same single-line recognition as a player
+        # name; only its crop box differs (large caps above the plate).
+        hero_result = ocr.read_player_name(hero_crop)
+        slots.append(
+            {
+                "slot": index + 1,
+                "rawName": result.text,
+                "status": "ok" if result.text else "unreadable",
+                "heroName": hero_result.text,
+            }
+        )
         results.append(result)
-    return slots, results
+        hero_results.append(hero_result)
+    return slots, results, hero_results
 
 
 def capture_and_submit(client: api_client.ApiClient, coordinator: DraftCaptureCoordinator | None = None) -> None:
@@ -162,9 +179,13 @@ def capture_and_submit(client: api_client.ApiClient, coordinator: DraftCaptureCo
 
         try:
             left, right = extract_team_crops(screenshot)
+            battleground_crop = extract_battleground_crop(screenshot)
+            battleground_result = (
+                ocr.read_battleground_name(battleground_crop) if battleground_crop is not None else OcrResult(None, 0.0)
+            )
             captured_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-            team_left, left_results = _build_team_payload(left.player_crops)
-            team_right, right_results = _build_team_payload(right.player_crops)
+            team_left, left_results, left_hero_results = _build_team_payload(left.player_crops, left.hero_crops)
+            team_right, right_results, right_hero_results = _build_team_payload(right.player_crops, right.hero_crops)
         except Exception:
             logger.exception("Live-draft capture failed while reading player names")
             if coordinator is not None:
@@ -181,9 +202,25 @@ def capture_and_submit(client: api_client.ApiClient, coordinator: DraftCaptureCo
         # Saved on every attempt, not just successful ones -- a capture that
         # came back empty or wrong is exactly what these crops are for
         # debugging (see draft_debug.py).
-        draft_debug.save_capture(screenshot, captured_at, left, right, left_results, right_results)
+        draft_debug.save_capture(
+            screenshot,
+            captured_at,
+            left,
+            right,
+            left_results,
+            right_results,
+            battleground_crop=battleground_crop,
+            battleground_text=battleground_result.text,
+            left_hero_results=left_hero_results,
+            right_hero_results=right_hero_results,
+        )
 
-        payload = {"capturedAt": captured_at, "teamLeft": team_left, "teamRight": team_right}
+        payload = {
+            "capturedAt": captured_at,
+            "mapName": battleground_result.text,
+            "teamLeft": team_left,
+            "teamRight": team_right,
+        }
         if client.post_draft_snapshot(payload):
             logger.info("Live-draft snapshot submitted")
     finally:
@@ -222,8 +259,8 @@ def run_test_capture() -> TestCaptureResult:
     ensure_crop_config_file()
     screenshot = screen_capture.capture_foreground_window()
     left, right = extract_team_crops(screenshot)
-    _left_slots, left_results = _build_team_payload(left.player_crops)
-    _right_slots, right_results = _build_team_payload(right.player_crops)
+    _left_slots, left_results, _left_hero_results = _build_team_payload(left.player_crops, left.hero_crops)
+    _right_slots, right_results, _right_hero_results = _build_team_payload(right.player_crops, right.hero_crops)
 
     captured_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     # Same debug snapshot a real capture would leave behind (see

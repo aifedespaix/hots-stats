@@ -84,11 +84,14 @@ def _save_image(image: Image.Image, path: Path) -> None:
     image.save(path)
 
 
-def _team_debug_info(result: TeamCropResult, ocr_results: list[OcrResult]) -> dict:
+def _team_debug_info(result: TeamCropResult, ocr_results: list[OcrResult], hero_results: list[OcrResult] | None = None) -> dict:
     strip_size = result.strip.size
     rotated_size = result.rotated.size
+    hero_results = hero_results or []
     slots = []
     for index, (box, crop, read) in enumerate(zip(result.layout.player_crops, result.player_crops, ocr_results), 1):
+        hero_box = result.layout.hero_crops[index - 1] if index - 1 < len(result.layout.hero_crops) else None
+        hero_read = hero_results[index - 1] if index - 1 < len(hero_results) else None
         slots.append(
             {
                 "slot": index,
@@ -98,6 +101,12 @@ def _team_debug_info(result: TeamCropResult, ocr_results: list[OcrResult]) -> di
                 "ocrText": read.text,
                 "ocrConfidence": read.confidence,
                 "status": "ok" if read.text else "unreadable",
+                # The hero-name line above the same plate -- kept next to the
+                # player read so a bad hero crop (a retuned box, a shifted UI)
+                # can be told apart from a bad player read at a glance.
+                "heroCropBoxRelative": [hero_box.x1, hero_box.y1, hero_box.x2, hero_box.y2] if hero_box else None,
+                "heroOcrText": hero_read.text if hero_read else None,
+                "heroOcrConfidence": hero_read.confidence if hero_read else None,
             }
         )
     initial = result.layout.initial_crop
@@ -116,6 +125,9 @@ def _save_team_images(result: TeamCropResult, directory: Path, prefix: str) -> N
     for index, crop in enumerate(result.player_crops, 1):
         if crop is not None:
             _save_image(crop, directory / f"{prefix}-slot-{index}.png")
+    for index, crop in enumerate(result.hero_crops, 1):
+        if crop is not None:
+            _save_image(crop, directory / f"{prefix}-hero-{index}.png")
 
 
 def save_capture(
@@ -125,6 +137,10 @@ def save_capture(
     right: TeamCropResult,
     left_results: list[OcrResult],
     right_results: list[OcrResult],
+    battleground_crop: Image.Image | None = None,
+    battleground_text: str | None = None,
+    left_hero_results: list[OcrResult] | None = None,
+    right_hero_results: list[OcrResult] | None = None,
 ) -> None:
     """Saves the full screenshot, every team/rotation/player-name crop, and a
     `crop-info.json` describing each crop's box and OCR read, to
@@ -143,14 +159,17 @@ def save_capture(
         capture_dir.mkdir(parents=True, exist_ok=True)
 
         _save_image(screenshot, capture_dir / "screenshot.png")
+        if battleground_crop is not None:
+            _save_image(battleground_crop, capture_dir / "battleground.png")
         _save_team_images(left, capture_dir, "left")
         _save_team_images(right, capture_dir, "right")
 
         info = {
             "capturedAt": captured_at,
             "screenshotSize": list(screenshot.size),
-            "teamLeft": _team_debug_info(left, left_results),
-            "teamRight": _team_debug_info(right, right_results),
+            "battlegroundText": battleground_text,
+            "teamLeft": _team_debug_info(left, left_results, left_hero_results),
+            "teamRight": _team_debug_info(right, right_results, right_hero_results),
         }
         (capture_dir / "crop-info.json").write_text(json.dumps(info, indent=2), encoding="utf-8")
     except OSError:
