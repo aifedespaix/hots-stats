@@ -500,8 +500,48 @@ Légende : `[ ]` à faire · `[~]` en cours · `[x]` terminé · `[!]` bloqué
     `GET /stats/trend` : `apps/web/app/utils/sessionSummary.ts` et son test ont
     été supprimés (doublon de la règle serveur). Un appel `/stats/session` non
     attendu s'ajoute au Dashboard.
-- [ ] **E2 — Objectifs** · `/objectifs` + table `player_goals` (migration)
+- [x] **E2 — Objectifs** · `/objectifs` + table `player_goals` (migration)
   Objectif mesurable, échéance, suivi. Spec § E2.
+  **Fait** (2026-09-19). Écarts / précisions vs spec :
+  - Les routes vivent sur `/goals` (l'option dédiée autorisée par la spec),
+    dans un routeur session-cookie séparé monté avant le `/stats` : la
+    progression est recalculée côté serveur, jamais stockée.
+  - Le calcul (fenêtre « parties jouées après `createdAt` », moyenne de la
+    métrique, seuil de fiabilité, ratio) vit dans un module pur sans DB
+    `apps/api/src/lib/goal-progress.ts` ; son test est
+    `goal-progress.test.ts`. `goals.service.ts` ne fait que scoper les lignes,
+    lire/écrire les objectifs et assembler.
+  - Aucune règle de métrique dupliquée : `driver-analysis.ts` expose désormais
+    `DRIVER_METRIC_CATALOG`, `driverMetricValue` et
+    `isKnownDriverMetricKey`, et son chargement de lignes est factorisé en
+    `loadDriverMatchInputs`, partagé par `/stats/drivers` et les objectifs.
+    Conséquence : `playedAt` est ajouté à `DriverMatchInput` (champ additif, la
+    sortie A4 est inchangée) pour que la fenêtre temporelle soit calculable.
+  - AC1 : seules les clés du catalogue A4 sont acceptées (400 « Métrique
+    inconnue. » sur POST et PATCH).
+  - AC2 : seules les parties strictement postérieures à `createdAt` comptent ;
+    `scopeHeroId`/`scopeMapId` filtrent la fenêtre quand ils sont posés.
+  - AC3 : le seul FK de `player_goals` pointe sur `users` (`ON DELETE
+    cascade`) — supprimer un objectif ne peut toucher aucune partie. Vérifié
+    par `packages/db/src/schema/player-goals.test.ts` (introspection Drizzle).
+  - AC4 : migration `0021_puzzling_tempest` purement additive (CREATE TABLE /
+    ADD CONSTRAINT / CREATE INDEX, aucun DROP).
+  - Progression = moyenne de la métrique sur l'échantillon (jamais une moyenne
+    de ratios ni un split victoires/défaites, qui n'a pas de sens pour un
+    objectif) ; `sampleSize` et `matchesSinceCreated` sont exposés séparément,
+    un échantillon vide rend `currentValue: null` (pas de 0 inventé) et
+    `reliable` suit `PROGRESSION_MIN_MATCHES`.
+  - `achievedAt` est horodaté par l'API la première fois que l'objectif est
+    observé atteint ; un PATCH qui change métrique/cible/direction le remet à
+    `null` (l'objectif n'a jamais été atteint sous cette forme).
+  - `GET /goals` passe par `accountScope` : la progression suit les comptes
+    sélectionnés. En revanche la page n'applique **pas** le filtre de mode
+    global (`withGameMode: false`) — un objectif de fond n'est pas la vue d'un
+    mode.
+  - La page `/objectifs` (états vide/erreur `UiStateCard`, formulaire
+    métrique/direction/cible/héros/carte/échéance, barre de progression,
+    suppression) est atteignable depuis la sidebar ; le formulaire pré-remplit
+    la direction depuis `betterWhen` mais reste modifiable.
 
 ### Lot F — Ergonomie et accessibilité
 

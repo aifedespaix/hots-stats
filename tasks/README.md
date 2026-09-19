@@ -311,6 +311,15 @@ rappelle donc le contexte nécessaire plutôt que de supposer une continuité.
   entrée sidebar + carte mobile) et carte « Dernière session » du Dashboard
   branchée sur l'endpoint (l'ancien util client `sessionSummary.ts` est
   supprimé). Aucune migration, aucune dépendance.
+- **Suite Progression — E2 (objectifs)** : table additive `player_goals`
+  (migration `0021`, FK vers `users` uniquement), contrats `PlayerGoal`/
+  `GoalProgress`/CRUD, module pur `apps/api/src/lib/goal-progress.ts` (fenêtre
+  après `createdAt`, moyenne de la métrique A4, seuil de fiabilité, ratio) et
+  routes session `GET/POST /goals` + `PATCH/DELETE /goals/:id` (clé de métrique
+  validée contre le catalogue A4, `achievedAt` horodaté à la première
+  observation). Page `/objectifs` + entrée sidebar ; les définitions de
+  métriques et le chargement des lignes A4 sont partagés (aucune règle
+  dupliquée). Aucune dépendance.
 
 ## À faire
 
