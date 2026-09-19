@@ -104,17 +104,26 @@ watch(snapshot, (next) => {
 });
 
 const capturedAgoLabel = ref("");
+// Separate, throttled text for the aria-live region: the visible label ticks
+// every second, but a screen reader must only hear it once per 10 s (F3).
+const announcedCapturedAgo = ref("");
+let lastAnnouncedAt: number | null = null;
 let tickTimer: ReturnType<typeof setInterval> | undefined;
 
 function updateCapturedAgoLabel() {
   if (!snapshot.value) {
     capturedAgoLabel.value = "";
+    announcedCapturedAgo.value = "";
+    lastAnnouncedAt = null;
     return;
   }
-  const seconds = Math.max(0, Math.round((Date.now() - new Date(snapshot.value.capturedAt).getTime()) / 1000));
-  if (seconds < 60) capturedAgoLabel.value = `Capturée il y a ${seconds}s`;
-  else if (seconds < 3600) capturedAgoLabel.value = `Capturée il y a ${Math.round(seconds / 60)} min`;
-  else capturedAgoLabel.value = `Capturée il y a ${Math.round(seconds / 3600)} h`;
+  const seconds = (Date.now() - new Date(snapshot.value.capturedAt).getTime()) / 1000;
+  capturedAgoLabel.value = formatCapturedAgo(seconds);
+  const now = Date.now();
+  if (shouldAnnounce(lastAnnouncedAt, now)) {
+    announcedCapturedAgo.value = capturedAgoLabel.value;
+    lastAnnouncedAt = now;
+  }
 }
 
 onMounted(() => {
@@ -134,8 +143,8 @@ watch(snapshot, updateCapturedAgoLabel);
         <h1 class="font-heading text-2xl font-semibold">Live Draft</h1>
         <p class="text-sm text-muted">Les deux équipes de ta partie, dès qu'une draft est détectée.</p>
       </div>
-      <div class="flex shrink-0 items-center gap-1.5 text-xs text-muted">
-        <span class="h-2 w-2 rounded-full" :class="connected ? 'bg-success' : 'bg-danger'" />
+      <div class="flex shrink-0 items-center gap-1.5 text-xs text-muted" role="status" aria-live="polite">
+        <span class="h-2 w-2 rounded-full" :class="connected ? 'bg-success' : 'bg-danger'" aria-hidden="true" />
         {{ connected ? "En direct" : "Hors ligne" }}
       </div>
     </div>
@@ -154,6 +163,7 @@ watch(snapshot, updateCapturedAgoLabel);
 
     <template v-else>
       <p v-if="capturedAgoLabel" class="text-xs text-muted">{{ capturedAgoLabel }}</p>
+      <p class="sr-only" aria-live="polite">{{ announcedCapturedAgo }}</p>
 
       <!-- Composition/picks/bans for the viewer's own team. One instance only:
            it fires its own one-shot fetches, so the CSS-hidden mobile/desktop
