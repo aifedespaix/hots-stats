@@ -289,6 +289,13 @@ rappelle donc le contexte nécessaire plutôt que de supposer une continuité.
   héros localisés (client FR) sans alias restent `null` — D1 reste bloqué sur
   une table d'alias localisés (voie recommandée : apprentissage depuis les
   replays).
+- **Suite Progression — D1 (aide au draft)** : alerte de composition de ton
+  équipe (le rôle résolu est porté par le snapshot ; absence de soigneur/tank
+  annoncée seulement si les 5 héros sont lus, ≥3 assassins sur toute lecture),
+  suggestions de pick classées par borne inférieure de Wilson moins une
+  pénalité de rôle déjà pris, bans issus des pires matchups des 3 meilleurs
+  picks. Aucune nouvelle route, aucune migration, aucune dépendance ; les
+  héros non résolus (client FR) affichent un état d'attente.
 - **Suite Progression — C3 (ton bourreau)** : contrat partagé
   `KillerEntry`/`KillersResponse`, agrégat pur sans DB
   `apps/api/src/lib/killer-aggregate.ts` (attribution des morts, top tueurs par

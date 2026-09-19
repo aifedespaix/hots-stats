@@ -432,11 +432,43 @@ Légende : `[ ]` à faire · `[~]` en cours · `[x]` terminé · `[!]` bloqué
     localisé), chantier séparé touchant l'ingestion.
   - Aucune UI D1 livrée dans cette session (le brief demandait d'abord la
     capture) : D1 reste à faire.
-- [ ] **D1 — Aide au draft** · dépend de D0
+- [x] **D1 — Aide au draft** · dépend de D0
   Alerte de composition, suggestion de pick par carte + pool perso, suggestion
   de ban via les pires matchups. Spec § D1. D0 fournit la carte et les noms de
   héros bruts ; la composition reste dépendante des alias de héros localisés
   (voir D0).
+  **Fait** (2026-09-19). Écarts / précisions vs spec :
+  - La règle de composition et les deux classements vivent dans un module pur
+    `apps/web/app/utils/draftAssist.ts` (verrouillé par
+    `draftAssist.test.ts`, 15 tests) : `summarizeComposition`,
+    `rankPickSuggestions`, `rankBanSuggestions`. Aucun nouvel endpoint : le
+    panneau consomme les routes existantes `/heroes?scope=personal&mapId=` et
+    `/heroes/:heroId/matchups?scope=personal`.
+  - Le rôle du héros résolu (`heroRole`) est ajouté à `DraftPlayerSlot` et au
+    snapshot en mémoire (résolu une fois à l'ingest, comme `mapId`/`heroId` en
+    D0) : la composition ne coûte donc aucune requête supplémentaire. Champ
+    additif — le build web déployé l'ignore.
+  - Les alertes d'absence (« aucun soigneur », « aucun tank ») ne sont émises
+    que si les 5 héros de l'équipe sont résolus ; avec un poste illisible, le
+    panneau affiche « X/5 héros reconnus » au lieu d'une fausse alerte. L'alerte
+    de présence (« 3 assassins ou plus ») reste valable sur une lecture
+    partielle. `Support` n'est pas compté comme soigneur (Medivh/Zarya/Abathur).
+  - `rankPickSuggestions` place les héros confiants (>= 5 parties,
+    `DRAFT_MIN_RANKED_GAMES_FOR_RANKING`) avant les échantillons faibles, puis
+    trie par borne inférieure de Wilson moins `DRAFT_ASSIST_CONTESTED_ROLE_PENALTY`
+    (0,1) par équipier déjà pourvu du même rôle. `n` est toujours affiché.
+  - `rankBanSuggestions` agrège les `worstMatchups` des 3 meilleurs picks : un
+    adversaire vu via plusieurs picks est réduit à son pire `deltaWinrate`, et
+    les entrées confiantes passent avant les échantillons faibles.
+  - Le panneau est monté **une seule fois** à pleine largeur, au-dessus des
+    deux mises en page responsives : une instance par bloc (comme
+    `DraftTeamThreats`, masqué en CSS) aurait doublé ses requêtes. Conséquence
+    assumée : la page peut défiler de la hauteur du panneau, mais les hauteurs
+    des zones de draft existantes (`- 19rem`/`- 13rem`) sont **inchangées** —
+    aucune compression du contenu existant, aucun endpoint ne change de valeur.
+  - Limite D0 toujours ouverte : les noms de héros localisés (client FR) sans
+    alias restent `heroId`/`heroRole` `null`, donc la composition est
+    partielle sur un client non anglais et l'état « X/5 héros reconnus » le dit.
 
 ### Lot E — Sessions et objectifs
 
