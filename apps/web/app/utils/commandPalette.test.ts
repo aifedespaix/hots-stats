@@ -8,6 +8,7 @@ import {
   matchCommandEntries,
   moveCommandSelection,
   normalizeCommandText,
+  pageCommandEntries,
   scoreCommandEntry,
   type CommandPaletteEntry,
 } from "./commandPalette";
@@ -115,6 +116,19 @@ describe("moveCommandSelection", () => {
 });
 
 describe("source mappers", () => {
+  test("maps navigation entries to the pages group", () => {
+    const [page] = pageCommandEntries([
+      { to: "/matches", label: "Historique", icon: "i-heroicons-clock" },
+    ]);
+    expect(page).toMatchObject({
+      id: "page-/matches",
+      label: "Historique",
+      group: "pages",
+      to: "/matches",
+      icon: "i-heroicons-clock",
+    });
+  });
+
   test("maps heroes to /heroes/:heroId with the role as keyword", () => {
     const [hero] = heroCommandEntries([
       { heroId: "anubarak", heroName: "Anub'arak", heroRole: "Tank" } as never,

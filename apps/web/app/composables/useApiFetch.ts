@@ -13,6 +13,14 @@ type ApiFetchOptions = {
    * calibration.
    */
   withAccounts?: boolean;
+  /**
+   * Passed straight through to `useFetch`. The command palette is the only
+   * caller that needs a deferred call (`lazy: true, immediate: false`) so the
+   * three list endpoints are fetched when the palette first opens, never on
+   * every page render.
+   */
+  lazy?: boolean;
+  immediate?: boolean;
 };
 
 /**
@@ -67,5 +75,7 @@ export function useApiFetch<T>(url: string, opts: ApiFetchOptions = {}) {
     credentials: "include",
     headers,
     query,
+    lazy: opts.lazy,
+    immediate: opts.immediate,
   });
 }
