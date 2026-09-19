@@ -605,9 +605,44 @@ Légende : `[ ]` à faire · `[~]` en cours · `[x]` terminé · `[!]` bloqué
     `router.replace` (`project()` ne réécrit que sur différence réelle : pas de
     boucle de redirection).
   - Aucune API, aucune migration, aucune dépendance nouvelle, aucun secret.
-- [ ] **F3 — Passe accessibilité**
+- [x] **F3 — Passe accessibilité**
   Daltonisme (glyphes), `aria-live` sur le live draft, focus visible,
   `prefers-reduced-motion`. Spec § F3.
+  **Fait** (2026-09-19). Écarts / précisions vs spec :
+  - La règle de glyphe redondant (▲/▼) vit dans `apps/web/app/utils/tone.ts`
+    (`OUTCOME_GLYPH`, `outcomeGlyph`, `winrateGlyph`), verrouillée par
+    `tone.test.ts` ; `winrateGlyph` dérive de `winrateTone`, donc les deux ne
+    peuvent pas diverger. Le composant partagé `UiResultBadge.vue` remplace les
+    4 cellules « résultat » des `UiDataTable` (dashboard, historique, ami,
+    profil), et `UiWinrateBar`/`MapWinrateList` affichent aussi le glyphe.
+  - `UiWinrateBar` porte désormais `role="img"` + `aria-label`
+    (« Taux de victoire : X % ») : la barre n'est plus muette pour un lecteur
+    d'écran.
+  - Régions live du live draft : le statut de connexion est `role="status"` +
+    `aria-live="polite"` ; le compteur « Capturée il y a Xs » visible continue
+    de battre chaque seconde mais son texte *annoncé* est throttlé à une mise à
+    jour par 10 s (`formatCapturedAgo`/`shouldAnnounce` dans
+    `utils/liveRegion.ts`, testés) via une région `sr-only`.
+  - Focus : une règle `:focus-visible` unique dans `globals.css`
+    (`@layer base` + `:where()`, spécificité 0 pour ne pas écraser les
+    utilitaires ni l'`outline-3` déjà produit par Nuxt UI) ; les anneaux
+    `ring-1` ad-hoc des composants maison (DataTable, StarRating,
+    CommandPalette, colonnes/threats de draft) sont retirés pour éviter un
+    double anneau. La ligne de tableau DataTable utilise
+    `outline-offset:-2px` pour ne pas être rognée par son conteneur
+    `overflow-x-auto`.
+  - `prefers-reduced-motion` : bloc CSS global (transitions/animations) +
+    `withReducedMotion` (`utils/chartMotion.ts`, testé) branché sur les 4
+    wrappers de base Chart.js (`Bar`/`Line`/`Doughnut`/`Radar`), car une
+    media query CSS ne peut pas atteindre un canvas.
+  - AC1 (axe-core) : aucune dépendance axe-core ajoutée (contrainte « aucune
+    dépendance nouvelle non annoncée ») et le setup vitest est un node sans
+    DOM ; vérifié par checklist manuelle équivalente (glyphes, noms
+    accessibles, régions live, focus, reduced motion) sur dashboard,
+    `/progress`, `/matches` et `/matches/[id]`. Limite assumée : les
+    indicateurs couleur-seule hors périmètre F3 (ex. pastilles « forme » de
+    `/maps`) ne sont pas traités.
+  - Aucune API, aucune migration, aucune dépendance nouvelle.
 - [ ] **F4 — Export CSV + partage** · dépend de F2
   `GET /matches/export.csv` + "copier le lien". Spec § F4.
 

@@ -334,6 +334,14 @@ rappelle donc le contexte nécessaire plutôt que de supposer une continuité.
   string ; le store Pinia reste la source de vérité, l'URL gagne sur le
   stockage à la clé près, un paramètre malformé est ignoré sans boucle de
   redirection. Aucune API, aucune migration, aucune dépendance.
+- **Suite Progression — F3 (accessibilité)** : glyphes redondants ▲/▼ sur les
+  indicateurs victoire/winrate (`utils/tone.ts`, `UiResultBadge`,
+  `UiWinrateBar`, `MapWinrateList`), régions `aria-live` sur le live draft
+  (statut + compteur annoncé throttlé à 10 s via `utils/liveRegion.ts`),
+  anneau `:focus-visible` unique dans `globals.css` (anneaux `ring-1`
+  ad-hoc retirés), et `prefers-reduced-motion` (CSS global +
+  `withReducedMotion` sur les 4 wrappers Chart.js). Vérifié par tests unitaires
+  + checklist manuelle équivalente (pas de dépendance axe-core ajoutée).
 
 ## À faire
 
