@@ -15,6 +15,10 @@ interface NavItem {
 
 const isAdmin = computed(() => authData.value?.user?.role === "admin");
 
+// The palette is mounted once here; its header button and its Ctrl+K shortcut
+// both go through the same module-level state (see useCommandPalette).
+const { open: openCommandPalette } = useCommandPalette();
+
 // Logical order for the desktop sidebar (home first, settings last). Admin
 // (when applicable) is appended last of all -- a rare, power-user-only
 // entry, kept out of the fixed mobile bottom bar below.
@@ -100,6 +104,16 @@ async function handleLogout() {
       <UiGameModeFilter class="min-w-0 flex-1 justify-center px-2" />
 
       <div class="flex shrink-0 items-center gap-2 sm:gap-3">
+        <button
+          type="button"
+          class="hidden items-center gap-1.5 rounded-md border border-border px-2 py-1.5 text-xs text-muted transition-colors hover:text-foreground md:flex"
+          aria-label="Ouvrir la palette de commandes"
+          @click="openCommandPalette"
+        >
+          <UIcon name="i-heroicons-magnifying-glass" class="h-4 w-4" />
+          <span>Rechercher</span>
+          <kbd class="rounded border border-border px-1 text-[10px]">Ctrl K</kbd>
+        </button>
         <template v-if="authData?.user">
           <UiAccountSwitcher />
         </template>
@@ -256,5 +270,7 @@ async function handleLogout() {
         </NuxtLink>
       </div>
     </nav>
+
+    <UiCommandPalette :pages="navItems" />
   </div>
 </template>

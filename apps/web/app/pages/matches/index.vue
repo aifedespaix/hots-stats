@@ -2,6 +2,7 @@
 import { UNKNOWN_GAME_VERSION } from "@hots-stats/shared-types";
 import type { MatchListResponse } from "~/types/matches";
 import type { MatchesSortableColumn } from "~/stores/useMatchesFiltersStore";
+import { matchCommandEntries } from "~/utils/commandPalette";
 
 definePageMeta({ middleware: "auth" });
 
@@ -132,6 +133,9 @@ const query = computed(() => ({
 }));
 
 const { data: matchesData, pending } = await useApiFetch<MatchListResponse>("/matches", { query });
+
+// The Ctrl+K palette surfaces the rows of the page you are currently on.
+useCommandPaletteEntries(computed(() => matchCommandEntries(matchesData.value?.matches ?? [])));
 
 watch(
   [() => gameModeStore.activeTags, heroId, mapId, dateFrom, dateTo, opponentBattletag, () => gameVersionFilterStore.excluded],
