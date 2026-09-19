@@ -29,15 +29,21 @@ export interface DriversFilters {
 }
 
 /**
- * Builds the A4 outcome-driver response over every match the scope played,
- * optionally filtered by mode/hero/map/date. The subject of each match is
- * resolved with the same shared rule as A1/A3 (resolveSubject): the SQL
- * scopeCondition already restricts candidate rows to the caller's own
- * battletags, so another user's match can never be selected. This service
- * only scopes, filters and assembles raw rows -- the maths is pure (see
+ * Loads the raw per-match inputs of the A4 driver analysis over every match the
+ * scope played, optionally filtered by mode/hero/map/date. The subject of each
+ * match is resolved with the same shared rule as A1/A3 (resolveSubject): the
+ * SQL scopeCondition already restricts candidate rows to the caller's own
+ * battletags, so another user's match can never be selected. This service only
+ * scopes, filters and assembles raw rows -- the maths is pure (see
  * ../lib/driver-analysis.ts).
+ *
+ * Shared with the E2 goals service, so a goal's progress reads the exact same
+ * per-match values as /stats/drivers.
  */
-export async function getDrivers(scope: Scope, filters: DriversFilters): Promise<DriversResponse> {
+export async function loadDriverMatchInputs(
+  scope: Scope,
+  filters: DriversFilters,
+): Promise<DriverMatchInput[]> {
   const conditions = scopeConditions([], scope, matchPlayers.battletag);
   if (filters.mode && filters.mode.length > 0) conditions.push(inArray(matches.gameMode, filters.mode));
   if (filters.heroId) conditions.push(eq(matchPlayers.heroId, filters.heroId));
@@ -64,7 +70,7 @@ export async function getDrivers(scope: Scope, filters: DriversFilters): Promise
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(asc(matches.playedAt), asc(matchPlayers.matchId));
 
-  if (candidateRows.length === 0) return buildDriversResponse([], scope.mode);
+  if (candidateRows.length === 0) return [];
 
   const scopedBattletags = scope.mode === "personal" ? scope.battletags : [];
 
@@ -93,7 +99,7 @@ export async function getDrivers(scope: Scope, filters: DriversFilters): Promise
   }
 
   const matchIds = [...subjectsByMatch.keys()];
-  if (matchIds.length === 0) return buildDriversResponse([], scope.mode);
+  if (matchIds.length === 0) return [];
 
   // Full roster of those matches, not scope-filtered: kill participation needs
   // the subject's whole team, including teammates the scope does not own.
@@ -183,5 +189,10 @@ export async function getDrivers(scope: Scope, filters: DriversFilters): Promise
     };
   });
 
-  return buildDriversResponse(inputs, scope.mode);
+  return inputs;
+}
+
+/** Builds the A4 outcome-driver response over the loaded match inputs. */
+export async function getDrivers(scope: Scope, filters: DriversFilters): Promise<DriversResponse> {
+  return buildDriversResponse(await loadDriverMatchInputs(scope, filters), scope.mode);
 }
