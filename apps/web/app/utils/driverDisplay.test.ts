@@ -27,6 +27,17 @@ describe("formatDriverMetric", () => {
     expect(formatDriverMetric("deathsPer10Min", 3.456)).toBe("3.46");
     expect(formatDriverMetric("xpPerMinute", 512)).toBe("512.00");
   });
+
+  test("coerces a numeric string and never throws on an unreadable value", () => {
+    // A decimal handed back as text must still render, not throw on .toFixed.
+    expect(formatDriverMetric("xpPerMinute", "450.5" as unknown as number)).toBe("450.50");
+    expect(formatDriverMetric("deathsPer10Min", "3" as unknown as number)).toBe("3.00");
+    // NaN/Infinity/null/undefined degrade to the shared "no data" dash.
+    expect(formatDriverMetric("xpPerMinute", Number.NaN)).toBe("—");
+    expect(formatDriverMetric("xpPerMinute", Number.POSITIVE_INFINITY)).toBe("—");
+    expect(formatDriverMetric("xpPerMinute", null as unknown as number)).toBe("—");
+    expect(formatDriverMetric("xpPerMinute", undefined as unknown as number)).toBe("—");
+  });
 });
 
 describe("driverTone", () => {
