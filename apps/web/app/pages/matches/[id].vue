@@ -391,13 +391,19 @@ const displayedInsights = computed(() =>
               @seek="seekTimeline"
             />
           </div>
-
-          <ChartsMatchObjectives
-            :objectives="timelineSeries.objectives"
-            :duration-seconds="timelineDuration"
-            :ally-team="viewerTeam"
-          />
         </div>
+
+        <!-- Deliberately a sibling of the shell, not a child: the shell's height
+        is pinned to the viewport (`lg:h-[calc(100dvh-...)]`), so an objectives
+        list inside it wins the vertical space the chart's `flex-1` lane needs.
+        On a camp-heavy map (Le val maudit: 22 objectives) that starved the chart
+        to 0px -- the graph vanished and the list overflowed the panel. Below the
+        shell the list simply flows and the page scrolls. -->
+        <ChartsMatchObjectives
+          :objectives="timelineSeries.objectives"
+          :duration-seconds="timelineDuration"
+          :ally-team="viewerTeam"
+        />
       </template>
     </UTabs>
 
