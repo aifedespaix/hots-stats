@@ -9,8 +9,26 @@ import type { Tone } from "~/utils/tone";
  */
 const PERCENT_KEYS = new Set(["firstDeath", "timeDeadShare"]);
 
+/**
+ * Coerces a metric value to a finite number, or null when it is missing or
+ * unreadable. A numeric string is accepted (a database driver that hands back
+ * decimals as text, a payload built elsewhere); null, undefined, "" and
+ * NaN/Infinity are rejected rather than silently becoming 0.
+ */
+function finiteMetricValue(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const numeric = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
 export function formatDriverMetric(key: string, value: number): string {
-  return PERCENT_KEYS.has(key) ? formatPercent(value) : value.toFixed(2);
+  // Coerce before formatting: a value that reaches the web as a numeric string
+  // used to throw on `.toFixed` during render and tear down the whole page --
+  // the exact failure mode the Cible field hit. An unreadable value degrades to
+  // the shared "no data" dash instead of a blank screen.
+  const numeric = finiteMetricValue(value);
+  if (numeric === null) return "—";
+  return PERCENT_KEYS.has(key) ? formatPercent(numeric) : numeric.toFixed(2);
 }
 
 /**
