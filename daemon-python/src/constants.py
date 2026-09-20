@@ -511,6 +511,44 @@ REQUIRED_SCORE_FIELDS = (
 )
 
 
+# replay.tracker.events' SStatGameEvent.m_eventName values we turn into an
+# objective event (see _extract_objective_events in parser.py and
+# PARSER_VERSION 1.15). Each entry declares its API kind, where its team
+# lives -- ("fixed", key) for a Q12 fixed-point m_fixedData value (divide by
+# 4096), ("int", key) for a plain 1-based m_intData value, None when the event
+# carries no side -- and an optional m_stringData detail key.
+#
+# Deliberately an allowlist: an m_eventName that isn't here is ignored, never
+# guessed. The names and shapes were confirmed by decoding 120 real replays
+# across 19 battlegrounds (see the G1 design spec); a new battleground adds a
+# row here plus a web label, nothing else.
+OBJECTIVE_EVENT_SPECS: dict[str, dict[str, object]] = {
+    "JungleCampCapture": {"kind": "mercenaryCamp", "team": ("fixed", "TeamID"), "detail": "CampType"},
+    "DragonKnightActivated": {"kind": "dragonKnight", "team": ("fixed", "TeamID")},
+    "TributeCollected": {"kind": "tribute", "team": ("fixed", "TeamID")},
+    "RavenCurseActivated": {"kind": "curse", "team": ("fixed", "TeamID")},
+    "GhostShipCaptured": {"kind": "ghostShipCaptured", "team": ("fixed", "TeamID")},
+    "HauntedMinesGolemsSpawned": {"kind": "golemsSpawned", "team": ("fixed", "TeamID")},
+    "SoulEatersSpawned": {"kind": "soulEatersSpawned", "team": ("fixed", "TeamID")},
+    "SkyTempleCaptured": {"kind": "templeCaptured", "team": ("int", "TeamID")},
+    "Altar Captured": {"kind": "altarCaptured", "team": ("int", "Firing Team")},
+    "WarheadJunctionNukeCollected": {"kind": "nukeCollected", "team": ("int", "OwningTeam")},
+    "WarheadJunctionNukeFired": {"kind": "nukeFired", "team": ("int", "OwningTeam")},
+    "WarheadJunctionNukeDropped": {"kind": "nukeDropped", "team": ("int", "OwningTeam")},
+    "VolskayaCapturePointComplete": {"kind": "capturePoint", "team": ("int", "WinningTeam")},
+    "Infernal Shrine Captured": {"kind": "shrineCaptured", "team": ("int", "Winning Team")},
+    "Punisher Killed": {
+        "kind": "punisherKilled",
+        "team": ("int", "Owning Team of Punisher"),
+        "detail": "Punisher Type",
+    },
+    "Immortal Defeated": {"kind": "immortalDefeated", "team": ("int", "Winning Team")},
+    "Six Town Event Start": {"kind": "sixTownStart", "team": ("int", "Owning Team")},
+    "SkyTempleActivated": {"kind": "templeActivated", "team": None},
+    "Town Captured": {"kind": "townCaptured", "team": None},
+}
+
+
 def stat_field_name(raw_name: str) -> str:
     """Tracker stat name (e.g. "HeroDamage") -> API payload field name (e.g.
     "heroDamage"), applying `STAT_FIELD_RENAMES` first for the few names that

@@ -636,6 +636,71 @@ def _extract_level_snapshots(
     return snapshots
 
 
+_STAT_GAME_EVENT = "NNet.Replay.Tracker.SStatGameEvent"
+
+
+def _objective_data_value(event: dict[str, Any], field: str, key: str) -> Any | None:
+    """One m_intData/m_fixedData/m_stringData entry's value by key, or None
+    when the event doesn't carry it."""
+    for entry in event.get(field) or []:
+        if _s(entry.get("m_key")) == key:
+            return entry.get("m_value")
+    return None
+
+
+def _objective_team(spec: dict[str, Any], event: dict[str, Any]) -> tuple[bool, int | None]:
+    """(keep, team) for one objective event's declared team source.
+
+    A spec with no team source is always kept with team=None. A spec with one
+    is dropped (keep=False) when the key is missing or the decoded value isn't
+    a real side -- skip rather than guess, the same posture _extract_deaths
+    takes for non-hero deaths.
+    """
+    source = spec.get("team")
+    if source is None:
+        return True, None
+    encoding, key = source
+    raw = _objective_data_value(event, "m_fixedData" if encoding == "fixed" else "m_intData", key)
+    if raw is None:
+        return False, None
+    side = (raw // 4096 if encoding == "fixed" else raw) - 1
+    if side not in (0, 1):
+        return False, None
+    return True, side
+
+
+def _extract_objective_events(tracker_events: list[dict], gates_open_loop: int) -> list[dict[str, Any]]:
+    """Allowlisted SStatGameEvents -- mercenary camps and map objectives -- as
+    {kind, team, atSeconds, detail} (see constants.OBJECTIVE_EVENT_SPECS and
+    PARSER_VERSION 1.15).
+
+    atSeconds uses the same gates-open reference as _extract_deaths. An
+    m_eventName outside the allowlist, or a declared team that can't be
+    resolved to 0/1, produces nothing.
+    """
+    events: list[dict[str, Any]] = []
+    for event in tracker_events:
+        if event.get("_event") != _STAT_GAME_EVENT:
+            continue
+        spec = constants.OBJECTIVE_EVENT_SPECS.get(_s(event.get("m_eventName")))
+        if spec is None:
+            continue
+        keep, team = _objective_team(spec, event)
+        if not keep:
+            continue
+        detail_key = spec.get("detail")
+        detail = _objective_data_value(event, "m_stringData", detail_key) if detail_key else None
+        events.append(
+            {
+                "kind": spec["kind"],
+                "team": team,
+                "atSeconds": max(0, round((event["_gameloop"] - gates_open_loop) / _GAMELOOPS_PER_SECOND)),
+                "detail": _s(detail) if isinstance(detail, bytes) else detail,
+            }
+        )
+    return events
+
+
 _UNIT_POSITIONS_EVENT = "NNet.Replay.Tracker.SUnitPositionsEvent"
 
 

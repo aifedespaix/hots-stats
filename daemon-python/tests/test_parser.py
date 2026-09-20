@@ -13,6 +13,7 @@ from src.parser import (
     _distribute_segment_across_cells,
     _extract_deaths,
     _extract_level_snapshots,
+    _extract_objective_events,
     _extract_spatial,
     _extract_structure_events,
     _extract_trajectories,
@@ -222,6 +223,28 @@ def _level_up_event(tracker_id: int, level: int, gameloop: int) -> dict:
         "m_intData": [{"m_key": b"PlayerID", "m_value": tracker_id}, {"m_key": b"Level", "m_value": level}],
         "_gameloop": gameloop,
     }
+
+
+def _stat_game_event(
+    name: str,
+    *,
+    int_data: list[tuple[str, int]] | None = None,
+    string_data: list[tuple[str, str]] | None = None,
+    fixed_data: list[tuple[str, int]] | None = None,
+    gameloop: int,
+) -> dict:
+    event: dict = {
+        "_event": "NNet.Replay.Tracker.SStatGameEvent",
+        "m_eventName": name.encode(),
+        "_gameloop": gameloop,
+    }
+    if int_data:
+        event["m_intData"] = [{"m_key": k.encode(), "m_value": v} for k, v in int_data]
+    if string_data:
+        event["m_stringData"] = [{"m_key": k.encode(), "m_value": v.encode()} for k, v in string_data]
+    if fixed_data:
+        event["m_fixedData"] = [{"m_key": k.encode(), "m_value": v} for k, v in fixed_data]
+    return event
 
 
 def _score_event(stats_by_name: dict[str, list[int]]) -> dict:
@@ -1818,6 +1841,92 @@ def test_build_payload_includes_structure_events_for_fort_destruction():
     )
 
     assert payload["timeline"]["structureEvents"] == [{"team": 0, "atSeconds": 300, "structureType": "fort"}]
+
+
+def test_extract_objective_events_reads_a_camp_with_a_fixed_team():
+    events = [
+        _stat_game_event(
+            "JungleCampCapture",
+            int_data=[("CampID", 3)],
+            string_data=[("CampType", "Siege Camp")],
+            fixed_data=[("TeamID", 8192)],
+            gameloop=610 + 16 * 159,
+        )
+    ]
+
+    assert _extract_objective_events(events, gates_open_loop=610) == [
+        {"kind": "mercenaryCamp", "team": 1, "atSeconds": 159, "detail": "Siege Camp"}
+    ]
+
+
+def test_extract_objective_events_reads_a_plain_int_team():
+    events = [
+        _stat_game_event(
+            "Immortal Defeated",
+            int_data=[("Winning Team", 1)],
+            fixed_data=[("GameTime", 1026560)],
+            gameloop=610 + 16 * 642,
+        )
+    ]
+
+    assert _extract_objective_events(events, gates_open_loop=610) == [
+        {"kind": "immortalDefeated", "team": 0, "atSeconds": 642, "detail": None}
+    ]
+
+
+def test_extract_objective_events_keeps_a_teamless_kind_with_null_team():
+    events = [_stat_game_event("SkyTempleActivated", int_data=[("TempleID", 1)], gameloop=610 + 16 * 300)]
+
+    assert _extract_objective_events(events, gates_open_loop=610) == [
+        {"kind": "templeActivated", "team": None, "atSeconds": 300, "detail": None}
+    ]
+
+
+def test_extract_objective_events_ignores_a_name_outside_the_allowlist():
+    events = [_stat_game_event("SomeUnmappedEvent", int_data=[("TeamID", 1)], gameloop=700)]
+
+    assert _extract_objective_events(events, gates_open_loop=610) == []
+
+
+def test_extract_objective_events_drops_an_out_of_range_team():
+    # 12288 // 4096 = 3 -> side 2, outside {0, 1}: skip rather than guess.
+    events = [_stat_game_event("TributeCollected", fixed_data=[("TeamID", 12288)], gameloop=700)]
+
+    assert _extract_objective_events(events, gates_open_loop=610) == []
+
+
+def test_extract_objective_events_drops_a_missing_team_key():
+    events = [_stat_game_event("TributeCollected", fixed_data=[("SomethingElse", 4096)], gameloop=700)]
+
+    assert _extract_objective_events(events, gates_open_loop=610) == []
+
+
+def test_extract_objective_events_clamps_before_gates_open_to_zero():
+    events = [_stat_game_event("TributeCollected", fixed_data=[("TeamID", 4096)], gameloop=100)]
+
+    assert _extract_objective_events(events, gates_open_loop=610) == [
+        {"kind": "tribute", "team": 0, "atSeconds": 0, "detail": None}
+    ]
+
+
+def test_objective_event_specs_cover_every_declared_kind():
+    # Pins the allowlist table: every entry must decode to its own kind, with
+    # its declared team source resolving to side 0.
+    for offset, (name, spec) in enumerate(constants.OBJECTIVE_EVENT_SPECS.items()):
+        int_data: list[tuple[str, int]] = [("CampID", 1)]
+        fixed_data: list[tuple[str, int]] = []
+        source = spec.get("team")
+        if source is not None:
+            encoding, key = source
+            bucket = fixed_data if encoding == "fixed" else int_data
+            bucket.append((key, 4096 if encoding == "fixed" else 1))
+        event = _stat_game_event(name, int_data=int_data, fixed_data=fixed_data or None, gameloop=1000 + offset)
+
+        result = _extract_objective_events([event], gates_open_loop=1000)
+
+        assert len(result) == 1
+        assert result[0]["kind"] == spec["kind"]
+        assert result[0]["team"] == (None if source is None else 0)
 
 
 def test_extract_trajectories_downsamples_to_the_configured_interval():

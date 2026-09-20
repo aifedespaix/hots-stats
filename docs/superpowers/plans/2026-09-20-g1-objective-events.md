@@ -284,7 +284,7 @@ def test_objective_event_specs_cover_every_declared_kind():
 
         assert len(result) == 1
         assert result[0]["kind"] == spec["kind"]
-        assert result[0]["team"] == 0
+        assert result[0]["team"] == (None if source is None else 0)
 ~~~
 
 - [ ] **Step 2: Run the tests and watch them fail**
