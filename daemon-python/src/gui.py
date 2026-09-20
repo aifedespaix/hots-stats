@@ -9,9 +9,10 @@ the extra packaging risk customtkinter's bundled theme/asset files add to a
 
 Laid out as a `ttk.Notebook` with one tab per concern (Config / Draft Live /
 Synchronisation / Update) instead of one long scroll of stacked sections —
-each tab's widgets are still built up front (not lazily on first select),
-so the window's locked size (see `_center`) already accounts for every
-tab's worst-case content and never resizes when switching between them.
+each tab's widgets are still built up front (not lazily on first select), so
+switching tabs never triggers a layout pass. The window itself is resizable,
+restoring/persisting its size and position across sessions (see
+`_apply_window_geometry`).
 
 Threading note: this module is only ever driven from a dedicated thread that
 does nothing but run one `tk.Tk()` mainloop at a time (see tray.py) — never
@@ -35,7 +36,8 @@ from typing import Callable
 
 from PIL import Image, ImageTk
 
-from . import api_client, auth_flow, autostart, draft_capture, hotkey, updater
+from . import api_client, auth_flow, autostart, draft_capture, hotkey, ui_kit, updater
+from . import window_state
 from .accounts_discovery import discover_account_folders
 from .config import (
     DEFAULT_DRAFT_HOTKEY,
@@ -60,17 +62,12 @@ logger = logging.getLogger(__name__)
 _DEBOUNCE_MS = 600
 _LIVE_STATS_POLL_MS = 500
 
-# Dynamic labels (currently-syncing filename, last sync error) are fed
-# unbounded text from the filesystem/API — without a cap the window would
-# keep growing to fit whatever comes in. Truncating to these lengths keeps
-# the window's locked size (see `_center`) valid for any content it'll ever
-# show.
-_SYNCING_LABEL_MAX_CHARS = 60
-_ERROR_LABEL_MAX_CHARS = 220
-_SKIPPED_LABEL_MAX_CHARS = 110
-_UPDATE_STATUS_MAX_CHARS = 90
-_DRAFT_CAPTURE_STATUS_MAX_CHARS = 90
-_TEST_CAPTURE_STATUS_MAX_CHARS = 90
+# Floor for `root.minsize(...)` once the old worst-case-measured lock is
+# removed (see `_apply_window_geometry`) — a real minimum below which the
+# Config tab's fields would start overlapping, not a worst-case content size.
+_MIN_WINDOW_WIDTH = 640
+_MIN_WINDOW_HEIGHT = 520
+
 _LABEL_WRAPLENGTH = 460
 
 # How long the "Tester la capture" button waits, after being clicked, before
@@ -88,16 +85,16 @@ _TEST_CAPTURE_THUMB_WIDTH = 220
 
 # A small, dark, "gamer tool" palette. Kept in one place so the whole window
 # reads as one deliberate look rather than default-tk gray.
-_BG = "#1c1f2e"
-_PANEL = "#252a3d"
-_FIELD_BG = "#2f3550"
-_FIELD_BG_FOCUS = "#394069"
-_TEXT = "#e8eaf6"
-_TEXT_MUTED = "#8b90ad"
-_ACCENT = "#6c8cff"
-_OK = "#4cd97b"
-_ERROR = "#ef5b5b"
-_NEUTRAL = "#8b90ad"
+_BG = ui_kit.DEFAULT_PALETTE.bg
+_PANEL = ui_kit.DEFAULT_PALETTE.panel
+_FIELD_BG = ui_kit.DEFAULT_PALETTE.field_bg
+_FIELD_BG_FOCUS = ui_kit.DEFAULT_PALETTE.field_bg_focus
+_TEXT = ui_kit.DEFAULT_PALETTE.text
+_TEXT_MUTED = ui_kit.DEFAULT_PALETTE.text_muted
+_ACCENT = ui_kit.DEFAULT_PALETTE.accent
+_OK = ui_kit.DEFAULT_PALETTE.ok
+_ERROR = ui_kit.DEFAULT_PALETTE.error
+_NEUTRAL = ui_kit.DEFAULT_PALETTE.neutral
 
 # Human-readable explanation per `parser.ReplaySkipped` / `IngestOutcome`
 # skip-reason code (see `ingestion.py`/`sync_state.py`, which persist the
@@ -139,15 +136,6 @@ def _format_update_status(status: UpdateStatus) -> str:
             else "✗ Échec de la mise à jour"
         )
     return status.message or f"À jour (v{APP_VERSION})"
-
-
-def _truncate(text: str, max_chars: int) -> str:
-    """Caps `text` at `max_chars`, replacing anything cut off with an
-    ellipsis, so a label fed unbounded text (a long file name, a verbose
-    server error) can't keep growing the window it lives in."""
-    if len(text) <= max_chars:
-        return text
-    return text[: max_chars - 1].rstrip() + "…"
 
 
 def _format_time_ago(moment: datetime) -> str:
@@ -288,7 +276,7 @@ class _UpdateProgressWindow:
 
         outer = ttk.Frame(root, padding=20, style="TFrame")
         outer.pack(fill="both", expand=True)
-        _apply_dark_style()
+        _apply_dark_style(ui_kit.DEFAULT_FONTS)
 
         ttk.Label(outer, text=f"Mise à jour v{version}", style="Title.TLabel").pack(
             anchor="w"
@@ -370,63 +358,32 @@ class _UpdateProgressWindow:
         self._poll_job = self._root.after(300, self._poll)
 
 
-def _apply_dark_style() -> None:
+def _apply_dark_style(fonts: ui_kit.Fonts) -> None:
     """Builds the shared dark ttk theme -- called every time a window is
-    created (the settings window and the standalone update-progress popup
-    both use it, and each is its own `tk.Tk()`).
-
-    This used to skip rebuilding after the first call, on the assumption
-    that ttk styles are process-global. They aren't: each `tk.Tk()` spins up
-    its own independent Tcl interpreter with its own, freshly-defaulted ttk
-    style database, so a style configured on the first window's interpreter
-    has no effect on a later window's -- only `style.theme_use("clam")`
-    (selecting a *built-in* theme, resolved by name against every
-    interpreter) carried over. In practice this meant only the very first
-    window opened in a run ever got the dark palette; every window after
-    that (closing and reopening Settings from the tray, for instance) fell
-    back to plain ttk "clam" defaults -- a much lighter look than the rest
-    of the UI -- which is exactly the "reopens light instead of dark" bug
-    this now fixes. Rebuilding is cheap (a couple dozen `style.configure`
-    calls), so there's no real cost to doing it on every window open."""
+    created (see the original docstring for why: each `tk.Tk()` has its
+    own ttk style database). `fonts` is the fixed `ui_kit.DEFAULT_FONTS`
+    token set; DPI-appropriate sizing comes from `set_dpi_awareness()` plus
+    Tk's own point-size-to-pixel conversion, not from scaling these fonts."""
     style = ttk.Style()
-    style.theme_use(
-        "clam"
-    )  # the only built-in theme that reliably honors custom colors everywhere
+    style.theme_use("clam")
     style.configure("TFrame", background=_BG)
     style.configure("Panel.TFrame", background=_PANEL)
-    style.configure("TLabel", background=_BG, foreground=_TEXT, font=("Segoe UI", 10))
+    style.configure("TLabel", background=_BG, foreground=_TEXT, font=fonts.body)
+    style.configure("Panel.TLabel", background=_PANEL, foreground=_TEXT, font=fonts.body)
+    style.configure("Muted.TLabel", background=_BG, foreground=_TEXT_MUTED, font=fonts.muted)
     style.configure(
-        "Panel.TLabel", background=_PANEL, foreground=_TEXT, font=("Segoe UI", 10)
+        "PanelMuted.TLabel", background=_PANEL, foreground=_TEXT_MUTED, font=fonts.muted
     )
     style.configure(
-        "Muted.TLabel", background=_BG, foreground=_TEXT_MUTED, font=("Segoe UI", 9)
+        "SectionHeader.TLabel", background=_PANEL, foreground=_TEXT_MUTED, font=fonts.section
     )
-    style.configure(
-        "PanelMuted.TLabel",
-        background=_PANEL,
-        foreground=_TEXT_MUTED,
-        font=("Segoe UI", 9),
-    )
-    style.configure(
-        "SectionHeader.TLabel",
-        background=_PANEL,
-        foreground=_TEXT_MUTED,
-        font=("Segoe UI", 9, "bold"),
-    )
-    style.configure(
-        "Title.TLabel", background=_BG, foreground=_TEXT, font=("Segoe UI", 15, "bold")
-    )
-    style.configure(
-        "Link.TLabel",
-        background=_PANEL,
-        foreground=_ACCENT,
-        font=("Segoe UI", 9, "underline"),
-    )
+    style.configure("Title.TLabel", background=_BG, foreground=_TEXT, font=fonts.title)
+    style.configure("Link.TLabel", background=_PANEL, foreground=_ACCENT, font=fonts.link)
     style.configure(
         "Accent.TButton",
         background=_ACCENT,
         foreground="#0f1220",
-        font=("Segoe UI", 10, "bold"),
+        font=fonts.button_bold,
         padding=(14, 8),
         borderwidth=0,
     )
@@ -437,7 +394,7 @@ def _apply_dark_style() -> None:
         "Ghost.TButton",
         background=_BG,
         foreground=_TEXT_MUTED,
-        font=("Segoe UI", 10),
+        font=fonts.button,
         padding=(14, 8),
         borderwidth=0,
     )
@@ -448,7 +405,7 @@ def _apply_dark_style() -> None:
         background=_BG,
         foreground=_TEXT_MUTED,
         padding=(16, 8),
-        font=("Segoe UI", 10),
+        font=fonts.button,
         borderwidth=0,
     )
     style.map(
@@ -505,6 +462,7 @@ class _SettingsWindow:
         # `root.after`, which would otherwise raise from a thread nothing is
         # watching.
         self._closed = False
+        self._geometry_save_job: str | None = None
         # Populated by `_build_tab`: key -> (notebook, tab frame, base
         # title), so `_set_tab_problem` can toggle a marker on a tab's
         # label without needing every call site to pass the notebook/frame
@@ -513,11 +471,11 @@ class _SettingsWindow:
 
         root.title("HotS Analytics - Configuration")
         root.configure(bg=_BG)
-        root.resizable(False, False)
         root.protocol("WM_DELETE_WINDOW", self._on_close)
         root.bind("<Escape>", lambda _e: self._on_close())
 
-        _apply_dark_style()
+        self._fonts = ui_kit.DEFAULT_FONTS
+        _apply_dark_style(self._fonts)
         self._api_var = tk.StringVar()
         self._token_var = tk.StringVar()
         self._replays_var = tk.StringVar()
@@ -526,7 +484,8 @@ class _SettingsWindow:
 
         self._build_ui()
         self._prefill()
-        self._center()
+        self._apply_window_geometry()
+        self._root.bind("<Configure>", self._on_geometry_changed)
         self._check_connection()
         if not is_first_run:
             self._load_stats()
@@ -545,10 +504,13 @@ class _SettingsWindow:
     # -- layout ---------------------------------------------------------
 
     def _build_tab(self, notebook: ttk.Notebook, key: str, title: str) -> ttk.Frame:
-        tab = ttk.Frame(notebook, style="TFrame", padding=18)
+        tab = ttk.Frame(notebook, style="TFrame")
         notebook.add(tab, text=title)
+        scrollable = ui_kit.ScrollableFrame(tab, background=_BG)
+        scrollable.outer.pack(fill="both", expand=True)
+        scrollable.content.configure(padding=18)
         self._tabs[key] = (notebook, tab, title)
-        return tab
+        return scrollable.content
 
     def _build_ui(self) -> None:
         outer = ttk.Frame(self._root, padding=24)
@@ -1078,7 +1040,7 @@ class _SettingsWindow:
             hotkey.validate(value)
         except hotkey.InvalidHotkeyError as err:
             self._set_status(
-                self._draft_hotkey_status, _truncate(f"✗ {err}", 60), _ERROR
+                self._draft_hotkey_status, f"✗ {err}", _ERROR
             )
             return False
         else:
@@ -1130,7 +1092,7 @@ class _SettingsWindow:
         if error is not None:
             self._set_status(
                 self._draft_hotkey_status,
-                _truncate(f"✗ Capture impossible : {error}", 60),
+                f"✗ Capture impossible : {error}",
                 _ERROR,
             )
             return
@@ -1187,7 +1149,7 @@ class _SettingsWindow:
             message = status.message or "Échec de la capture."
             self._set_status(
                 self._draft_capture_status_label,
-                _truncate(f"✗ {message}", _DRAFT_CAPTURE_STATUS_MAX_CHARS),
+                f"✗ {message}",
                 _ERROR,
             )
         else:
@@ -1220,7 +1182,7 @@ class _SettingsWindow:
             if snapshot.last_error:
                 self._set_status(
                     self._hotkey_registration_status,
-                    _truncate(f"✗ Échec de l'enregistrement — {snapshot.last_error}", 90),
+                    f"✗ Échec de l'enregistrement — {snapshot.last_error}",
                     _ERROR,
                 )
                 if not self._hotkey_retry_btn_shown:
@@ -1293,7 +1255,7 @@ class _SettingsWindow:
         if error is not None:
             self._set_status(
                 self._test_capture_status_label,
-                _truncate(f"✗ {error}", _TEST_CAPTURE_STATUS_MAX_CHARS),
+                f"✗ {error}",
                 _ERROR,
             )
             return
@@ -1487,9 +1449,8 @@ class _SettingsWindow:
             # Already counted inside `synced` above (not a failure -- see
             # `DaemonStatus.skipped_ai_player`'s docstring), called out on
             # its own full-width row rather than appended to the narrow
-            # "Synchronisées" column so a 3-digit count can't push the
-            # "En cours de synchronisation" column past this window's fixed
-            # size (see `_measure_worst_case_size`).
+            # "Synchronisées" column so a 3-digit count can't push that
+            # column's width around.
             self._skipped_count_label.configure(
                 text=(
                     f"ℹ {status.skipped_ai_player} partie(s) avec un joueur IA non synchronisée(s) "
@@ -1503,9 +1464,7 @@ class _SettingsWindow:
         # "in progress" at once -- joined here rather than only ever showing
         # one of them and hiding the rest.
         if status.currently_syncing:
-            syncing_text = _truncate(
-                ", ".join(sorted(status.currently_syncing)), _SYNCING_LABEL_MAX_CHARS
-            )
+            syncing_text = ", ".join(sorted(status.currently_syncing))
         else:
             syncing_text = "—"
         self._currently_syncing_label.configure(text=syncing_text)
@@ -1516,7 +1475,7 @@ class _SettingsWindow:
         )
 
         if status.last_error:
-            error_text = _truncate(status.last_error, _ERROR_LABEL_MAX_CHARS)
+            error_text = status.last_error
             self._sync_error_label.configure(
                 text=f"✗ Dernière erreur de synchronisation : {error_text}"
             )
@@ -1649,7 +1608,7 @@ class _SettingsWindow:
         assert self._update_status is not None
         status = self._update_status.snapshot()
         self._update_status_label.configure(
-            text=_truncate(_format_update_status(status), _UPDATE_STATUS_MAX_CHARS)
+            text=_format_update_status(status)
         )
         self._update_progress_driver.apply(status)
 
@@ -2026,103 +1985,72 @@ class _SettingsWindow:
     def _open_token_link(self) -> None:
         webbrowser.open(guess_settings_url(self._api_var.get() or DEFAULT_API_BASE_URL))
 
-    def _center(self) -> None:
-        """Locks the window to a fixed size and centers it.
-
-        Without an explicit "WxH", Tk keeps auto-growing the window every
-        time a dynamic label's text changes (see `_refresh_live_stats`) --
-        `resizable(False, False)` only blocks *manual* dragging, it doesn't
-        stop that auto-layout growth. The size is computed from worst-case
-        label content (see `_measure_worst_case_size`), not whatever
-        happens to be showing right now, so it stays valid for anything
-        those labels go on to display. `ttk.Notebook` sizes itself to fit
-        its largest pane regardless of which tab is selected, so this
-        already accounts for every tab's content, not just the active one.
-        """
-        width, height = self._measure_worst_case_size()
-        x = (self._root.winfo_screenwidth() - width) // 2
-        y = (self._root.winfo_screenheight() - height) // 3
-        self._root.geometry(f"{width}x{height}+{x}+{y}")
-
-    def _measure_worst_case_size(self) -> tuple[int, int]:
-        """Temporarily fills every dynamically-updated label with
-        max-length placeholder text, measures the window's required size
-        with that worst case in place, then restores the real text.
-        """
-        placeholders: list[tuple[ttk.Label, str]] = [
-            (self._error_label, "x" * _ERROR_LABEL_MAX_CHARS)
-        ]
-        if self._status_tracker is not None:
-            placeholders.append(
-                (self._currently_syncing_label, "x" * _SYNCING_LABEL_MAX_CHARS)
-            )
-            placeholders.append(
-                (self._skipped_count_label, "x" * _SKIPPED_LABEL_MAX_CHARS)
-            )
-            placeholders.append(
-                (
-                    self._sync_error_label,
-                    "✗ Dernière erreur de synchronisation : "
-                    + "x" * _ERROR_LABEL_MAX_CHARS,
-                )
-            )
-        if hasattr(self, "_update_status_label"):
-            placeholders.append(
-                (self._update_status_label, "x" * _UPDATE_STATUS_MAX_CHARS)
-            )
-        if self._draft_capture_status is not None:
-            # Can show an ERROR message up to _DRAFT_CAPTURE_STATUS_MAX_CHARS
-            # long (see `_refresh_draft_capture_status`), not just the two
-            # short fixed in-progress phrases -- same "x"*N filler pattern
-            # as the other unbounded-text labels above.
-            placeholders.append(
-                (self._draft_capture_status_label, "x" * _DRAFT_CAPTURE_STATUS_MAX_CHARS)
-            )
-            placeholders.append(
-                (
-                    self._hotkey_last_triggered_label,
-                    "Dernier appui du raccourci détecté : il y a 12345678 h",
-                )
-            )
-        if hasattr(self, "_hotkey_registration_status"):
-            placeholders.append((self._hotkey_registration_status, "x" * 90))
-        placeholders.append(
-            (self._test_capture_status_label, "x" * _TEST_CAPTURE_STATUS_MAX_CHARS)
-        )
-
-        originals = [(label, label.cget("text")) for label, _ in placeholders]
-        for label, placeholder in placeholders:
-            label.configure(text=placeholder)
-
-        # The progress bar itself is normally hidden (grid_remove'd) until a
-        # capture starts -- briefly showing it here too means its height is
-        # already accounted for in the locked window size, so the window
-        # doesn't need to grow the first time a real capture actually shows it.
-        if self._draft_capture_status is not None:
-            self._draft_capture_progress_bar.grid(
-                row=2, column=0, columnspan=3, sticky="ew", pady=(6, 0)
-            )
-
-        # Same idea for the "Ouvrir le dossier" button: normally unpacked
-        # until `_refresh_update_status` sees a `manual_fallback_path`, which
-        # since the Velopack migration never happens (the field is always
-        # `None`). Still briefly packed here so `button_row`'s worst-case
-        # width -- one more button wider than the common case -- stays
-        # accounted for as long as the widget exists at all.
-        if hasattr(self, "_open_fallback_button"):
-            self._open_fallback_button.pack(side="left", padx=(10, 0))
-
+    def _apply_window_geometry(self) -> None:
+        """Restores the previous session's window size/position (clamped
+        to the current screen) or falls back to a natural, centered size
+        derived from the window's actual content -- every tab body now
+        lives in a `ui_kit.ScrollableFrame` (see `_build_tab`), so unlike
+        the old `_measure_worst_case_size`, the window no longer needs to
+        be sized for the longest content any label could ever show."""
         self._root.update_idletasks()
-        width, height = self._root.winfo_reqwidth(), self._root.winfo_reqheight()
+        min_width = max(self._root.winfo_reqwidth(), _MIN_WINDOW_WIDTH)
+        min_height = max(self._root.winfo_reqheight(), _MIN_WINDOW_HEIGHT)
+        self._root.minsize(min_width, min_height)
 
-        for label, original in originals:
-            label.configure(text=original)
-        if self._draft_capture_status is not None:
-            self._draft_capture_progress_bar.grid_remove()
-        if hasattr(self, "_open_fallback_button"):
-            self._open_fallback_button.pack_forget()
+        saved = window_state.load_window_geometry()
+        clamped = (
+            window_state.clamp_to_screen(
+                saved,
+                self._root.winfo_screenwidth(),
+                self._root.winfo_screenheight(),
+                min_width=min_width,
+                min_height=min_height,
+            )
+            if saved is not None
+            else None
+        )
+        if clamped is not None:
+            self._root.geometry(f"{clamped.width}x{clamped.height}+{clamped.x}+{clamped.y}")
+            if clamped.maximized:
+                self._root.state("zoomed")
+            return
 
-        return width, height
+        x = max(0, (self._root.winfo_screenwidth() - min_width) // 2)
+        y = max(0, (self._root.winfo_screenheight() - min_height) // 3)
+        self._root.geometry(f"{min_width}x{min_height}+{x}+{y}")
+
+    def _on_geometry_changed(self, event: "tk.Event") -> None:
+        if event.widget is not self._root or self._closed:
+            return
+        if self._geometry_save_job is not None:
+            self._root.after_cancel(self._geometry_save_job)
+        self._geometry_save_job = self._root.after(_DEBOUNCE_MS, self._save_geometry_now)
+
+    def _save_geometry_now(self) -> None:
+        self._geometry_save_job = None
+        if self._closed:
+            return
+        maximized = self._root.state() == "zoomed"
+        if maximized:
+            # Preserve the last known non-maximized size/position so
+            # un-maximizing later has somewhere sane to restore to.
+            previous = window_state.load_window_geometry()
+            geometry = window_state.WindowGeometry(
+                width=previous.width if previous else self._root.winfo_width(),
+                height=previous.height if previous else self._root.winfo_height(),
+                x=previous.x if previous else self._root.winfo_x(),
+                y=previous.y if previous else self._root.winfo_y(),
+                maximized=True,
+            )
+        else:
+            geometry = window_state.WindowGeometry(
+                width=self._root.winfo_width(),
+                height=self._root.winfo_height(),
+                x=self._root.winfo_x(),
+                y=self._root.winfo_y(),
+                maximized=False,
+            )
+        window_state.save_window_geometry(geometry)
 
     def _save(self) -> None:
         if self._hotkey_capturing:
@@ -2179,9 +2107,13 @@ class _SettingsWindow:
         self._root.destroy()
 
     def _show_error(self, message: str) -> None:
-        self._error_label.configure(text=_truncate(message, _ERROR_LABEL_MAX_CHARS))
+        self._error_label.configure(text=message)
 
     def _stop_background_jobs(self) -> None:
+        if self._geometry_save_job is not None:
+            self._root.after_cancel(self._geometry_save_job)
+            self._geometry_save_job = None
+            self._save_geometry_now()
         # Marks the window as closing so `_after_if_open` drops any
         # still-in-flight worker-thread result instead of handing it to the
         # root we're about to destroy. Set here (the one place both `_save`

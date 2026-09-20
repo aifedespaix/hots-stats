@@ -55,3 +55,32 @@ def test_tray_launch_migrates_and_exits_without_starting_the_app(_legacy_install
     assert main_module.main([]) == 0
     _legacy_install.assert_called_once()
     run_app.assert_not_called()
+
+
+def test_main_sets_dpi_awareness_before_anything_else(_legacy_install, monkeypatch):
+    """DPI awareness must be requested once per process, before the tray
+    or a settings window can create a `tk.Tk()` — the migration-shim path
+    is reused here purely because it's the shortest path through `main()`
+    that this test fixture already short-circuits."""
+    calls = []
+    monkeypatch.setattr(main_module.ui_kit, "set_dpi_awareness", lambda: calls.append(True))
+
+    main_module.main([])
+
+    assert calls == [True]
+
+
+def test_resync_also_sets_dpi_awareness(monkeypatch, tmp_path):
+    """Headless `--resync` never opens a window, but setting awareness is
+    a harmless no-op off-Windows/without a window, so it's simplest to set
+    it unconditionally at the top of `main()` rather than special-casing
+    the flag."""
+    calls = []
+    monkeypatch.setattr(main_module.ui_kit, "set_dpi_awareness", lambda: calls.append(True))
+    monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
+    monkeypatch.delenv("HOTS_API_BASE_URL", raising=False)
+    monkeypatch.delenv("HOTS_ACCESS_TOKEN", raising=False)
+
+    main_module.main(["--resync", str(tmp_path / "replays")])
+
+    assert calls == [True]

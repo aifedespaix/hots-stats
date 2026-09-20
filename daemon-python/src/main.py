@@ -12,7 +12,7 @@ import argparse
 import logging
 from pathlib import Path
 
-from . import accounts_discovery, api_client, updater
+from . import accounts_discovery, api_client, ui_kit, updater
 from .accounts_discovery import WatchDir
 from .config import ConfigError, load_config
 from .ingestion import resync, sync_spatial_calibrations
@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def main(argv: list[str] | None = None) -> int:
+    ui_kit.set_dpi_awareness()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
     arg_parser = argparse.ArgumentParser(description="HotS Analytics replay daemon")

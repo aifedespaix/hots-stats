@@ -1,9 +1,10 @@
 import type { User } from "@hots-stats/db";
-import { draftPreferenceInputSchema, draftSnapshotInputSchema } from "@hots-stats/shared-types";
+import { draftPreferenceInputSchema, draftSnapshotInputSchema, type DraftSnapshot } from "@hots-stats/shared-types";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import type { Scope } from "../lib/account-selection";
+import { waitForFirst } from "../lib/wait-for-first";
 import { accountScope } from "../middleware/account-scope";
 import { authSession, requireUser } from "../middleware/auth-session";
 import { authToken } from "../middleware/auth-token";
@@ -30,6 +31,11 @@ type Env = { Variables: { user: User; scope: Scope } };
 // between pushes -- pushes themselves (see draft.service.ts's `publish`)
 // aren't on this schedule at all, they go out the moment a snapshot lands.
 const SSE_PING_INTERVAL_MS = 20_000;
+
+// How long `GET /draft/poll` holds a request open waiting for the next
+// snapshot before answering "nothing new" (the client immediately re-polls).
+// Kept well under Cloudflare's 100s origin timeout -- see the route's comment.
+const DRAFT_POLL_WAIT_MS = 25_000;
 
 /**
  * `/draft/*` -- the live-draft feature. `/snapshot` is daemon-facing
@@ -73,6 +79,43 @@ export const draftRoute = new Hono<Env>()
         unsubscribe();
       }
     });
+  })
+  // Long-poll twin of `/stream`, and what the web app actually uses (see
+  // useDraftStream.ts). Cloudflare fronts this API, and its HTTP/3 (QUIC) edge
+  // resets long-lived streaming responses -- Chrome reported
+  // `net::ERR_QUIC_PROTOCOL_ERROR` on `/stream` after a 200 and EventSource
+  // retried in a loop. A short request the origin *holds* open is fine: the
+  // response is delivered the moment a snapshot is published (or after the
+  // hold expires with nothing new), so it stays near-realtime.
+  .get("/poll", authSession, requireUser, async (c) => {
+    const user = c.get("user");
+    const since = c.req.query("since") || null;
+
+    const pushed = await waitForFirst<DraftSnapshot>(
+      (deliver) => {
+        const unsubscribe = subscribeToDraftUpdates(user.id, {
+          send: async (snapshot) => deliver(snapshot),
+        });
+        // Read *after* subscribing: a snapshot published between "do we
+        // already have something new?" and this point would otherwise be
+        // missed until the hold expired. `waitForFirst` ignores the second
+        // delivery, so resolving twice is harmless.
+        void getCurrentSnapshotForViewer(user.id)
+          .then((current) => {
+            if (current && current.id !== since) deliver(current);
+          })
+          .catch(() => {});
+        return unsubscribe;
+      },
+      DRAFT_POLL_WAIT_MS,
+      c.req.raw.signal,
+    );
+
+    if (pushed) {
+      return c.json({ snapshot: pushed, id: pushed.id }, 200, { "Cache-Control": "no-store" });
+    }
+    const current = await getCurrentSnapshotForViewer(user.id);
+    return c.json({ snapshot: current, id: current?.id ?? null }, 200, { "Cache-Control": "no-store" });
   })
   .post("/preference", authSession, requireUser, async (c) => {
     const parsed = draftPreferenceInputSchema.safeParse(await c.req.json().catch(() => null));
