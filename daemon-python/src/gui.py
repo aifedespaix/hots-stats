@@ -505,10 +505,13 @@ class _SettingsWindow:
     # -- layout ---------------------------------------------------------
 
     def _build_tab(self, notebook: ttk.Notebook, key: str, title: str) -> ttk.Frame:
-        tab = ttk.Frame(notebook, style="TFrame", padding=18)
+        tab = ttk.Frame(notebook, style="TFrame")
         notebook.add(tab, text=title)
+        scrollable = ui_kit.ScrollableFrame(tab, background=_BG)
+        scrollable.outer.pack(fill="both", expand=True)
+        scrollable.content.configure(padding=18)
         self._tabs[key] = (notebook, tab, title)
-        return tab
+        return scrollable.content
 
     def _build_ui(self) -> None:
         outer = ttk.Frame(self._root, padding=24)
