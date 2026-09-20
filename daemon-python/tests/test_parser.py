@@ -1292,6 +1292,33 @@ def test_build_payload_extracts_level_snapshots_timeline():
     ]
 
 
+def test_build_payload_includes_objective_events():
+    events = [
+        *_base_tracker_events(),
+        _stat_game_event(
+            "JungleCampCapture",
+            int_data=[("CampID", 3)],
+            string_data=[("CampType", "Siege Camp")],
+            fixed_data=[("TeamID", 8192)],
+            gameloop=610 + 16 * 159,
+        ),
+    ]
+
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=events,
+        attributes_events=_base_attributes_events(),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+    )
+
+    assert payload["timeline"]["objectives"] == [
+        {"kind": "mercenaryCamp", "team": 1, "atSeconds": 159, "detail": "Siege Camp"}
+    ]
+
+
 def test_build_payload_timeline_defaults_to_empty_lists():
     # No SUnitBornEvent/SUnitDiedEvent/LevelUp events at all in the base
     # fixture -- `timeline` must still be present with empty arrays, not

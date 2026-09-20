@@ -205,7 +205,19 @@ from __future__ import annotations
 # clear-cut (more than one of either) is left alone and still raises the
 # same error as before, since guessing wrong there would misattribute a
 # stranger's stats instead of just losing one match.
-PARSER_VERSION = "1.14"
+# 1.15: adds an optional timeline.objectives[] block -- mercenary camp
+# captures (JungleCampCapture) and map objectives (DragonKnightActivated,
+# TributeCollected, RavenCurseActivated, SkyTempleCaptured/Activated,
+# Altar/Town Captured, GhostShipCaptured, Warhead nuke events,
+# HauntedMinesGolemsSpawned, VolskayaCapturePointComplete,
+# Infernal Shrine Captured, Punisher Killed, SoulEatersSpawned,
+# Immortal Defeated, Six Town Event Start), each as {kind, team, atSeconds,
+# detail}, from an explicit allowlist of SStatGameEvent names (see
+# OBJECTIVE_EVENT_SPECS). Additive/optional, so deliberately NOT paired with
+# a MIN_PARSER_VERSION bump, same reasoning as 1.8/1.11/1.13: an older daemon
+# would only waste bandwidth re-uploading replays it can't enrich, while a
+# daemon that updates to this build resyncs its own replays by itself.
+PARSER_VERSION = "1.15"
 
 # How many times a single replay is allowed to fail with a parse error (a
 # corrupt/incomplete archive -- see parser.ReplayParseError) at the *same*

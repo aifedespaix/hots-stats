@@ -1581,6 +1581,18 @@ def build_payload(
     deaths = _extract_deaths(tracker_events, hero_unit_tags, tracker_id_to_toon, players, gates_open_loop, calibrations)
     level_snapshots = _extract_level_snapshots(tracker_events, tracker_id_to_toon, players, gates_open_loop)
     structure_events = _extract_structure_events(tracker_events, tracker_id_to_toon, players, gates_open_loop)
+    objective_events = _extract_objective_events(tracker_events, gates_open_loop)
+
+    timeline: dict[str, Any] = {
+        "deaths": deaths,
+        "levelSnapshots": level_snapshots,
+        "structureEvents": structure_events,
+    }
+    # Additive and optional: an older daemon omits it, and a match with no
+    # objective event omits it too, so the existing timeline contract is
+    # unchanged (same rollout as the 1.8/1.11/1.13 blocks).
+    if objective_events:
+        timeline["objectives"] = objective_events
 
     spatial = _extract_spatial(tracker_events, tracker_id_to_toon, players, calibrations) if calibrations else None
     trajectories = (
@@ -1623,7 +1635,7 @@ def build_payload(
         "region": region,
         "playedAt": _windows_filetime_to_iso8601(details["m_timeUTC"]),
         "durationSeconds": duration_seconds,
-        "timeline": {"deaths": deaths, "levelSnapshots": level_snapshots, "structureEvents": structure_events},
+        "timeline": timeline,
         "players": [
             {
                 "battletag": p["battletag"],
