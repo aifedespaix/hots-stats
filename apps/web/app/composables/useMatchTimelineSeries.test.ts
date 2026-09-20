@@ -141,6 +141,7 @@ function series(overrides: Partial<MatchTimelineSeries> = {}): MatchTimelineSeri
     teamLevels: [[], []],
     deaths: [],
     structures: [],
+    objectives: [],
     lanes: [],
     allDeaths: [],
     events: [],

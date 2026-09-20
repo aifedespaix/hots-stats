@@ -391,6 +391,12 @@ const displayedInsights = computed(() =>
               @seek="seekTimeline"
             />
           </div>
+
+          <ChartsMatchObjectives
+            :objectives="timelineSeries.objectives"
+            :duration-seconds="timelineDuration"
+            :ally-team="viewerTeam"
+          />
         </div>
       </template>
     </UTabs>
