@@ -1295,10 +1295,23 @@ git commit -m "feat(daemon): scroll each settings-window tab instead of locking 
   instead of erroring or opening off-screen.
 - [ ] **Step 4:** On a display running at 100%, 125%, and 150% Windows scaling (`Réglages > Système >
   Affichage > Mise à l'échelle`), confirm the window's text is crisp (not blurry/bitmap-scaled) and
-  legible, and that the layout doesn't clip or overlap at any of the three scales.
+  legible, and that the layout doesn't clip or overlap at any of the three scales. Font sizes come
+  from `ui_kit.DEFAULT_FONTS` unscaled (the final whole-branch review found the earlier
+  `Fonts.for_scale(dpi_scale_factor(root))` double-applied DPI scaling, since Tk's own point-size
+  conversion already reflects the real display DPI once Per-Monitor-V2 awareness is on — fixed in
+  commit aa10adc) — confirm text is neither oversized nor stuck at its 100%-scale pixel size on a
+  125%/150% display. Also check: switching tabs with the mouse pointer already resting over the
+  notebook's tab area (possible `<Enter>`/`<Leave>` mousewheel-binding race across
+  `ScrollableFrame` instances); and dragging the settings window from one monitor to another with a
+  different scaling factor (no live `WM_DPICHANGED` handling — fonts/layout are computed once per
+  window open, so this may look stale until reopened; note it, don't treat it as a blocker).
 - [ ] **Step 5:** At a small resolution (1366×768) and a large one (or a scaled-down 4K), confirm the
   window's `minsize` doesn't force it larger than the screen and that scrolling still works within
-  the smaller size.
+  the smaller size. Also confirm the Config tab's account-list error/status label (wraps at
+  `wraplength=520`) doesn't clip against `_MIN_WINDOW_WIDTH`'s narrow padding budget at the
+  window's minimum width — `ScrollableFrame` has no horizontal scrolling, so any clipped text here
+  would be unreachable rather than scrollable; if it clips, the fix is either raising
+  `_MIN_WINDOW_WIDTH` or lowering that wraplength.
 - [ ] **Step 6:** Run `bun run typecheck` and `bun run build` at the repo root (this plan touches no
   TypeScript, but the roadmap's prod-exploitable bar requires both green before considering any
   daemon change shippable).
