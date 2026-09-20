@@ -7,6 +7,7 @@ import {
   matchPlayers,
   matchSpatialGrids,
   matchStructureEvents,
+  matchObjectiveEvents,
   matches,
   talentPicks,
   userAccounts,
@@ -15,6 +16,7 @@ import {
   type Grid,
   type MatchHeroTrajectory,
   type MatchStructureEvent,
+  type MatchObjectiveEvent,
   type MatchTimelineDeath,
   type ReplayPayload,
   cellIndexForPosition,
@@ -208,6 +210,9 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
     trajectoriesByBattletag.set(t.battletag, list);
   }
   const structureEvents: MatchStructureEvent[] = payload.timeline?.structureEvents ?? [];
+  // Optional: absent for a daemon older than PARSER_VERSION 1.15 (which
+  // doesn't send it yet) and for a match with no objective event.
+  const objectiveEvents: MatchObjectiveEvent[] = payload.timeline?.objectives ?? [];
 
   return db.transaction(async (tx) => {
     let matchId: string;
@@ -274,9 +279,12 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
       // match_hero_trajectories (all FK'd on matchPlayerId). match_structure_events
       // is FK'd on matchId directly instead (a structure belongs to the match,
       // not to any one player row -- see match-structure-events.ts), so it
-      // isn't caught by that cascade and needs its own explicit re-ingest cleanup.
+      // isn't caught by that cascade and needs its own explicit re-ingest cleanup
+      // (same for match_objective_events, also FK'd on matchId -- see
+      // match-objective-events.ts).
       await tx.delete(matchPlayers).where(eq(matchPlayers.matchId, matchId));
       await tx.delete(matchStructureEvents).where(eq(matchStructureEvents.matchId, matchId));
+      await tx.delete(matchObjectiveEvents).where(eq(matchObjectiveEvents.matchId, matchId));
     } else {
       const [created] = await tx
         .insert(matches)
@@ -410,6 +418,18 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
           team: event.team,
           atSeconds: event.atSeconds,
           structureType: event.structureType,
+        })),
+      );
+    }
+
+    if (objectiveEvents.length > 0) {
+      await tx.insert(matchObjectiveEvents).values(
+        objectiveEvents.map((event) => ({
+          matchId,
+          team: event.team,
+          atSeconds: event.atSeconds,
+          kind: event.kind,
+          detail: event.detail ?? null,
         })),
       );
     }
