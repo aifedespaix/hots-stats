@@ -35,7 +35,7 @@ from typing import Callable
 
 from PIL import Image, ImageTk
 
-from . import api_client, auth_flow, autostart, draft_capture, hotkey, updater
+from . import api_client, auth_flow, autostart, draft_capture, hotkey, ui_kit, updater
 from .accounts_discovery import discover_account_folders
 from .config import (
     DEFAULT_DRAFT_HOTKEY,
@@ -288,7 +288,8 @@ class _UpdateProgressWindow:
 
         outer = ttk.Frame(root, padding=20, style="TFrame")
         outer.pack(fill="both", expand=True)
-        _apply_dark_style()
+        fonts = ui_kit.Fonts.for_scale(ui_kit.dpi_scale_factor(root))
+        _apply_dark_style(fonts)
 
         ttk.Label(outer, text=f"Mise à jour v{version}", style="Title.TLabel").pack(
             anchor="w"
@@ -370,63 +371,32 @@ class _UpdateProgressWindow:
         self._poll_job = self._root.after(300, self._poll)
 
 
-def _apply_dark_style() -> None:
+def _apply_dark_style(fonts: ui_kit.Fonts) -> None:
     """Builds the shared dark ttk theme -- called every time a window is
-    created (the settings window and the standalone update-progress popup
-    both use it, and each is its own `tk.Tk()`).
-
-    This used to skip rebuilding after the first call, on the assumption
-    that ttk styles are process-global. They aren't: each `tk.Tk()` spins up
-    its own independent Tcl interpreter with its own, freshly-defaulted ttk
-    style database, so a style configured on the first window's interpreter
-    has no effect on a later window's -- only `style.theme_use("clam")`
-    (selecting a *built-in* theme, resolved by name against every
-    interpreter) carried over. In practice this meant only the very first
-    window opened in a run ever got the dark palette; every window after
-    that (closing and reopening Settings from the tray, for instance) fell
-    back to plain ttk "clam" defaults -- a much lighter look than the rest
-    of the UI -- which is exactly the "reopens light instead of dark" bug
-    this now fixes. Rebuilding is cheap (a couple dozen `style.configure`
-    calls), so there's no real cost to doing it on every window open."""
+    created (see the original docstring for why: each `tk.Tk()` has its
+    own ttk style database). `fonts` is DPI-scaled by the caller via
+    `ui_kit.Fonts.for_scale(ui_kit.dpi_scale_factor(root))` so text stays
+    readable (not bitmap-scaled blurry) on a 125%/150% display."""
     style = ttk.Style()
-    style.theme_use(
-        "clam"
-    )  # the only built-in theme that reliably honors custom colors everywhere
+    style.theme_use("clam")
     style.configure("TFrame", background=_BG)
     style.configure("Panel.TFrame", background=_PANEL)
-    style.configure("TLabel", background=_BG, foreground=_TEXT, font=("Segoe UI", 10))
+    style.configure("TLabel", background=_BG, foreground=_TEXT, font=fonts.body)
+    style.configure("Panel.TLabel", background=_PANEL, foreground=_TEXT, font=fonts.body)
+    style.configure("Muted.TLabel", background=_BG, foreground=_TEXT_MUTED, font=fonts.muted)
     style.configure(
-        "Panel.TLabel", background=_PANEL, foreground=_TEXT, font=("Segoe UI", 10)
+        "PanelMuted.TLabel", background=_PANEL, foreground=_TEXT_MUTED, font=fonts.muted
     )
     style.configure(
-        "Muted.TLabel", background=_BG, foreground=_TEXT_MUTED, font=("Segoe UI", 9)
+        "SectionHeader.TLabel", background=_PANEL, foreground=_TEXT_MUTED, font=fonts.section
     )
-    style.configure(
-        "PanelMuted.TLabel",
-        background=_PANEL,
-        foreground=_TEXT_MUTED,
-        font=("Segoe UI", 9),
-    )
-    style.configure(
-        "SectionHeader.TLabel",
-        background=_PANEL,
-        foreground=_TEXT_MUTED,
-        font=("Segoe UI", 9, "bold"),
-    )
-    style.configure(
-        "Title.TLabel", background=_BG, foreground=_TEXT, font=("Segoe UI", 15, "bold")
-    )
-    style.configure(
-        "Link.TLabel",
-        background=_PANEL,
-        foreground=_ACCENT,
-        font=("Segoe UI", 9, "underline"),
-    )
+    style.configure("Title.TLabel", background=_BG, foreground=_TEXT, font=fonts.title)
+    style.configure("Link.TLabel", background=_PANEL, foreground=_ACCENT, font=fonts.link)
     style.configure(
         "Accent.TButton",
         background=_ACCENT,
         foreground="#0f1220",
-        font=("Segoe UI", 10, "bold"),
+        font=fonts.button_bold,
         padding=(14, 8),
         borderwidth=0,
     )
@@ -437,7 +407,7 @@ def _apply_dark_style() -> None:
         "Ghost.TButton",
         background=_BG,
         foreground=_TEXT_MUTED,
-        font=("Segoe UI", 10),
+        font=fonts.button,
         padding=(14, 8),
         borderwidth=0,
     )
@@ -448,7 +418,7 @@ def _apply_dark_style() -> None:
         background=_BG,
         foreground=_TEXT_MUTED,
         padding=(16, 8),
-        font=("Segoe UI", 10),
+        font=fonts.button,
         borderwidth=0,
     )
     style.map(
@@ -517,7 +487,8 @@ class _SettingsWindow:
         root.protocol("WM_DELETE_WINDOW", self._on_close)
         root.bind("<Escape>", lambda _e: self._on_close())
 
-        _apply_dark_style()
+        self._fonts = ui_kit.Fonts.for_scale(ui_kit.dpi_scale_factor(root))
+        _apply_dark_style(self._fonts)
         self._api_var = tk.StringVar()
         self._token_var = tk.StringVar()
         self._replays_var = tk.StringVar()
