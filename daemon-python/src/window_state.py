@@ -71,3 +71,31 @@ def save_window_geometry(geometry: WindowGeometry, path: Path | None = None) -> 
         target.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     except OSError as err:
         logger.debug("Failed to save window state at %s: %s", target, err)
+
+
+def clamp_to_screen(
+    geometry: WindowGeometry,
+    screen_width: int,
+    screen_height: int,
+    *,
+    min_width: int,
+    min_height: int,
+) -> WindowGeometry | None:
+    """Keeps a saved geometry fully on the current screen, or discards it
+    (`None`) if it can no longer fit at all — an undocked laptop or a
+    changed monitor layout, where the caller should fall back to its
+    default centered size instead of showing a too-small or partially
+    off-screen window."""
+    if geometry.width < min_width or geometry.height < min_height:
+        return None
+    if geometry.width > screen_width or geometry.height > screen_height:
+        return None
+    max_x = max(0, screen_width - geometry.width)
+    max_y = max(0, screen_height - geometry.height)
+    return WindowGeometry(
+        width=geometry.width,
+        height=geometry.height,
+        x=min(max(geometry.x, 0), max_x),
+        y=min(max(geometry.y, 0), max_y),
+        maximized=geometry.maximized,
+    )
