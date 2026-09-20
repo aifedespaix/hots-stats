@@ -188,3 +188,12 @@ service `postgres`.
 - **Le frontend affiche `API status: unreachable`** : `NUXT_PUBLIC_API_BASE`
   a été changé sans rebuild, ou le domaine `api.*` n'a pas encore de
   certificat valide.
+- **Console : `net::ERR_QUIC_PROTOCOL_ERROR` en boucle sur un flux long
+  (SSE)** : l'edge HTTP/3 (QUIC) de Cloudflare coupe les réponses streamées.
+  C'est pour ça que le live-draft utilise `GET /draft/poll` (long-poll,
+  requêtes courtes) et non `/draft/stream`. Si un autre flux long-lived est
+  ajouté un jour, désactiver HTTP/3 pour la zone, ou créer une *Response
+  Header Transform Rule* (Cloudflare → Rules → Transform Rules → Modify
+  Response Header) qui retire `Alt-Svc` sur le hostname de l'API. Le
+  navigateur garde l'`alt-svc` en cache jusqu'à 24 h : tester en navigation
+  privée.
