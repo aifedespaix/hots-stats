@@ -48,6 +48,36 @@ export function buildApiQuery(input: {
  * filter architecture - do not re-implement `mode` or `accounts` handling ad
  * hoc in a page, use this composable instead.
  */
+/** Minimal shape of the accounts store this helper needs (structural, so it
+ * stays decoupled from the Pinia store's module in tests). */
+export interface AccountsScopeStore {
+  accountsQueryParam(available: string[], primary: string | null): string | undefined;
+}
+
+/** Minimal shape of the authenticated user this helper needs. */
+export interface AccountsScopeUser {
+  accounts: { battletag: string }[];
+  primaryBattletag: string | null;
+  battletag: string | null;
+}
+
+/**
+ * Resolves the accounts query value for the active account selection. This is
+ * the single source both useApiFetch (on-screen requests) and the CSV export
+ * link use, so an export can never be scoped differently from the list it
+ * mirrors.
+ */
+export function accountsScopeParam(
+  accountsStore: AccountsScopeStore,
+  authUser: AccountsScopeUser | null | undefined,
+): string | undefined {
+  if (!authUser) return undefined;
+  return accountsStore.accountsQueryParam(
+    authUser.accounts.map((account) => account.battletag),
+    authUser.primaryBattletag ?? authUser.battletag ?? null,
+  );
+}
+
 export function useApiFetch<T>(url: string, opts: ApiFetchOptions = {}) {
   const config = useRuntimeConfig();
   const headers = import.meta.server ? useRequestHeaders(["cookie"]) : undefined;
@@ -61,12 +91,7 @@ export function useApiFetch<T>(url: string, opts: ApiFetchOptions = {}) {
     buildApiQuery({
       base: (unref(opts.query) ?? {}) as Record<string, unknown>,
       mode: gameModeStore?.modeQueryParam,
-      accounts: accountsStore
-        ? accountsStore.accountsQueryParam(
-            (authData.value?.user?.accounts ?? []).map((account) => account.battletag),
-            authData.value?.user?.primaryBattletag ?? authData.value?.user?.battletag ?? null,
-          )
-        : undefined,
+      accounts: accountsStore ? accountsScopeParam(accountsStore, authData.value?.user) : undefined,
     }),
   );
 
