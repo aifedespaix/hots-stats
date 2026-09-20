@@ -19,3 +19,4 @@ export * from "./match-spatial-grids";
 export * from "./hero-map-spatial-rollup";
 export * from "./match-hero-trajectories";
 export * from "./match-structure-events";
+export * from "./match-objective-events";
