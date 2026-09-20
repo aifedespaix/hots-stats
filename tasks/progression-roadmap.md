@@ -643,8 +643,39 @@ Légende : `[ ]` à faire · `[~]` en cours · `[x]` terminé · `[!]` bloqué
     indicateurs couleur-seule hors périmètre F3 (ex. pastilles « forme » de
     `/maps`) ne sont pas traités.
   - Aucune API, aucune migration, aucune dépendance nouvelle.
-- [ ] **F4 — Export CSV + partage** · dépend de F2
+- [x] **F4 — Export CSV + partage** · dépend de F2
   `GET /matches/export.csv` + "copier le lien". Spec § F4.
+  **Fait** (2026-09-20). Écarts / précisions vs spec :
+  - Le calcul (échappement RFC-4180, mapping des colonnes, plafond) vit dans un
+    module pur sans DB `apps/api/src/lib/match-csv.ts` ; son test est
+    `match-csv.test.ts` (même scission pure/DB que A1/A3/A4/C1/C3/C4/E1).
+  - La route réutilise `buildMatchConditions`, le schéma de filtres de la liste et
+    `accountScope` : portée et filtres strictement identiques à
+    `GET /matches` (AC3). Elle est déclarée avant `/:id` pour ne jamais
+    être capturée comme un id de partie.
+  - Plafond `MATCH_EXPORT_MAX_ROWS = 5000` déclaré dans `packages/shared-types`
+    (le web l'annonce, l'API l'applique) ; le serveur lit `plafond + 1` lignes
+    pour détecter la troncature et renvoie `X-Export-Row-Limit`,
+    `X-Export-Row-Count` et `X-Export-Truncated` (AC2). La réponse est un
+    `ReadableStream` écrit par paquets de 200 lignes
+    (`MATCH_EXPORT_CHUNK_ROWS`).
+  - Colonnes : Date ISO, Carte, Mode (valeur brute `GameMode`), Héros,
+    Durée (s), Résultat (« Victoire »/« Défaite »), Version. Les valeurs restent
+    lisibles par une machine ; seuls l'en-tête et le résultat sont en français
+    (les libellés `formatGameMode` vivent côté web, les déplacer serait un
+    refactor hors F4). Pas de BOM.
+  - « Copier le lien » copie l'URL de la page courante (F2 la rend
+    reproductible), pas l'URL du CSV : c'est une action distincte du bouton
+    d'export. `useClipboard` (@vueuse/core, déjà présent) avec repli
+    `legacy`.
+  - Le lien d'export réutilise `accountsScopeParam` (extrait de
+    `useApiFetch`, désormais source unique) et `activeFilters`/le tri de la
+    page : aucune duplication de la résolution de portée multi-comptes.
+  - Écart assumé : le web ne lit pas l'en-tête de troncature (lien de
+    téléchargement direct, pas de `fetch`) ; l'utilisateur est informé du
+    plafond via l'attribut `title` du bouton.
+  - Aucune migration, aucune dépendance nouvelle (vueuse déjà présent), aucun
+    secret.
 
 ### Lot G — Backlog (spec séparée requise)
 

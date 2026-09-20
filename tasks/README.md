@@ -342,6 +342,12 @@ rappelle donc le contexte nécessaire plutôt que de supposer une continuité.
   ad-hoc retirés), et `prefers-reduced-motion` (CSS global +
   `withReducedMotion` sur les 4 wrappers Chart.js). Vérifié par tests unitaires
   + checklist manuelle équivalente (pas de dépendance axe-core ajoutée).
+- **Suite Progression — F4 (export CSV + partage)** : `GET
+  /matches/export.csv` (RFC-4180, portée/filtres identiques à `GET /matches`,
+  plafond partagé `MATCH_EXPORT_MAX_ROWS = 5000` rapporté par en-têtes,
+  réponse en flux) + actions « Exporter en CSV » et « Copier le lien » sur
+  `/matches` (le lien copié est l'URL de la vue, F2). Aucune migration, aucune
+  dépendance.
 
 ## À faire
 
