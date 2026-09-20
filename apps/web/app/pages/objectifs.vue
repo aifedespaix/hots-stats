@@ -56,7 +56,13 @@ const mapItems = computed(() =>
   (mapsData.value?.maps ?? []).map((map) => ({ value: map.mapId, label: map.mapName })),
 );
 
-const suggestions = computed<GoalSuggestion[]>(() => suggestionsData.value?.suggestions ?? []);
+// Defensive: a suggestions payload that is not an array (an error envelope, a
+// shape change) must degrade to "no suggestion", never throw in .filter below
+// and blank the page.
+const suggestions = computed<GoalSuggestion[]>(() => {
+  const raw = suggestionsData.value?.suggestions;
+  return Array.isArray(raw) ? raw : [];
+});
 const suggestionWindowDays = computed(
   () => suggestionsData.value?.windowDays ?? GOAL_SUGGESTION_WINDOW_DAYS,
 );
@@ -153,6 +159,39 @@ function applySuggestion(suggestion: GoalSuggestion) {
   });
 }
 
+/** Stable identity of one suggestion card, shared by the v-for key and the
+ * direct-create loading state. */
+function suggestionKey(suggestion: GoalSuggestion): string {
+  return `${suggestion.group}-${suggestion.metricKey}`;
+}
+
+const creatingKey = ref<string | null>(null);
+const suggestionError = ref<string | null>(null);
+
+/** Accepts a pre-configured objective in one click: the suggestion already
+ * carries its metric, direction, target and hero scope, so it can be saved
+ * without going through the form. The form path (applySuggestion) stays
+ * available for adjusting the target first. */
+async function createFromSuggestion(suggestion: GoalSuggestion) {
+  suggestionError.value = null;
+  creatingKey.value = suggestionKey(suggestion);
+  try {
+    await createGoal({
+      metricKey: suggestion.metricKey,
+      targetValue: suggestion.targetValue,
+      direction: suggestion.direction,
+      scopeHeroId: suggestion.heroId ?? null,
+      scopeMapId: null,
+      dueAt: null,
+    });
+    await refresh();
+  } catch {
+    suggestionError.value = "Impossible d'enregistrer l'objectif.";
+  } finally {
+    creatingKey.value = null;
+  }
+}
+
 const deletingId = ref<string | null>(null);
 
 async function remove(goal: PlayerGoal) {
@@ -180,11 +219,14 @@ function metricLabel(goal: PlayerGoal): string {
       </p>
     </div>
 
-    <UiPanel title="Objectifs suggérés" :scrollable="false">
+    <UiPanel title="Objectifs suggérés" :count="suggestions.length" :scrollable="false">
       <p class="text-sm text-muted">
-        Deux axes de travail calculés sur tes {{ suggestionWindowDays }} derniers jours, puis un jeu par
-        héros le plus joué. Clique sur « Utiliser » pour pré-remplir le formulaire.
+        Jusqu'à 6 objectifs pré-configurés à partir de tes parties des
+        {{ suggestionWindowDays }} derniers jours : 2 sur l'ensemble de tes héros, 2 sur ton héros le
+        plus joué, puis 2 sur le deuxième. Clique sur « Créer » pour l'ajouter directement, ou « Ajuster » pour pré-remplir le formulaire.
       </p>
+
+      <p v-if="suggestionError" class="mt-2 text-sm text-danger">{{ suggestionError }}</p>
 
       <div class="mt-3">
         <UiStateCard v-if="suggestionsPending" state="loading" message="Calcul de tes axes de travail…" />
@@ -225,15 +267,24 @@ function metricLabel(goal: PlayerGoal): string {
                   }}
                   · {{ suggestion.sampleSize }} partie(s) mesurée(s)
                 </p>
-                <UButton
-                  size="xs"
-                  color="primary"
-                  variant="soft"
-                  class="self-start"
-                  @click="applySuggestion(suggestion)"
-                >
-                  Utiliser
-                </UButton>
+                <div class="flex flex-wrap items-center gap-2">
+                  <UButton
+                    size="xs"
+                    color="primary"
+                    :loading="creatingKey === suggestionKey(suggestion)"
+                    @click="createFromSuggestion(suggestion)"
+                  >
+                    Créer
+                  </UButton>
+                  <UButton
+                    size="xs"
+                    color="primary"
+                    variant="soft"
+                    @click="applySuggestion(suggestion)"
+                  >
+                    Ajuster
+                  </UButton>
+                </div>
               </article>
             </div>
           </section>
