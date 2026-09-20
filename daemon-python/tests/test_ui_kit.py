@@ -1,5 +1,7 @@
 import sys
 
+import pytest
+
 from src import ui_kit
 
 
@@ -109,6 +111,7 @@ def test_default_palette_matches_todays_hardcoded_colors():
         text_muted="#8b90ad",
         accent="#6c8cff",
         ok="#4cd97b",
+        warn="#f2c14e",
         error="#ef5b5b",
         neutral="#8b90ad",
     )
@@ -125,3 +128,35 @@ def test_mousewheel_scroll_units_scroll_down():
 def test_mousewheel_scroll_units_fast_scroll_scales_linearly():
     assert ui_kit.mousewheel_scroll_units(240) == -2
     assert ui_kit.mousewheel_scroll_units(-360) == 3
+
+
+def test_contrast_ratio_black_on_white_is_maximum():
+    assert ui_kit.contrast_ratio("#000000", "#ffffff") == pytest.approx(21.0, abs=0.01)
+
+
+def test_contrast_ratio_is_symmetric():
+    assert ui_kit.contrast_ratio("#1c1f2e", "#f2c14e") == ui_kit.contrast_ratio(
+        "#f2c14e", "#1c1f2e"
+    )
+
+
+def test_default_palette_warn_meets_accessibility_contrast_target_on_bg():
+    assert ui_kit.contrast_ratio(ui_kit.DEFAULT_PALETTE.warn, ui_kit.DEFAULT_PALETTE.bg) >= 4.5
+
+
+def test_default_palette_warn_meets_accessibility_contrast_target_on_panel():
+    assert (
+        ui_kit.contrast_ratio(ui_kit.DEFAULT_PALETTE.warn, ui_kit.DEFAULT_PALETTE.panel) >= 4.5
+    )
+
+
+def test_default_palette_text_muted_meets_accessibility_contrast_target():
+    assert ui_kit.contrast_ratio(ui_kit.DEFAULT_PALETTE.text_muted, ui_kit.DEFAULT_PALETTE.bg) >= 4.5
+    assert (
+        ui_kit.contrast_ratio(ui_kit.DEFAULT_PALETTE.text_muted, ui_kit.DEFAULT_PALETTE.panel)
+        >= 4.5
+    )
+
+
+def test_default_spacing_matches_todays_hardcoded_padding_values():
+    assert ui_kit.DEFAULT_SPACING == ui_kit.Spacing(xs=4, sm=8, md=12, lg=18, xl=24)

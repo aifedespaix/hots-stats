@@ -92,12 +92,56 @@ def set_dpi_awareness() -> None:
         logger.debug("SetProcessDPIAware also failed: %s", err)
 
 
+def _relative_luminance(hex_color: str) -> float:
+    """WCAG relative luminance of a `#rrggbb` color, 0 (black) to 1
+    (white) -- pure hex/arithmetic, no Tk involved."""
+    hex_color = hex_color.lstrip("#")
+    channels = []
+    for i in (0, 2, 4):
+        c = int(hex_color[i : i + 2], 16) / 255.0
+        c = c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+        channels.append(c)
+    r, g, b = channels
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def contrast_ratio(hex_a: str, hex_b: str) -> float:
+    """WCAG contrast ratio between two `#rrggbb` colors (>= 1.0, higher is
+    more contrast) -- backs the palette's own regression tests so new
+    status/tone colors stay above the spec's 4.5:1 accessibility target
+    (Accessibility section) without eyeballing it by hand."""
+    l1 = _relative_luminance(hex_a) + 0.05
+    l2 = _relative_luminance(hex_b) + 0.05
+    return max(l1, l2) / min(l1, l2)
+
+
+@dataclass(frozen=True)
+class Spacing:
+    """Named spacing tokens (pixels at 96 DPI) so container padding stops
+    being hardcoded per call site (e.g. `Card`'s inner padding) and can be
+    tuned once. Values match today's hardcoded paddings across `gui.py`
+    (18px card padding, 12px between stacked cards, etc.) — a no-visual-
+    change extraction, same as `Palette`/`Fonts` before it."""
+
+    xs: int = 4
+    sm: int = 8
+    md: int = 12
+    lg: int = 18
+    xl: int = 24
+
+
+DEFAULT_SPACING = Spacing()
+
+
 @dataclass(frozen=True)
 class Palette:
     """A small, dark, "gamer tool" color set. Values match `gui.py`'s
     previous module-level color constants exactly (this is a no-visual-
-    change extraction); B2 (widget kit) is where `warn` and a higher-
-    contrast muted color get added, per the spec's Decision on scope."""
+    change extraction). `warn` was added in B2 for the health banner's
+    "degraded"/"syncing" tones; it and `text_muted` both meet the spec's
+    4.5:1 contrast target against `bg` and `panel` (see
+    `test_default_palette_warn_meets_accessibility_contrast_target_on_bg`
+    and its siblings)."""
 
     bg: str
     panel: str
@@ -107,6 +151,7 @@ class Palette:
     text_muted: str
     accent: str
     ok: str
+    warn: str
     error: str
     neutral: str
 
@@ -120,6 +165,7 @@ DEFAULT_PALETTE = Palette(
     text_muted="#8b90ad",
     accent="#6c8cff",
     ok="#4cd97b",
+    warn="#f2c14e",
     error="#ef5b5b",
     neutral="#8b90ad",
 )
