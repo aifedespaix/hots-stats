@@ -8,9 +8,7 @@ from __future__ import annotations
 
 import logging
 import sys
-import tkinter as tk
 from dataclasses import dataclass
-from tkinter import ttk
 from typing import Protocol
 
 logger = logging.getLogger(__name__)
@@ -149,6 +147,9 @@ class ScrollableFrame:
     """
 
     def __init__(self, parent: tk.Misc, *, background: str) -> None:
+        import tkinter as tk
+        from tkinter import ttk
+
         self.outer = tk.Frame(parent, bg=background)
         self._canvas = tk.Canvas(
             self.outer, background=background, highlightthickness=0, borderwidth=0

@@ -85,16 +85,16 @@ _TEST_CAPTURE_THUMB_WIDTH = 220
 
 # A small, dark, "gamer tool" palette. Kept in one place so the whole window
 # reads as one deliberate look rather than default-tk gray.
-_BG = "#1c1f2e"
-_PANEL = "#252a3d"
-_FIELD_BG = "#2f3550"
-_FIELD_BG_FOCUS = "#394069"
-_TEXT = "#e8eaf6"
-_TEXT_MUTED = "#8b90ad"
-_ACCENT = "#6c8cff"
-_OK = "#4cd97b"
-_ERROR = "#ef5b5b"
-_NEUTRAL = "#8b90ad"
+_BG = ui_kit.DEFAULT_PALETTE.bg
+_PANEL = ui_kit.DEFAULT_PALETTE.panel
+_FIELD_BG = ui_kit.DEFAULT_PALETTE.field_bg
+_FIELD_BG_FOCUS = ui_kit.DEFAULT_PALETTE.field_bg_focus
+_TEXT = ui_kit.DEFAULT_PALETTE.text
+_TEXT_MUTED = ui_kit.DEFAULT_PALETTE.text_muted
+_ACCENT = ui_kit.DEFAULT_PALETTE.accent
+_OK = ui_kit.DEFAULT_PALETTE.ok
+_ERROR = ui_kit.DEFAULT_PALETTE.error
+_NEUTRAL = ui_kit.DEFAULT_PALETTE.neutral
 
 # Human-readable explanation per `parser.ReplaySkipped` / `IngestOutcome`
 # skip-reason code (see `ingestion.py`/`sync_state.py`, which persist the
@@ -276,8 +276,7 @@ class _UpdateProgressWindow:
 
         outer = ttk.Frame(root, padding=20, style="TFrame")
         outer.pack(fill="both", expand=True)
-        fonts = ui_kit.Fonts.for_scale(ui_kit.dpi_scale_factor(root))
-        _apply_dark_style(fonts)
+        _apply_dark_style(ui_kit.DEFAULT_FONTS)
 
         ttk.Label(outer, text=f"Mise à jour v{version}", style="Title.TLabel").pack(
             anchor="w"
@@ -362,9 +361,9 @@ class _UpdateProgressWindow:
 def _apply_dark_style(fonts: ui_kit.Fonts) -> None:
     """Builds the shared dark ttk theme -- called every time a window is
     created (see the original docstring for why: each `tk.Tk()` has its
-    own ttk style database). `fonts` is DPI-scaled by the caller via
-    `ui_kit.Fonts.for_scale(ui_kit.dpi_scale_factor(root))` so text stays
-    readable (not bitmap-scaled blurry) on a 125%/150% display."""
+    own ttk style database). `fonts` is the fixed `ui_kit.DEFAULT_FONTS`
+    token set; DPI-appropriate sizing comes from `set_dpi_awareness()` plus
+    Tk's own point-size-to-pixel conversion, not from scaling these fonts."""
     style = ttk.Style()
     style.theme_use("clam")
     style.configure("TFrame", background=_BG)
@@ -475,7 +474,7 @@ class _SettingsWindow:
         root.protocol("WM_DELETE_WINDOW", self._on_close)
         root.bind("<Escape>", lambda _e: self._on_close())
 
-        self._fonts = ui_kit.Fonts.for_scale(ui_kit.dpi_scale_factor(root))
+        self._fonts = ui_kit.DEFAULT_FONTS
         _apply_dark_style(self._fonts)
         self._api_var = tk.StringVar()
         self._token_var = tk.StringVar()
@@ -2016,8 +2015,8 @@ class _SettingsWindow:
                 self._root.state("zoomed")
             return
 
-        x = (self._root.winfo_screenwidth() - min_width) // 2
-        y = (self._root.winfo_screenheight() - min_height) // 3
+        x = max(0, (self._root.winfo_screenwidth() - min_width) // 2)
+        y = max(0, (self._root.winfo_screenheight() - min_height) // 3)
         self._root.geometry(f"{min_width}x{min_height}+{x}+{y}")
 
     def _on_geometry_changed(self, event: "tk.Event") -> None:
