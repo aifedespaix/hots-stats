@@ -285,3 +285,50 @@ def fetch_summary(base_url: str, access_token: str, timeout: float = 5.0) -> dic
         return response.json()
     except ValueError:
         return None
+
+def fetch_web_origin(base_url: str, timeout: float = 3.0) -> str | None:
+    """Reads the dashboard origin the API advertises on its public health
+    endpoint. Used by the browser handshake, before the daemon holds any
+    token (GET /ingest/version requires one, /health does not). Best-effort:
+    returns None on any failure, so callers fall back to guessing."""
+    try:
+        response = requests.get(f"{base_url.rstrip('/')}/health", timeout=timeout)
+    except requests.RequestException:
+        return None
+    if response.status_code != 200:
+        return None
+    try:
+        body = response.json()
+    except ValueError:
+        return None
+    origin = body.get("webOrigin") if isinstance(body, dict) else None
+    return origin if isinstance(origin, str) and origin else None
+
+
+def post_daemon_token(
+    base_url: str, code: str, code_verifier: str, timeout: float = 15.0
+) -> str | None:
+    """Exchanges a one-time authorization code (plus its PKCE verifier) for a
+    personal access token. Returns the raw token, or None on any failure --
+    the caller turns that into a user-facing message, this never raises."""
+    try:
+        response = requests.post(
+            f"{base_url.rstrip('/')}/auth/daemon/token",
+            json={"code": code, "codeVerifier": code_verifier},
+            timeout=timeout,
+        )
+    except requests.RequestException as err:
+        logger.warning("Daemon token exchange failed: %s", err)
+        return None
+
+    if response.status_code != 201:
+        logger.warning(
+            "Daemon token exchange rejected (%d): %s", response.status_code, _safe_json(response)
+        )
+        return None
+
+    try:
+        token = response.json().get("token")
+    except ValueError:
+        return None
+    return token if isinstance(token, str) and token else None

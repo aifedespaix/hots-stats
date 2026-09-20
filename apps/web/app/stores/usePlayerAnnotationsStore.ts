@@ -8,10 +8,33 @@ import type { PlayerAnnotation, PlayerAnnotationInput, SharedPlayerAnnotation } 
  * views so a given battletag is only fetched once per session instead of once per component
  * instance that happens to render it.
  */
+
+/**
+ * BattleTags sent per bulk request. The whole list used to be crammed into a
+ * single `?battletags=` value; the API (Bun) rejects a request line over ~16 KiB
+ * with HTTP 431, so a long players list (roughly 800+ encountered BattleTags)
+ * made the one annotation request fail and blanked every "Note"/"Commentaires"
+ * cell at once. At ~25 encoded chars per BattleTag, 200 keeps a batch well under
+ * that ceiling.
+ */
+export const ANNOTATIONS_BATCH_SIZE = 200;
+
+/**
+ * BattleTags whose fetch is currently in flight. Deliberately module-scoped and
+ * NOT part of the Pinia state: @pinia/nuxt's `app:rendered` hook dumps the whole
+ * store state into the SSR payload (node_modules/@pinia/nuxt/dist/runtime/plugin.js)
+ * and the client restores it verbatim. A battletag still in flight when the server
+ * finished rendering would therefore arrive on the client as "pending", make
+ * `fetchMany` skip it forever, and leave the "Note"/"Commentaires" columns blank
+ * until a later reload happened to win the race. Keeping the in-flight registry out
+ * of state also means a hydrated client always believes nothing is in flight and
+ * refetches whatever the server did not manage to cache.
+ */
+const inFlight = new Set<string>();
+
 export const usePlayerAnnotationsStore = defineStore("player-annotations", {
-  state: (): { byBattletag: Record<string, SharedPlayerAnnotation>; pending: Set<string> } => ({
+  state: (): { byBattletag: Record<string, SharedPlayerAnnotation> } => ({
     byBattletag: {},
-    pending: new Set(),
   }),
   getters: {
     annotationFor:
@@ -32,15 +55,19 @@ export const usePlayerAnnotationsStore = defineStore("player-annotations", {
     /** Fetches whichever of `battletags` isn't already cached (or in flight) yet, in one request. */
     async fetchMany(battletags: string[]) {
       const missing = [...new Set(battletags.filter(Boolean))].filter(
-        (battletag) => !(battletag in this.byBattletag) && !this.pending.has(battletag),
+        (battletag) => !(battletag in this.byBattletag) && !inFlight.has(battletag),
       );
       if (missing.length === 0) return;
 
-      missing.forEach((battletag) => this.pending.add(battletag));
+      missing.forEach((battletag) => inFlight.add(battletag));
       try {
-        await this.fetchBattletags(missing);
+        const batches: string[][] = [];
+        for (let i = 0; i < missing.length; i += ANNOTATIONS_BATCH_SIZE) {
+          batches.push(missing.slice(i, i + ANNOTATIONS_BATCH_SIZE));
+        }
+        await Promise.all(batches.map((batch) => this.fetchBattletags(batch)));
       } finally {
-        missing.forEach((battletag) => this.pending.delete(battletag));
+        missing.forEach((battletag) => inFlight.delete(battletag));
       }
     },
     /** Force-refetches a single battletag's shared aggregate, bypassing the cache -- used after

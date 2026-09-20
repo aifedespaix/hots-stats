@@ -29,6 +29,7 @@ export const tokensRoute = new Hono()
     const rows = await db
       .select({
         id: personalAccessTokens.id,
+        name: personalAccessTokens.name,
         lastUsedAt: personalAccessTokens.lastUsedAt,
         createdAt: personalAccessTokens.createdAt,
       })

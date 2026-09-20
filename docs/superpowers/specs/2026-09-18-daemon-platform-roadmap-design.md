@@ -97,6 +97,14 @@ A step may be merged (and therefore released) only when all of:
 Merging a checkpoint before starting the next is the default. Two checkpoints may share one PR
 only if the intermediate state would be visibly broken to users.
 
+### Statut des chantiers
+
+- **C1 — Browser-based authorization : livré** (branche `feat/daemon-browser-auth`,
+  2026-09-20). Les trois checkpoints A1/A2/A3 sont implémentés et couverts par les
+  tests (`bun test apps/api`, `bun run --filter './apps/web' test`, `pytest`).
+  Reste à faire : la vérification manuelle du parcours navigateur sur un poste
+  avec l'API réelle, puis l'ouverture de la PR (pas de push direct sur `main`).
+
 ## Clean-session execution prompt
 
 Each chantier is executed in a **fresh session** with no prior conversation. Paste the prompt

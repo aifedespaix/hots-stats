@@ -47,6 +47,11 @@ const features = [
       </li>
     </ul>
 
+    <p class="text-xs text-muted">
+      Le daemon se connecte en un clic : il ouvre cette page dans ton navigateur, tu confirmes, c'est terminé.
+      Plus besoin de copier une clé à la main.
+    </p>
+
     <div class="flex flex-col gap-2 sm:flex-row">
       <UButton
         to="https://github.com/aifedespaix/hots-stats/releases/latest"
@@ -67,7 +72,7 @@ const features = [
         icon="i-heroicons-key"
         class="sm:flex-1"
       >
-        Récupérer mon token
+        Connecter mon daemon
       </UButton>
     </div>
   </div>

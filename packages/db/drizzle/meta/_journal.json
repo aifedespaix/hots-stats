@@ -169,6 +169,13 @@
       "when": 1789905944518,
       "tag": "0023_fluffy_the_hood",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1789907976516,
+      "tag": "0024_open_darwin",
+      "breakpoints": true
     }
   ]
 }

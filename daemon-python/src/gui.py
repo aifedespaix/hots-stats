@@ -35,7 +35,7 @@ from typing import Callable
 
 from PIL import Image, ImageTk
 
-from . import api_client, autostart, draft_capture, hotkey, updater
+from . import api_client, auth_flow, autostart, draft_capture, hotkey, updater
 from .accounts_discovery import discover_account_folders
 from .config import (
     DEFAULT_DRAFT_HOTKEY,
@@ -492,6 +492,8 @@ class _SettingsWindow:
         self._live_stats_job: str | None = None
         self._update_status_job: str | None = None
         self._draft_capture_status_job: str | None = None
+        self._connect_busy = False
+        self._auth_cancel = threading.Event()
         self._test_capture_countdown_job: str | None = None
         self._test_capture_running = False
         self._hotkey_capturing = False
@@ -652,11 +654,31 @@ class _SettingsWindow:
             row=0, column=0, columnspan=3, sticky="w", pady=(0, 10)
         )
 
+        connect_row = ttk.Frame(inner, style="Panel.TFrame")
+        connect_row.grid(row=1, column=0, columnspan=3, sticky="w", pady=(0, 4))
+
+        self._connect_button = ttk.Button(
+            connect_row,
+            text="Connecter ce PC via le navigateur",
+            style="Accent.TButton",
+            command=self._connect_via_browser,
+        )
+        self._connect_button.pack(side="left")
+
+        self._connect_status = ttk.Label(
+            inner,
+            text="",
+            style="PanelMuted.TLabel",
+            wraplength=_LABEL_WRAPLENGTH,
+            justify="left",
+        )
+        self._connect_status.grid(row=2, column=0, columnspan=3, sticky="w", pady=(0, 12))
+
         self._api_entry, self._api_status, grid_row = self._build_field(
             inner,
             label="URL de l'API",
             var=self._api_var,
-            start_row=1,
+            start_row=3,
             on_change=self._on_api_or_token_changed,
         )
         self._token_entry, self._token_status, grid_row = self._build_field(
@@ -1744,6 +1766,41 @@ class _SettingsWindow:
             self._root.after_cancel(self._debounce_job)
         self._debounce_job = self._root.after(_DEBOUNCE_MS, self._check_connection)
 
+    def _connect_via_browser(self) -> None:
+        """Starts the loopback browser handshake on a worker thread. The Tk
+        thread only ever starts it and renders its result (see
+        _after_if_open), matching this module's threading contract."""
+        if self._connect_busy:
+            return
+        self._connect_busy = True
+        self._auth_cancel = threading.Event()
+        self._connect_button.configure(state="disabled")
+        self._set_status(self._connect_status, "Ouverture du navigateur…", _NEUTRAL)
+        threading.Thread(
+            target=self._connect_worker, name="hots-browser-auth", daemon=True
+        ).start()
+
+    def _connect_worker(self) -> None:
+        result = auth_flow.request_authorization(
+            api_base_url=self._api_var.get().strip(),
+            cancel_event=self._auth_cancel,
+        )
+        self._after_if_open(self._finish_connect, result)
+
+    def _finish_connect(self, result: auth_flow.AuthorizationResult) -> None:
+        self._connect_busy = False
+        self._connect_button.configure(state="normal")
+        if result.token:
+            # Fill the field and reuse the existing debounced check, so the
+            # user sees the token turn green before saving.
+            self._token_var.set(result.token)
+            self._set_status(self._connect_status, "✓ Connecté. Vérification du token…", _OK)
+            self._on_api_or_token_changed()
+        else:
+            self._set_status(
+                self._connect_status, f"✗ {result.error or 'Échec de la connexion.'}", _ERROR
+            )
+
     def _check_connection(self) -> None:
         self._debounce_job = None
         base_url = self._api_var.get().strip()
@@ -2145,6 +2202,9 @@ class _SettingsWindow:
             self._test_capture_countdown_job = None
 
     def _on_close(self) -> None:
+        # Release the loopback listener's wait loop immediately instead of
+        # leaving the auth worker blocked for up to the full timeout.
+        self._auth_cancel.set()
         if self._hotkey_capturing:
             # `keyboard.read_hotkey()` (see `_capture_hotkey_worker`) is a
             # blocking call with no cancellation API: it keeps its low-level

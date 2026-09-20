@@ -355,6 +355,17 @@ rappelle donc le contexte nécessaire plutôt que de supposer une continuité.
   marqueurs + résumé FR sur la Chronologie de `/matches/[id]`. Aucune
   dépendance.
 
+- **Daemon Platform — C1 (autorisation navigateur)** : handshake loopback +
+  PKCE (S256) échangeant un code à usage unique (60 s) contre un PAT ordinaire
+  nommé `Daemon — <hostname>`. API : table additive `daemon_authorization_codes`
+  (migration 0024), `POST /auth/daemon/authorize` (session) +
+  `POST /auth/daemon/token` (public, `invalid_grant` unique), `webOrigin` sur
+  `GET /health`, rate-limit en mémoire. Web : page `/daemon/authorize`
+  (consentement, états invalide/erreur) + nom du token dans la liste. Daemon :
+  `src/auth_flow.py` (PKCE + listener loopback), bouton « Connecter ce PC via le
+  navigateur » dans les Réglages ; saisie manuelle conservée. Branche
+  `feat/daemon-browser-auth` (pas de push direct sur `main`).
+
 ## À faire
 
 Tous les epics du roadmap initial (1 à 6), plus les Epics 7 à 9, sont

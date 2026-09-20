@@ -5,6 +5,7 @@ import { startQuarantineVerificationJob } from "./jobs/quarantine-verification.j
 import { env } from "./lib/env";
 import { adminSpatialRoute } from "./routes/admin-spatial";
 import { authRoute } from "./routes/auth";
+import { daemonAuthRoute } from "./routes/daemon-auth";
 import { compareRoute } from "./routes/compare";
 import { draftRoute } from "./routes/draft";
 import { friendsRoute } from "./routes/friends";
@@ -38,6 +39,7 @@ app.use(
 
 app.route("/health", healthRoute);
 app.route("/auth", authRoute);
+app.route("/auth/daemon", daemonAuthRoute);
 app.route("/tokens", tokensRoute);
 app.route("/ingest", ingestRoute);
 app.route("/uploads", uploadsRoute);
