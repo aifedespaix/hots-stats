@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
+from src import api_client
 from src.api_client import (
     ApiClient,
     ApiClientError,
@@ -285,3 +286,65 @@ def test_fetch_version_none_on_401():
 def test_fetch_version_none_on_network_error():
     with patch("src.api_client.requests.get", side_effect=requests.ConnectionError("offline")):
         assert fetch_version("https://api.example.com", "hots_pat_abc") is None
+
+class _FakeResponse:
+    def __init__(self, status_code: int, body: object) -> None:
+        self.status_code = status_code
+        self._body = body
+
+    def json(self) -> object:
+        return self._body
+
+
+def test_fetch_web_origin_returns_the_advertised_origin(monkeypatch):
+    monkeypatch.setattr(
+        api_client.requests,
+        "get",
+        lambda *a, **k: _FakeResponse(200, {"status": "ok", "webOrigin": "https://web.test"}),
+    )
+    assert api_client.fetch_web_origin("https://api.test") == "https://web.test"
+
+
+def test_fetch_web_origin_returns_none_on_failure(monkeypatch):
+    def boom(*_a, **_k):
+        raise api_client.requests.RequestException("down")
+
+    monkeypatch.setattr(api_client.requests, "get", boom)
+    assert api_client.fetch_web_origin("https://api.test") is None
+
+
+def test_fetch_web_origin_returns_none_when_absent(monkeypatch):
+    monkeypatch.setattr(
+        api_client.requests, "get", lambda *a, **k: _FakeResponse(200, {"status": "ok"})
+    )
+    assert api_client.fetch_web_origin("https://api.test") is None
+
+
+def test_post_daemon_token_sends_the_verifier_and_returns_the_token(monkeypatch):
+    captured = {}
+
+    def fake_post(url, json=None, timeout=None):
+        captured["url"] = url
+        captured["json"] = json
+        return _FakeResponse(201, {"token": "hots_pat_deadbeef"})
+
+    monkeypatch.setattr(api_client.requests, "post", fake_post)
+    token = api_client.post_daemon_token("https://api.test/", "the-code", "the-verifier")
+    assert token == "hots_pat_deadbeef"
+    assert captured["url"] == "https://api.test/auth/daemon/token"
+    assert captured["json"] == {"code": "the-code", "codeVerifier": "the-verifier"}
+
+
+def test_post_daemon_token_returns_none_on_invalid_grant(monkeypatch):
+    monkeypatch.setattr(
+        api_client.requests, "post", lambda *a, **k: _FakeResponse(400, {"error": "invalid_grant"})
+    )
+    assert api_client.post_daemon_token("https://api.test", "c", "v") is None
+
+
+def test_post_daemon_token_returns_none_on_network_error(monkeypatch):
+    def boom(*_a, **_k):
+        raise api_client.requests.RequestException("down")
+
+    monkeypatch.setattr(api_client.requests, "post", boom)
+    assert api_client.post_daemon_token("https://api.test", "c", "v") is None
