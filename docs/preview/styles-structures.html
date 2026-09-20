@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Chronologie — différencier les structures</title>
+<style>
+  :root { --bg:#0b1120; --surface:#131c31; --band:#1b2540; --border:#2a3757; --fg:#e8edf7; --muted:#93a2c4; --ally:#3b82f6; --enemy:#ef4444; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:24px; background:var(--bg); color:var(--fg); font:13px/1.5 system-ui, sans-serif; }
+  .page { max-width:1000px; margin:0 auto; }
+  h1 { font-size:19px; margin:0 0 6px; }
+  h2 { font-size:14px; margin:0 0 2px; }
+  p.intro { color:var(--muted); margin:0 0 20px; max-width:82ch; }
+  .block { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:16px; }
+  .block p.note { color:var(--muted); margin:2px 0 0; font-size:12px; }
+  .tag { display:inline-block; font-size:10px; padding:1px 6px; border-radius:4px; background:var(--band); color:var(--muted); margin-left:6px; }
+  svg { display:block; width:100%; height:auto; }
+  .caption { color:var(--muted); font-size:11px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>Différencier les structures dans la chronologie</h1>
+  <p class="intro">
+    4 catégories retenues : <b>Cœur</b>, <b>Bastion</b> (fort + donjon), <b>Tour</b>, <b>Porte</b>.
+    La couleur est déjà prise par le camp (bleu = mon équipe, rouge = adverses), donc c'est la <b>forme</b>
+    qui doit porter le type. Trois pistes, montrées à la taille réelle du graphe <b>et</b> agrandies ×7.
+    La 5e pastille de chaque rangée est en rouge pour vérifier que la forme reste lisible dans les deux camps.
+  </p>
+
+  <!-- ============ STYLE A ============ -->
+  <div class="block">
+    <h2>A — Silhouettes distinctes <span class="tag">le plus lisible en petit</span></h2>
+    <p class="note">Bastion = carré plein · Tour = losange · Porte = arche · Cœur = grand carré à anneau. Aucun détail interne à déchiffrer.</p>
+    <svg viewBox="0 0 900 140" role="img" aria-label="Style A, silhouettes distinctes">
+      <text x="8" y="14" fill="#93a2c4" font-size="10">taille réelle</text>
+      <rect x="8" y="22" width="260" height="40" rx="4" fill="#1b2540"/>
+      <g transform="translate(46,42)"><rect x="-4.5" y="-4.5" width="9" height="9" fill="#3b82f6"/></g>
+      <g transform="translate(88,42)"><rect x="-4" y="-4" width="8" height="8" fill="#3b82f6" transform="rotate(45)"/></g>
+      <g transform="translate(130,42)"><path d="M -4.5 4.5 L -4.5 -0.5 A 4.5 4.5 0 0 1 4.5 -0.5 L 4.5 4.5 Z" fill="#3b82f6"/></g>
+      <g transform="translate(172,42)"><rect x="-6" y="-6" width="12" height="12" fill="#3b82f6"/><circle r="2.2" fill="#1b2540"/></g>
+      <g transform="translate(230,42)"><rect x="-4.5" y="-4.5" width="9" height="9" fill="#ef4444"/></g>
+      <text x="300" y="14" fill="#93a2c4" font-size="10">agrandi ×7</text>
+      <g transform="translate(340,72) scale(7)"><rect x="-4.5" y="-4.5" width="9" height="9" fill="#3b82f6"/></g>
+      <g transform="translate(470,72) scale(7)"><rect x="-4" y="-4" width="8" height="8" fill="#3b82f6" transform="rotate(45)"/></g>
+      <g transform="translate(600,72) scale(7)"><path d="M -4.5 4.5 L -4.5 -0.5 A 4.5 4.5 0 0 1 4.5 -0.5 L 4.5 4.5 Z" fill="#3b82f6"/></g>
+      <g transform="translate(730,72) scale(7)"><rect x="-6" y="-6" width="12" height="12" fill="#3b82f6"/><circle r="2.2" fill="#131c31"/></g>
+      <g transform="translate(840,72) scale(7)"><rect x="-4.5" y="-4.5" width="9" height="9" fill="#ef4444"/></g>
+      <text x="340" y="128" fill="#93a2c4" font-size="11" text-anchor="middle">Bastion</text>
+      <text x="470" y="128" fill="#93a2c4" font-size="11" text-anchor="middle">Tour</text>
+      <text x="600" y="128" fill="#93a2c4" font-size="11" text-anchor="middle">Porte</text>
+      <text x="730" y="128" fill="#93a2c4" font-size="11" text-anchor="middle">Cœur</text>
+      <text x="840" y="128" fill="#93a2c4" font-size="11" text-anchor="middle">Bastion (adverse)</text>
+    </svg>
+  </div>
+
+  <!-- ============ STYLE B ============ -->
+  <div class="block">
+    <h2>B — Carré + glyphe interne <span class="tag">unité de famille conservée</span></h2>
+    <p class="note">Toujours un carré (= structure, jamais un joueur) ; le type est un petit motif : créneaux pour la tour, arche pour la porte, anneau pour le cœur, rien pour le bastion.</p>
+    <svg viewBox="0 0 900 140" role="img" aria-label="Style B, carré et glyphe interne">
+      <text x="8" y="14" fill="#93a2c4" font-size="10">taille réelle</text>
+      <rect x="8" y="22" width="260" height="40" rx="4" fill="#1b2540"/>
+      <g transform="translate(46,42)"><rect x="-4.5" y="-4.5" width="9" height="9" fill="#3b82f6"/></g>
+      <g transform="translate(88,42)"><rect x="-4.5" y="-4.5" width="9" height="9" fill="#3b82f6"/><rect x="-4.5" y="-4.5" width="2" height="2.6" fill="#1b2540"/><rect x="-1" y="-4.5" width="2" height="2.6" fill="#1b2540"/><rect x="2.5" y="-4.5" width="2" height="2.6" fill="#1b2540"/></g>
+      <g transform="translate(130,42)"><rect x="-4.5" y="-4.5" width="9" height="9" fill="#3b82f6"/><circle cy="4.5" r="2.6" fill="#1b2540"/></g>
+      <g transform="translate(172,42)"><rect x="-6" y="-6" width="12" height="12" fill="#3b82f6"/><circle r="2.4" fill="#1b2540"/></g>
+      <g transform="translate(230,42)"><rect x="-4.5" y="-4.5" width="9" height="9" fill="#ef4444"/></g>
+      <text x="300" y="14" fill="#93a2c4" font-size="10">agrandi ×7</text>
+      <g transform="translate(340,72) scale(7)"><rect x="-4.5" y="-4.5" width="9" height="9" fill="#3b82f6"/></g>
+      <g transform="translate(470,72) scale(7)"><rect x="-4.5" y="-4.5" width="9" height="9" fill="#3b82f6"/><rect x="-4.5" y="-4.5" width="2" height="2.6" fill="#131c31"/><rect x="-1" y="-4.5" width="2" height="2.6" fill="#131c31"/><rect x="2.5" y="-4.5" width="2" height="2.6" fill="#131c31"/></g>
+      <g transform="translate(600,72) scale(7)"><rect x="-4.5" y="-4.5" width="9" height="9" fill="#3b82f6"/><circle cy="4.5" r="2.6" fill="#131c31"/></g>
+      <g transform="translate(730,72) scale(7)"><rect x="-6" y="-6" width="12" height="12" fill="#3b82f6"/><circle r="2.4" fill="#131c31"/></g>
+      <g transform="translate(840,72) scale(7)"><rect x="-4.5" y="-4.5" width="9" height="9" fill="#ef4444"/><rect x="-4.5" y="-4.5" width="2" height="2.6" fill="#131c31"/><rect x="-1" y="-4.5" width="2" height="2.6" fill="#131c31"/><rect x="2.5" y="-4.5" width="2" height="2.6" fill="#131c31"/></g>
+      <text x="340" y="128" fill="#93a2c4" font-size="11" text-anchor="middle">Bastion</text>
+      <text x="470" y="128" fill="#93a2c4" font-size="11" text-anchor="middle">Tour</text>
+      <text x="600" y="128" fill="#93a2c4" font-size="11" text-anchor="middle">Porte</text>
+      <text x="730" y="128" fill="#93a2c4" font-size="11" text-anchor="middle">Cœur</text>
+      <text x="840" y="128" fill="#93a2c4" font-size="11" text-anchor="middle">Tour (adverse)</text>
+    </svg>
+  </div>
+
+  <!-- ============ STYLE C ============ -->
+  <div class="block">
+    <h2>C — Carré + lettre <span class="tag">explicite mais petit</span></h2>
+    <p class="note">B / T / P / C au centre du carré. Sans ambiguïté quand on zoome, mais à la taille réelle les lettres deviennent des taches — d'où l'intérêt de la légende et de l'infobulle.</p>
+    <svg viewBox="0 0 900 140" role="img" aria-label="Style C, carré et lettre">
+      <text x="8" y="14" fill="#93a2c4" font-size="10">taille réelle</text>
+      <rect x="8" y="22" width="260" height="40" rx="4" fill="#1b2540"/>
+      <g transform="translate(46,42)"><rect x="-4.5" y="-4.5" width="9" height="9" fill="#3b82f6"/><text y="2.2" font-size="6" fill="#0b1120" text-anchor="middle" font-weight="700">B</text></g>
+      <g transform="translate(88,42)"><rect x="-4.5" y="-4.5" width="9" height="9" fill="#3b82f6"/><text y="2.2" font-size="6" fill="#0b1120" text-anchor="middle" font-weight="700">T</text></g>
+      <g transform="translate(130,42)"><rect x="-4.5" y="-4.5" width="9" height="9" fill="#3b82f6"/><text y="2.2" font-size="6" fill="#0b1120" text-anchor="middle" font-weight="700">P</text></g>
+      <g transform="translate(172,42)"><rect x="-6" y="-6" width="12" height="12" fill="#3b82f6"/><text y="2.4" font-size="7" fill="#0b1120" text-anchor="middle" font-weight="700">C</text></g>
+      <g transform="translate(230,42)"><rect x="-4.5" y="-4.5" width="9" height="9" fill="#ef4444"/><text y="2.2" font-size="6" fill="#0b1120" text-anchor="middle" font-weight="700">B</text></g>
+      <text x="300" y="14" fill="#93a2c4" font-size="10">agrandi ×7</text>
+      <g transform="translate(340,72) scale(7)"><rect x="-4.5" y="-4.5" width="9" height="9" fill="#3b82f6"/><text y="2.2" font-size="6" fill="#0b1120" text-anchor="middle" font-weight="700">B</text></g>
+      <g transform="translate(470,72) scale(7)"><rect x="-4.5" y="-4.5" width="9" height="9" fill="#3b82f6"/><text y="2.2" font-size="6" fill="#0b1120" text-anchor="middle" font-weight="700">T</text></g>
+      <g transform="translate(600,72) scale(7)"><rect x="-4.5" y="-4.5" width="9" height="9" fill="#3b82f6"/><text y="2.2" font-size="6" fill="#0b1120" text-anchor="middle" font-weight="700">P</text></g>
+      <g transform="translate(730,72) scale(7)"><rect x="-6" y="-6" width="12" height="12" fill="#3b82f6"/><text y="2.4" font-size="7" fill="#0b1120" text-anchor="middle" font-weight="700">C</text></g>
+      <g transform="translate(840,72) scale(7)"><rect x="-4.5" y="-4.5" width="9" height="9" fill="#ef4444"/><text y="2.2" font-size="6" fill="#0b1120" text-anchor="middle" font-weight="700">B</text></g>
+      <text x="340" y="128" fill="#93a2c4" font-size="11" text-anchor="middle">Bastion</text>
+      <text x="470" y="128" fill="#93a2c4" font-size="11" text-anchor="middle">Tour</text>
+      <text x="600" y="128" fill="#93a2c4" font-size="11" text-anchor="middle">Porte</text>
+      <text x="730" y="128" fill="#93a2c4" font-size="11" text-anchor="middle">Cœur</text>
+      <text x="840" y="128" fill="#93a2c4" font-size="11" text-anchor="middle">Bastion (adverse)</text>
+    </svg>
+  </div>
+
+  <!-- ============ REAL DENSITY ============ -->
+  <div class="block">
+    <h2>Dans le contexte réel de la bande</h2>
+    <p class="note">Rythme mesuré sur 20 parties : ~14 tours, ~6 portes, ~4 bastions et ~1 cœur détruits par partie. Ci-dessous une bande à la taille réelle avec ces proportions (style A).</p>
+    <svg viewBox="0 0 900 96" role="img" aria-label="Bande de structures à densité réelle">
+      <rect x="0" y="18" width="880" height="20" rx="3" fill="#1b2540"/>
+      <g transform="translate(30,28)"><rect x="-4" y="-4" width="8" height="8" fill="#3b82f6" transform="rotate(45)"/></g>
+      <g transform="translate(70,28)"><rect x="-4" y="-4" width="8" height="8" fill="#3b82f6" transform="rotate(45)"/></g>
+      <g transform="translate(110,28)"><path d="M -4.5 4.5 L -4.5 -0.5 A 4.5 4.5 0 0 1 4.5 -0.5 L 4.5 4.5 Z" fill="#ef4444"/></g>
+      <g transform="translate(150,28)"><rect x="-4" y="-4" width="8" height="8" fill="#3b82f6" transform="rotate(45)"/></g>
+      <g transform="translate(190,28)"><rect x="-4.5" y="-4.5" width="9" height="9" fill="#ef4444"/></g>
+      <g transform="translate(235,28)"><rect x="-4" y="-4" width="8" height="8" fill="#3b82f6" transform="rotate(45)"/></g>
+      <g transform="translate(280,28)"><rect x="-4" y="-4" width="8" height="8" fill="#3b82f6" transform="rotate(45)"/></g>
+      <g transform="translate(325,28)"><path d="M -4.5 4.5 L -4.5 -0.5 A 4.5 4.5 0 0 1 4.5 -0.5 L 4.5 4.5 Z" fill="#3b82f6"/></g>
+      <g transform="translate(370,28)"><rect x="-4.5" y="-4.5" width="9" height="9" fill="#3b82f6"/></g>
+      <g transform="translate(415,28)"><rect x="-4" y="-4" width="8" height="8" fill="#ef4444" transform="rotate(45)"/></g>
+      <g transform="translate(460,28)"><rect x="-4" y="-4" width="8" height="8" fill="#3b82f6" transform="rotate(45)"/></g>
+      <g transform="translate(505,28)"><path d="M -4.5 4.5 L -4.5 -0.5 A 4.5 4.5 0 0 1 4.5 -0.5 L 4.5 4.5 Z" fill="#ef4444"/></g>
+      <g transform="translate(550,28)"><rect x="-4.5" y="-4.5" width="9" height="9" fill="#ef4444"/></g>
+      <g transform="translate(595,28)"><rect x="-4" y="-4" width="8" height="8" fill="#3b82f6" transform="rotate(45)"/></g>
+      <g transform="translate(640,28)"><rect x="-4" y="-4" width="8" height="8" fill="#ef4444" transform="rotate(45)"/></g>
+      <g transform="translate(685,28)"><circle r="6.5" fill="#3b82f6"/><circle r="2.4" fill="#1b2540"/></g>
+      <g transform="translate(735,28)"><rect x="-4" y="-4" width="8" height="8" fill="#3b82f6" transform="rotate(45)"/></g>
+      <g transform="translate(785,28)"><rect x="-4.5" y="-4.5" width="9" height="9" fill="#ef4444"/></g>
+      <g transform="translate(835,28)"><path d="M -4.5 4.5 L -4.5 -0.5 A 4.5 4.5 0 0 1 4.5 -0.5 L 4.5 4.5 Z" fill="#3b82f6"/></g>
+      <text x="0" y="70" fill="#93a2c4" font-size="11">Ligne du haut = mes structures perdues · ligne du bas = structures adverses perdues (deux rangées séparées, comme dans le graphe actuel).</text>
+    </svg>
+  </div>
+
+</div>
+</body>
+</html>
