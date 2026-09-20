@@ -59,7 +59,7 @@ const query = computed<Record<string, unknown>>(() => {
   return base;
 });
 
-const { trend, patterns, drivers, context } = useProgression(query);
+const { trend, patterns, drivers, context } = useProgression(query, scope);
 </script>
 
 <template>
@@ -77,11 +77,19 @@ const { trend, patterns, drivers, context } = useProgression(query);
 
     <UiStatsScopeToggle v-model="scope" />
 
-    <UiStateCard
-      v-if="isGlobal"
-      state="empty"
-      message="L'analyse de progression est personnelle : bascule sur « Mes parties » pour voir ta tendance, tes axes et ton contexte."
-    />
+    <template v-if="isGlobal">
+      <ProgressGlobalTeamCompositionPanel
+        :context="context.data.value"
+        :loading="context.pending.value"
+        :error="Boolean(context.error.value)"
+        :scrollable="false"
+      />
+
+      <UiStateCard
+        state="empty"
+        message="Le reste de l'analyse de progression est personnel : bascule sur « Mes parties » pour voir ta tendance, tes axes de travail, tes patterns et ton contexte."
+      />
+    </template>
 
     <template v-else>
       <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">

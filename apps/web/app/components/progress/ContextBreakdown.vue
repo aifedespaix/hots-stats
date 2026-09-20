@@ -81,7 +81,6 @@ function tableRows(dimension: string) {
 
 const sessionPositionRows = computed(() => tableRows("sessionPosition"));
 const patchRows = computed(() => tableRows("patch"));
-const compositionRows = computed(() => tableRows("teamComposition"));
 
 /** Best-played bucket with at least one game, for the chart's text summary. */
 function bestBucket(breakdown: ContextBreakdown | undefined): ContextBucket | null {
@@ -166,13 +165,7 @@ const isEmpty = computed(() => !props.loading && !props.error && (props.context?
 
       <section class="min-w-0">
         <h3 class="mb-2 font-heading text-sm font-medium">Composition d'équipe</h3>
-        <UiDataTable
-          :columns="contextColumns"
-          :rows="compositionRows"
-          row-key="key"
-          mobile-primary-key="label"
-          mobile-badge-key="winrate"
-        />
+        <ProgressTeamCompositionTable :breakdown="findBreakdown('teamComposition')" />
       </section>
     </div>
   </UiPanel>

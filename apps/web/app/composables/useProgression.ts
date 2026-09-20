@@ -2,6 +2,7 @@ import {
   DRAFT_RANKED_MODES,
   type ContextResponse,
   type DriverMetric,
+  type HeroStatsScope,
   type DriversResponse,
   type PatternsResponse,
   type TrendResponse,
@@ -42,10 +43,18 @@ export function selectWorkAxes(drivers: DriverMetric[], limit: number = WORK_AXE
  * game-mode and account selection into every request, and refreshes when the
  * reactive query changes (period / compareTo / tzOffsetMinutes).
  */
-export function useProgression(query: ComputedRef<Record<string, unknown>>) {
+export function useProgression(
+  query: ComputedRef<Record<string, unknown>>,
+  scope: Ref<HeroStatsScope> = ref("personal"),
+) {
   const trend = useApiFetch<TrendResponse>("/stats/trend", { query });
   const patterns = useApiFetch<PatternsResponse>("/stats/patterns", { query });
   const drivers = useApiFetch<DriversResponse>("/stats/drivers", { query });
-  const context = useApiFetch<ContextResponse>("/stats/context", { query });
+  // /stats/context is the only progression endpoint that serves the global
+  // scope, and it answers with the team-composition dimension alone there. The
+  // three above stay personal whatever the scope toggle says.
+  const context = useApiFetch<ContextResponse>("/stats/context", {
+    query: computed(() => ({ ...unref(query), scope: scope.value })),
+  });
   return { trend, patterns, drivers, context };
 }

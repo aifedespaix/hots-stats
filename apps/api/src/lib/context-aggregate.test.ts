@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { PROGRESSION_MIN_MATCHES } from "@hots-stats/shared-types";
-import { buildContextResponse, type ContextMatchInput } from "./context-aggregate";
+import { buildCompositionResponse, buildContextResponse, type ContextMatchInput } from "./context-aggregate";
 
 function match(
   overrides: Partial<ContextMatchInput> & { matchId: string; playedAt: string },
@@ -109,6 +109,43 @@ describe("buildContextResponse", () => {
     expect(hour.buckets[20]).toMatchObject({ gamesPlayed: 1, insufficientSample: true });
     expect(response.matches).toBe(1);
     expect(PROGRESSION_MIN_MATCHES).toBe(20);
+  });
+
+  test("counts each team of a match as an independent sample in global scope", () => {
+    const response = buildCompositionResponse(
+      [
+        { matchId: "a", winner: true, teamRoleCounts: { Tank: 1, Healer: 1, RangedAssassin: 3 } },
+        { matchId: "a", winner: false, teamRoleCounts: { Tank: 2, Healer: 1, RangedAssassin: 2 } },
+        { matchId: "b", winner: true, teamRoleCounts: { Tank: 1, Healer: 1, RangedAssassin: 3 } },
+      ],
+      120,
+    );
+    expect(response.scope).toBe("global");
+    expect(response.matches).toBe(2);
+    expect(response.tzOffsetMinutes).toBe(120);
+    expect(response.breakdowns.map((entry) => entry.dimension)).toEqual(["teamComposition"]);
+    expect(breakdown(response, "teamComposition").buckets).toEqual([
+      expect.objectContaining({
+        key: "Tank:1|RangedAssassin:3|Healer:1",
+        label: "1× Tank · 3× Assassin à distance · 1× Soigneur",
+        gamesPlayed: 2,
+        wins: 2,
+        winrate: 1,
+      }),
+      expect.objectContaining({
+        key: "Tank:2|RangedAssassin:2|Healer:1",
+        gamesPlayed: 1,
+        wins: 0,
+        winrate: 0,
+      }),
+    ]);
+  });
+
+  test("returns an empty composition breakdown for the global scope with no team", () => {
+    const response = buildCompositionResponse([], 0);
+    expect(response.matches).toBe(0);
+    expect(response.breakdowns.map((entry) => entry.dimension)).toEqual(["teamComposition"]);
+    expect(breakdown(response, "teamComposition").buckets).toEqual([]);
   });
 
   test("returns zeroed breakdowns for an empty match set", () => {
