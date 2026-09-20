@@ -2,7 +2,14 @@
 import type { MatchDetailResponse } from "~/types/matches";
 import type { ScoreboardRow } from "~/types/coach";
 import type { MatchSlotHero } from "~/types/spatial";
-import type { MatchTimelineInput } from "~/composables/useMatchTimelineSeries";
+import {
+  timelineEventStep,
+  timelineEventsAround,
+  timelineFocusAt,
+  timelineStateAt,
+  type MatchTimelineInput,
+} from "~/composables/useMatchTimelineSeries";
+import type { TimelineWindow } from "~/composables/useTimelineViewport";
 
 definePageMeta({ middleware: "auth" });
 
@@ -48,10 +55,10 @@ const myBattletags = computed(() =>
 );
 const allPlayers = computed(() => data.value?.teams.flatMap((team) => team.players) ?? []);
 
-/** Every participant as (BattleTag, team) -- one shape for both the chronology
+/** Every participant as (BattleTag, team, hero) -- one shape for both the chronology
  * input and the heatmap recap's kill crediting. */
 const matchPlayers = computed(() =>
-  allPlayers.value.map((player) => ({ battletag: player.battletag, team: player.team })),
+  allPlayers.value.map((player) => ({ battletag: player.battletag, team: player.team, heroName: player.heroName })),
 );
 
 const annotationsStore = usePlayerAnnotationsStore();
@@ -82,9 +89,59 @@ const timelineInput = computed<MatchTimelineInput>(() => ({
   timeline: data.value?.timeline ?? null,
   players: matchPlayers.value,
   durationSeconds: data.value?.match.durationSeconds ?? 0,
+  myBattletags: [...myBattletags.value],
 }));
 
-const { series: timelineSeries, scrubSeconds: timelineScrubSeconds } = useMatchTimelineSeries(timelineInput);
+const {
+  series: timelineSeries,
+  scrubSeconds: timelineScrubSeconds,
+  durationSeconds: timelineDuration,
+} = useMatchTimelineSeries(timelineInput);
+
+/** "Moi" by default -- my lane full height, the other nine as context. "Les 10
+ * joueurs" gives everyone an equal, named lane. */
+const laneMode = ref<"me" | "all">("me");
+
+const {
+  window: timelineWindow,
+  isZoomed: timelineIsZoomed,
+  zoomTo: zoomTimelineTo,
+  zoomAround: zoomTimelineAround,
+  panBy: panTimeline,
+  reset: resetTimelineZoom,
+} = useTimelineViewport(timelineDuration);
+
+const {
+  playing: timelinePlaying,
+  speed: timelineSpeed,
+  toggle: toggleTimelinePlay,
+  cycleSpeed: cycleTimelineSpeed,
+  stop: stopTimelinePlayback,
+} = useTimelinePlayback({ positionSeconds: timelineScrubSeconds, durationSeconds: timelineDuration });
+
+/** Everything the detail panel reads, derived from the one shared cursor. */
+const timelineState = computed(() => timelineStateAt(timelineSeries.value, timelineScrubSeconds.value));
+const timelineFocus = computed(() => timelineFocusAt(timelineSeries.value, timelineScrubSeconds.value));
+const timelineAround = computed(() =>
+  timelineEventsAround(timelineSeries.value.events, timelineScrubSeconds.value),
+);
+
+function stepTimelineEvent(direction: -1 | 1) {
+  const event = timelineEventStep(timelineSeries.value.events, timelineScrubSeconds.value, direction);
+  if (event) timelineScrubSeconds.value = event.atSeconds;
+}
+
+function seekTimeline(atSeconds: number) {
+  timelineScrubSeconds.value = atSeconds;
+}
+
+function onTimelineZoomWindow(window: TimelineWindow) {
+  zoomTimelineTo(window.startSeconds, window.endSeconds);
+}
+
+function onTimelineZoomAround(payload: { anchorSeconds: number; factor: number }) {
+  zoomTimelineAround(payload.anchorSeconds, payload.factor);
+}
 
 /** The team the viewer played on, so the chronology says "mon équipe" rather
  * than "équipe 0"; null when the viewer isn't in this match. */
@@ -211,7 +268,7 @@ const displayedInsights = computed(() =>
       description="Cette partie a été analysée par une ancienne version du parseur, qui pouvait mal attribuer certaines stats de combat (dégâts, soins, XP figés à 0 ou dupliqués entre joueurs). Elle sera corrigée automatiquement à la prochaine synchronisation du daemon du joueur qui l'a envoyée, si le fichier de replay est encore présent sur son disque."
     />
 
-    <UTabs :items="tabItems" variant="pill" class="w-full">
+    <UTabs :items="tabItems" variant="pill" class="w-full" @update:model-value="stopTimelinePlayback">
       <template #scoreboard>
         <div class="mt-4 space-y-6">
           <CoachTeamTotalsBar :my-team="viewerAllyRows" :enemy-team="viewerEnemyRows" />
@@ -254,13 +311,47 @@ const displayedInsights = computed(() =>
       </template>
 
       <template #chronology>
-        <div class="mt-4">
+        <div class="mt-4 space-y-3">
+          <ChartsMatchTimelineControls
+            :lane-mode="laneMode"
+            :playing="timelinePlaying"
+            :speed="timelineSpeed"
+            :is-zoomed="timelineIsZoomed"
+            :scrub-seconds="timelineScrubSeconds"
+            :duration-seconds="timelineDuration"
+            :has-events="timelineSeries.events.length > 0"
+            @update:lane-mode="laneMode = $event"
+            @toggle-play="toggleTimelinePlay"
+            @cycle-speed="cycleTimelineSpeed"
+            @step="stepTimelineEvent"
+            @reset-zoom="resetTimelineZoom"
+            @update:scrub-seconds="timelineScrubSeconds = $event"
+          />
+
           <ChartsMatchTimelineChart
             :series="timelineSeries"
-            :duration-seconds="data.match.durationSeconds"
+            :duration-seconds="timelineDuration"
+            :window="timelineWindow"
             :scrub-seconds="timelineScrubSeconds"
             :ally-team="viewerTeam"
-            @update:scrub-seconds="timelineScrubSeconds = $event"
+            :lane-mode="laneMode"
+            :focus="timelineFocus"
+            :is-zoomed="timelineIsZoomed"
+            @scrub="timelineScrubSeconds = $event"
+            @zoom-window="onTimelineZoomWindow"
+            @zoom-around="onTimelineZoomAround"
+            @pan="panTimeline"
+            @reset-zoom="resetTimelineZoom"
+          />
+
+          <ChartsMatchTimelineDetail
+            :series="timelineSeries"
+            :seconds="timelineScrubSeconds"
+            :state="timelineState"
+            :around="timelineAround"
+            :focus="timelineFocus"
+            :ally-team="viewerTeam"
+            @seek="seekTimeline"
           />
         </div>
       </template>

@@ -4,40 +4,63 @@ import {
   deathMarkerRadius,
   timelineLeadMax,
   timelineLeadY,
+  timelineStateAt,
   timelineTeamLabels,
   timelineX,
 } from "~/composables/useMatchTimelineSeries";
-import type { MatchTimelineSeries } from "~/types/coach";
+import type { TimelineWindow } from "~/composables/useTimelineViewport";
+import type { MatchTimelineFocus, MatchTimelineLane, MatchTimelineLeadPoint, MatchTimelineSeries } from "~/types/coach";
+import { CLUSTER_TIME_WINDOW_SECONDS } from "~/utils/deathClustering";
 import { ALLY_TEAM_RGB, ENEMY_TEAM_RGB } from "~/utils/spatialColors";
 
 const props = withDefaults(
   defineProps<{
     series: MatchTimelineSeries;
-    /** Match length, the x-axis domain (never the last snapshot's time). */
+    /** The match's full length -- the overview band's domain. */
     durationSeconds: number;
-    /** Current scrub position in seconds (v-model:scrub-seconds); null hides the scrub line. */
-    scrubSeconds?: number | null;
+    /** The visible window, in seconds -- the main chart's domain. */
+    window: TimelineWindow;
+    /** Cursor position in seconds; the page shares this with the heatmap tab. */
+    scrubSeconds: number;
     /** The viewer's team, so the sides are named/coloured rather than numbered; null when the viewer isn't in this match. */
     allyTeam?: 0 | 1 | null;
+    /** "me" = my lane full height with the other nine as micro-lanes; "all" = ten named lanes. */
+    laneMode?: "me" | "all";
+    /** The death under the cursor, so its lane and marker are emphasised. */
+    focus?: MatchTimelineFocus | null;
+    /** Widest window the overview band shows its own curve on; below this it is a bare density strip. */
+    isZoomed?: boolean;
   }>(),
-  { scrubSeconds: null, allyTeam: null },
+  { allyTeam: null, laneMode: "me", focus: null, isZoomed: false },
 );
 
 const emit = defineEmits<{
-  "update:scrubSeconds": [value: number];
+  scrub: [seconds: number];
+  "zoom-window": [window: TimelineWindow];
+  "zoom-around": [payload: { anchorSeconds: number; factor: number }];
+  pan: [deltaSeconds: number];
+  "reset-zoom": [];
 }>();
 
-// Wide viewBox; the default preserveAspectRatio (xMidYMid meet) keeps every
-// circle round when the SVG stretches to the panel width.
+// A wide viewBox: the chart is sized by its width, so the lanes keep their
+// relative heights instead of being letterboxed into a fixed pixel height.
 const WIDTH = 800;
-const HEIGHT = 240;
-const LEAD_TOP = 16;
-const LEAD_BOTTOM = 140;
+const HEIGHT = 380;
+/** Lane labels live left of the track, so nothing is drawn over the data. */
+const TRACK_LEFT = 132;
+const TRACK_WIDTH = 660;
+const LEAD_TOP = 22;
+const LEAD_BOTTOM = 134;
 const LEAD_MID = (LEAD_TOP + LEAD_BOTTOM) / 2;
 const LEAD_HALF = (LEAD_BOTTOM - LEAD_TOP) / 2;
-const TEAM0_ROW_Y = 166;
-const TEAM1_ROW_Y = 190;
-const STRUCTURE_ROW_Y = 214;
+const LANES_TOP = 158;
+const LANES_HEIGHT = 168;
+const LANES_BOTTOM = LANES_TOP + LANES_HEIGHT;
+const STRUCTURE_Y = 346;
+const AXIS_Y = 368;
+const OVERVIEW_HEIGHT = 26;
+/** Below this a drag is a click, not a window selection. */
+const MIN_DRAG_SECONDS = 2;
 
 const labels = computed(() => timelineTeamLabels(props.allyTeam));
 
@@ -50,20 +73,61 @@ const teamColors = computed<[string, string]>(() => {
   return props.allyTeam === 1 ? [enemy, ally] : [ally, enemy];
 });
 
+const span = computed(() => Math.max(0, props.window.endSeconds - props.window.startSeconds));
+
+/** A timestamp to a pixel on the main track, clamped to the window. */
+function trackX(atSeconds: number): number {
+  return TRACK_LEFT + timelineX(atSeconds - props.window.startSeconds, span.value, TRACK_WIDTH);
+}
+
+/** A timestamp to a pixel on the overview band, clamped to the match. */
+function overviewX(atSeconds: number): number {
+  return timelineX(atSeconds, props.durationSeconds, WIDTH);
+}
+
+function clampSeconds(value: number): number {
+  return Math.min(props.durationSeconds, Math.max(0, value));
+}
+
+// The lead domain comes from the whole match, not the visible window, so the
+// curve does not rescale every time the window changes.
 const leadMax = computed(() => timelineLeadMax(props.series.points));
 
-const leadPoints = computed(() =>
-  props.series.points.map((point) => ({
-    ...point,
-    x: timelineX(point.atSeconds, props.durationSeconds, WIDTH),
+/**
+ * The points to draw: those inside the window, plus an opening point carrying
+ * the levels known at the window's start (the same carried-forward step the
+ * curve is built from -- never an interpolated value) so a fully zoomed-in
+ * window still shows the state it opened on.
+ */
+const windowPoints = computed<MatchTimelineLeadPoint[]>(() => {
+  const inside = props.series.points.filter(
+    (point) => point.atSeconds > props.window.startSeconds && point.atSeconds <= props.window.endSeconds,
+  );
+  if (inside.length === 0) return [];
+  const state = timelineStateAt(props.series, props.window.startSeconds);
+  if (state.team0Level === null || state.team1Level === null || state.lead === null) return inside;
+  return [
+    {
+      atSeconds: props.window.startSeconds,
+      team0Level: state.team0Level,
+      team1Level: state.team1Level,
+      lead: state.lead,
+    },
+    ...inside,
+  ];
+});
+
+const curvePoints = computed(() =>
+  windowPoints.value.map((point) => ({
+    x: trackX(point.atSeconds),
     y: timelineLeadY(point.lead, leadMax.value, LEAD_MID, LEAD_HALF),
   })),
 );
 
-const leadPolyline = computed(() => leadPoints.value.map((point) => point.x + "," + point.y).join(" "));
+const leadPolyline = computed(() => curvePoints.value.map((point) => point.x + "," + point.y).join(" "));
 
 const leadArea = computed(() => {
-  const points = leadPoints.value;
+  const points = curvePoints.value;
   if (points.length === 0) return "";
   const first = points[0]!;
   const last = points[points.length - 1]!;
@@ -74,36 +138,269 @@ const leadArea = computed(() => {
   );
 });
 
-const deathMarkers = computed(() =>
-  props.series.deaths.map((marker) => ({
-    ...marker,
-    x: timelineX(marker.atSeconds, props.durationSeconds, WIDTH),
-    y: marker.team === 0 ? TEAM0_ROW_Y : TEAM1_ROW_Y,
-    radius: deathMarkerRadius(marker.deaths),
-    color: teamColors.value[marker.team],
-  })),
-);
+interface LaneRow {
+  lane: MatchTimelineLane;
+  y: number;
+  height: number;
+}
+
+/**
+ * The lane layout. Both modes fill exactly the same vertical band, so
+ * switching "moi" / "les 10 joueurs" never makes the page jump: in "me" mode
+ * my lane takes half of it and the other nine share the rest.
+ */
+const laneRows = computed<LaneRow[]>(() => {
+  const lanes = props.series.lanes;
+  if (lanes.length === 0) return [];
+  if (props.laneMode === "all") {
+    const rowHeight = LANES_HEIGHT / lanes.length;
+    return lanes.map((lane, index) => ({ lane, y: LANES_TOP + index * rowHeight, height: rowHeight }));
+  }
+  const primary = lanes.find((lane) => lane.isMe) ?? null;
+  const rest = lanes.filter((lane) => lane !== primary);
+  if (primary === null) {
+    const rowHeight = LANES_HEIGHT / Math.max(1, rest.length);
+    return rest.map((lane, index) => ({ lane, y: LANES_TOP + index * rowHeight, height: rowHeight }));
+  }
+  const primaryHeight = LANES_HEIGHT / 2;
+  const rowHeight = (LANES_HEIGHT - primaryHeight) / Math.max(1, rest.length);
+  return [
+    { lane: primary, y: LANES_TOP, height: primaryHeight },
+    ...rest.map((lane, index) => ({
+      lane,
+      y: LANES_TOP + primaryHeight + index * rowHeight,
+      height: rowHeight,
+    })),
+  ];
+});
+
+interface DeathDot {
+  key: string;
+  x: number;
+  y: number;
+  radius: number;
+  color: string;
+  opacity: number;
+  focused: boolean;
+}
+
+const deathDots = computed<DeathDot[]>(() => {
+  const dots: DeathDot[] = [];
+  for (const row of laneRows.value) {
+    const color = teamColors.value[row.lane.team];
+    const baseRadius = row.height >= 40 ? 5 : row.height >= 13 ? 3.4 : 2.4;
+    for (const death of row.lane.deaths) {
+      if (death.atSeconds < props.window.startSeconds || death.atSeconds > props.window.endSeconds) continue;
+      const focused =
+        props.focus?.victim.battletag === row.lane.battletag &&
+        props.focus.victim.atSeconds === death.atSeconds;
+      const near = Math.abs(death.atSeconds - props.scrubSeconds) <= CLUSTER_TIME_WINDOW_SECONDS;
+      dots.push({
+        key: row.lane.battletag + "-" + death.atSeconds,
+        x: trackX(death.atSeconds),
+        y: row.y + row.height / 2,
+        radius: focused ? baseRadius + 1.6 : baseRadius,
+        color,
+        opacity: focused || near ? 0.95 : 0.28,
+        focused,
+      });
+    }
+  }
+  return dots;
+});
 
 const structureMarkers = computed(() =>
-  props.series.structures.map((event) => ({
-    ...event,
-    x: timelineX(event.atSeconds, props.durationSeconds, WIDTH),
+  props.series.structures
+    .filter((event) => event.atSeconds >= props.window.startSeconds && event.atSeconds <= props.window.endSeconds)
+    .map((event) => ({
+      key: event.structureType + "-" + event.atSeconds,
+      x: trackX(event.atSeconds),
+      color: teamColors.value[event.team],
+    })),
+);
+
+/** Minute-ish gridlines, spaced to whatever keeps them readable at this zoom. */
+const ticks = computed(() => {
+  const spanSeconds = span.value;
+  const step = spanSeconds <= 360 ? 30 : spanSeconds <= 900 ? 60 : spanSeconds <= 2400 ? 120 : 300;
+  const list: { x: number; label: string }[] = [];
+  for (let seconds = Math.ceil(props.window.startSeconds / step) * step; seconds <= props.window.endSeconds; seconds += step) {
+    if (seconds < 0) continue;
+    list.push({ x: trackX(seconds), label: formatDuration(seconds) });
+  }
+  return list;
+});
+
+const scrubVisible = computed(
+  () => props.scrubSeconds >= props.window.startSeconds && props.scrubSeconds <= props.window.endSeconds,
+);
+const scrubX = computed(() => trackX(props.scrubSeconds));
+
+const summary = computed(() => buildMatchTimelineSummary(props.series, labels.value));
+const hasMarkers = computed(() => props.series.allDeaths.length > 0 || props.series.structures.length > 0);
+const showChart = computed(() => props.series.hasLevelData || props.series.lanes.length > 0);
+const ariaLabel = computed(() =>
+  props.series.hasLevelData ? summary.value : "Chronologie des morts et des structures de cette partie.",
+);
+
+// --- pointer handling: hover drives the cursor, drag selects a window ------
+
+const svg = ref<SVGSVGElement | null>(null);
+const overview = ref<SVGSVGElement | null>(null);
+const drag = ref<{ startSeconds: number; endSeconds: number; moved: boolean } | null>(null);
+
+function secondsAtClientX(clientX: number): number | null {
+  const element = svg.value;
+  if (!element) return null;
+  const rect = element.getBoundingClientRect();
+  if (rect.width <= 0) return null;
+  const x = ((clientX - rect.left) / rect.width) * WIDTH;
+  const ratio = (x - TRACK_LEFT) / TRACK_WIDTH;
+  return clampSeconds(props.window.startSeconds + ratio * span.value);
+}
+
+// One scrub per animation frame: the same value feeds the heatmap tab's
+// highlight, and a raw pointermove would redraw it far faster than the browser
+// paints.
+let pendingScrub: number | null = null;
+let scrubFrame: number | null = null;
+
+function emitScrub(seconds: number) {
+  if (typeof requestAnimationFrame !== "function") {
+    emit("scrub", seconds);
+    return;
+  }
+  pendingScrub = seconds;
+  if (scrubFrame !== null) return;
+  scrubFrame = requestAnimationFrame(() => {
+    scrubFrame = null;
+    const value = pendingScrub;
+    pendingScrub = null;
+    if (value !== null) emit("scrub", value);
+  });
+}
+
+function onPointerDown(event: PointerEvent) {
+  if (event.button !== 0) return;
+  const seconds = secondsAtClientX(event.clientX);
+  if (seconds === null) return;
+  (event.currentTarget as Element).setPointerCapture?.(event.pointerId);
+  drag.value = { startSeconds: seconds, endSeconds: seconds, moved: false };
+}
+
+function onPointerMove(event: PointerEvent) {
+  const seconds = secondsAtClientX(event.clientX);
+  if (seconds === null) return;
+  const current = drag.value;
+  if (current) {
+    drag.value = {
+      ...current,
+      endSeconds: seconds,
+      moved: current.moved || Math.abs(seconds - current.startSeconds) > 1,
+    };
+    return;
+  }
+  emitScrub(seconds);
+}
+
+function onPointerUp(event: PointerEvent) {
+  const current = drag.value;
+  drag.value = null;
+  if (!current) return;
+  const startSeconds = Math.min(current.startSeconds, current.endSeconds);
+  const endSeconds = Math.max(current.startSeconds, current.endSeconds);
+  if (current.moved && endSeconds - startSeconds >= MIN_DRAG_SECONDS) {
+    emit("zoom-window", { startSeconds, endSeconds });
+    return;
+  }
+  const seconds = secondsAtClientX(event.clientX);
+  if (seconds !== null) emit("scrub", seconds);
+}
+
+function onWheel(event: WheelEvent) {
+  const seconds = secondsAtClientX(event.clientX);
+  if (seconds === null) return;
+  emit("zoom-around", { anchorSeconds: seconds, factor: event.deltaY > 0 ? 1.25 : 0.8 });
+}
+
+const selection = computed(() => {
+  const current = drag.value;
+  if (!current || !current.moved) return null;
+  const startSeconds = Math.min(current.startSeconds, current.endSeconds);
+  const endSeconds = Math.max(current.startSeconds, current.endSeconds);
+  const x = trackX(startSeconds);
+  return { x, width: Math.max(1, trackX(endSeconds) - x) };
+});
+
+// --- overview band: drag the window to pan, drag elsewhere to recentre ------
+
+let overviewDrag: { mode: "pan" | "recentre"; lastSeconds: number } | null = null;
+
+function secondsAtOverview(clientX: number): number | null {
+  const element = overview.value;
+  if (!element) return null;
+  const rect = element.getBoundingClientRect();
+  if (rect.width <= 0) return null;
+  const x = ((clientX - rect.left) / rect.width) * WIDTH;
+  return clampSeconds((x / WIDTH) * props.durationSeconds);
+}
+
+function recentreOn(seconds: number) {
+  const half = span.value / 2;
+  emit("zoom-window", { startSeconds: seconds - half, endSeconds: seconds + half });
+}
+
+function onOverviewDown(event: PointerEvent) {
+  const seconds = secondsAtOverview(event.clientX);
+  if (seconds === null) return;
+  (event.currentTarget as Element).setPointerCapture?.(event.pointerId);
+  const inside = seconds >= props.window.startSeconds && seconds <= props.window.endSeconds;
+  overviewDrag = { mode: inside ? "pan" : "recentre", lastSeconds: seconds };
+  if (!inside) recentreOn(seconds);
+}
+
+function onOverviewMove(event: PointerEvent) {
+  if (!overviewDrag) return;
+  const seconds = secondsAtOverview(event.clientX);
+  if (seconds === null) return;
+  if (overviewDrag.mode === "pan") emit("pan", seconds - overviewDrag.lastSeconds);
+  else recentreOn(seconds);
+  overviewDrag.lastSeconds = seconds;
+}
+
+function onOverviewUp() {
+  overviewDrag = null;
+}
+
+/** The whole match at a glance, so the overview band shows where the lead went. */
+const overviewPoints = computed(() => {
+  if (props.series.points.length < 2 || props.durationSeconds <= 0) return "";
+  const max = leadMax.value;
+  return props.series.points
+    .map((point) => overviewX(point.atSeconds) + "," + timelineLeadY(point.lead, max, OVERVIEW_HEIGHT / 2, OVERVIEW_HEIGHT / 2 - 3))
+    .join(" ");
+});
+
+/** Team death clusters along the overview's own baseline, so the band answers
+ * "where were the fights" and not only "who was ahead". */
+const overviewClusters = computed(() =>
+  props.series.deaths.map((cluster) => ({
+    key: cluster.team + "-" + cluster.atSeconds,
+    x: overviewX(cluster.atSeconds),
+    y: OVERVIEW_HEIGHT - 4,
+    radius: Math.min(3.5, deathMarkerRadius(cluster.deaths) / 2.5),
+    color: teamColors.value[cluster.team],
   })),
 );
 
-const scrubX = computed(() =>
-  props.scrubSeconds === null ? null : timelineX(props.scrubSeconds, props.durationSeconds, WIDTH),
-);
+const overviewWindow = computed(() => {
+  const x = overviewX(props.window.startSeconds);
+  return { x, width: Math.max(2, overviewX(props.window.endSeconds) - x) };
+});
 
-const summary = computed(() => buildMatchTimelineSummary(props.series, labels.value));
-const hasMarkers = computed(() => props.series.deaths.length > 0 || props.series.structures.length > 0);
-const showChart = computed(() => props.series.hasLevelData || hasMarkers.value);
-const sliderMax = computed(() => Math.max(0, Math.floor(props.durationSeconds)));
-
-function onScrub(event: Event) {
-  const value = Number((event.target as HTMLInputElement).value);
-  emit("update:scrubSeconds", Number.isFinite(value) ? value : 0);
-}
+onBeforeUnmount(() => {
+  if (scrubFrame !== null && typeof cancelAnimationFrame === "function") cancelAnimationFrame(scrubFrame);
+});
 </script>
 
 <template>
@@ -117,25 +414,50 @@ function onScrub(event: Event) {
 
     <svg
       v-if="showChart"
+      ref="svg"
       :viewBox="'0 0 ' + WIDTH + ' ' + HEIGHT"
-      class="h-56 w-full"
+      class="h-auto w-full touch-pan-y select-none"
       role="img"
-      :aria-label="series.hasLevelData ? summary : 'Chronologie des morts et des structures de cette partie.'"
+      :aria-label="ariaLabel"
+      @pointerdown="onPointerDown"
+      @pointermove="onPointerMove"
+      @pointerup="onPointerUp"
+      @pointercancel="onPointerUp"
+      @dblclick="emit('reset-zoom')"
+      @wheel.prevent="onWheel"
     >
+      <!-- gridlines, behind everything -->
+      <line
+        v-for="tick in ticks"
+        :key="'grid-' + tick.label"
+        :x1="tick.x"
+        :y1="LEAD_TOP"
+        :x2="tick.x"
+        :y2="LANES_BOTTOM"
+        class="text-border"
+        stroke="currentColor"
+        stroke-opacity="0.5"
+        stroke-width="1"
+      />
+
+      <!-- lead curve -->
       <template v-if="series.hasLevelData">
+        <text :x="TRACK_LEFT" :y="LEAD_TOP - 8" class="text-muted" fill="currentColor" font-size="10">
+          avance en niveaux — au-dessus de la ligne, {{ labels.team0 }} mène
+        </text>
         <line
-          x1="0"
+          :x1="TRACK_LEFT"
           :y1="LEAD_MID"
-          :x2="WIDTH"
+          :x2="TRACK_LEFT + TRACK_WIDTH"
           :y2="LEAD_MID"
           class="text-border"
           stroke="currentColor"
           stroke-width="1"
           stroke-dasharray="4 4"
         />
-        <path :d="leadArea" class="text-brand" fill="currentColor" fill-opacity="0.12" />
+        <path :d="leadArea" class="text-brand" fill="currentColor" fill-opacity="0.14" />
         <polyline
-          v-if="leadPoints.length > 1"
+          v-if="curvePoints.length > 1"
           :points="leadPolyline"
           fill="none"
           class="text-brand"
@@ -145,91 +467,195 @@ function onScrub(event: Event) {
           stroke-linecap="round"
         />
         <circle
-          v-else-if="leadPoints.length === 1"
-          :cx="leadPoints[0]!.x"
-          :cy="leadPoints[0]!.y"
+          v-else-if="curvePoints.length === 1"
+          :cx="curvePoints[0]!.x"
+          :cy="curvePoints[0]!.y"
           r="3"
           class="text-brand"
           fill="currentColor"
         />
       </template>
 
+      <!-- lanes: one per player, my own lane first -->
+      <g v-for="row in laneRows" :key="'lane-' + row.lane.battletag">
+        <rect
+          :x="TRACK_LEFT"
+          :y="row.y"
+          :width="TRACK_WIDTH"
+          :height="row.height"
+          :fill="teamColors[row.lane.team]"
+          :fill-opacity="row.lane.isMe ? 0.1 : 0.04"
+        />
+        <line
+          :x1="TRACK_LEFT"
+          :y1="row.y + row.height"
+          :x2="TRACK_LEFT + TRACK_WIDTH"
+          :y2="row.y + row.height"
+          class="text-border"
+          stroke="currentColor"
+          stroke-opacity="0.35"
+          stroke-width="1"
+        />
+        <text
+          x="8"
+          :y="row.y + row.height / 2 + 3"
+          :font-size="row.height >= 40 ? 12 : row.height >= 13 ? 10 : 7"
+          :font-weight="row.lane.isMe ? 600 : 400"
+          :fill="teamColors[row.lane.team]"
+          :fill-opacity="row.lane.isMe ? 1 : 0.75"
+        >
+          {{ row.lane.heroName ?? row.lane.battletag }}<tspan v-if="row.lane.isMe"> (moi)</tspan>
+        </text>
+      </g>
+
+      <!-- deaths -->
       <circle
-        v-for="(marker, index) in deathMarkers"
-        :key="'death-' + index"
-        :cx="marker.x"
-        :cy="marker.y"
-        :r="marker.radius"
-        :fill="marker.color"
-        fill-opacity="0.85"
-        stroke="rgba(0, 0, 0, 0.6)"
-        stroke-width="1"
-      >
-        <title>{{ marker.deaths }} mort(s) {{ marker.team === 0 ? labels.team0 : labels.team1 }} à {{ formatDuration(marker.atSeconds) }}</title>
-      </circle>
+        v-for="dot in deathDots"
+        :key="dot.key"
+        :cx="dot.x"
+        :cy="dot.y"
+        :r="dot.radius"
+        :fill="dot.color"
+        :fill-opacity="dot.opacity"
+        :stroke="dot.focused ? 'currentColor' : 'rgba(0, 0, 0, 0.6)'"
+        :stroke-width="dot.focused ? 2 : 1"
+        :class="dot.focused ? 'text-foreground' : ''"
+      />
 
+      <!-- structures -->
+      <g>
+        <text x="8" :y="STRUCTURE_Y + 3" class="text-muted" fill="currentColor" font-size="9">structures</text>
+        <line
+          :x1="TRACK_LEFT"
+          :y1="STRUCTURE_Y"
+          :x2="TRACK_LEFT + TRACK_WIDTH"
+          :y2="STRUCTURE_Y"
+          class="text-border"
+          stroke="currentColor"
+          stroke-opacity="0.35"
+          stroke-width="1"
+        />
+        <rect
+          v-for="marker in structureMarkers"
+          :key="marker.key"
+          :x="marker.x - 4"
+          :y="STRUCTURE_Y - 4"
+          width="8"
+          height="8"
+          :fill="marker.color"
+          fill-opacity="0.75"
+        />
+      </g>
+
+      <!-- drag-to-zoom selection -->
       <rect
-        v-for="(event, index) in structureMarkers"
-        :key="'structure-' + index"
-        :x="event.x - 4"
-        :y="STRUCTURE_ROW_Y - 4"
-        width="8"
-        height="8"
+        v-if="selection"
+        :x="selection.x"
+        :y="LEAD_TOP"
+        :width="selection.width"
+        :height="LANES_BOTTOM - LEAD_TOP"
+        class="text-brand"
         fill="currentColor"
-        fill-opacity="0.7"
-        class="text-muted"
-      >
-        <title>{{ event.structureType }} détruit à {{ formatDuration(event.atSeconds) }} ({{ event.team === 0 ? labels.team0 : labels.team1 }}) — détection best-effort</title>
-      </rect>
+        fill-opacity="0.16"
+        stroke="currentColor"
+        stroke-width="1"
+      />
 
+      <!-- cursor -->
       <line
-        v-if="scrubX !== null"
+        v-if="scrubVisible"
         :x1="scrubX"
-        y1="6"
+        :y1="LEAD_TOP - 4"
         :x2="scrubX"
-        :y2="STRUCTURE_ROW_Y + 8"
+        :y2="STRUCTURE_Y + 6"
         class="text-foreground"
         stroke="currentColor"
         stroke-width="1"
         stroke-dasharray="3 3"
       />
 
-      <text x="0" :y="HEIGHT - 4" fill="currentColor" class="text-muted" font-size="12">0:00</text>
-      <text :x="WIDTH" :y="HEIGHT - 4" fill="currentColor" class="text-muted" font-size="12" text-anchor="end">
-        {{ formatDuration(durationSeconds) }}
+      <!-- time axis -->
+      <line
+        :x1="TRACK_LEFT"
+        :y1="AXIS_Y - 8"
+        :x2="TRACK_LEFT + TRACK_WIDTH"
+        :y2="AXIS_Y - 8"
+        class="text-border"
+        stroke="currentColor"
+        stroke-width="1"
+      />
+      <text
+        v-for="tick in ticks"
+        :key="'tick-' + tick.label"
+        :x="tick.x"
+        :y="AXIS_Y + 4"
+        class="text-muted"
+        fill="currentColor"
+        font-size="10"
+        text-anchor="middle"
+      >
+        {{ tick.label }}
       </text>
     </svg>
 
-    <template v-if="series.hasLevelData">
-      <div class="flex flex-wrap items-center gap-3 text-[11px] text-muted">
-        <span class="flex items-center gap-1.5">
-          <span class="h-2 w-2 rounded-full" :style="{ background: teamColors[0] }" />
-          {{ labels.team0 }}
-        </span>
-        <span class="flex items-center gap-1.5">
-          <span class="h-2 w-2 rounded-full" :style="{ background: teamColors[1] }" />
-          {{ labels.team1 }}
-        </span>
-        <span v-if="series.deaths.length > 0">Morts : la taille du point = morts groupées</span>
-        <span v-if="series.structures.length > 0">Structures détruites : {{ series.structures.length }} (best-effort)</span>
-      </div>
+    <!-- overview band: only while zoomed, since it is the way back out -->
+    <svg
+      v-if="showChart && isZoomed"
+      ref="overview"
+      :viewBox="'0 0 ' + WIDTH + ' ' + OVERVIEW_HEIGHT"
+      class="h-6 w-full cursor-ew-resize touch-pan-y select-none"
+      role="img"
+      aria-label="Vue d'ensemble de la partie : courbe d'avance et morts par équipe. Glisser dans la fenêtre pour la déplacer, cliquer ailleurs pour la recentrer."
+      @pointerdown="onOverviewDown"
+      @pointermove="onOverviewMove"
+      @pointerup="onOverviewUp"
+      @pointercancel="onOverviewUp"
+    >
+      <rect x="0" y="0" width="800" :height="OVERVIEW_HEIGHT" class="text-border" fill="currentColor" fill-opacity="0.25" />
+      <polyline v-if="overviewPoints" :points="overviewPoints" fill="none" class="text-brand" stroke="currentColor" stroke-width="1.5" stroke-opacity="0.6" />
+      <circle
+        v-for="cluster in overviewClusters"
+        :key="'overview-cluster-' + cluster.key"
+        :cx="cluster.x"
+        :cy="cluster.y"
+        :r="cluster.radius"
+        :fill="cluster.color"
+        fill-opacity="0.9"
+      />
+      <rect
+        x="0"
+        y="0"
+        width="800"
+        :height="OVERVIEW_HEIGHT"
+        fill="#000"
+        fill-opacity="0.45"
+      />
+      <rect
+        :x="overviewWindow.x"
+        y="0"
+        :width="overviewWindow.width"
+        :height="OVERVIEW_HEIGHT"
+        class="text-brand"
+        fill="currentColor"
+        fill-opacity="0.22"
+        stroke="currentColor"
+        stroke-width="1.5"
+      />
+    </svg>
 
-      <label class="flex flex-col gap-1 text-xs text-muted">
-        <span>Position dans la chronologie : {{ formatDuration(scrubSeconds ?? durationSeconds) }}</span>
-        <input
-          type="range"
-          min="0"
-          :max="sliderMax"
-          step="1"
-          :value="scrubSeconds ?? sliderMax"
-          aria-label="Position dans la chronologie de la partie"
-          @input="onScrub"
-        />
-      </label>
-    </template>
-
-    <p v-else-if="hasMarkers" class="text-[11px] text-muted">
-      Morts et structures restent tracées ci-dessus ; seule la courbe de niveaux est indisponible.
-    </p>
+    <div class="flex flex-wrap items-center gap-3 text-[11px] text-muted">
+      <span class="flex items-center gap-1.5">
+        <span class="h-2 w-2 rounded-full" :style="{ background: teamColors[0] }" />
+        {{ labels.team0 }}
+      </span>
+      <span class="flex items-center gap-1.5">
+        <span class="h-2 w-2 rounded-full" :style="{ background: teamColors[1] }" />
+        {{ labels.team1 }}
+      </span>
+      <span v-if="hasMarkers">Sur la piste d'un joueur = une de ses morts ; les structures détruites sont en bas.</span>
+      <span v-if="!series.hasLevelData" class="text-muted">
+        Seules les morts et les structures sont tracées : la courbe de niveaux est indisponible.
+      </span>
+    </div>
   </div>
 </template>

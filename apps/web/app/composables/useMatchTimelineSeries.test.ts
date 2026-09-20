@@ -134,7 +134,18 @@ describe("buildMatchTimelineSeries markers", () => {
 });
 
 function series(overrides: Partial<MatchTimelineSeries> = {}): MatchTimelineSeries {
-  return { hasLevelData: true, points: [], finalLead: null, deaths: [], structures: [], ...overrides };
+  return {
+    hasLevelData: true,
+    points: [],
+    finalLead: null,
+    teamLevels: [[], []],
+    deaths: [],
+    structures: [],
+    lanes: [],
+    allDeaths: [],
+    events: [],
+    ...overrides,
+  };
 }
 
 describe("timelineTeamLabels", () => {

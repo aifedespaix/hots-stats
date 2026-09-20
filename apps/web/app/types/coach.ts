@@ -71,8 +71,80 @@ export interface MatchTimelineDeathMarker {
   deaths: number;
 }
 
-/** Everything `MatchTimelineChart.vue` draws for one match, derived only
- * from `MatchTimelineData` (no fabricated timeline). */
+/** One team's mean level at one real snapshot timestamp -- the step function
+ * `timelineStateAt` reads, never an interpolated point. */
+export interface MatchTimelineLevelStep {
+  atSeconds: number;
+  level: number;
+}
+
+/** One player's row on the chronology: their own deaths, time-ordered. */
+export interface MatchTimelineLane {
+  battletag: string;
+  /** Hero display name when the match page resolved it; null falls back to the battletag. */
+  heroName: string | null;
+  team: 0 | 1;
+  isMe: boolean;
+  deaths: MatchTimelineLaneDeath[];
+}
+
+/** One of a player's deaths, reduced to what the chronology plots (a player
+ * can only die once per instant, so a lane position is always one death). */
+export interface MatchTimelineLaneDeath {
+  atSeconds: number;
+  /** Credited killers, as the BattleTags the replay exposed (may be empty). */
+  killers: string[];
+  /** "hero" = killed by enemy heroes, "other" = minions/towers/etc.; null when the replay didn't record it. */
+  killType: "hero" | "other" | null;
+}
+
+/** A death with its victim and killers resolved to display names -- what the
+ * cursor's focus and the event rail read. */
+export interface MatchTimelineStateDeath {
+  battletag: string;
+  heroName: string | null;
+  team: 0 | 1;
+  atSeconds: number;
+  killers: string[];
+  /** Killers resolved the same way `heroName` is; a BattleTag with no row in this match is kept as-is. */
+  killerNames: string[];
+  killType: "hero" | "other" | null;
+}
+
+/** Both event kinds in one time-ordered list, so "previous/next event" is a
+ * single walk instead of two parallel cursors. */
+export interface MatchTimelineEvent {
+  kind: "death" | "structure";
+  atSeconds: number;
+  /** For a death, the victim's team; for a structure, the side that lost it. */
+  team: 0 | 1;
+  /** Death only. */
+  battletag?: string;
+  heroName?: string | null;
+  /** Structure only. */
+  structureType?: "fort" | "keep" | "wall" | "core";
+}
+
+/** What the game looked like at one instant: both teams' last known level
+ * (carried forward -- never interpolated) and the events within reach. */
+export interface MatchTimelineStateAt {
+  atSeconds: number;
+  team0Level: number | null;
+  team1Level: number | null;
+  /** team0Level - team1Level; null until both sides have a known level. */
+  lead: number | null;
+  deaths: MatchTimelineStateDeath[];
+  structures: MatchTimelineStructureEvent[];
+}
+
+/** The death the cursor is on, plus every death of the same fight. */
+export interface MatchTimelineFocus {
+  victim: MatchTimelineStateDeath;
+  fight: MatchTimelineStateDeath[];
+}
+
+/** Everything the chronology tab renders for one match, derived only from
+ * `MatchTimelineData` (no fabricated timeline). */
 export interface MatchTimelineSeries {
   /** True only when both teams share a level snapshot in time; false makes
    * the tab show an explicit "données de niveau absentes" state instead of
@@ -82,8 +154,16 @@ export interface MatchTimelineSeries {
   points: MatchTimelineLeadPoint[];
   /** Lead at the last shared snapshot; null when there is no point. */
   finalLead: number | null;
+  /** Each team's own level steps -- the raw material of `timelineStateAt`. */
+  teamLevels: [MatchTimelineLevelStep[], MatchTimelineLevelStep[]];
   deaths: MatchTimelineDeathMarker[];
   structures: MatchTimelineStructureEvent[];
+  /** One row per player: mine first, then my team, then the enemy team. */
+  lanes: MatchTimelineLane[];
+  /** Every death, time-ordered, with victims and killers resolved to names. */
+  allDeaths: MatchTimelineStateDeath[];
+  /** Deaths and structures merged, time-ordered -- powers prev/next event. */
+  events: MatchTimelineEvent[];
 }
 
 /** French labels for the two sides, so the text alternative can name the

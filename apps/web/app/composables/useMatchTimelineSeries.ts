@@ -5,8 +5,14 @@ import { computed, type ComputedRef, type Ref, type WritableComputedRef, ref } f
 import type {
   MatchTimelineData,
   MatchTimelineDeathMarker,
+  MatchTimelineEvent,
+  MatchTimelineFocus,
+  MatchTimelineLane,
   MatchTimelineLeadPoint,
+  MatchTimelineLevelStep,
   MatchTimelineSeries,
+  MatchTimelineStateAt,
+  MatchTimelineStateDeath,
   MatchTimelineStructureEvent,
   MatchTimelineTeamLabels,
 } from "~/types/coach";
@@ -15,6 +21,8 @@ import { CLUSTER_TIME_WINDOW_SECONDS } from "~/utils/deathClustering";
 export interface MatchTimelinePlayer {
   battletag: string;
   team: number;
+  /** Hero display name when the caller resolved it; lanes fall back to the battletag. */
+  heroName?: string | null;
 }
 
 /** Everything the chronology needs from one match -- kept decoupled from
@@ -24,6 +32,8 @@ export interface MatchTimelineInput {
   timeline: MatchTimelineData | null;
   players: MatchTimelinePlayer[];
   durationSeconds: number;
+  /** Every BattleTag the viewer owns, so their lane is identifiable; empty when the viewer isn't in the match. */
+  myBattletags?: string[];
 }
 
 function mean(values: number[]): number {
@@ -31,7 +41,7 @@ function mean(values: number[]): number {
 }
 
 /** One team's mean level per distinct snapshot timestamp, ascending. */
-function levelSteps(snapshots: { atSeconds: number; level: number }[]): { atSeconds: number; level: number }[] {
+function levelSteps(snapshots: { atSeconds: number; level: number }[]): MatchTimelineLevelStep[] {
   const levelsByTime = new Map<number, number[]>();
   for (const snapshot of snapshots) {
     const levels = levelsByTime.get(snapshot.atSeconds);
@@ -74,10 +84,21 @@ function clusterDeathTimes(atSeconds: number[]): { atSeconds: number; deaths: nu
 export function buildMatchTimelineSeries(input: MatchTimelineInput): MatchTimelineSeries {
   const timeline = input.timeline;
   if (!timeline) {
-    return { hasLevelData: false, points: [], finalLead: null, deaths: [], structures: [] };
+    return {
+      hasLevelData: false,
+      points: [],
+      finalLead: null,
+      teamLevels: [[], []],
+      deaths: [],
+      structures: [],
+      lanes: [],
+      allDeaths: [],
+      events: [],
+    };
   }
 
   const teamByBattletag = new Map(input.players.map((player) => [player.battletag, player.team]));
+  const heroByBattletag = new Map(input.players.map((player) => [player.battletag, player.heroName ?? null]));
   const snapshotsByTeam: { atSeconds: number; level: number }[][] = [[], []];
   for (const snapshot of timeline.levelSnapshots) {
     const team = teamByBattletag.get(snapshot.battletag);
@@ -85,6 +106,7 @@ export function buildMatchTimelineSeries(input: MatchTimelineInput): MatchTimeli
     snapshotsByTeam[team]!.push({ atSeconds: snapshot.atSeconds, level: snapshot.level });
   }
   const steps = [levelSteps(snapshotsByTeam[0]!), levelSteps(snapshotsByTeam[1]!)];
+  const teamLevels: [MatchTimelineLevelStep[], MatchTimelineLevelStep[]] = [steps[0]!, steps[1]!];
 
   const timestamps = [
     ...new Set([...steps[0]!.map((step) => step.atSeconds), ...steps[1]!.map((step) => step.atSeconds)]),
@@ -119,12 +141,86 @@ export function buildMatchTimelineSeries(input: MatchTimelineInput): MatchTimeli
     (a, b) => a.atSeconds - b.atSeconds,
   );
 
+  // One lane per player, so the chronology can show everyone's own deaths
+  // rather than only a per-team aggregate. Deaths (and their killers) are
+  // resolved to hero names here, once, instead of in each render pass.
+  const mine = new Set(input.myBattletags ?? []);
+  const laneByBattletag = new Map<string, MatchTimelineLane>();
+  for (const player of input.players) {
+    if (player.team !== 0 && player.team !== 1) continue;
+    laneByBattletag.set(player.battletag, {
+      battletag: player.battletag,
+      heroName: player.heroName ?? null,
+      team: player.team,
+      isMe: mine.has(player.battletag),
+      deaths: [],
+    });
+  }
+
+  const allDeaths: MatchTimelineStateDeath[] = [];
+  for (const death of timeline.deaths) {
+    const killers = [...(death.killers ?? [])];
+    const resolved: MatchTimelineStateDeath = {
+      battletag: death.battletag,
+      heroName: heroByBattletag.get(death.battletag) ?? null,
+      team: death.team,
+      atSeconds: death.atSeconds,
+      killers,
+      killerNames: killers.map((killer) => heroByBattletag.get(killer) ?? killer),
+      killType: death.killType ?? null,
+    };
+    allDeaths.push(resolved);
+    laneByBattletag
+      .get(death.battletag)
+      ?.deaths.push({ atSeconds: death.atSeconds, killers: resolved.killers, killType: resolved.killType });
+  }
+  allDeaths.sort((a, b) => a.atSeconds - b.atSeconds);
+
+  const lanes = [...laneByBattletag.values()];
+  const myTeam = lanes.find((lane) => lane.isMe)?.team ?? null;
+  for (const lane of lanes) lane.deaths.sort((a, b) => a.atSeconds - b.atSeconds);
+  // My lane first, then my team, then the enemy team; within a group the
+  // busiest players lead, so a lane that matters is never buried.
+  const groupRank = (lane: MatchTimelineLane): number =>
+    lane.isMe ? 0 : myTeam === null ? 1 : lane.team === myTeam ? 1 : 2;
+  lanes.sort(
+    (a, b) =>
+      groupRank(a) - groupRank(b) ||
+      b.deaths.length - a.deaths.length ||
+      a.battletag.localeCompare(b.battletag),
+  );
+
+  const events: MatchTimelineEvent[] = [
+    ...allDeaths.map(
+      (death): MatchTimelineEvent => ({
+        kind: "death",
+        atSeconds: death.atSeconds,
+        team: death.team,
+        battletag: death.battletag,
+        heroName: death.heroName,
+      }),
+    ),
+    ...structures.map(
+      (structure): MatchTimelineEvent => ({
+        kind: "structure",
+        atSeconds: structure.atSeconds,
+        team: structure.team,
+        structureType: structure.structureType,
+      }),
+    ),
+  ];
+  events.sort((a, b) => a.atSeconds - b.atSeconds || (a.kind === b.kind ? 0 : a.kind === "death" ? -1 : 1));
+
   return {
     hasLevelData: points.length > 0,
     points,
     finalLead: points.length > 0 ? points[points.length - 1]!.lead : null,
+    teamLevels,
     deaths,
     structures,
+    lanes,
+    allDeaths,
+    events,
   };
 }
 
@@ -200,6 +296,125 @@ const DEATH_MARKER_MAX_RADIUS = 10;
 /** Death-marker radius: one step per extra death in the cluster, capped so a huge teamfight stays on its track. */
 export function deathMarkerRadius(deaths: number): number {
   return Math.min(DEATH_MARKER_MAX_RADIUS, DEATH_MARKER_BASE_RADIUS + Math.max(0, deaths - 1) * DEATH_MARKER_RADIUS_STEP);
+}
+
+/** A team's last known level at or before `seconds`, read off its own steps.
+ * Null before that team's first snapshot: the parser only records real
+ * level-ups, so "unknown" is the honest answer rather than level 1. */
+export function timelineLevelAt(steps: MatchTimelineLevelStep[], seconds: number): number | null {
+  let level: number | null = null;
+  for (const step of steps) {
+    if (step.atSeconds > seconds) break;
+    level = step.level;
+  }
+  return level;
+}
+
+/** The state of the game at one instant: both teams' carried-forward level,
+ * the resulting lead, and the events within `windowSeconds`. */
+export function timelineStateAt(
+  series: MatchTimelineSeries,
+  seconds: number,
+  windowSeconds = CLUSTER_TIME_WINDOW_SECONDS,
+): MatchTimelineStateAt {
+  const team0Level = timelineLevelAt(series.teamLevels[0], seconds);
+  const team1Level = timelineLevelAt(series.teamLevels[1], seconds);
+  return {
+    atSeconds: seconds,
+    team0Level,
+    team1Level,
+    lead: team0Level === null || team1Level === null ? null : team0Level - team1Level,
+    deaths: series.allDeaths.filter((death) => Math.abs(death.atSeconds - seconds) <= windowSeconds),
+    structures: series.structures.filter((structure) => Math.abs(structure.atSeconds - seconds) <= windowSeconds),
+  };
+}
+
+/** The death under the cursor (nearest within the clustering window) and the
+ * rest of its fight. Null when the cursor isn't sitting on a death -- the
+ * detail panel then shows the level state alone. Ties go to the earlier
+ * death so the same cursor position always answers the same way. */
+export function timelineFocusAt(
+  series: MatchTimelineSeries,
+  seconds: number,
+  windowSeconds = CLUSTER_TIME_WINDOW_SECONDS,
+): MatchTimelineFocus | null {
+  let victim: MatchTimelineStateDeath | null = null;
+  let best = Number.POSITIVE_INFINITY;
+  for (const death of series.allDeaths) {
+    const distance = Math.abs(death.atSeconds - seconds);
+    if (distance > windowSeconds || distance >= best) continue;
+    best = distance;
+    victim = death;
+  }
+  if (victim === null) return null;
+  const atSeconds = victim.atSeconds;
+  return {
+    victim,
+    fight: series.allDeaths.filter((death) => Math.abs(death.atSeconds - atSeconds) <= windowSeconds),
+  };
+}
+
+/** The next (direction 1) or previous (direction -1) event in time, strictly
+ * after/before `seconds` so stepping from an event lands on its neighbour. */
+export function timelineEventStep(
+  events: MatchTimelineEvent[],
+  seconds: number,
+  direction: -1 | 1,
+): MatchTimelineEvent | null {
+  if (direction > 0) return events.find((event) => event.atSeconds > seconds) ?? null;
+  let previous: MatchTimelineEvent | null = null;
+  for (const event of events) {
+    if (event.atSeconds >= seconds) break;
+    previous = event;
+  }
+  return previous;
+}
+
+export interface MatchTimelineSurroundings {
+  previous: MatchTimelineEvent | null;
+  upcoming: MatchTimelineEvent[];
+}
+
+/** The last event at or before the cursor plus the next `upcomingLimit` ones
+ * after it -- the "autour de cet instant" rail. */
+export function timelineEventsAround(
+  events: MatchTimelineEvent[],
+  seconds: number,
+  upcomingLimit = 3,
+): MatchTimelineSurroundings {
+  let previous: MatchTimelineEvent | null = null;
+  const upcoming: MatchTimelineEvent[] = [];
+  for (const event of events) {
+    if (event.atSeconds <= seconds) {
+      previous = event;
+      continue;
+    }
+    if (upcoming.length >= upcomingLimit) break;
+    upcoming.push(event);
+  }
+  return { previous, upcoming };
+}
+
+const STRUCTURE_LABELS: Record<NonNullable<MatchTimelineEvent["structureType"]>, string> = {
+  fort: "Fort",
+  keep: "Donjon",
+  wall: "Tour",
+  core: "Cœur",
+};
+
+/** French name of a destroyed structure, matching the game's own wording. */
+export function structureTypeLabel(structureType: NonNullable<MatchTimelineEvent["structureType"]>): string {
+  return STRUCTURE_LABELS[structureType];
+}
+
+/** One-line label for an event, shared by the rail and the hover card so both
+ * name the same thing the same way. */
+export function timelineEventLabel(event: MatchTimelineEvent): string {
+  if (event.kind === "structure") {
+    const name = event.structureType ? structureTypeLabel(event.structureType) : "Structure";
+    return name + " détruit";
+  }
+  return "Mort de " + (event.heroName ?? event.battletag ?? "un joueur");
 }
 
 export interface UseMatchTimelineSeriesResult {
