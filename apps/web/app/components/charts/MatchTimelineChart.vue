@@ -2,9 +2,16 @@
 import {
   buildMatchTimelineSummary,
   deathMarkerRadius,
+  formatTimelineLevel,
+  structureTypeLabel,
+  timelineComparison,
+  timelineLeadLabel,
   timelineLeadMax,
   timelineLeadY,
   timelineStateAt,
+  timelineStructureLanes,
+  timelineStructureMarkers,
+  timelineStructureSideLabel,
   timelineTeamLabels,
   timelineX,
 } from "~/composables/useMatchTimelineSeries";
@@ -56,7 +63,11 @@ const LEAD_HALF = (LEAD_BOTTOM - LEAD_TOP) / 2;
 const LANES_TOP = 158;
 const LANES_HEIGHT = 168;
 const LANES_BOTTOM = LANES_TOP + LANES_HEIGHT;
-const STRUCTURE_Y = 346;
+/** Structure band: two rows (ally first) between the lanes and the axis. */
+const STRUCTURE_TOP = 330;
+const STRUCTURE_ROW_HEIGHT = 15;
+const STRUCTURE_MARKER_SIZE = 9;
+const STRUCTURE_MARKER_SLOT_STEP = 11;
 const AXIS_Y = 368;
 const OVERVIEW_HEIGHT = 26;
 /** Below this a drag is a click, not a window selection. */
@@ -209,15 +220,47 @@ const deathDots = computed<DeathDot[]>(() => {
   return dots;
 });
 
-const structureMarkers = computed(() =>
-  props.series.structures
-    .filter((event) => event.atSeconds >= props.window.startSeconds && event.atSeconds <= props.window.endSeconds)
-    .map((event) => ({
-      key: event.structureType + "-" + event.atSeconds,
-      x: trackX(event.atSeconds),
-      color: teamColors.value[event.team],
-    })),
-);
+/**
+ * The two structure rows (ally first) with their square markers. A square is
+ * the shape language for a structure, exactly as a round pastille is for a
+ * death, so the two can never be confused at a glance. Simultaneous
+ * destructions are spread sideways instead of stacking on one pixel.
+ */
+const structureRows = computed(() => {
+  const lanes = timelineStructureLanes(props.allyTeam, labels.value);
+  const markers = timelineStructureMarkers(props.series.structures, props.window);
+  return lanes.map((lane, index) => {
+    const y = STRUCTURE_TOP + index * STRUCTURE_ROW_HEIGHT;
+    const height = STRUCTURE_ROW_HEIGHT - 2;
+    const center = y + height / 2;
+    return {
+      key: lane.side,
+      label: lane.label,
+      color: teamColors.value[lane.team],
+      y,
+      height,
+      labelY: center + 3,
+      markers: markers
+        .filter((marker) => marker.team === lane.team)
+        .map((marker) => {
+          const size = marker.structureType === "core" ? STRUCTURE_MARKER_SIZE + 3 : STRUCTURE_MARKER_SIZE;
+          const raw = trackX(marker.atSeconds) + marker.slot * STRUCTURE_MARKER_SLOT_STEP;
+          const x = Math.min(TRACK_LEFT + TRACK_WIDTH - size / 2, Math.max(TRACK_LEFT + size / 2, raw));
+          return {
+            key: marker.key,
+            x,
+            y: center,
+            size,
+            color: teamColors.value[marker.team],
+            side: timelineStructureSideLabel(marker.team, props.allyTeam),
+            typeLabel: structureTypeLabel(marker.structureType),
+          };
+        }),
+    };
+  });
+});
+
+const hasStructures = computed(() => props.series.structures.length > 0);
 
 /** Minute-ish gridlines, spaced to whatever keeps them readable at this zoom. */
 const ticks = computed(() => {
@@ -248,6 +291,64 @@ const ariaLabel = computed(() =>
 const svg = ref<SVGSVGElement | null>(null);
 const overview = ref<SVGSVGElement | null>(null);
 const drag = ref<{ startSeconds: number; endSeconds: number; moved: boolean } | null>(null);
+
+// --- hover card: the level comparison, drawn on the graph itself ----------
+
+const wrap = ref<HTMLElement | null>(null);
+/** Cursor position (and container size) in px relative to `wrap`; null while
+ * the pointer is off the chart, which is what hides the card. */
+const hover = ref<{ x: number; y: number; width: number; height: number } | null>(null);
+
+const hoverComparison = computed(() => timelineComparison(props.series, props.scrubSeconds, labels.value));
+
+const hoverStructures = computed(() =>
+  hoverComparison.value.structures.map((event) => ({
+    key: event.team + "-" + event.structureType + "-" + event.atSeconds,
+    label: structureTypeLabel(event.structureType),
+    side: timelineStructureSideLabel(event.team, props.allyTeam),
+    color: teamColors.value[event.team],
+  })),
+);
+
+const hoverLeaderColor = computed(() => {
+  const leader = hoverComparison.value.leader;
+  return leader === null ? null : teamColors.value[leader];
+});
+
+function trackHover(event: PointerEvent) {
+  const element = wrap.value;
+  if (!element) return;
+  const rect = element.getBoundingClientRect();
+  hover.value = {
+    x: event.clientX - rect.left,
+    y: event.clientY - rect.top,
+    width: rect.width,
+    height: rect.height,
+  };
+}
+
+function clearHover() {
+  hover.value = null;
+}
+
+/** Flip to whichever half the cursor is not in, so the card stays inside the
+ * panel without measuring itself -- same rule as HeatmapCellTooltip.vue. */
+const hoverCardStyle = computed(() => {
+  const point = hover.value;
+  if (!point) return {};
+  const placeLeft = point.x > point.width / 2;
+  const placeAbove = point.y > point.height / 2;
+  return {
+    left: point.x + "px",
+    top: point.y + "px",
+    transform:
+      "translate(" +
+      (placeLeft ? "calc(-100% - 14px)" : "14px") +
+      ", " +
+      (placeAbove ? "calc(-100% - 14px)" : "14px") +
+      ")",
+  };
+});
 
 function secondsAtClientX(clientX: number): number | null {
   const element = svg.value;
@@ -293,6 +394,7 @@ function onPointerMove(event: PointerEvent) {
   if (seconds === null) return;
   const current = drag.value;
   if (current) {
+    clearHover();
     drag.value = {
       ...current,
       endSeconds: seconds,
@@ -300,6 +402,7 @@ function onPointerMove(event: PointerEvent) {
     };
     return;
   }
+  trackHover(event);
   emitScrub(seconds);
 }
 
@@ -404,7 +507,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="flex min-h-0 flex-col gap-3">
+  <div ref="wrap" class="relative flex min-h-0 flex-col gap-3">
     <UiStateCard
       v-if="!series.hasLevelData"
       state="empty"
@@ -423,6 +526,7 @@ onBeforeUnmount(() => {
       @pointermove="onPointerMove"
       @pointerup="onPointerUp"
       @pointercancel="onPointerUp"
+      @pointerleave="clearHover"
       @dblclick="emit('reset-zoom')"
       @wheel.prevent="onWheel"
     >
@@ -442,8 +546,16 @@ onBeforeUnmount(() => {
 
       <!-- lead curve -->
       <template v-if="series.hasLevelData">
+        <!-- Side bands: the upper half always means team 0 leads, the lower
+             half team 1 -- readable without decoding the curve. -->
+        <rect x="0" :y="LEAD_TOP" width="6" :height="LEAD_HALF" :fill="teamColors[0]" fill-opacity="0.85" />
+        <rect x="0" :y="LEAD_MID" width="6" :height="LEAD_HALF" :fill="teamColors[1]" fill-opacity="0.85" />
+        <text x="10" :y="LEAD_TOP + 14" :fill="teamColors[0]" font-size="10" font-weight="600">{{ labels.team0 }}</text>
+        <text x="10" :y="LEAD_TOP + 25" class="text-muted" fill="currentColor" font-size="9">en tête</text>
+        <text x="10" :y="LEAD_BOTTOM - 15" :fill="teamColors[1]" font-size="10" font-weight="600">{{ labels.team1 }}</text>
+        <text x="10" :y="LEAD_BOTTOM - 4" class="text-muted" fill="currentColor" font-size="9">en tête</text>
         <text :x="TRACK_LEFT" :y="LEAD_TOP - 8" class="text-muted" fill="currentColor" font-size="10">
-          avance en niveaux — au-dessus de la ligne, {{ labels.team0 }} mène
+          avance en niveaux
         </text>
         <line
           :x1="TRACK_LEFT"
@@ -522,29 +634,56 @@ onBeforeUnmount(() => {
         :class="dot.focused ? 'text-foreground' : ''"
       />
 
-      <!-- structures -->
+      <!-- structures: one row per side, squares so they never read as players -->
       <g>
-        <text x="8" :y="STRUCTURE_Y + 3" class="text-muted" fill="currentColor" font-size="9">structures</text>
-        <line
-          :x1="TRACK_LEFT"
-          :y1="STRUCTURE_Y"
-          :x2="TRACK_LEFT + TRACK_WIDTH"
-          :y2="STRUCTURE_Y"
-          class="text-border"
-          stroke="currentColor"
-          stroke-opacity="0.35"
-          stroke-width="1"
-        />
-        <rect
-          v-for="marker in structureMarkers"
-          :key="marker.key"
-          :x="marker.x - 4"
-          :y="STRUCTURE_Y - 4"
-          width="8"
-          height="8"
-          :fill="marker.color"
-          fill-opacity="0.75"
-        />
+        <g v-for="row in structureRows" :key="'structure-row-' + row.key">
+          <rect
+            :x="TRACK_LEFT"
+            :y="row.y"
+            :width="TRACK_WIDTH"
+            :height="row.height"
+            :fill="row.color"
+            fill-opacity="0.07"
+          />
+          <line
+            :x1="TRACK_LEFT"
+            :y1="row.y + row.height"
+            :x2="TRACK_LEFT + TRACK_WIDTH"
+            :y2="row.y + row.height"
+            class="text-border"
+            stroke="currentColor"
+            stroke-opacity="0.35"
+            stroke-width="1"
+          />
+          <text x="8" :y="row.labelY" font-size="9" font-weight="600" :fill="row.color" fill-opacity="0.9">
+            {{ row.label }}
+          </text>
+          <rect
+            v-for="marker in row.markers"
+            :key="marker.key"
+            :x="marker.x - marker.size / 2"
+            :y="marker.y - marker.size / 2"
+            :width="marker.size"
+            :height="marker.size"
+            :fill="marker.color"
+            fill-opacity="0.95"
+            stroke="rgba(0, 0, 0, 0.55)"
+            stroke-width="1"
+          >
+            <title>{{ marker.typeLabel }} détruit — {{ marker.side }}</title>
+          </rect>
+        </g>
+        <text
+          v-if="!hasStructures"
+          :x="TRACK_LEFT + 6"
+          :y="STRUCTURE_TOP + STRUCTURE_ROW_HEIGHT - 2"
+          class="text-muted"
+          fill="currentColor"
+          font-size="9"
+          font-style="italic"
+        >
+          aucune destruction de structure enregistrée pour cette partie
+        </text>
       </g>
 
       <!-- drag-to-zoom selection -->
@@ -567,7 +706,7 @@ onBeforeUnmount(() => {
         :x1="scrubX"
         :y1="LEAD_TOP - 4"
         :x2="scrubX"
-        :y2="STRUCTURE_Y + 6"
+        :y2="AXIS_Y - 8"
         class="text-foreground"
         stroke="currentColor"
         stroke-width="1"
@@ -597,6 +736,51 @@ onBeforeUnmount(() => {
         {{ tick.label }}
       </text>
     </svg>
+
+    <!-- hover card: the level comparison under the cursor -->
+    <div
+      v-if="showChart && hover"
+      class="pointer-events-none absolute z-30 w-60 rounded-md border border-border bg-surface/95 p-2 text-[11px] leading-snug shadow-lg backdrop-blur-sm"
+      :style="hoverCardStyle"
+    >
+      <div class="flex items-baseline justify-between gap-2">
+        <span class="font-mono font-semibold text-foreground">{{ formatDuration(scrubSeconds) }}</span>
+        <span v-if="!series.hasLevelData" class="text-[10px] text-muted">niveaux indisponibles</span>
+      </div>
+
+      <div v-if="series.hasLevelData" class="mt-1.5 space-y-1">
+        <div v-for="row in hoverComparison.rows" :key="row.team" class="flex items-center gap-1.5">
+          <span class="inline-block h-2.5 w-2.5 shrink-0 rounded-full" :style="{ background: teamColors[row.team] }" />
+          <span class="truncate" :style="{ color: teamColors[row.team] }">{{ row.label }}</span>
+          <span class="ml-auto font-heading text-sm font-semibold tabular-nums text-foreground">
+            {{ row.level === null ? "—" : formatTimelineLevel(row.level) }}
+          </span>
+        </div>
+      </div>
+
+      <div
+        v-if="hoverComparison.leadLabel"
+        class="mt-1.5 rounded border px-1.5 py-0.5 text-[10px] font-medium"
+        :class="hoverLeaderColor ? '' : 'border-border text-muted'"
+        :style="hoverLeaderColor ? { borderColor: hoverLeaderColor, color: hoverLeaderColor } : undefined"
+      >
+        {{ hoverComparison.leadLabel }}
+      </div>
+
+      <div
+        v-if="hoverStructures.length > 0 || hoverComparison.deaths.length > 0"
+        class="mt-1.5 space-y-0.5 border-t border-border pt-1.5"
+      >
+        <div v-for="row in hoverStructures" :key="row.key" class="flex items-center gap-1.5">
+          <span class="inline-block h-2 w-2 shrink-0 rounded-[2px]" :style="{ background: row.color }" />
+          <span class="truncate text-foreground">{{ row.label }} détruit</span>
+          <span class="ml-auto shrink-0 text-muted">{{ row.side }}</span>
+        </div>
+        <p v-if="hoverComparison.deaths.length > 0" class="text-muted">
+          {{ hoverComparison.deaths.length }} mort{{ hoverComparison.deaths.length > 1 ? "s" : "" }} à cet instant
+        </p>
+      </div>
+    </div>
 
     <!-- overview band: only while zoomed, since it is the way back out -->
     <svg
@@ -652,7 +836,14 @@ onBeforeUnmount(() => {
         <span class="h-2 w-2 rounded-full" :style="{ background: teamColors[1] }" />
         {{ labels.team1 }}
       </span>
-      <span v-if="hasMarkers">une pastille = une mort, sur la ligne du joueur ; les structures sont sur la ligne du bas</span>
+      <span v-if="hasMarkers" class="flex items-center gap-1.5">
+        <span class="h-2 w-2 rounded-full bg-current opacity-60" />
+        une mort, sur la ligne du joueur
+      </span>
+      <span v-if="hasStructures" class="flex items-center gap-1.5">
+        <span class="h-2 w-2 rounded-[2px] bg-current opacity-60" />
+        une structure détruite, sur la ligne de son camp
+      </span>
       <span v-if="!series.hasLevelData">courbe de niveaux indisponible pour cette partie</span>
       <span class="hidden lg:ml-auto lg:inline">glisser = cadrer · molette = zoom · double-clic = toute la partie</span>
     </div>

@@ -444,3 +444,154 @@ export function useMatchTimelineSeries(input: ComputedRef<MatchTimelineInput>): 
   });
   return { series, durationSeconds, scrubPercent, scrubSeconds };
 }
+
+/**
+ * French label for the lead at one instant -- shared by the detail panel and
+ * the chart's hover card so both name the same gap the same way. Deliberately
+ * avoids verb agreement traps ("mon equipe" / "les adversaires" cannot both
+ * take the same verb), the same reason `buildMatchTimelineSummary` does.
+ */
+export function timelineLeadLabel(lead: number | null, labels: MatchTimelineTeamLabels): string | null {
+  if (lead === null) return null;
+  if (lead === 0) return "égalité";
+  const ahead = lead > 0 ? labels.team0 : labels.team1;
+  const gap = formatTimelineLevel(Math.abs(lead));
+  return ahead + " devant de " + gap + (Math.abs(lead) > 1 ? " niveaux" : " niveau");
+}
+
+export interface TimelineStructureLane {
+  team: 0 | 1;
+  /** "ally" is the row drawn first: the viewer's own team when known. */
+  side: "ally" | "enemy";
+  /** Row label, drawn left of the track. */
+  label: string;
+}
+
+/**
+ * The two rows of the chronology's structure band: the viewer's own team
+ * first, the other second, so "nos structures" always sits above "leurs
+ * structures". Without a viewer team the rows keep the neutral team-number
+ * labels instead of pretending to know which side is whose.
+ */
+export function timelineStructureLanes(
+  allyTeam: 0 | 1 | null,
+  labels: MatchTimelineTeamLabels,
+): [TimelineStructureLane, TimelineStructureLane] {
+  if (allyTeam === null) {
+    return [
+      { team: 0, side: "ally", label: labels.team0 },
+      { team: 1, side: "enemy", label: labels.team1 },
+    ];
+  }
+  const enemyTeam: 0 | 1 = allyTeam === 0 ? 1 : 0;
+  return [
+    { team: allyTeam, side: "ally", label: "nos structures" },
+    { team: enemyTeam, side: "enemy", label: "leurs structures" },
+  ];
+}
+
+/** How one destroyed structure's side reads in a tooltip or a list. */
+export function timelineStructureSideLabel(team: 0 | 1, allyTeam: 0 | 1 | null): string {
+  if (allyTeam === null) return team === 0 ? "équipe 1" : "équipe 2";
+  return team === allyTeam ? "notre structure" : "leur structure";
+}
+
+export interface MatchTimelineStructureMarker {
+  /** Unique even when two structures of the same type fall on the same second. */
+  key: string;
+  team: 0 | 1;
+  atSeconds: number;
+  structureType: NonNullable<MatchTimelineEvent["structureType"]>;
+  /** Horizontal slot inside a same-team, same-second group: 0 when alone,
+   * otherwise symmetric around 0 (-0.5/+0.5 for a pair, -1/0/1 for a trio) so
+   * simultaneous destructions never draw on top of each other. */
+  slot: number;
+}
+
+/**
+ * The structure squares inside the visible window, each tagged with its slot.
+ * Grouping is per team and per second: an allied keep and an enemy fort on the
+ * same second still each sit on their own row, while two allied walls of the
+ * same wave get separate slots. Keys are unique by construction -- the
+ * previous `team-type-second` key silently collapsed simultaneous
+ * destructions into one square when Vue de-duplicated the v-for.
+ */
+export function timelineStructureMarkers(
+  structures: MatchTimelineStructureEvent[],
+  window?: { startSeconds: number; endSeconds: number },
+): MatchTimelineStructureMarker[] {
+  const visible = window
+    ? structures.filter(
+        (event) => event.atSeconds >= window.startSeconds && event.atSeconds <= window.endSeconds,
+      )
+    : structures;
+  const groups = new Map<string, MatchTimelineStructureEvent[]>();
+  for (const event of visible) {
+    const groupKey = event.team + "@" + event.atSeconds;
+    const group = groups.get(groupKey);
+    if (group) group.push(event);
+    else groups.set(groupKey, [event]);
+  }
+  const markers: MatchTimelineStructureMarker[] = [];
+  for (const [groupKey, group] of groups) {
+    group.forEach((event, index) => {
+      markers.push({
+        key: groupKey + "-" + event.structureType + "-" + index,
+        team: event.team,
+        atSeconds: event.atSeconds,
+        structureType: event.structureType,
+        slot: index - (group.length - 1) / 2,
+      });
+    });
+  }
+  markers.sort((a, b) => a.atSeconds - b.atSeconds || a.team - b.team || a.slot - b.slot);
+  return markers;
+}
+
+export interface TimelineComparisonRow {
+  team: 0 | 1;
+  label: string;
+  level: number | null;
+}
+
+export interface TimelineComparison {
+  atSeconds: number;
+  /** Team 0 first, team 1 second -- the chart's own team order. */
+  rows: [TimelineComparisonRow, TimelineComparisonRow];
+  /** team0Level - team1Level; null until both sides have a known level. */
+  lead: number | null;
+  /** French one-liner naming the side ahead; null when the lead is unknown. */
+  leadLabel: string | null;
+  /** The team ahead; null on a tie or an unknown lead. */
+  leader: 0 | 1 | null;
+  /** The same carried-forward instant `timelineStateAt` answers, so the hover
+   * card and the panel beside it can never disagree. */
+  deaths: MatchTimelineStateDeath[];
+  structures: MatchTimelineStructureEvent[];
+}
+
+/**
+ * Everything the chart's hover card shows for one instant: both teams' levels
+ * and who is ahead, plus the events within the clustering window of the
+ * cursor. Built on `timelineStateAt`, never a second, drifting derivation.
+ */
+export function timelineComparison(
+  series: MatchTimelineSeries,
+  seconds: number,
+  labels: MatchTimelineTeamLabels,
+): TimelineComparison {
+  const state = timelineStateAt(series, seconds);
+  return {
+    atSeconds: state.atSeconds,
+    rows: [
+      { team: 0, label: labels.team0, level: state.team0Level },
+      { team: 1, label: labels.team1, level: state.team1Level },
+    ],
+    lead: state.lead,
+    leadLabel: timelineLeadLabel(state.lead, labels),
+    leader: state.lead === null || state.lead === 0 ? null : state.lead > 0 ? 0 : 1,
+    deaths: state.deaths,
+    structures: state.structures,
+  };
+}
+

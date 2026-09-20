@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatTimelineLevel, timelineEventLabel, timelineTeamLabels } from "~/composables/useMatchTimelineSeries";
+import { formatTimelineLevel, timelineEventLabel, timelineLeadLabel, timelineTeamLabels } from "~/composables/useMatchTimelineSeries";
 import type { MatchTimelineSurroundings } from "~/composables/useMatchTimelineSeries";
 import type { MatchTimelineFocus, MatchTimelineSeries, MatchTimelineStateAt } from "~/types/coach";
 import { ALLY_TEAM_RGB, ENEMY_TEAM_RGB } from "~/utils/spatialColors";
@@ -43,14 +43,7 @@ const levelsLabel = computed(() => {
   );
 });
 
-const leadLabel = computed(() => {
-  const lead = props.state.lead;
-  if (lead === null) return null;
-  if (lead === 0) return "égalité";
-  const ahead = lead > 0 ? labels.value.team0 : labels.value.team1;
-  const gap = formatTimelineLevel(Math.abs(lead));
-  return ahead + " devant de " + gap + (Math.abs(lead) > 1 ? " niveaux" : " niveau");
-});
+const leadLabel = computed(() => timelineLeadLabel(props.state.lead, labels.value));
 
 const victimLane = computed(() =>
   props.focus ? (props.series.lanes.find((lane) => lane.battletag === props.focus!.victim.battletag) ?? null) : null,
