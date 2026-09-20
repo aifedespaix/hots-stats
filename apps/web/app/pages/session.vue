@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { PROGRESSION_MIN_MATCHES } from "@hots-stats/shared-types";
 import { useSessionRecap } from "~/composables/useSessionRecap";
 import {
   deltaTone,
+  formatDeltaNoise,
   formatSessionOption,
   formatSignedNumber,
   selectableSessions,
@@ -44,6 +44,7 @@ const session = computed(() => data.value?.session ?? null);
 const stats = computed(() => session.value?.stats ?? null);
 const baseline = computed(() => data.value?.baseline ?? null);
 const delta = computed(() => data.value?.baselineDelta ?? null);
+const noise = computed(() => data.value?.deltaNoise ?? null);
 
 /** The picker stays on the picked session until the matching recap lands, so
  * the control never snaps back to the previous session mid-fetch. */
@@ -78,17 +79,24 @@ watch(at, (value) => {
 const record = computed(() =>
   stats.value ? stats.value.wins + " V · " + stats.value.losses + " D" : "—",
 );
-const insufficientMessage = computed(() => {
-  const sessionGames = stats.value?.gamesPlayed ?? 0;
-  const baselineGames = baseline.value?.gamesPlayed ?? 0;
+/** Shown when the session exists but has nothing before it to compare with. */
+const noBaselineMessage = computed(() =>
+  baseline.value && baseline.value.gamesPlayed === 0
+    ? "Première session enregistrée : pas encore de moyenne avant elle pour comparer."
+    : "Aucune moyenne de référence pour cette session.",
+);
+
+/** The winrate band is the one worth spelling out in a sentence: it is the
+ * widest, and the one most likely to be misread on a 5-game session. */
+const noiseHint = computed(() => {
+  const half = noise.value?.winrate;
+  if (half === null || half === undefined || half === 0) return "";
   return (
-    "Échantillon insuffisant pour comparer : " +
-    sessionGames +
-    " partie(s) dans la session, " +
-    baselineGames +
-    " dans ta moyenne — au moins " +
-    PROGRESSION_MIN_MATCHES +
-    " sont nécessaires des deux côtés."
+    "Sur " +
+    (stats.value?.gamesPlayed ?? 0) +
+    " partie(s), le hasard seul fait varier le winrate de ±" +
+    Math.round(half * 100) +
+    " points : un écart n'est coloré que s'il dépasse sa marge."
   );
 });
 </script>
@@ -149,25 +157,32 @@ const insufficientMessage = computed(() => {
           <UiStatTile
             label="Winrate"
             :value="formatSignedPercent(delta.winrate)"
-            :tone="deltaTone(delta.winrate, 'higher')"
+            :sublabel="formatDeltaNoise(noise?.winrate ?? null, 'winrate')"
+            :tone="deltaTone(delta.winrate, 'higher', noise?.winrate ?? null)"
           />
           <UiStatTile
             label="KDA"
             :value="delta.kda === null ? '—' : formatSignedKda(delta.kda)"
-            :tone="delta.kda === null ? 'default' : deltaTone(delta.kda, 'higher')"
+            :sublabel="formatDeltaNoise(noise?.kda ?? null, 'kda')"
+            :tone="
+              delta.kda === null ? 'default' : deltaTone(delta.kda, 'higher', noise?.kda ?? null)
+            "
           />
           <UiStatTile
             label="Morts / 10 min"
             :value="formatSignedNumber(delta.deathsPer10Min)"
-            :tone="deltaTone(delta.deathsPer10Min, 'lower')"
+            :sublabel="formatDeltaNoise(noise?.deathsPer10Min ?? null, 'deathsPer10Min')"
+            :tone="deltaTone(delta.deathsPer10Min, 'lower', noise?.deathsPer10Min ?? null)"
           />
           <UiStatTile
             label="XP / min"
             :value="formatSignedNumber(delta.xpPerMinute)"
-            :tone="deltaTone(delta.xpPerMinute, 'higher')"
+            :sublabel="formatDeltaNoise(noise?.xpPerMinute ?? null, 'xpPerMinute')"
+            :tone="deltaTone(delta.xpPerMinute, 'higher', noise?.xpPerMinute ?? null)"
           />
         </div>
-        <UiStateCard v-else state="empty" size="sm" :message="insufficientMessage" />
+        <UiStateCard v-else state="empty" size="sm" :message="noBaselineMessage" />
+        <p v-if="delta && noiseHint" class="mt-3 text-xs text-muted">{{ noiseHint }}</p>
         <p v-if="baseline" class="mt-3 text-xs text-muted">
           Moyenne de référence : {{ baseline.gamesPlayed }} partie(s) avant cette session.
         </p>

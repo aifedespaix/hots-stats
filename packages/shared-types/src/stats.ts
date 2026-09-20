@@ -707,6 +707,21 @@ export interface SessionBaselineDelta {
   xpPerMinute: number;
 }
 
+/** 95% half-width of the noise chance alone would produce in each
+ * `SessionBaselineDelta` metric, on the same scale. Estimated from the spread
+ * of the player's own pre-session matches, so a 5-game session gets the wide
+ * band its size deserves instead of a false signal. A delta only says something
+ * when its absolute value clears this band. */
+export interface SessionDeltaNoise {
+  /** Winrate half-width, in winrate points (0.44 = ±44 points). */
+  winrate: number | null;
+  /** Null exactly when the kda delta is null (either side has no death). */
+  kda: number | null;
+  /** Null when the baseline holds too few usable matches to estimate a spread. */
+  deathsPer10Min: number | null;
+  xpPerMinute: number | null;
+}
+
 /** One entry of the session picker: a session's identity and headline record,
  * without its matches. GET /stats/session returns one per selectable session so
  * the web picker can list them without a second round-trip; the 90-minute
@@ -733,9 +748,10 @@ export interface SessionRecap {
 
 /** Response for GET /stats/session (E1). session is null when the scope has no
  * match at or after the requested at (or no match at all). baselineDelta is
- * null until the session AND its baseline each clear PROGRESSION_MIN_MATCHES,
- * so the endpoint never claims a trend on a thin sample; insufficientSample
- * carries that gate for the UI. */
+ * exposed whenever there is a session AND a non-empty baseline: a thin sample
+ * no longer suppresses it, it widens `deltaNoise` instead, so the UI can show
+ * the gap next to the band chance alone would have produced. insufficientSample
+ * stays as the "both sides clear PROGRESSION_MIN_MATCHES" notice. */
 export interface SessionRecapResponse {
   scope: "personal" | "global";
   session: SessionRecap | null;
@@ -747,6 +763,10 @@ export interface SessionRecapResponse {
   /** One row per pre-session scope match, or null with no session. */
   baseline: SessionRecapStats | null;
   baselineDelta: SessionBaselineDelta | null;
+  /** 95% noise band matching `baselineDelta` field by field, or null whenever
+   * `baselineDelta` is null (no session, or no baseline to estimate a spread
+   * from). */
+  deltaNoise: SessionDeltaNoise | null;
   insufficientSample: boolean;
 }
 

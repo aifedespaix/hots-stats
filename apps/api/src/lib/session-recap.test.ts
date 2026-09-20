@@ -33,6 +33,24 @@ function block(startIso: string, count: number, prefix: string, winner = true): 
   );
 }
 
+/** n matches with a spread of durations, stats and results, so the noise band
+ * has an actual variance to estimate (a uniform block has none). */
+function varied(startIso: string, count: number, prefix: string): SessionMatchInput[] {
+  const start = Date.parse(startIso);
+  return Array.from({ length: count }, (_, index) =>
+    match({
+      matchId: prefix + index,
+      playedAt: new Date(start + index * 15 * 60_000).toISOString(),
+      winner: index % 2 === 0,
+      durationSeconds: 900 + index * 60,
+      deaths: 1 + (index % 4),
+      kills: 3 + (index % 5),
+      assists: 2 + (index % 3),
+      experienceContribution: 8000 + index * 250,
+    }),
+  );
+}
+
 describe("buildSessionRecap", () => {
   test("uses the shared 90-minute clustering: 89 minutes apart is one session", () => {
     const recap = buildSessionRecap([
@@ -55,6 +73,7 @@ describe("buildSessionRecap", () => {
     expect(recap.session).toBeNull();
     expect(recap.baseline).toBeNull();
     expect(recap.baselineDelta).toBeNull();
+    expect(recap.deltaNoise).toBeNull();
     expect(recap.insufficientSample).toBe(true);
   });
 
@@ -89,6 +108,7 @@ describe("buildSessionRecap", () => {
       kda: null,
     });
     expect(recap.baselineDelta).toBeNull();
+    expect(recap.deltaNoise).toBeNull();
     expect(recap.insufficientSample).toBe(true);
   });
 
@@ -100,12 +120,15 @@ describe("buildSessionRecap", () => {
     expect(recap.baseline).toMatchObject({ gamesPlayed: 4, wins: 4 });
   });
 
-  test("baselineDelta is null below PROGRESSION_MIN_MATCHES on either side", () => {
+  test("a thin session still gets its deltas, wrapped in its own noise band", () => {
     const baseline = block("2026-09-01T10:00:00.000Z", PROGRESSION_MIN_MATCHES, "b");
     const session = block("2026-09-02T20:00:00.000Z", PROGRESSION_MIN_MATCHES - 1, "s");
     const recap = buildSessionRecap([...baseline, ...session]);
     expect(recap.insufficientSample).toBe(true);
-    expect(recap.baselineDelta).toBeNull();
+    // The old gate suppressed the comparison entirely; now it only widens the band.
+    expect(recap.baselineDelta).not.toBeNull();
+    expect(recap.deltaNoise).not.toBeNull();
+    expect(recap.deltaNoise?.winrate).toBeGreaterThan(0);
   });
 
   test("baselineDelta is exposed once both sides clear the gate", () => {
@@ -129,6 +152,7 @@ describe("buildSessionRecap", () => {
     expect(recap.session?.stats.kda).not.toBeNull();
     expect(recap.baseline?.kda).toBeNull();
     expect(recap.baselineDelta?.kda).toBeNull();
+    expect(recap.deltaNoise?.kda).toBeNull();
   });
 
   test("lists every session most recent first, with its record", () => {
@@ -172,5 +196,32 @@ describe("buildSessionRecap", () => {
 
   test("lists no session at all with no match", () => {
     expect(buildSessionRecap([]).sessions).toEqual([]);
+  });
+
+  test("bands every delta it exposes, on the delta's own scale", () => {
+    const baseline = varied("2026-09-01T10:00:00.000Z", 20, "b");
+    const recap = buildSessionRecap([...baseline, ...varied("2026-09-02T20:00:00.000Z", 5, "s")]);
+    expect(recap.baselineDelta).not.toBeNull();
+    expect(recap.deltaNoise).not.toBeNull();
+    expect(recap.deltaNoise?.winrate).toBeGreaterThan(0);
+    expect(recap.deltaNoise?.kda).toBeGreaterThan(0);
+    expect(recap.deltaNoise?.deathsPer10Min).toBeGreaterThan(0);
+    expect(recap.deltaNoise?.xpPerMinute).toBeGreaterThan(0);
+  });
+
+  test("the band shrinks as the session grows", () => {
+    const baseline = varied("2026-09-01T10:00:00.000Z", 20, "b");
+    const short = buildSessionRecap([...baseline, ...varied("2026-09-02T20:00:00.000Z", 3, "s")]);
+    const longer = buildSessionRecap([...baseline, ...varied("2026-09-02T20:00:00.000Z", 5, "s")]);
+    expect(short.deltaNoise?.winrate).toBeGreaterThan(longer.deltaNoise?.winrate ?? 0);
+    // With a ~50% baseline, a handful of games is tens of winrate points of noise.
+    expect(longer.deltaNoise?.winrate).toBeGreaterThan(0.4);
+  });
+
+  test("an all-win baseline keeps a non-zero band instead of faking certainty", () => {
+    const baseline = block("2026-09-01T10:00:00.000Z", 20, "b", true);
+    const recap = buildSessionRecap([...baseline, ...block("2026-09-02T20:00:00.000Z", 5, "s", false)]);
+    expect(recap.baseline?.winrate).toBe(1);
+    expect(recap.deltaNoise?.winrate).toBeGreaterThan(0);
   });
 });

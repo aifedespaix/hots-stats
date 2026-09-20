@@ -2,6 +2,7 @@ import {
   PROGRESSION_MIN_MATCHES,
   clusterSessions,
   type SessionBaselineDelta,
+  type SessionDeltaNoise,
   type SessionRecap,
   type SessionRecapResponse,
   type SessionRecapStats,
@@ -77,6 +78,102 @@ function computeDelta(
   };
 }
 
+/** Confidence level for the session delta band: 1.96 standard errors is a 95%
+ * two-sided interval, the same level as the Wilson bounds used elsewhere, so
+ * "surprising" means the same thing across the app. */
+const SESSION_DELTA_Z = 1.96;
+
+type DeltaMetric = "winrate" | "kda" | "deathsPer10Min" | "xpPerMinute";
+
+/** One match's own value for a delta metric, so the band can be estimated from
+ * the spread of single matches instead of the aggregate (which hides it). Null
+ * when the metric is undefined for that match -- no death for KDA, no duration
+ * for a rate -- and those matches are then left out of the estimate. */
+function perMatchMetric(entry: SessionMatchInput, metric: DeltaMetric): number | null {
+  switch (metric) {
+    case "winrate":
+      return entry.winner ? 1 : 0;
+    case "kda":
+      return entry.deaths > 0 ? (entry.kills + entry.assists) / entry.deaths : null;
+    case "deathsPer10Min":
+      return entry.durationSeconds > 0 ? entry.deaths / (entry.durationSeconds / 600) : null;
+    case "xpPerMinute":
+      return entry.durationSeconds > 0
+        ? entry.experienceContribution / (entry.durationSeconds / 60)
+        : null;
+  }
+}
+
+/** Sample standard deviation (n-1), or null below two values: one match says
+ * nothing about spread, and returning 0 would fake total certainty. */
+function sampleSd(values: number[]): number | null {
+  if (values.length < 2) return null;
+  const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+  const squares = values.reduce((sum, value) => sum + (value - mean) ** 2, 0);
+  return Math.sqrt(squares / (values.length - 1));
+}
+
+/** Bernoulli spread with Laplace smoothing, so a baseline that won (or lost)
+ * every game keeps a non-zero band instead of marking every session a real
+ * change against a certainty it never had. */
+function proportionSd(wins: number, games: number): number {
+  const p = (wins + 1) / (games + 2);
+  return Math.sqrt(p * (1 - p));
+}
+
+/**
+ * 95% half-width of the gap chance alone would produce between a session and its
+ * baseline. The null is "the session is just n more draws from the player's usual
+ * process", so the spread comes from the baseline's own matches: using the
+ * session's own spread would be circular (it is the thing being tested) and
+ * undefined for a one-game session. The two-sample standard error
+ * `sd * sqrt(1/nSession + 1/nBaseline)` shrinks as either side grows, so the band
+ * is widest exactly where the least is known. Null when either side has too few
+ * usable matches to say anything.
+ *
+ * The KDA band reads the per-match ratio's spread, an approximation of the
+ * ratio-of-sums delta: it is a "is this gap bigger than my usual variance?"
+ * guard, not a formal test of the KDA estimator.
+ */
+function noiseHalfWidth(
+  metric: DeltaMetric,
+  session: SessionMatchInput[],
+  baseline: SessionMatchInput[],
+): number | null {
+  const sessionValues = session
+    .map((entry) => perMatchMetric(entry, metric))
+    .filter((value): value is number => value !== null);
+  const baselineValues = baseline
+    .map((entry) => perMatchMetric(entry, metric))
+    .filter((value): value is number => value !== null);
+  if (sessionValues.length === 0 || baselineValues.length < 2) return null;
+  const sd =
+    metric === "winrate"
+      ? proportionSd(
+          baselineValues.reduce((sum, value) => sum + value, 0),
+          baselineValues.length,
+        )
+      : sampleSd(baselineValues);
+  if (sd === null) return null;
+  return SESSION_DELTA_Z * sd * Math.sqrt(1 / sessionValues.length + 1 / baselineValues.length);
+}
+
+/** The four noise half-widths, field-aligned with `computeDelta`: every delta the
+ * response exposes has a band to read it against. kda stays null exactly when the
+ * delta does -- with no death on either side there is no ratio to put a band
+ * around. */
+function computeDeltaNoise(
+  session: SessionMatchInput[],
+  baselineMatches: SessionMatchInput[],
+): SessionDeltaNoise {
+  return {
+    winrate: noiseHalfWidth("winrate", session, baselineMatches),
+    kda: noiseHalfWidth("kda", session, baselineMatches),
+    deathsPer10Min: noiseHalfWidth("deathsPer10Min", session, baselineMatches),
+    xpPerMinute: noiseHalfWidth("xpPerMinute", session, baselineMatches),
+  };
+}
+
 function buildSession(matches: SessionMatchInput[], stats: SessionRecapStats): SessionRecap {
   const first = matches[0]!;
   const last = matches[matches.length - 1]!;
@@ -117,9 +214,16 @@ function summarizeSession(matches: SessionMatchInput[]): SessionSummary {
 /**
  * Builds the E1 recap: the selected session, every selectable session for the
  * picker (most recent first), the player's baseline (every scope match strictly
- * before the session), and the deltas between them. The deltas are exposed only
- * when BOTH sides clear PROGRESSION_MIN_MATCHES, so the endpoint never claims a
- * trend on a thin sample.
+ * before the session), and the deltas between them.
+ *
+ * A thin sample no longer suppresses the deltas -- a player who rarely plays 20
+ * games in one sitting would never see a comparison at all. The deltas are
+ * exposed as soon as there is a session AND a non-empty baseline, and always
+ * come with `deltaNoise`: the gap chance alone would produce at that sample
+ * size. The UI colours a delta only when it clears that band, so more data is
+ * visible without a 5-game session being presented as proof.
+ * PROGRESSION_MIN_MATCHES still drives `insufficientSample` as the "both sides
+ * are comfortable" notice.
  */
 export function buildSessionRecap(matches: SessionMatchInput[], at?: string): SessionRecapCore {
   const ordered = chronological(matches);
@@ -132,6 +236,7 @@ export function buildSessionRecap(matches: SessionMatchInput[], at?: string): Se
       sessions,
       baseline: null,
       baselineDelta: null,
+      deltaNoise: null,
       insufficientSample: true,
     };
   }
@@ -139,6 +244,9 @@ export function buildSessionRecap(matches: SessionMatchInput[], at?: string): Se
   const baselineMatches = ordered.filter((entry) => Date.parse(entry.playedAt) < sessionStart);
   const stats = computeSessionStats(session);
   const baseline = computeSessionStats(baselineMatches);
+  // With no pre-session match there is no baseline at all: show the session
+  // alone rather than a delta invented from an empty mean.
+  const comparable = baselineMatches.length > 0;
   const sufficientSample =
     stats.gamesPlayed >= PROGRESSION_MIN_MATCHES &&
     baseline.gamesPlayed >= PROGRESSION_MIN_MATCHES;
@@ -146,7 +254,8 @@ export function buildSessionRecap(matches: SessionMatchInput[], at?: string): Se
     session: buildSession(session, stats),
     sessions,
     baseline,
-    baselineDelta: sufficientSample ? computeDelta(stats, baseline) : null,
+    baselineDelta: comparable ? computeDelta(stats, baseline) : null,
+    deltaNoise: comparable ? computeDeltaNoise(session, baselineMatches) : null,
     insufficientSample: !sufficientSample,
   };
 }

@@ -4,6 +4,7 @@ import { formatDate } from "~/composables/useFormat";
 import {
   SESSION_PICKER_WINDOW_DAYS,
   deltaTone,
+  formatDeltaNoise,
   formatSessionOption,
   formatSignedNumber,
   selectableSessions,
@@ -23,6 +24,24 @@ describe("deltaTone", () => {
   test("lower-is-better (deaths) is green only when the delta is negative", () => {
     expect(deltaTone(-1.2, "lower")).toBe("success");
     expect(deltaTone(1.2, "lower")).toBe("danger");
+  });
+
+  test("a gap inside the noise band is chance, not a result", () => {
+    expect(deltaTone(0.2, "higher", 0.3)).toBe("default");
+    expect(deltaTone(-0.2, "lower", 0.3)).toBe("default");
+  });
+
+  test("a gap past the band keeps its direction colour", () => {
+    expect(deltaTone(0.4, "higher", 0.3)).toBe("success");
+    expect(deltaTone(-0.4, "higher", 0.3)).toBe("danger");
+  });
+
+  test("exactly at the band edge is still chance", () => {
+    expect(deltaTone(0.3, "higher", 0.3)).toBe("default");
+  });
+
+  test("an unknown band is not read as a zero-width one", () => {
+    expect(deltaTone(0.4, "higher", null)).toBe("default");
   });
 });
 
@@ -70,6 +89,19 @@ describe("selectableSessions", () => {
 
   test("returns nothing for no session", () => {
     expect(selectableSessions([], null, NOW)).toEqual([]);
+  });
+});
+
+describe("formatDeltaNoise", () => {
+  test("formats each metric on its own scale", () => {
+    expect(formatDeltaNoise(0.481, "winrate")).toBe("± 48 pts");
+    expect(formatDeltaNoise(0.43, "kda")).toBe("± 0.43");
+    expect(formatDeltaNoise(1.24, "deathsPer10Min")).toBe("± 1.2");
+    expect(formatDeltaNoise(44.6, "xpPerMinute")).toBe("± 45");
+  });
+
+  test("an unknown band has no label rather than a fake zero", () => {
+    expect(formatDeltaNoise(null, "winrate")).toBe("");
   });
 });
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { PROGRESSION_MIN_MATCHES, type SessionRecapResponse } from "@hots-stats/shared-types";
+import type { SessionRecapResponse } from "@hots-stats/shared-types";
 
 const props = withDefaults(
   defineProps<{ recap?: SessionRecapResponse | null; loading?: boolean; error?: boolean }>(),
@@ -49,8 +49,8 @@ const recordTone = computed(() =>
         Session terminée sur une {{ lastResult ? "victoire" : "défaite" }}.
       </p>
       <p v-if="recap?.insufficientSample" class="text-xs text-muted">
-        Échantillon de {{ stats.gamesPlayed }} partie{{ stats.gamesPlayed > 1 ? "s" : "" }} — au
-        moins {{ PROGRESSION_MIN_MATCHES }} sont nécessaires pour comparer à ta moyenne.
+        Échantillon de {{ stats.gamesPlayed }} partie{{ stats.gamesPlayed > 1 ? "s" : "" }} — le
+        récap affiche les écarts avec leur marge de bruit, pas comme un verdict.
       </p>
       <UiArrowLink to="/session" class="text-xs">Voir le récap complet</UiArrowLink>
     </div>

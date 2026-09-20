@@ -4,9 +4,20 @@ import type { Tone } from "./tone";
 
 /** Colour of a session-vs-baseline delta: green only when the metric moved in
  * the direction that is good for the player. betterWhen names that direction
- * explicitly, so a lower-is-better metric (deaths) is not coloured backwards. */
-export function deltaTone(delta: number | null, betterWhen: "higher" | "lower"): Tone {
+ * explicitly, so a lower-is-better metric (deaths) is not coloured backwards.
+ *
+ * `noise` is the metric's half-width from chance alone (the API's `deltaNoise`).
+ * A gap inside it is not a result, so it stays neutral; passing `null` means the
+ * band is unknown, which must not be read as a zero-width one either. Omitting
+ * the argument keeps the plain direction colouring for callers with no band. */
+export function deltaTone(
+  delta: number | null,
+  betterWhen: "higher" | "lower",
+  noise?: number | null,
+): Tone {
   if (delta === null || delta === 0) return "default";
+  if (noise === null) return "default";
+  if (typeof noise === "number" && Math.abs(delta) <= noise) return "default";
   const improving = betterWhen === "higher" ? delta > 0 : delta < 0;
   return improving ? "success" : "danger";
 }
@@ -16,6 +27,27 @@ export function deltaTone(delta: number | null, betterWhen: "higher" | "lower"):
 export function formatSignedNumber(value: number, digits = 1): string {
   const rounded = Number(value.toFixed(digits));
   return (rounded > 0 ? "+" : "") + rounded.toFixed(digits);
+}
+
+/** The four session-recap delta metrics, so a noise band is formatted on the
+ * same scale as the delta shown next to it. */
+export type SessionDeltaMetric = "winrate" | "kda" | "deathsPer10Min" | "xpPerMinute";
+
+/** The band under a delta tile: "± 8 pts" / "± 0.43" / "± 1.2" / "± 45", on the
+ * delta's own scale. Empty when the band is unknown, so `UiStatTile` drops the
+ * sublabel instead of printing a zero it never measured. */
+export function formatDeltaNoise(halfWidth: number | null, metric: SessionDeltaMetric): string {
+  if (halfWidth === null) return "";
+  switch (metric) {
+    case "winrate":
+      return "± " + Math.round(halfWidth * 100) + " pts";
+    case "kda":
+      return "± " + halfWidth.toFixed(2);
+    case "deathsPer10Min":
+      return "± " + halfWidth.toFixed(1);
+    case "xpPerMinute":
+      return "± " + Math.round(halfWidth);
+  }
 }
 
 /** How far back the /session picker reaches by default. */
