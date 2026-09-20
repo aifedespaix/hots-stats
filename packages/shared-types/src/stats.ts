@@ -627,7 +627,9 @@ export interface ContextBreakdown {
 
 /** Response for `GET /stats/context` (C4). `tzOffsetMinutes` is the offset
  * east of UTC the buckets were computed in, echoed back so the UI can label
- * them. */
+ * them. A personal response carries all six breakdowns; the global scope has no
+ * subject, so it carries `teamComposition` only (one sample per team per match,
+ * `matches` = distinct matches). */
 export interface ContextResponse {
   scope: "personal" | "global";
   matches: number;

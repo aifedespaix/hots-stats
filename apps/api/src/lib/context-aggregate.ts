@@ -20,6 +20,15 @@ export interface ContextMatchInput {
   teamRoleCounts: Record<string, number>;
 }
 
+/** One team of one match: the sample the *global* team-composition breakdown
+ * counts. The personal breakdown reads a single subject team per match (one
+ * ContextMatchInput); globally both sides of a match are independent samples. */
+export interface CompositionTeamInput {
+  matchId: string;
+  winner: boolean;
+  teamRoleCounts: Record<string, number>;
+}
+
 const ROLE_ORDER = ["Tank", "Bruiser", "RangedAssassin", "MeleeAssassin", "Healer", "Support", "unknown"] as const;
 const ROLE_LABELS: Record<string, string> = {
   Tank: "Tank",
@@ -59,7 +68,13 @@ function localDate(playedAt: string, tzOffsetMinutes: number): Date {
   return new Date(Date.parse(playedAt) + tzOffsetMinutes * 60_000);
 }
 
-function bucket(key: string, label: string, matches: ContextMatchInput[]): ContextBucket {
+/** Anything carrying a win flag can be bucketed: the personal context match
+ * and the global per-team sample both qualify. */
+interface MatchOutcome {
+  winner: boolean;
+}
+
+function bucket(key: string, label: string, matches: MatchOutcome[]): ContextBucket {
   const gamesPlayed = matches.length;
   const wins = matches.filter((entry) => entry.winner).length;
   return {
@@ -144,7 +159,7 @@ function compositionLabel(counts: Record<string, number>): string {
   return parts.length > 0 ? parts.join(" · ") : "Composition inconnue";
 }
 
-function compositionBreakdown(matches: ContextMatchInput[]): ContextBreakdown {
+function compositionBreakdown(matches: CompositionTeamInput[]): ContextBreakdown {
   const grouped = groupBy(matches, (entry) => compositionKey(entry.teamRoleCounts));
   const buckets = [...grouped.entries()]
     .map(([key, list]) => bucket(key, compositionLabel(list[0]?.teamRoleCounts ?? {}), list))
@@ -174,5 +189,24 @@ export function buildContextResponse(
       patchBreakdown(ordered),
       compositionBreakdown(ordered),
     ],
+  };
+}
+
+/**
+ * Full C4 response for the *global* team-composition view. The community has no
+ * subject row, so only `teamComposition` is derived -- one sample per team per
+ * match (both sides, unlike the personal path) -- and `matches` counts the
+ * distinct matches those teams played. The other five dimensions stay
+ * personal-only (see GET /stats/context).
+ */
+export function buildCompositionResponse(
+  teams: CompositionTeamInput[],
+  tzOffsetMinutes: number,
+): ContextResponse {
+  return {
+    scope: "global",
+    matches: new Set(teams.map((team) => team.matchId)).size,
+    tzOffsetMinutes,
+    breakdowns: [compositionBreakdown(teams)],
   };
 }

@@ -170,16 +170,12 @@ export const statsRoute = new Hono<Env>()
     const parsed = contextQuerySchema.safeParse(c.req.query());
     if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
 
-    // Context buckets are personal for the same reason as /patterns, /trend and
-    // /drivers: team composition needs a subject. An explicit global scope is
-    // refused; an omitted scope falls back to the caller's own accounts.
+    // The one progression endpoint that also serves the global scope: team
+    // composition is the single dimension with no subject requirement, so
+    // scope=global returns just that dimension over the community's matches.
+    // Every other dimension stays personal, as do /patterns, /trend, /drivers,
+    // /killers and /session.
     const scope = withStatsScope(c.get("scope"), parsed.data.scope ?? "personal");
-    if (scope.mode === "global") {
-      return c.json(
-        { error: "Le contexte de victoire n'est disponible que pour ton profil (scope=personal)." },
-        400,
-      );
-    }
 
     return c.json(
       await getContext(

@@ -2,7 +2,12 @@ import { db, heroes, matchPlayers, matches } from "@hots-stats/db";
 import type { ContextResponse, GameMode } from "@hots-stats/shared-types";
 import { and, asc, eq, gte, inArray, lte } from "drizzle-orm";
 import { type Scope, scopeConditions } from "../lib/account-selection";
-import { buildContextResponse, type ContextMatchInput } from "../lib/context-aggregate";
+import {
+  buildCompositionResponse,
+  buildContextResponse,
+  type CompositionTeamInput,
+  type ContextMatchInput,
+} from "../lib/context-aggregate";
 import { type RosterPlayer, resolveSubject } from "../lib/pattern-aggregate";
 
 export interface ContextFilters {
@@ -21,18 +26,19 @@ export interface ContextFilters {
  * match can never be selected. Team-composition counts are taken from the
  * subject's own team only. The bucketing maths is pure (see
  * ../lib/context-aggregate.ts).
+ *
+ * The global scope has no subject row, so it only serves the one dimension
+ * that survives without one: team composition, counted once per team per match
+ * (see getGlobalComposition). The other five dimensions stay personal-only.
  */
 export async function getContext(
   scope: Scope,
   filters: ContextFilters,
   tzOffsetMinutes: number,
 ): Promise<ContextResponse> {
-  const conditions = scopeConditions([], scope, matchPlayers.battletag);
-  if (filters.mode && filters.mode.length > 0) conditions.push(inArray(matches.gameMode, filters.mode));
-  if (filters.heroId) conditions.push(eq(matchPlayers.heroId, filters.heroId));
-  if (filters.mapId) conditions.push(eq(matches.mapId, filters.mapId));
-  if (filters.from) conditions.push(gte(matches.playedAt, new Date(filters.from)));
-  if (filters.to) conditions.push(lte(matches.playedAt, new Date(filters.to)));
+  if (scope.mode === "global") return getGlobalComposition(filters, tzOffsetMinutes);
+
+  const conditions = contextConditions(scope, filters);
 
   const candidateRows = await db
     .select({
@@ -109,4 +115,66 @@ export async function getContext(
   }));
 
   return buildContextResponse(inputs, scope.mode, tzOffsetMinutes);
+}
+
+/** The literal the global path passes to contextConditions; scopeConditions
+ * contributes no SQL condition for it. */
+const GLOBAL_SCOPE: Scope = { mode: "global" };
+
+/** Every filter shared by the personal and global paths, scope included. The
+ * global scope adds no condition, so the same builder serves both. */
+function contextConditions(scope: Scope, filters: ContextFilters) {
+  const conditions = scopeConditions([], scope, matchPlayers.battletag);
+  if (filters.mode && filters.mode.length > 0) conditions.push(inArray(matches.gameMode, filters.mode));
+  if (filters.heroId) conditions.push(eq(matchPlayers.heroId, filters.heroId));
+  if (filters.mapId) conditions.push(eq(matches.mapId, filters.mapId));
+  if (filters.from) conditions.push(gte(matches.playedAt, new Date(filters.from)));
+  if (filters.to) conditions.push(lte(matches.playedAt, new Date(filters.to)));
+  return conditions;
+}
+
+/**
+ * Global C4: the community has no subject row, so only the team-composition
+ * dimension is served -- the role counts of every team of every filtered match,
+ * one sample per (match, team). Both sides come from the same rows, so this is
+ * a single grouped read; `matches` in the response is the distinct match count,
+ * not the sample count.
+ */
+async function getGlobalComposition(
+  filters: ContextFilters,
+  tzOffsetMinutes: number,
+): Promise<ContextResponse> {
+  const conditions = contextConditions(GLOBAL_SCOPE, filters);
+
+  const rows = await db
+    .select({
+      matchId: matchPlayers.matchId,
+      team: matchPlayers.team,
+      winner: matchPlayers.winner,
+      role: heroes.role,
+    })
+    .from(matchPlayers)
+    .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
+    .innerJoin(heroes, eq(heroes.id, matchPlayers.heroId))
+    .where(conditions.length > 0 ? and(...conditions) : undefined);
+
+  if (rows.length === 0) return buildCompositionResponse([], tzOffsetMinutes);
+
+  // One sample per (match, team): the two sides of a match are independent
+  // compositions, so both are counted -- unlike the personal path, which keeps
+  // only the subject's own team.
+  const teamsByKey = new Map<string, CompositionTeamInput>();
+  for (const row of rows) {
+    const key = row.matchId + "|" + row.team;
+    const sample = teamsByKey.get(key) ?? {
+      matchId: row.matchId,
+      winner: row.winner,
+      teamRoleCounts: {} as Record<string, number>,
+    };
+    const role = row.role ?? "unknown";
+    sample.teamRoleCounts[role] = (sample.teamRoleCounts[role] ?? 0) + 1;
+    teamsByKey.set(key, sample);
+  }
+
+  return buildCompositionResponse([...teamsByKey.values()], tzOffsetMinutes);
 }
