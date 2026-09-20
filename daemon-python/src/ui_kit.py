@@ -90,3 +90,36 @@ def set_dpi_awareness() -> None:
         ctypes.windll.user32.SetProcessDPIAware()
     except (AttributeError, OSError) as err:
         logger.debug("SetProcessDPIAware also failed: %s", err)
+
+
+@dataclass(frozen=True)
+class Palette:
+    """A small, dark, "gamer tool" color set. Values match `gui.py`'s
+    previous module-level color constants exactly (this is a no-visual-
+    change extraction); B2 (widget kit) is where `warn` and a higher-
+    contrast muted color get added, per the spec's Decision on scope."""
+
+    bg: str
+    panel: str
+    field_bg: str
+    field_bg_focus: str
+    text: str
+    text_muted: str
+    accent: str
+    ok: str
+    error: str
+    neutral: str
+
+
+DEFAULT_PALETTE = Palette(
+    bg="#1c1f2e",
+    panel="#252a3d",
+    field_bg="#2f3550",
+    field_bg_focus="#394069",
+    text="#e8eaf6",
+    text_muted="#8b90ad",
+    accent="#6c8cff",
+    ok="#4cd97b",
+    error="#ef5b5b",
+    neutral="#8b90ad",
+)

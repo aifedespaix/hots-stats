@@ -97,3 +97,18 @@ def test_set_dpi_awareness_never_raises_even_if_both_calls_fail(monkeypatch):
     )
     with patch("ctypes.windll", fake_windll, create=True):
         ui_kit.set_dpi_awareness()  # must not raise
+
+
+def test_default_palette_matches_todays_hardcoded_colors():
+    assert ui_kit.DEFAULT_PALETTE == ui_kit.Palette(
+        bg="#1c1f2e",
+        panel="#252a3d",
+        field_bg="#2f3550",
+        field_bg_focus="#394069",
+        text="#e8eaf6",
+        text_muted="#8b90ad",
+        accent="#6c8cff",
+        ok="#4cd97b",
+        error="#ef5b5b",
+        neutral="#8b90ad",
+    )
