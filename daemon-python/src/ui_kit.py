@@ -60,3 +60,33 @@ def dpi_scale_factor(root: _WinfoFpixels) -> float:
     `root` is anything exposing `winfo_fpixels` (a real `tk.Tk`/`tk.Misc` in
     production; a stub in tests) so this stays headless-testable."""
     return root.winfo_fpixels("1i") / 96.0
+
+
+# PROCESS_PER_MONITOR_DPI_AWARE, from Windows' shcore.h — not imported from
+# anywhere since this repo has no Windows-specific typing stubs; the literal
+# is documented stable API surface (Per-Monitor-V2 DPI awareness).
+_PROCESS_PER_MONITOR_DPI_AWARE = 2
+
+
+def set_dpi_awareness() -> None:
+    """Opts the process into Per-Monitor-V2 DPI awareness, with a fallback
+    to the older system-DPI-only API, so the settings window isn't
+    bitmap-scaled (blurry) on a 125%/150% display. Must be called before
+    any `tk.Tk()` is created (Windows ignores the call afterwards) — see
+    `main.py`. Best-effort and never fatal: an unsupported/older Windows,
+    or a process that already had awareness set by something else, is not
+    an error worth stopping the daemon over."""
+    if sys.platform != "win32":
+        return
+    import ctypes
+
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(_PROCESS_PER_MONITOR_DPI_AWARE)
+        return
+    except (AttributeError, OSError) as err:
+        logger.debug("SetProcessDpiAwareness unavailable, falling back: %s", err)
+
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()
+    except (AttributeError, OSError) as err:
+        logger.debug("SetProcessDPIAware also failed: %s", err)

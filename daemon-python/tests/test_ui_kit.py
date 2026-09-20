@@ -1,3 +1,5 @@
+import sys
+
 from src import ui_kit
 
 
@@ -42,3 +44,56 @@ def test_dpi_scale_factor_at_96_dpi_is_1_0():
 
 def test_dpi_scale_factor_at_150_percent_scaling():
     assert ui_kit.dpi_scale_factor(_FakeWinfo(144.0)) == 1.5
+
+
+import types
+from unittest.mock import patch
+
+
+def test_set_dpi_awareness_is_a_noop_off_windows(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "linux")
+    ui_kit.set_dpi_awareness()  # must not raise even though ctypes.windll doesn't exist on Linux
+
+
+def test_set_dpi_awareness_calls_per_monitor_v2_on_windows(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "win32")
+    fake_shcore = types.SimpleNamespace(SetProcessDpiAwareness=lambda value: setattr(
+        fake_shcore, "called_with", value
+    ))
+    fake_windll = types.SimpleNamespace(shcore=fake_shcore, user32=types.SimpleNamespace())
+    with patch("ctypes.windll", fake_windll, create=True):
+        ui_kit.set_dpi_awareness()
+    assert fake_shcore.called_with == 2  # PROCESS_PER_MONITOR_DPI_AWARE
+
+
+def test_set_dpi_awareness_falls_back_to_set_process_dpi_aware(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "win32")
+
+    def _raise(_value):
+        raise AttributeError("no shcore on this Windows version")
+
+    calls = []
+    fake_windll = types.SimpleNamespace(
+        shcore=types.SimpleNamespace(SetProcessDpiAwareness=_raise),
+        user32=types.SimpleNamespace(SetProcessDPIAware=lambda: calls.append(True)),
+    )
+    with patch("ctypes.windll", fake_windll, create=True):
+        ui_kit.set_dpi_awareness()
+    assert calls == [True]
+
+
+def test_set_dpi_awareness_never_raises_even_if_both_calls_fail(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "win32")
+
+    def _raise_shcore(_value):
+        raise OSError("access denied")
+
+    def _raise_user32():
+        raise OSError("access denied")
+
+    fake_windll = types.SimpleNamespace(
+        shcore=types.SimpleNamespace(SetProcessDpiAwareness=_raise_shcore),
+        user32=types.SimpleNamespace(SetProcessDPIAware=_raise_user32),
+    )
+    with patch("ctypes.windll", fake_windll, create=True):
+        ui_kit.set_dpi_awareness()  # must not raise
