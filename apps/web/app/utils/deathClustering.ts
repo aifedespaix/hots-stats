@@ -118,3 +118,25 @@ export function isClusterHighlighted(
   if (atSeconds === null || atSeconds === undefined || !Number.isFinite(atSeconds)) return false;
   return Math.abs(cluster.atSeconds - atSeconds) <= HIGHLIGHT_WINDOW_SECONDS;
 }
+
+/** The deaths a cluster stands for, so a marker can open the full recap of what
+ * it plots: a "death" point names its own victim, a "kill" point names the
+ * killer and matches every death they were credited for at that instant. */
+export function deathsForCluster(
+  cluster: SpatialEventCluster,
+  deaths: readonly MatchTimelineDeath[],
+): MatchTimelineDeath[] {
+  const matched: MatchTimelineDeath[] = [];
+
+  for (const point of cluster.points) {
+    for (const death of deaths) {
+      if (death.atSeconds !== point.atSeconds) continue;
+      const isVictim = point.kind === "death" && death.battletag === point.battletag;
+      const isKiller = point.kind === "kill" && (death.killers ?? []).includes(point.battletag);
+      if ((!isVictim && !isKiller) || matched.includes(death)) continue;
+      matched.push(death);
+    }
+  }
+
+  return matched;
+}

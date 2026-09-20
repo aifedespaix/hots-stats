@@ -3,8 +3,12 @@ import type { Grid } from "@hots-stats/shared-types";
 import { sumGrids } from "@hots-stats/shared-types";
 import { useMatchSpatialSlot } from "~/composables/useMatchSpatialSlot";
 import { HISTORY_ROLE_LABELS, useSpatialHistorySlot } from "~/composables/useSpatialHistorySlot";
-import type { MatchTimelineDeath } from "~/types/coach";
-import type { MatchSlotHero } from "~/types/spatial";
+import type {
+  MatchTimelineDeath,
+  MatchTimelineLevelSnapshot,
+  MatchTimelineStructureEvent,
+} from "~/types/coach";
+import type { MatchHeroTrajectory, MatchSlotHero } from "~/types/spatial";
 import { exportSpatialImageElement } from "~/utils/exportSpatialImage";
 import type { HeatmapPlayerLabels } from "~/utils/heatmapCellDetails";
 import { SLOT_A_RGB, SLOT_B_RGB } from "~/utils/spatialColors";
@@ -36,9 +40,42 @@ const props = withDefaults(
     myBattletags?: string[];
     /** Timeline scrub position, in seconds, forwarded to every heatmap so the match page's chronology can highlight the deaths around it. */
     highlightAtSeconds?: number | null;
+    /** The rest of the match context a kill/death recap needs: level readings,
+     * structure destructions, hero paths, match length, the viewer's side and
+     * every participant. All optional -- an aggregate or older match simply
+     * shows fewer recap lines (see `eventRecap.ts`). */
+    levelSnapshots?: MatchTimelineLevelSnapshot[];
+    structureEvents?: MatchTimelineStructureEvent[];
+    trajectories?: MatchHeroTrajectory[];
+    durationSeconds?: number;
+    viewerTeam?: 0 | 1 | null;
+    players?: { battletag: string; team: number }[];
   }>(),
-  { matchHeroes: () => [], matchDeaths: () => [], myBattletags: () => [], highlightAtSeconds: null },
+  {
+    matchHeroes: () => [],
+    matchDeaths: () => [],
+    myBattletags: () => [],
+    highlightAtSeconds: null,
+    levelSnapshots: () => [],
+    structureEvents: () => [],
+    trajectories: () => [],
+    durationSeconds: 0,
+    viewerTeam: null,
+    players: () => [],
+  },
 );
+
+/** Forwarded to every heatmap instance -- one object so the four call sites
+ * below can't drift on which recap inputs they pass. */
+const recapContext = computed(() => ({
+  allDeaths: props.matchDeaths,
+  levelSnapshots: props.levelSnapshots,
+  structureEvents: props.structureEvents,
+  trajectories: props.trajectories,
+  durationSeconds: props.durationSeconds,
+  viewerTeam: props.viewerTeam,
+  players: props.players,
+}));
 
 const allowMatchScope = computed(() => props.matchHeroes.length > 0);
 const myBattletagRef = computed(() => props.myBattletag ?? null);
@@ -256,6 +293,7 @@ function exportView(heatmapViewRef: { mapContainerEl: HTMLElement | null } | nul
         :deaths="hoverA?.deaths"
         :player-labels="hoverA?.playerLabels"
         :active-battletags="hoverA?.battletags"
+        v-bind="recapContext"
         :match-count="matchCountA"
       />
 
@@ -343,6 +381,7 @@ function exportView(heatmapViewRef: { mapContainerEl: HTMLElement | null } | nul
           :deaths="hoverOverlay?.deaths"
           :player-labels="hoverOverlay?.playerLabels"
           :active-battletags="hoverOverlay?.battletags"
+          v-bind="recapContext"
           :match-count="matchCountOverlay"
         />
       </template>
@@ -368,6 +407,7 @@ function exportView(heatmapViewRef: { mapContainerEl: HTMLElement | null } | nul
             :deaths="hoverA?.deaths"
             :player-labels="hoverA?.playerLabels"
             :active-battletags="hoverA?.battletags"
+            v-bind="recapContext"
             :match-count="matchCountA"
           />
         </div>
@@ -392,6 +432,7 @@ function exportView(heatmapViewRef: { mapContainerEl: HTMLElement | null } | nul
             :deaths="hoverB?.deaths"
             :player-labels="hoverB?.playerLabels"
             :active-battletags="hoverB?.battletags"
+            v-bind="recapContext"
             :match-count="matchCountB"
           />
         </div>

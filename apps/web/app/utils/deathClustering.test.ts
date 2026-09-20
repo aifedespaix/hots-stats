@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { MatchTimelineDeath } from "~/types/coach";
-import { buildSpatialEventPoints, clusterSpatialEvents, isClusterHighlighted, type SpatialEventPoint } from "./deathClustering";
+import {
+  buildSpatialEventPoints,
+  clusterSpatialEvents,
+  deathsForCluster,
+  isClusterHighlighted,
+  type SpatialEventCluster,
+  type SpatialEventPoint,
+} from "./deathClustering";
 
 function point(overrides: Partial<SpatialEventPoint> = {}): SpatialEventPoint {
   return { kind: "death", battletag: "Foo#1111", atSeconds: 0, x: 0.5, y: 0.5, layer: null, ...overrides };
@@ -93,5 +100,52 @@ describe("isClusterHighlighted", () => {
   it("highlights nothing while the scrubber has no position", () => {
     expect(isClusterHighlighted(cluster, null)).toBe(false);
     expect(isClusterHighlighted(cluster, undefined)).toBe(false);
+  });
+});
+
+describe("deathsForCluster", () => {
+  const deaths: MatchTimelineDeath[] = [
+    { battletag: "Victim#1", team: 0, atSeconds: 100, x: 0.2, y: 0.3, killers: ["Killer#1"] },
+    { battletag: "Victim#2", team: 1, atSeconds: 100, x: 0.21, y: 0.3, killers: ["Killer#1", "Killer#2"] },
+    { battletag: "Victim#3", team: 0, atSeconds: 400, x: 0.2, y: 0.3, killers: ["Killer#1"] },
+  ];
+
+  function cluster(overrides: Partial<SpatialEventCluster>): SpatialEventCluster {
+    return { kind: "death", x: 0.2, y: 0.3, atSeconds: 100, points: [], ...overrides };
+  }
+
+  it("maps a death cluster back to the victims it plots", () => {
+    const result = deathsForCluster(
+      cluster({
+        points: [
+          { kind: "death", battletag: "Victim#1", atSeconds: 100, x: 0.2, y: 0.3, layer: null },
+          { kind: "death", battletag: "Victim#2", atSeconds: 100, x: 0.21, y: 0.3, layer: null },
+        ],
+      }),
+      deaths,
+    );
+    expect(result.map((d) => d.battletag)).toEqual(["Victim#1", "Victim#2"]);
+  });
+
+  it("maps a kill cluster back to every death the killer was credited for, at that instant", () => {
+    const result = deathsForCluster(
+      cluster({ kind: "kill", points: [{ kind: "kill", battletag: "Killer#1", atSeconds: 100, x: 0.2, y: 0.3, layer: null }] }),
+      deaths,
+    );
+    expect(result.map((d) => d.battletag)).toEqual(["Victim#1", "Victim#2"]);
+  });
+
+  it("never repeats a death shared by several of the cluster's points", () => {
+    const result = deathsForCluster(
+      cluster({
+        kind: "kill",
+        points: [
+          { kind: "kill", battletag: "Killer#1", atSeconds: 100, x: 0.2, y: 0.3, layer: null },
+          { kind: "kill", battletag: "Killer#2", atSeconds: 100, x: 0.21, y: 0.3, layer: null },
+        ],
+      }),
+      deaths,
+    );
+    expect(result).toHaveLength(2);
   });
 });

@@ -17,11 +17,30 @@ const props = withDefaults(
     aspectRatio?: number;
     /** Timeline scrub position, in seconds; clusters within the clustering window of it are emphasised. Null = nothing highlighted. */
     highlightAtSeconds?: number | null;
+    /** The cluster under the cursor or opened in the recap panel -- drawn at
+     * full opacity with its ring, so the marker the tooltip describes is never
+     * one of the faded ones. */
+    focusedCluster?: SpatialEventCluster | null;
   }>(),
-  { aspectRatio: 1, highlightAtSeconds: null },
+  { aspectRatio: 1, highlightAtSeconds: null, focusedCluster: null },
 );
 
-const emit = defineEmits<{ "select-cluster": [cluster: SpatialEventCluster] }>();
+const emit = defineEmits<{
+  "select-cluster": [cluster: SpatialEventCluster];
+  "hover-cluster": [cluster: SpatialEventCluster];
+  "leave-cluster": [];
+}>();
+
+/** Markers away from the chronology scrubber stay clearly readable: a teamfight
+ * used to fade to a quarter opacity, which made the whole map look empty while
+ * scrubbing. */
+const DIMMED_OPACITY = 0.7;
+
+function opacityFor(cluster: SpatialEventCluster): number {
+  if (cluster === props.focusedCluster) return 1;
+  if (props.highlightAtSeconds === null || isClusterHighlighted(cluster, props.highlightAtSeconds)) return 1;
+  return DIMMED_OPACITY;
+}
 
 function toSvgY(y: number): number {
   // Same Y inversion as SpatialCanvasLayer.vue/mapProjection.ts: row 0 = world-Y-min = bottom of the map.
@@ -49,15 +68,19 @@ function colorFor(kind: SpatialEventCluster["kind"]): string {
       :key="i"
       class="pointer-events-auto cursor-pointer"
       :transform="'translate(' + cluster.x + ' ' + toSvgY(cluster.y) + ') scale(1 ' + aspectRatio + ')'"
-      :opacity="highlightAtSeconds === null || isClusterHighlighted(cluster, highlightAtSeconds) ? 1 : 0.25"
-      @click="emit('select-cluster', cluster)"
+      :opacity="opacityFor(cluster)"
+      @click.stop="emit('select-cluster', cluster)"
+      @pointerenter="emit('hover-cluster', cluster)"
+      @pointerleave="emit('leave-cluster')"
     >
-      <!-- Ring on the cluster the chronology scrubber is currently over. -->
+      <!-- Ring on the cluster the chronology scrubber is over, and on the one the
+           cursor or the recap panel is focused on, so the marker being described
+           is always identifiable. -->
       <circle
-        v-if="isClusterHighlighted(cluster, highlightAtSeconds)"
+        v-if="isClusterHighlighted(cluster, highlightAtSeconds) || cluster === focusedCluster"
         cx="0"
         cy="0"
-        r="0.028"
+        r="0.021"
         fill="none"
         stroke="white"
         stroke-width="0.004"
@@ -66,7 +89,7 @@ function colorFor(kind: SpatialEventCluster["kind"]): string {
       <!-- Kills: triangle. Deaths: diamond. Shape carries the kind so color alone isn't the only signal (accessibility). Coordinates below are local to this marker's own (undistorted) frame. -->
       <polygon
         v-if="cluster.kind === 'kill'"
-        points="0,-0.014 -0.012,0.008 0.012,0.008"
+        points="0,-0.010 -0.009,0.006 0.009,0.006"
         :fill="colorFor(cluster.kind)"
         stroke="rgba(0,0,0,0.6)"
         stroke-width="0.002"
@@ -74,19 +97,19 @@ function colorFor(kind: SpatialEventCluster["kind"]): string {
       />
       <rect
         v-else
-        x="-0.01"
-        y="-0.01"
-        width="0.02"
-        height="0.02"
+        x="-0.008"
+        y="-0.008"
+        width="0.016"
+        height="0.016"
         transform="rotate(45)"
         :fill="colorFor(cluster.kind)"
         stroke="rgba(0,0,0,0.6)"
         stroke-width="0.002"
         vector-effect="non-scaling-stroke"
       />
-      <g v-if="cluster.points.length > 1" :transform="`translate(0.016 -0.016) scale(1 ${1 / aspectRatio})`">
-        <circle cx="0" cy="0" r="0.011" fill="rgba(0,0,0,0.75)" />
-        <text x="0" y="0" font-size="0.013" fill="white" text-anchor="middle" dominant-baseline="central">
+      <g v-if="cluster.points.length > 1" :transform="`translate(0.013 -0.013) scale(1 ${1 / aspectRatio})`">
+        <circle cx="0" cy="0" r="0.009" fill="rgba(0,0,0,0.85)" />
+        <text x="0" y="0" font-size="0.011" fill="white" text-anchor="middle" dominant-baseline="central">
           +{{ cluster.points.length }}
         </text>
       </g>

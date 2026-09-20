@@ -48,6 +48,12 @@ const myBattletags = computed(() =>
 );
 const allPlayers = computed(() => data.value?.teams.flatMap((team) => team.players) ?? []);
 
+/** Every participant as (BattleTag, team) -- one shape for both the chronology
+ * input and the heatmap recap's kill crediting. */
+const matchPlayers = computed(() =>
+  allPlayers.value.map((player) => ({ battletag: player.battletag, team: player.team })),
+);
+
 const annotationsStore = usePlayerAnnotationsStore();
 watch(
   allPlayers,
@@ -74,7 +80,7 @@ const viewerEnemyRows = computed(() => scoreboardRows.value.filter((r) => !r.isA
 
 const timelineInput = computed<MatchTimelineInput>(() => ({
   timeline: data.value?.timeline ?? null,
-  players: allPlayers.value.map((player) => ({ battletag: player.battletag, team: player.team })),
+  players: matchPlayers.value,
   durationSeconds: data.value?.match.durationSeconds ?? 0,
 }));
 
@@ -236,6 +242,12 @@ const displayedInsights = computed(() =>
             :hero-options="spatialHeroOptions"
             :my-battletag="authData?.user?.battletag ?? null"
             :my-battletags="[...myBattletags]"
+            :level-snapshots="data.timeline?.levelSnapshots ?? []"
+            :structure-events="data.timeline?.structureEvents ?? []"
+            :trajectories="data.spatial?.trajectories ?? []"
+            :duration-seconds="data.match.durationSeconds"
+            :viewer-team="viewerTeam"
+            :players="matchPlayers"
           />
           <CoachHeatmapsPlaceholder v-else :calibrated="data.spatialCalibrated" />
         </div>
