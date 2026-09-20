@@ -1,3 +1,4 @@
+import type { MatchObjectiveEvent } from "@hots-stats/shared-types";
 import type { MatchDetailPlayer } from "./matches";
 
 /**
@@ -47,6 +48,8 @@ export interface MatchTimelineData {
   deaths: MatchTimelineDeath[];
   levelSnapshots: MatchTimelineLevelSnapshot[];
   structureEvents?: MatchTimelineStructureEvent[];
+  /** Optional: absent for a match ingested before PARSER_VERSION 1.15. */
+  objectives?: MatchObjectiveEvent[];
 }
 
 /** One point of the C2 chronology lead curve: both teams' mean level at
@@ -158,6 +161,8 @@ export interface MatchTimelineSeries {
   teamLevels: [MatchTimelineLevelStep[], MatchTimelineLevelStep[]];
   deaths: MatchTimelineDeathMarker[];
   structures: MatchTimelineStructureEvent[];
+  /** Camps/objectives captured this match, time-ordered. */
+  objectives: MatchObjectiveEvent[];
   /** One row per player: mine first, then my team, then the enemy team. */
   lanes: MatchTimelineLane[];
   /** Every death, time-ordered, with victims and killers resolved to names. */

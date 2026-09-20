@@ -91,6 +91,7 @@ export function buildMatchTimelineSeries(input: MatchTimelineInput): MatchTimeli
       teamLevels: [[], []],
       deaths: [],
       structures: [],
+      objectives: [],
       lanes: [],
       allDeaths: [],
       events: [],
@@ -211,6 +212,8 @@ export function buildMatchTimelineSeries(input: MatchTimelineInput): MatchTimeli
   ];
   events.sort((a, b) => a.atSeconds - b.atSeconds || (a.kind === b.kind ? 0 : a.kind === "death" ? -1 : 1));
 
+  const objectives = [...(timeline.objectives ?? [])].sort((a, b) => a.atSeconds - b.atSeconds);
+
   return {
     hasLevelData: points.length > 0,
     points,
@@ -218,6 +221,7 @@ export function buildMatchTimelineSeries(input: MatchTimelineInput): MatchTimeli
     teamLevels,
     deaths,
     structures,
+    objectives,
     lanes,
     allDeaths,
     events,
