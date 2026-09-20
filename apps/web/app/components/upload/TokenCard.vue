@@ -54,7 +54,8 @@ function maskedPreview(value: string): string {
     </div>
 
     <div class="min-w-0 flex-1">
-      <p class="truncate font-mono text-xs" :class="revealedValue ? 'text-foreground' : 'text-muted'">
+      <p class="truncate text-sm font-medium text-foreground">{{ token.name }}</p>
+      <p class="mt-0.5 truncate font-mono text-xs" :class="revealedValue ? 'text-foreground' : 'text-muted'">
         {{ revealedValue ? maskedPreview(revealedValue) : "Clé secrète (déjà copiée)" }}
       </p>
       <p class="mt-0.5 text-xs text-muted">

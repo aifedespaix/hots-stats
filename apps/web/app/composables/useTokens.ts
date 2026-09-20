@@ -1,5 +1,6 @@
 export interface TokenSummary {
   id: string;
+  name: string;
   lastUsedAt: string | null;
   createdAt: string;
 }
