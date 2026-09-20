@@ -9,6 +9,7 @@ import {
   matchPlayers,
   matchSpatialGrids,
   matchStructureEvents,
+  matchObjectiveEvents,
   matches,
   maps,
   talentPicks,
@@ -685,8 +686,15 @@ export const matchesRoute = new Hono<Env>()
     // `spatial` (match_spatial_grids) is separately gated on PARSER_VERSION
     // >= 1.7 *and* the map having had a calibration at ingestion time --
     // see spatial-rollup.service.ts / replay-upsert.service.ts.
-    const [deathRows, levelSnapshotRows, spatialGridRows, trajectoryRows, structureEventRows, calibrationRows] =
-      await Promise.all([
+    const [
+      deathRows,
+      levelSnapshotRows,
+      spatialGridRows,
+      trajectoryRows,
+      structureEventRows,
+      objectiveEventRows,
+      calibrationRows,
+    ] = await Promise.all([
       playerIds.length > 0
         ? db
             .select({
@@ -747,6 +755,17 @@ export const matchesRoute = new Hono<Env>()
         })
         .from(matchStructureEvents)
         .where(eq(matchStructureEvents.matchId, match.id)),
+      // Match-wide, not gated on playerIds -- same reasoning as
+      // match_structure_events above.
+      db
+        .select({
+          team: matchObjectiveEvents.team,
+          atSeconds: matchObjectiveEvents.atSeconds,
+          kind: matchObjectiveEvents.kind,
+          detail: matchObjectiveEvents.detail,
+        })
+        .from(matchObjectiveEvents)
+        .where(eq(matchObjectiveEvents.matchId, match.id)),
       // Independent of playerIds -- whether *the map* has ever been
       // calibrated (see /admin/calibrate), regardless of whether this
       // specific match has any spatial rows. Lets the frontend tell "this
@@ -757,7 +776,10 @@ export const matchesRoute = new Hono<Env>()
 
     const playerById = new Map(players.map((p) => [p.id, p]));
     const timeline =
-      deathRows.length > 0 || levelSnapshotRows.length > 0 || structureEventRows.length > 0
+      deathRows.length > 0 ||
+      levelSnapshotRows.length > 0 ||
+      structureEventRows.length > 0 ||
+      objectiveEventRows.length > 0
         ? {
             deaths: deathRows.flatMap((d) => {
               const player = playerById.get(d.matchPlayerId);
@@ -780,6 +802,12 @@ export const matchesRoute = new Hono<Env>()
               team: e.team,
               atSeconds: e.atSeconds,
               structureType: e.structureType,
+            })),
+            objectives: objectiveEventRows.map((e) => ({
+              kind: e.kind,
+              team: e.team,
+              atSeconds: e.atSeconds,
+              detail: e.detail,
             })),
           }
         : undefined;
