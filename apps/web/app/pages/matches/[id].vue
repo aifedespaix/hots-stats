@@ -143,6 +143,34 @@ function onTimelineZoomAround(payload: { anchorSeconds: number; factor: number }
   zoomTimelineAround(payload.anchorSeconds, payload.factor);
 }
 
+/** The chronology tab is built to fit one screen: the chart flexes into the
+ * height that is left instead of pushing the page down. Its own top offset is
+ * therefore measured rather than hard-coded -- the layout's sticky header, the
+ * page title and the tab list all sit above it, and their heights are not ours
+ * to assume. The fallback keeps SSR and the first paint sane. */
+const chronologyShell = ref<HTMLElement | null>(null);
+const chronologyOffset = ref<number | null>(null);
+
+function measureChronologyOffset() {
+  const element = chronologyShell.value;
+  // `offsetParent` is null for a display:none element -- the tab body while
+  // another tab is active -- whose rect would read as a 0 top and collapse the
+  // whole panel to a sliver.
+  if (!element || element.offsetParent === null) return;
+  chronologyOffset.value = Math.round(element.getBoundingClientRect().top + 24);
+}
+
+function onTimelineTabChange() {
+  stopTimelinePlayback();
+  nextTick(measureChronologyOffset);
+}
+
+onMounted(() => window.addEventListener("resize", measureChronologyOffset));
+onBeforeUnmount(() => window.removeEventListener("resize", measureChronologyOffset));
+// The tab body only mounts once its tab is active, and the match data arrives
+// asynchronously (which can reflow the title above it).
+watch([chronologyShell, data], () => nextTick(measureChronologyOffset));
+
 /** The team the viewer played on, so the chronology says "mon équipe" rather
  * than "équipe 0"; null when the viewer isn't in this match. */
 const viewerTeam = computed<0 | 1 | null>(() => {
@@ -268,7 +296,7 @@ const displayedInsights = computed(() =>
       description="Cette partie a été analysée par une ancienne version du parseur, qui pouvait mal attribuer certaines stats de combat (dégâts, soins, XP figés à 0 ou dupliqués entre joueurs). Elle sera corrigée automatiquement à la prochaine synchronisation du daemon du joueur qui l'a envoyée, si le fichier de replay est encore présent sur son disque."
     />
 
-    <UTabs :items="tabItems" variant="pill" class="w-full" @update:model-value="stopTimelinePlayback">
+    <UTabs :items="tabItems" variant="pill" class="w-full" @update:model-value="onTimelineTabChange">
       <template #scoreboard>
         <div class="mt-4 space-y-6">
           <CoachTeamTotalsBar :my-team="viewerAllyRows" :enemy-team="viewerEnemyRows" />
@@ -311,7 +339,11 @@ const displayedInsights = computed(() =>
       </template>
 
       <template #chronology>
-        <div class="mt-4 space-y-3">
+        <div
+          ref="chronologyShell"
+          class="mt-4 flex flex-col gap-3 lg:h-[calc(100dvh-var(--chronology-offset))] lg:min-h-0"
+          :style="{ '--chronology-offset': (chronologyOffset ?? 304) + 'px' }"
+        >
           <ChartsMatchTimelineControls
             :lane-mode="laneMode"
             :playing="timelinePlaying"
@@ -328,31 +360,37 @@ const displayedInsights = computed(() =>
             @update:scrub-seconds="timelineScrubSeconds = $event"
           />
 
-          <ChartsMatchTimelineChart
-            :series="timelineSeries"
-            :duration-seconds="timelineDuration"
-            :window="timelineWindow"
-            :scrub-seconds="timelineScrubSeconds"
-            :ally-team="viewerTeam"
-            :lane-mode="laneMode"
-            :focus="timelineFocus"
-            :is-zoomed="timelineIsZoomed"
-            @scrub="timelineScrubSeconds = $event"
-            @zoom-window="onTimelineZoomWindow"
-            @zoom-around="onTimelineZoomAround"
-            @pan="panTimeline"
-            @reset-zoom="resetTimelineZoom"
-          />
+          <div class="grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_21rem]">
+            <div class="flex min-w-0 flex-col lg:min-h-0">
+              <ChartsMatchTimelineChart
+                class="lg:min-h-0 lg:flex-1"
+                :series="timelineSeries"
+                :duration-seconds="timelineDuration"
+                :window="timelineWindow"
+                :scrub-seconds="timelineScrubSeconds"
+                :ally-team="viewerTeam"
+                :lane-mode="laneMode"
+                :focus="timelineFocus"
+                :is-zoomed="timelineIsZoomed"
+                @scrub="timelineScrubSeconds = $event"
+                @zoom-window="onTimelineZoomWindow"
+                @zoom-around="onTimelineZoomAround"
+                @pan="panTimeline"
+                @reset-zoom="resetTimelineZoom"
+              />
+            </div>
 
-          <ChartsMatchTimelineDetail
-            :series="timelineSeries"
-            :seconds="timelineScrubSeconds"
-            :state="timelineState"
-            :around="timelineAround"
-            :focus="timelineFocus"
-            :ally-team="viewerTeam"
-            @seek="seekTimeline"
-          />
+            <ChartsMatchTimelineDetail
+              class="lg:min-h-0"
+              :series="timelineSeries"
+              :seconds="timelineScrubSeconds"
+              :state="timelineState"
+              :around="timelineAround"
+              :focus="timelineFocus"
+              :ally-team="viewerTeam"
+              @seek="seekTimeline"
+            />
+          </div>
         </div>
       </template>
     </UTabs>

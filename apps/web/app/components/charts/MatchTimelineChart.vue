@@ -404,7 +404,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="space-y-3">
+  <div class="flex min-h-0 flex-col gap-3">
     <UiStateCard
       v-if="!series.hasLevelData"
       state="empty"
@@ -416,7 +416,7 @@ onBeforeUnmount(() => {
       v-if="showChart"
       ref="svg"
       :viewBox="'0 0 ' + WIDTH + ' ' + HEIGHT"
-      class="h-auto w-full touch-pan-y select-none"
+      class="h-auto w-full touch-pan-y select-none lg:min-h-0 lg:flex-1"
       role="img"
       :aria-label="ariaLabel"
       @pointerdown="onPointerDown"
@@ -603,7 +603,7 @@ onBeforeUnmount(() => {
       v-if="showChart && isZoomed"
       ref="overview"
       :viewBox="'0 0 ' + WIDTH + ' ' + OVERVIEW_HEIGHT"
-      class="h-6 w-full cursor-ew-resize touch-pan-y select-none"
+      class="h-6 w-full shrink-0 cursor-ew-resize touch-pan-y select-none"
       role="img"
       aria-label="Vue d'ensemble de la partie : courbe d'avance et morts par équipe. Glisser dans la fenêtre pour la déplacer, cliquer ailleurs pour la recentrer."
       @pointerdown="onOverviewDown"
@@ -643,7 +643,7 @@ onBeforeUnmount(() => {
       />
     </svg>
 
-    <div class="flex flex-wrap items-center gap-3 text-[11px] text-muted">
+    <div class="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted">
       <span class="flex items-center gap-1.5">
         <span class="h-2 w-2 rounded-full" :style="{ background: teamColors[0] }" />
         {{ labels.team0 }}
@@ -652,10 +652,9 @@ onBeforeUnmount(() => {
         <span class="h-2 w-2 rounded-full" :style="{ background: teamColors[1] }" />
         {{ labels.team1 }}
       </span>
-      <span v-if="hasMarkers">Sur la piste d'un joueur = une de ses morts ; les structures détruites sont en bas.</span>
-      <span v-if="!series.hasLevelData" class="text-muted">
-        Seules les morts et les structures sont tracées : la courbe de niveaux est indisponible.
-      </span>
+      <span v-if="hasMarkers">une pastille = une mort, sur la ligne du joueur ; les structures sont sur la ligne du bas</span>
+      <span v-if="!series.hasLevelData">courbe de niveaux indisponible pour cette partie</span>
+      <span class="hidden lg:ml-auto lg:inline">glisser = cadrer · molette = zoom · double-clic = toute la partie</span>
     </div>
   </div>
 </template>
