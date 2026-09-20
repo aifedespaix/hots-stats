@@ -24,7 +24,7 @@ function game(overrides: Partial<HeatmapGameData> = {}): HeatmapGameData {
       { battletag: "Foo#1111", atSeconds: 160, level: 16 },
     ],
     deaths: [{ battletag: "Foo#1111", team: 0, atSeconds: 100, x: 0.5, y: 0.5 }],
-    structureEvents: [{ team: 1, atSeconds: 60, structureType: "fort" }],
+    structureEvents: [{ team: 1, atSeconds: 60, structureType: "bastion" }],
     ...overrides,
   };
 }

@@ -184,7 +184,7 @@ describe("fightBilanAt", () => {
 });
 
 describe("buildEventRecaps", () => {
-  const structureEvents: MatchTimelineStructureEvent[] = [{ team: 1, atSeconds: 130, structureType: "fort" }];
+  const structureEvents: MatchTimelineStructureEvent[] = [{ team: 1, atSeconds: 130, structureType: "bastion" }];
   const levelSnapshots: MatchTimelineLevelSnapshot[] = [
     { battletag: "Ally#1", atSeconds: 0, level: 10 },
     { battletag: "Enemy#1", atSeconds: 0, level: 9 },
@@ -261,7 +261,7 @@ describe("buildEventRecaps", () => {
       allyTeam: 0,
       structureEvents,
     });
-    expect(near[1]!.structure).toEqual({ atSeconds: 130, structureType: "fort", team: 1, deltaSeconds: 10 });
+    expect(near[1]!.structure).toEqual({ atSeconds: 130, structureType: "bastion", team: 1, deltaSeconds: 10 });
     expect(near[0]!.structure).toBeNull();
   });
 

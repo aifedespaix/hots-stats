@@ -112,8 +112,8 @@ describe("buildMatchTimelineSeries events", () => {
         timeline: timeline({
           deaths: [{ battletag: "Me#1", team: 0, atSeconds: 60 }],
           structureEvents: [
-            { team: 1, atSeconds: 60, structureType: "fort" },
-            { team: 0, atSeconds: 30, structureType: "keep" },
+            { team: 1, atSeconds: 60, structureType: "bastion" },
+            { team: 0, atSeconds: 30, structureType: "tower" },
           ],
         }),
       }),
@@ -144,7 +144,7 @@ describe("timelineLevelAt and timelineStateAt", () => {
             { battletag: "Foe#1", atSeconds: 90, level: 3 },
           ],
           deaths: [{ battletag: "Me#1", team: 0, atSeconds: 130 }],
-          structureEvents: [{ team: 1, atSeconds: 200, structureType: "fort" }],
+          structureEvents: [{ team: 1, atSeconds: 200, structureType: "bastion" }],
         }),
       }),
     );
@@ -253,10 +253,10 @@ describe("timelineEventLabel", () => {
   });
 
   it("uses the game's French wording for structures", () => {
-    expect(timelineEventLabel({ kind: "structure", atSeconds: 1, team: 0, structureType: "fort" })).toBe("Fort détruit");
+    expect(timelineEventLabel({ kind: "structure", atSeconds: 1, team: 0, structureType: "bastion" })).toBe("Bastion détruit");
     expect(timelineEventLabel({ kind: "structure", atSeconds: 1, team: 0, structureType: "core" })).toBe("Cœur détruit");
     expect(timelineEventLabel({ kind: "structure", atSeconds: 1, team: 0 })).toBe("Structure détruit");
-    expect(structureTypeLabel("keep")).toBe("Donjon");
-    expect(structureTypeLabel("wall")).toBe("Tour");
+    expect(structureTypeLabel("tower")).toBe("Tour");
+    expect(structureTypeLabel("gate")).toBe("Porte");
   });
 });

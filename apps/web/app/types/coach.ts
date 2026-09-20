@@ -31,17 +31,16 @@ export interface MatchTimelineLevelSnapshot {
   level: number;
 }
 
-/** A fort/keep/wall/core destruction -- `team` is the *owning* team (the
- * side that lost the structure). Present for a match ingested with
- * PARSER_VERSION >= 1.11 whose structure-destruction detection matched at
- * least one event; best-effort (see `matchStructureEventSchema` in
- * shared-types), so its absence doesn't imply anything about the match. An
- * event-anchor source for the Pro Comparison View
- * (`useHeatmapSync.ts`). */
+/**
+ * A destroyed building -- team is the *owning* team (the side that lost it).
+ * Present for a match ingested with PARSER_VERSION >= 1.16; best-effort at
+ * ingestion, so its absence does not imply anything about the match. An
+ * event-anchor source for the Pro Comparison View (useHeatmapSync.ts).
+ */
 export interface MatchTimelineStructureEvent {
   team: 0 | 1;
   atSeconds: number;
-  structureType: "fort" | "keep" | "wall" | "core";
+  structureType: "core" | "bastion" | "tower" | "gate";
 }
 
 export interface MatchTimelineData {
@@ -125,7 +124,7 @@ export interface MatchTimelineEvent {
   battletag?: string;
   heroName?: string | null;
   /** Structure only. */
-  structureType?: "fort" | "keep" | "wall" | "core";
+  structureType?: "core" | "bastion" | "tower" | "gate";
 }
 
 /** What the game looked like at one instant: both teams' last known level

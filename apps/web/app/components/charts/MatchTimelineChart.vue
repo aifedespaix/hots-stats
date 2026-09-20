@@ -253,6 +253,7 @@ const structureRows = computed(() => {
             size,
             color: teamColors.value[marker.team],
             side: timelineStructureSideLabel(marker.team, props.allyTeam),
+            type: marker.structureType,
             typeLabel: structureTypeLabel(marker.structureType),
           };
         }),
@@ -658,20 +659,44 @@ onBeforeUnmount(() => {
           <text x="8" :y="row.labelY" font-size="9" font-weight="600" :fill="row.color" fill-opacity="0.9">
             {{ row.label }}
           </text>
-          <rect
+          <g
             v-for="marker in row.markers"
             :key="marker.key"
-            :x="marker.x - marker.size / 2"
-            :y="marker.y - marker.size / 2"
-            :width="marker.size"
-            :height="marker.size"
-            :fill="marker.color"
-            fill-opacity="0.95"
-            stroke="rgba(0, 0, 0, 0.55)"
-            stroke-width="1"
+            :transform="'translate(' + marker.x + ' ' + marker.y + ')'"
           >
+            <rect
+              :x="-marker.size / 2"
+              :y="-marker.size / 2"
+              :width="marker.size"
+              :height="marker.size"
+              :fill="marker.color"
+              fill-opacity="0.95"
+              stroke="rgba(0, 0, 0, 0.55)"
+              stroke-width="1"
+            />
+            <template v-if="marker.type === 'tower'">
+              <rect :x="-marker.size / 2 + 0.9" :y="-marker.size / 2 + 0.9" width="1.7" height="2.7" class="text-foreground" fill="currentColor" />
+              <rect x="-0.85" :y="-marker.size / 2 + 0.9" width="1.7" height="2.7" class="text-foreground" fill="currentColor" />
+              <rect :x="marker.size / 2 - 2.6" :y="-marker.size / 2 + 0.9" width="1.7" height="2.7" class="text-foreground" fill="currentColor" />
+            </template>
+            <path
+              v-else-if="marker.type === 'gate'"
+              :d="'M ' + (1.6 - marker.size / 2) + ' ' + (marker.size / 2 - 0.7) + ' L ' + (1.6 - marker.size / 2) + ' 0 A ' + (marker.size / 2 - 1.6) + ' ' + (marker.size / 2 - 1.6) + ' 0 0 1 ' + (marker.size / 2 - 1.6) + ' 0 L ' + (marker.size / 2 - 1.6) + ' ' + (marker.size / 2 - 0.7)"
+              class="text-foreground"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.3"
+            />
+            <circle
+              v-else-if="marker.type === 'core'"
+              r="2.5"
+              class="text-foreground"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.4"
+            />
             <title>{{ marker.typeLabel }} détruit — {{ marker.side }}</title>
-          </rect>
+          </g>
         </g>
         <text
           v-if="!hasStructures"
@@ -842,7 +867,7 @@ onBeforeUnmount(() => {
       </span>
       <span v-if="hasStructures" class="flex items-center gap-1.5">
         <span class="h-2 w-2 rounded-[2px] bg-current opacity-60" />
-        une structure détruite, sur la ligne de son camp
+        un carré = une structure détruite (créneaux = tour, arche = porte, anneau = cœur), sur la ligne de son camp
       </span>
       <span v-if="!series.hasLevelData">courbe de niveaux indisponible pour cette partie</span>
       <span class="hidden lg:ml-auto lg:inline">glisser = cadrer · molette = zoom · double-clic = toute la partie</span>

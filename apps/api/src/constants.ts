@@ -22,7 +22,12 @@ export const API_VERSION = "1.1.0";
 // `HeroAttributeId` fallback. Forces a resync of any already-stored match
 // that hit that path, for players whose daemon updates and still has the
 // replay file locally.
-export const MIN_PARSER_VERSION = "1.10";
+// Bumped to 1.16 (2026-09): the daemon had never emitted a single
+// timeline.structureEvents[] entry, so every stored match is missing its
+// structure history. Only a daemon this new can produce it, which makes this an
+// explicit resync of the whole backlog rather than an optional extra.
+export const MIN_PARSER_VERSION = "1.16";
+
 
 /**
  * Below this `parserVersion`, a stored match's combat stats

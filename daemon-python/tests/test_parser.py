@@ -1790,86 +1790,6 @@ def test_build_payload_death_includes_position_and_killer():
     assert death["killType"] == "hero"
 
 
-def test_structure_type_from_unit_type_name_matches_known_prefixes():
-    assert _structure_type_from_unit_type_name("TownFortHeroesLegacy") == "fort"
-    assert _structure_type_from_unit_type_name("TownKeepBlue") == "keep"
-    assert _structure_type_from_unit_type_name("TownWallLeft") == "wall"
-    assert _structure_type_from_unit_type_name("TownGateLeft") == "wall"
-    assert _structure_type_from_unit_type_name("TownTownCore") == "core"
-    assert _structure_type_from_unit_type_name("HeroLiMing") is None
-    assert _structure_type_from_unit_type_name("NexusMinion") is None
-
-
-def test_structure_unit_teams_by_tag_resolves_from_born_event():
-    players = {"1-Hero-1-1001": {"battletag": "Foo#1111", "team": 0, "heroId": "li-ming"}}
-    events = [_unit_born_event(1, "TownFort", unit_tag_index=200)]
-
-    tags = _structure_unit_teams_by_tag(events, tracker_id_to_toon={1: "1-Hero-1-1001"}, players=players)
-
-    assert tags == {(200, 0): ("fort", 0)}
-
-
-def test_structure_unit_teams_by_tag_skips_non_structure_units():
-    players = {"1-Hero-1-1001": {"battletag": "Foo#1111", "team": 0, "heroId": "li-ming"}}
-    events = [_unit_born_event(1, "HeroLiMing", unit_tag_index=5)]
-
-    assert _structure_unit_teams_by_tag(events, tracker_id_to_toon={1: "1-Hero-1-1001"}, players=players) == {}
-
-
-def test_extract_structure_events_resolves_owning_team_and_type():
-    events = [
-        _unit_born_event(1, "TownFort", unit_tag_index=200),
-        _unit_died_event(200, 610 + 16 * 300),
-    ]
-    players = {"1-Hero-1-1001": {"battletag": "Foo#1111", "team": 0, "heroId": "li-ming"}}
-
-    result = _extract_structure_events(
-        events, tracker_id_to_toon={1: "1-Hero-1-1001"}, players=players, gates_open_loop=610
-    )
-
-    assert result == [{"team": 0, "atSeconds": 300, "structureType": "fort"}]
-
-
-def test_extract_structure_events_ignores_hero_deaths():
-    events = [
-        _unit_born_event(1, "HeroLiMing", unit_tag_index=5),
-        _unit_died_event(5, 610 + 16 * 30),
-    ]
-    players = {"1-Hero-1-1001": {"battletag": "Foo#1111", "team": 0, "heroId": "li-ming"}}
-
-    result = _extract_structure_events(
-        events, tracker_id_to_toon={1: "1-Hero-1-1001"}, players=players, gates_open_loop=610
-    )
-
-    assert result == []
-
-
-def test_extract_structure_events_skips_unresolvable_tags():
-    events = [_unit_died_event(999, 700)]
-
-    assert _extract_structure_events(events, tracker_id_to_toon={}, players={}, gates_open_loop=0) == []
-
-
-def test_build_payload_includes_structure_events_for_fort_destruction():
-    events = [
-        *_base_tracker_events(),
-        _unit_born_event(1, "TownFort", unit_tag_index=200),
-        _unit_died_event(200, 610 + 16 * 300),
-    ]
-
-    payload = build_payload(
-        header=_header(610 + 16 * 600),
-        details=_details(),
-        initdata=_initdata(),
-        tracker_events=events,
-        attributes_events=_base_attributes_events(),
-        battletags=_battletags(),
-        replay_hash="a" * 64,
-    )
-
-    assert payload["timeline"]["structureEvents"] == [{"team": 0, "atSeconds": 300, "structureType": "fort"}]
-
-
 def test_extract_objective_events_reads_a_camp_with_a_fixed_team():
     events = [
         _stat_game_event(
@@ -2089,3 +2009,89 @@ def test_build_payload_omits_self_battletag_when_no_toon_is_given():
 
     assert "selfBattletag" not in payload
 
+
+def test_structure_type_from_unit_type_name_matches_real_hots_units():
+    assert _structure_type_from_unit_type_name("TownTownHallL2") == "bastion"
+    assert _structure_type_from_unit_type_name("TownTownHallL3") == "bastion"
+    assert _structure_type_from_unit_type_name("KingsCore") == "core"
+    assert _structure_type_from_unit_type_name("TownTownCore") == "core"
+    assert _structure_type_from_unit_type_name("TownCannonTowerL2") == "tower"
+    assert _structure_type_from_unit_type_name("TownCannonTowerL3Standalone") == "tower"
+    assert _structure_type_from_unit_type_name("TownGateL215BRUL") == "gate"
+
+
+def test_structure_type_from_unit_type_name_ignores_walls_and_decor():
+    assert _structure_type_from_unit_type_name("TownWallRadial14L3") is None
+    assert _structure_type_from_unit_type_name("TownMoonwellL2") is None
+    assert _structure_type_from_unit_type_name("TownMercCampCaptureBeacon") is None
+    assert _structure_type_from_unit_type_name("HeroLiMing") is None
+    assert _structure_type_from_unit_type_name("NexusMinion") is None
+
+
+def test_structure_unit_teams_by_tag_resolves_the_team_from_the_structure_control_id():
+    # Real replays tag every structure with m_controlPlayerId 11 (owning team 0)
+    # or 12 (team 1). Neither is a player tracker id, which is exactly why the
+    # old player-id lookup silently dropped every structure ever recorded.
+    events = [
+        _unit_born_event(11, "TownTownHallL2", unit_tag_index=200),
+        _unit_born_event(12, "TownCannonTowerL2", unit_tag_index=201),
+    ]
+
+    tags = _structure_unit_teams_by_tag(events, tracker_id_to_toon={}, players={})
+
+    assert tags == {(200, 0): ("bastion", 0), (201, 0): ("tower", 1)}
+
+
+def test_structure_unit_teams_by_tag_still_resolves_a_player_control_id():
+    players = {"1-Hero-1-1001": {"battletag": "Foo#1111", "team": 1, "heroId": "li-ming"}}
+    events = [_unit_born_event(1, "KingsCore", unit_tag_index=200)]
+
+    tags = _structure_unit_teams_by_tag(events, tracker_id_to_toon={1: "1-Hero-1-1001"}, players=players)
+
+    assert tags == {(200, 0): ("core", 1)}
+
+
+def test_structure_unit_teams_by_tag_skips_an_unresolvable_control_id():
+    events = [_unit_born_event(99, "TownTownHallL3", unit_tag_index=200)]
+
+    assert _structure_unit_teams_by_tag(events, tracker_id_to_toon={}, players={}) == {}
+
+
+def test_structure_unit_teams_by_tag_ignores_wall_segments():
+    events = [_unit_born_event(11, "TownWallRadial14L3", unit_tag_index=200)]
+
+    assert _structure_unit_teams_by_tag(events, tracker_id_to_toon={}, players={}) == {}
+
+
+def test_structure_unit_teams_by_tag_ignores_non_structure_units():
+    events = [_unit_born_event(11, "HeroLiMing", unit_tag_index=5)]
+
+    assert _structure_unit_teams_by_tag(events, tracker_id_to_toon={}, players={}) == {}
+
+
+def test_extract_structure_events_resolves_team_and_type_from_born_and_died():
+    events = [
+        _unit_born_event(12, "KingsCore", unit_tag_index=200),
+        _unit_died_event(200, 610 + 16 * 300),
+    ]
+
+    result = _extract_structure_events(events, tracker_id_to_toon={}, players={}, gates_open_loop=610)
+
+    assert result == [{"team": 1, "atSeconds": 300, "structureType": "core"}]
+
+
+def test_extract_structure_events_ignores_hero_deaths():
+    events = [
+        _unit_born_event(11, "HeroLiMing", unit_tag_index=5),
+        _unit_died_event(5, 610 + 16 * 30),
+    ]
+
+    result = _extract_structure_events(events, tracker_id_to_toon={}, players={}, gates_open_loop=610)
+
+    assert result == []
+
+
+def test_extract_structure_events_skips_unresolvable_tags():
+    events = [_unit_died_event(200, 610 + 16 * 300)]
+
+    assert _extract_structure_events(events, tracker_id_to_toon={}, players={}, gates_open_loop=0) == []

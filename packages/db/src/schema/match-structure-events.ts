@@ -2,10 +2,10 @@ import { index, integer, pgEnum, pgTable, uuid } from "drizzle-orm/pg-core";
 import { matches } from "./matches";
 
 // See packages/shared-types/src/replay-payload.ts's `matchStructureEventSchema`.
-export const structureTypeEnum = pgEnum("structure_type", ["fort", "keep", "wall", "core"]);
+export const structureTypeEnum = pgEnum("structure_type", ["core", "bastion", "tower", "gate"]);
 
 /**
- * One fort/keep/wall/core destruction for a match -- keyed by `matchId`
+ * One destroyed building for a match -- keyed by `matchId`
  * (not `matchPlayerId` like `match-deaths.ts`: a structure belongs to a
  * team, not an individual hero, so there's no single owning player row to
  * attach it to). An anchor point for the Pro Comparison View's

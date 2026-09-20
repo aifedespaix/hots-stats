@@ -120,15 +120,15 @@ describe("buildMatchTimelineSeries markers", () => {
       input({
         timeline: timeline({
           structureEvents: [
-            { team: 1, atSeconds: 60, structureType: "fort" },
-            { team: 0, atSeconds: 30, structureType: "keep" },
+            { team: 1, atSeconds: 60, structureType: "bastion" },
+            { team: 0, atSeconds: 30, structureType: "tower" },
           ],
         }),
       }),
     );
     expect(series.structures).toEqual([
-      { team: 0, atSeconds: 30, structureType: "keep" },
-      { team: 1, atSeconds: 60, structureType: "fort" },
+      { team: 0, atSeconds: 30, structureType: "tower" },
+      { team: 1, atSeconds: 60, structureType: "bastion" },
     ]);
   });
 });

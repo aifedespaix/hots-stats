@@ -495,13 +495,26 @@ def _extract_deaths(
     return deaths
 
 
+# The real `m_unitTypeName` values HotS writes for destructible buildings,
+# confirmed against real replays (see this table's history: the previous
+# entries -- "TownFort"/"TownKeep"/"TownTownCore" -- were a guess that matched
+# nothing, so every structure was silently dropped). `TownWall*` segments are
+# deliberately absent: they are destroyed incidentally (~9 per match) and the
+# chronology has no meaningful label for them.
 _STRUCTURE_UNIT_TYPE_NAME_PREFIXES: dict[str, str] = {
-    "TownFort": "fort",
-    "TownKeep": "keep",
-    "TownGate": "wall",
-    "TownWall": "wall",
+    "TownTownHall": "bastion",  # Fort (L2) and Keep (L3) alike
+    "KingsCore": "core",
     "TownTownCore": "core",
+    "TownCannonTower": "tower",
+    "TownGate": "gate",
 }
+
+# The owning side of a structure, as HotS tags it. Measured on 32 real replays:
+# structure `SUnitBornEvent`s only ever carry 11 or 12 (1094 / 1095
+# occurrences) and all 56 cores land on the expected side. Neither id is a
+# player tracker id, which is exactly why the player-id lookup below never
+# resolved a single structure -- see `_structure_unit_teams_by_tag`.
+_STRUCTURE_TEAM_BY_CONTROL_ID: dict[int, int] = {11: 0, 12: 1}
 
 
 def _structure_type_from_unit_type_name(unit_type_name: str) -> str | None:
@@ -509,13 +522,9 @@ def _structure_type_from_unit_type_name(unit_type_name: str) -> str | None:
     `SUnitBornEvent`/`SUnitDiedEvent`'s `m_unitTypeName`, prefix-matched
     against `_STRUCTURE_UNIT_TYPE_NAME_PREFIXES`.
 
-    UNCONFIRMED: these prefixes are a best-effort guess from community
-    parser documentation, not verified against a real replay -- same
-    caveat as `_iter_unit_positions` and the hero-side
-    `UNIT_TYPE_HERO_OVERRIDES` table before it was corrected against real
-    fixtures (see PARSER_VERSION's 1.10/1.11 changelog entries). Under- or
-    over-matching here only affects the optional `timeline.structureEvents[]`
-    block, never any other field.
+    Confirmed against real replays: the table above lists the actual unit
+    type names, and non-structure units (heroes, minions, moonwells, merc
+    beacons, `TownWall*` segments) deliberately return None.
     """
     for prefix, structure_type in _STRUCTURE_UNIT_TYPE_NAME_PREFIXES.items():
         if unit_type_name.startswith(prefix):
@@ -530,14 +539,12 @@ def _structure_unit_teams_by_tag(
     `(structureType, owning team)`, from `SUnitBornEvent` -- same tag
     convention `_hero_unit_tags_by_toon` relies on for heroes.
 
-    UNCONFIRMED: assumes a structure's `SUnitBornEvent` carries a
-    resolvable `m_controlPlayerId` naming one representative player on its
-    owning team (HotS structures aren't player-controlled in-game the way
-    heroes are, but the tracker stream may still tag them this way -- same
-    unverified-shape caveat as `_structure_type_from_unit_type_name`). A
-    structure whose team can't be resolved this way is simply never added
-    here, so `_extract_structure_events` skips its destruction rather than
-    guessing a team.
+    The owning team comes from `_STRUCTURE_TEAM_BY_CONTROL_ID`: real
+    structures are tagged 11 (team 0) or 12 (team 1), never with a player
+    tracker id. The player-id path is kept as a fallback for a replay shape
+    that did use one. A structure whose control id resolves to neither is
+    simply never added here, so `_extract_structure_events` skips its
+    destruction rather than guessing a team.
     """
     tags: dict[tuple[int, int], tuple[str, int]] = {}
     for event in tracker_events:
@@ -546,11 +553,15 @@ def _structure_unit_teams_by_tag(
         structure_type = _structure_type_from_unit_type_name(_s(event["m_unitTypeName"]))
         if structure_type is None:
             continue
-        toon_handle = tracker_id_to_toon.get(event.get("m_controlPlayerId"))
-        player = players.get(toon_handle) if toon_handle else None
-        if player is None:
-            continue
-        tags[(event["m_unitTagIndex"], event["m_unitTagRecycle"])] = (structure_type, player["team"])
+        control_id = event.get("m_controlPlayerId")
+        team = _STRUCTURE_TEAM_BY_CONTROL_ID.get(control_id)
+        if team is None:
+            toon_handle = tracker_id_to_toon.get(control_id)
+            player = players.get(toon_handle) if toon_handle else None
+            if player is None:
+                continue
+            team = player["team"]
+        tags[(event["m_unitTagIndex"], event["m_unitTagRecycle"])] = (structure_type, team)
     return tags
 
 
@@ -560,7 +571,7 @@ def _extract_structure_events(
     players: dict[str, dict[str, Any]],
     gates_open_loop: int,
 ) -> list[dict[str, Any]]:
-    """Every fort/keep/wall/core destruction (`SUnitDiedEvent` on a
+    """Every core/bastion/tower/gate destruction (`SUnitDiedEvent` on a
     structure unit, resolved via `_structure_unit_teams_by_tag`), as
     `{team, atSeconds, structureType}` -- an anchor point for the Pro
     Comparison View's event-anchored heatmap slices (e.g. "show presence

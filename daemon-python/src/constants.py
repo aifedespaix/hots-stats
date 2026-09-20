@@ -217,7 +217,18 @@ from __future__ import annotations
 # a MIN_PARSER_VERSION bump, same reasoning as 1.8/1.11/1.13: an older daemon
 # would only waste bandwidth re-uploading replays it can't enrich, while a
 # daemon that updates to this build resyncs its own replays by itself.
-PARSER_VERSION = "1.15"
+# 1.16: structure events were never emitted, for any replay. Two defects, both
+# confirmed against real replays (2026-09): (a) the owning team was resolved
+# through SUnitBornEvent.m_controlPlayerId as if it were a player tracker id,
+# but structures are tagged 11 (team 0) / 12 (team 1), so every structure was
+# silently dropped; (b) the unit-type-name table was a guess that matched none
+# of the real names, so even a resolved structure would have come back empty.
+# The table now lists the real names and reports four categories
+# (core/bastion/tower/gate); TownWall segments are not reported. Paired with a
+# MIN_PARSER_VERSION bump so matches that predate it -- every match, since none
+# ever had structure data -- get reparsed.
+PARSER_VERSION = "1.16"
+
 
 # How many times a single replay is allowed to fail with a parse error (a
 # corrupt/incomplete archive -- see parser.ReplayParseError) at the *same*

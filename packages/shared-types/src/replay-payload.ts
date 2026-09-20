@@ -63,19 +63,21 @@ export const matchTimelineDeathSchema = z.object({
 });
 export type MatchTimelineDeath = z.infer<typeof matchTimelineDeathSchema>;
 
-/** A fort/keep/wall/core destruction (`SUnitDiedEvent` on a structure unit
- * -- see `_extract_structure_events` in daemon-python/src/parser.py,
- * PARSER_VERSION 1.11). `team` is the *owning* team, i.e. the side that
- * lost the structure. An anchor point for the Pro Comparison View's
- * event-anchored heatmap slices (apps/web/app/composables/useHeatmapSync.ts).
- * Optional/best-effort: the daemon's structure-unit-type-name table is
- * unconfirmed against a real replay (see that changelog entry), so this may
- * under- or over-match on some replays -- absence never blocks the rest of
- * `timeline`. */
+/**
+ * A destroyed building (SUnitDiedEvent on a structure unit -- see
+ * _extract_structure_events in daemon-python/src/parser.py, PARSER_VERSION
+ * 1.16). team is the *owning* team, i.e. the side that lost the structure.
+ * An anchor point for the Pro Comparison View's event-anchored heatmap slices
+ * (apps/web/app/composables/useHeatmapSync.ts).
+ *
+ * "bastion" covers both the Fort and the Keep: they share one unit type name
+ * family and the chronology never needed them apart. Wall segments are not
+ * reported at all (see the daemon's type table).
+ */
 export const matchStructureEventSchema = z.object({
   team: z.union([z.literal(0), z.literal(1)]),
   atSeconds: z.number().int().nonnegative(),
-  structureType: z.enum(["fort", "keep", "wall", "core"]),
+  structureType: z.enum(["core", "bastion", "tower", "gate"]),
 });
 export type MatchStructureEvent = z.infer<typeof matchStructureEventSchema>;
 

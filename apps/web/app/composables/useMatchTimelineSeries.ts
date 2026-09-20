@@ -400,10 +400,10 @@ export function timelineEventsAround(
 }
 
 const STRUCTURE_LABELS: Record<NonNullable<MatchTimelineEvent["structureType"]>, string> = {
-  fort: "Fort",
-  keep: "Donjon",
-  wall: "Tour",
   core: "Cœur",
+  bastion: "Bastion",
+  tower: "Tour",
+  gate: "Porte",
 };
 
 /** French name of a destroyed structure, matching the game's own wording. */

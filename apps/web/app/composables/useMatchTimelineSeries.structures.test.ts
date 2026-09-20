@@ -82,9 +82,9 @@ describe("timelineStructureSideLabel", () => {
 
 describe("timelineStructureMarkers", () => {
   const structures = [
-    { team: 0 as const, atSeconds: 100, structureType: "fort" as const },
-    { team: 1 as const, atSeconds: 200, structureType: "keep" as const },
-    { team: 0 as const, atSeconds: 300, structureType: "wall" as const },
+    { team: 0 as const, atSeconds: 100, structureType: "bastion" as const },
+    { team: 1 as const, atSeconds: 200, structureType: "tower" as const },
+    { team: 0 as const, atSeconds: 300, structureType: "gate" as const },
   ];
 
   it("returns every structure when no window is given", () => {
@@ -102,25 +102,25 @@ describe("timelineStructureMarkers", () => {
 
   it("spreads simultaneous destructions onto distinct symmetric slots", () => {
     const simultaneous = [
-      { team: 0 as const, atSeconds: 100, structureType: "wall" as const },
-      { team: 0 as const, atSeconds: 100, structureType: "wall" as const },
-      { team: 0 as const, atSeconds: 100, structureType: "keep" as const },
+      { team: 0 as const, atSeconds: 100, structureType: "gate" as const },
+      { team: 0 as const, atSeconds: 100, structureType: "gate" as const },
+      { team: 0 as const, atSeconds: 100, structureType: "tower" as const },
     ];
     expect(timelineStructureMarkers(simultaneous).map((marker) => marker.slot)).toEqual([-1, 0, 1]);
   });
 
   it("slots each team separately at the same second", () => {
     const markers = timelineStructureMarkers([
-      { team: 0, atSeconds: 100, structureType: "wall" },
-      { team: 1, atSeconds: 100, structureType: "wall" },
+      { team: 0, atSeconds: 100, structureType: "gate" },
+      { team: 1, atSeconds: 100, structureType: "gate" },
     ]);
     expect(markers.map((marker) => marker.slot)).toEqual([0, 0]);
   });
 
   it("gives every event a unique key even when team, type and second collide", () => {
     const markers = timelineStructureMarkers([
-      { team: 0, atSeconds: 100, structureType: "wall" },
-      { team: 0, atSeconds: 100, structureType: "wall" },
+      { team: 0, atSeconds: 100, structureType: "gate" },
+      { team: 0, atSeconds: 100, structureType: "gate" },
     ]);
     expect(new Set(markers.map((marker) => marker.key)).size).toBe(2);
   });
@@ -137,7 +137,7 @@ describe("timelineComparison", () => {
             { battletag: "Foe#1", atSeconds: 120, level: 8 },
           ],
           deaths: [{ battletag: "Me#1", team: 0, atSeconds: 200 }],
-          structureEvents: [{ team: 1, atSeconds: 200, structureType: "fort" }],
+          structureEvents: [{ team: 1, atSeconds: 200, structureType: "bastion" }],
         }),
       }),
     );
@@ -175,7 +175,7 @@ describe("timelineComparison", () => {
 
   it("carries the structures and deaths inside the clustering window", () => {
     const comparison = timelineComparison(series(), 200, labels);
-    expect(comparison.structures.map((event) => event.structureType)).toEqual(["fort"]);
+    expect(comparison.structures.map((event) => event.structureType)).toEqual(["bastion"]);
     expect(comparison.deaths.map((death) => death.battletag)).toEqual(["Me#1"]);
   });
 

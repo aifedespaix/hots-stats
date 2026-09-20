@@ -162,6 +162,13 @@
       "when": 1789905061206,
       "tag": "0022_chilly_zuras",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1789905944518,
+      "tag": "0023_fluffy_the_hood",
+      "breakpoints": true
     }
   ]
 }
