@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { UNKNOWN_GAME_VERSION } from "@hots-stats/shared-types";
+import { useClipboard } from "@vueuse/core";
+import { MATCH_EXPORT_MAX_ROWS, UNKNOWN_GAME_VERSION } from "@hots-stats/shared-types";
 import type { MatchListResponse } from "~/types/matches";
 import { MATCHES_SORTABLE_COLUMNS, type MatchesSortableColumn } from "~/stores/useMatchesFiltersStore";
 import { DEFAULT_GAME_MODE_TAG_KEYS, GAME_MODE_TAG_KEYS, type GameModeTagKey } from "~/utils/gameModeTags";
@@ -198,6 +199,29 @@ const query = computed(() => ({
 
 const { data: matchesData, pending } = await useApiFetch<MatchListResponse>("/matches", { query });
 
+const { data: authData } = useAuthUser();
+const accountsParam = computed(() => accountsScopeParam(accountsStore, authData.value?.user));
+
+// Same filters + sort as the on-screen list, plus the account scope the list
+// request carries through useApiFetch -- the export and the page can't diverge
+// (spec F4 AC3).
+const exportUrl = computed(() =>
+  buildExportUrl(config.public.apiBase, "/matches/export.csv", {
+    ...activeFilters.value,
+    sortBy: apiSortBy.value,
+    sortDir: sortDir.value,
+    ...(accountsParam.value ? { accounts: accountsParam.value } : {}),
+  }),
+);
+
+// "Copier le lien" shares the current filtered view: F2 makes the URL
+// reproduce it, so the page URL is the link.
+const { copy, copied, isSupported: clipboardSupported } = useClipboard({ legacy: true });
+
+function copyShareLink() {
+  void copy(window.location.href);
+}
+
 // The Ctrl+K palette surfaces the rows of the page you are currently on.
 useCommandPaletteEntries(computed(() => matchCommandEntries(matchesData.value?.matches ?? [])));
 
@@ -355,15 +379,41 @@ function goToMatch(row: Record<string, unknown>) {
       </div>
     </UiFilterBar>
 
-    <UiFilterResetActions
-      :filters-default="filtersStore.isFiltersDefault && gameVersionFilterStore.isDefault"
-      :sort-default="filtersStore.isSortDefault"
-      @reset-filters="
-        filtersStore.resetFilters();
-        gameVersionFilterStore.includeAll();
-      "
-      @reset-sort="filtersStore.resetSort()"
-    />
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <UiFilterResetActions
+        :filters-default="filtersStore.isFiltersDefault && gameVersionFilterStore.isDefault"
+        :sort-default="filtersStore.isSortDefault"
+        @reset-filters="
+          filtersStore.resetFilters();
+          gameVersionFilterStore.includeAll();
+        "
+        @reset-sort="filtersStore.resetSort()"
+      />
+      <div class="flex flex-wrap items-center gap-2">
+        <UButton
+          :to="exportUrl"
+          external
+          size="xs"
+          color="neutral"
+          variant="soft"
+          icon="i-heroicons-arrow-down-tray"
+          :title="`Limité aux ${MATCH_EXPORT_MAX_ROWS} premières parties`"
+        >
+          Exporter en CSV
+        </UButton>
+        <UButton
+          size="xs"
+          color="neutral"
+          variant="soft"
+          :icon="copied ? 'i-heroicons-check' : 'i-heroicons-link'"
+          :disabled="!clipboardSupported"
+          :title="clipboardSupported ? 'Copier le lien de cette vue' : 'Copie non supportée par ce navigateur'"
+          @click="copyShareLink"
+        >
+          {{ copied ? "Lien copié" : "Copier le lien" }}
+        </UButton>
+      </div>
+    </div>
 
     <UiTableScrollPanel>
       <UiDataTable
