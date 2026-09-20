@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import logging
 import sys
+import tkinter as tk
 from dataclasses import dataclass
+from tkinter import ttk
 from typing import Protocol
 
 logger = logging.getLogger(__name__)
@@ -123,3 +125,65 @@ DEFAULT_PALETTE = Palette(
     error="#ef5b5b",
     neutral="#8b90ad",
 )
+
+
+def mousewheel_scroll_units(delta: int) -> int:
+    """Converts a Windows `<MouseWheel>` event's `delta` (a signed multiple
+    of 120: positive = wheel up, negative = wheel down) into the number of
+    `Canvas.yview_scroll` "units" to move, per the standard Tk recipe.
+    Pure so it's testable without a real event/widget."""
+    return int(-delta / 120)
+
+
+class ScrollableFrame:
+    """A vertically scrollable container: a `tk.Canvas` holding one inner
+    `ttk.Frame` (`.content`), with a `ttk.Scrollbar` and mouse-wheel
+    support. Every settings-window tab body lives in one of these (see
+    `gui.py`'s `_build_tab`) instead of being sized to its worst-case
+    content up front.
+
+    Not unit-tested: constructing it requires a real Tk interpreter, which
+    CI's headless runner doesn't have (see `mousewheel_scroll_units` above
+    for the one piece of its logic that *is* pure). Verified by hand at
+    multiple DPI scales and window sizes.
+    """
+
+    def __init__(self, parent: tk.Misc, *, background: str) -> None:
+        self.outer = tk.Frame(parent, bg=background)
+        self._canvas = tk.Canvas(
+            self.outer, background=background, highlightthickness=0, borderwidth=0
+        )
+        scrollbar = ttk.Scrollbar(
+            self.outer, orient="vertical", command=self._canvas.yview
+        )
+        self._canvas.configure(yscrollcommand=scrollbar.set)
+        self._canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        self.content = ttk.Frame(self._canvas, style="TFrame")
+        self._content_window = self._canvas.create_window(
+            (0, 0), window=self.content, anchor="nw"
+        )
+
+        self.content.bind("<Configure>", self._on_content_configure)
+        self._canvas.bind("<Configure>", self._on_canvas_configure)
+        self._canvas.bind("<Enter>", self._bind_mousewheel)
+        self._canvas.bind("<Leave>", self._unbind_mousewheel)
+
+    def _on_content_configure(self, _event: "tk.Event") -> None:
+        self._canvas.configure(scrollregion=self._canvas.bbox("all"))
+
+    def _on_canvas_configure(self, event: "tk.Event") -> None:
+        # Keeps the inner frame exactly as wide as the visible canvas, so
+        # content wraps/reflows on window resize instead of leaving a gap
+        # or requiring horizontal scrolling.
+        self._canvas.itemconfigure(self._content_window, width=event.width)
+
+    def _bind_mousewheel(self, _event: "tk.Event") -> None:
+        self._canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+
+    def _unbind_mousewheel(self, _event: "tk.Event") -> None:
+        self._canvas.unbind_all("<MouseWheel>")
+
+    def _on_mousewheel(self, event: "tk.Event") -> None:
+        self._canvas.yview_scroll(mousewheel_scroll_units(event.delta), "units")

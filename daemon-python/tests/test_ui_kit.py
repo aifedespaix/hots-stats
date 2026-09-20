@@ -112,3 +112,16 @@ def test_default_palette_matches_todays_hardcoded_colors():
         error="#ef5b5b",
         neutral="#8b90ad",
     )
+
+
+def test_mousewheel_scroll_units_scroll_up():
+    assert ui_kit.mousewheel_scroll_units(120) == -1
+
+
+def test_mousewheel_scroll_units_scroll_down():
+    assert ui_kit.mousewheel_scroll_units(-120) == 1
+
+
+def test_mousewheel_scroll_units_fast_scroll_scales_linearly():
+    assert ui_kit.mousewheel_scroll_units(240) == -2
+    assert ui_kit.mousewheel_scroll_units(-360) == 3
