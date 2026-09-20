@@ -1,5 +1,11 @@
 # Daemon Browser-Based Authorization — Design (C1)
 
+**Statut :** implémenté (branche `feat/daemon-browser-auth`, 2026-09-20). A1
+(table + endpoints), A2 (page de consentement, noms de tokens) et A3 (bouton
+daemon, fallback manuel) sont couverts par les tests `bun test apps/api`,
+`bun run --filter './apps/web' test` et `pytest`. Vérification manuelle du
+parcours navigateur (Step 6 du plan) non réalisée dans cette session.
+
 ## Context
 
 Today, connecting the daemon to a site account means: install the daemon, open the web

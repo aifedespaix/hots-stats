@@ -471,3 +471,15 @@ Note: `gui.py` and `tray.py` need a display (tkinter/pystray) and aren't
 exercised by the test suite, which runs headless in CI — their pure-logic
 helpers (`config.py`, `urls.py`, `api_client.py`'s ping/summary functions)
 are covered instead.
+
+## Connexion en un clic (navigateur)
+
+Depuis la fenêtre de configuration, **« Connecter ce PC via le navigateur »**
+lance un handshake loopback + PKCE : le daemon ouvre la page de consentement
+`/daemon/authorize` du tableau de bord dans le navigateur, tu confirmes, et le
+daemon échange le code à usage unique (60 s) contre un PAT ordinaire nommé
+`Daemon — <nom de la machine>` (`src/auth_flow.py`). Le token est écrit dans le
+champ, puis validé par le chemin de vérification existant : c'est le bouton
+**Enregistrer** qui persiste la configuration. La saisie manuelle du token reste
+disponible en dessous, et `HOTS_ACCESS_TOKEN` continue de fonctionner pour les
+installations headless/CI.
