@@ -1,4 +1,10 @@
-import type { GoalInput, GoalResponse, GoalUpdate, GoalsResponse } from "@hots-stats/shared-types";
+import type {
+  GoalInput,
+  GoalResponse,
+  GoalSuggestionsResponse,
+  GoalUpdate,
+  GoalsResponse,
+} from "@hots-stats/shared-types";
 
 /**
  * E2 goals for the current viewer. Progress is measured across the accounts
@@ -7,6 +13,12 @@ import type { GoalInput, GoalResponse, GoalUpdate, GoalsResponse } from "@hots-s
  */
 export function useGoals() {
   return useApiFetch<GoalsResponse>("/goals", { withGameMode: false });
+}
+
+/** Pre-configured objectives for the /objectifs page, adapted to the player's
+ * last 30 days. Same mode rule as useGoals: a goal is not a view of one mode. */
+export function useGoalSuggestions() {
+  return useApiFetch<GoalSuggestionsResponse>("/goals/suggestions", { withGameMode: false });
 }
 
 /** Write side of the same resource: `$fetch` is used for mutations so the

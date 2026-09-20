@@ -80,3 +80,46 @@ export interface GoalsResponse {
 export interface GoalResponse {
   goal: PlayerGoal;
 }
+
+/** How far back a pre-configured objective suggestion looks, in days. */
+export const GOAL_SUGGESTION_WINDOW_DAYS = 30;
+
+/** Relative improvement applied to the player's own mean when proposing a
+ * target: +10% for a floor metric, -10% for a ceiling metric. */
+export const GOAL_SUGGESTION_MARGIN = 0.1;
+
+/** Which family a suggestion belongs to: across every hero, the most-played
+ * hero of the window, or the second most-played one. */
+export type GoalSuggestionGroup = "global" | "topHero" | "secondHero";
+
+/** One pre-configured objective offered on /objectifs, adapted to the
+ * player's own recent form. It never creates anything by itself -- the web
+ * pre-fills the form so the player can adjust the target before saving. */
+export interface GoalSuggestion {
+  metricKey: string;
+  metricLabel: string;
+  direction: GoalDirection;
+  /** The suggested target, derived from `baselineValue` and rounded to 2
+   * decimals so the displayed baseline and target stay consistent. */
+  targetValue: number;
+  /** The player's own mean for the metric in this scope/window, the baseline
+   * the target is derived from; null when the sample is unreadable. */
+  baselineValue: number | null;
+  /** Matches that contributed a readable value for the metric. */
+  sampleSize: number;
+  /** False below the shared reliability gates: shown as "indicatif". */
+  reliable: boolean;
+  group: GoalSuggestionGroup;
+  /** Hero scope, null for the global group. */
+  heroId: string | null;
+  heroName: string | null;
+  /** One-line French explanation of where the suggestion comes from. */
+  rationale: string;
+}
+
+/** GET /goals/suggestions (E2 follow-up). */
+export interface GoalSuggestionsResponse {
+  scope: "personal" | "global";
+  windowDays: number;
+  suggestions: GoalSuggestion[];
+}

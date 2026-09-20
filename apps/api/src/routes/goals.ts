@@ -5,7 +5,7 @@ import type { Scope } from "../lib/account-selection";
 import { isKnownDriverMetricKey } from "../lib/driver-analysis";
 import { accountScope } from "../middleware/account-scope";
 import { authSession, requireUser } from "../middleware/auth-session";
-import { createGoal, deleteGoal, listGoals, updateGoal } from "../services/goals.service";
+import { createGoal, deleteGoal, listGoals, suggestGoals, updateGoal } from "../services/goals.service";
 
 type Env = { Variables: { user: User; scope: Scope } };
 
@@ -21,6 +21,9 @@ export const goalsRoute = new Hono<Env>()
     const user = c.get("user");
     return c.json(await listGoals(c.get("scope"), user.id));
   })
+  // Defines no goal: returns the pre-configured suggestions for the last 30
+  // days, which the page uses to pre-fill the form.
+  .get("/suggestions", async (c) => c.json(await suggestGoals(c.get("scope"))))
   .post("/", async (c) => {
     const parsed = goalInputSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);

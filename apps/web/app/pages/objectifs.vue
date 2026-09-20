@@ -1,14 +1,25 @@
 <script setup lang="ts">
 import {
+  GOAL_SUGGESTION_WINDOW_DAYS,
   PROGRESSION_MIN_MATCHES,
   type GoalInput,
   type GoalMetricOption,
+  type GoalSuggestion,
+  type GoalSuggestionGroup,
   type MapHubEntry,
   type PlayerGoal,
 } from "@hots-stats/shared-types";
 import { formatDate } from "~/composables/useFormat";
-import { formatGoalTarget, formatGoalValue, goalPercent, goalTone } from "~/utils/goalDisplay";
-import { useGoalMutations, useGoals } from "~/composables/useGoals";
+import {
+  formatGoalTarget,
+  formatGoalValue,
+  goalPercent,
+  goalTone,
+  hasGoalTarget,
+  parseGoalTarget,
+} from "~/utils/goalDisplay";
+import { formatDriverMetric } from "~/utils/driverDisplay";
+import { useGoalMutations, useGoals, useGoalSuggestions } from "~/composables/useGoals";
 import type { HeroListResponse } from "~/types/analytics";
 
 definePageMeta({ middleware: "auth" });
@@ -26,6 +37,9 @@ useSeoMeta({
 
 const { data, pending, error, refresh } = await useGoals();
 const { createGoal, deleteGoal } = useGoalMutations();
+// Not awaited: the suggestions panel renders its own loading state, and the
+// form below must stay usable even while the calculation runs.
+const { data: suggestionsData, pending: suggestionsPending } = useGoalSuggestions();
 
 const { data: heroesData } = await useApiFetch<HeroListResponse>("/heroes", {
   query: { scope: "personal" },
@@ -42,8 +56,33 @@ const mapItems = computed(() =>
   (mapsData.value?.maps ?? []).map((map) => ({ value: map.mapId, label: map.mapName })),
 );
 
+const suggestions = computed<GoalSuggestion[]>(() => suggestionsData.value?.suggestions ?? []);
+const suggestionWindowDays = computed(
+  () => suggestionsData.value?.windowDays ?? GOAL_SUGGESTION_WINDOW_DAYS,
+);
+
+const SUGGESTION_GROUP_ORDER: GoalSuggestionGroup[] = ["global", "topHero", "secondHero"];
+
+function suggestionGroupLabel(group: GoalSuggestionGroup, heroName: string | null): string {
+  if (group === "global") return "Tous tes héros";
+  const base = group === "topHero" ? "Perso le plus joué" : "2ᵉ perso le plus joué";
+  return heroName ? `${base} : ${heroName}` : base;
+}
+
+const suggestionGroups = computed(() =>
+  SUGGESTION_GROUP_ORDER.map((group) => {
+    const items = suggestions.value.filter((suggestion) => suggestion.group === group);
+    return items.length === 0
+      ? null
+      : { key: group, label: suggestionGroupLabel(group, items[0]?.heroName ?? null), items };
+  }).filter((group): group is NonNullable<typeof group> => group !== null),
+);
+
 const metricKey = ref("");
 const direction = ref<"atLeast" | "atMost">("atLeast");
+// Declared as a string to match UInput's model, but type="number" makes Nuxt
+// UI write an actual number here as soon as the field parses -- hence the
+// coercion in hasGoalTarget/parseGoalTarget rather than a string method.
 const targetValue = ref("");
 const scopeHeroId = ref("");
 const scopeMapId = ref("");
@@ -66,13 +105,13 @@ watch(
 );
 
 const canSubmit = computed(
-  () => metricKey.value !== "" && targetValue.value.trim() !== "" && !submitting.value,
+  () => metricKey.value !== "" && hasGoalTarget(targetValue.value) && !submitting.value,
 );
 
 async function submit() {
   formError.value = null;
-  const target = Number(targetValue.value.replace(",", "."));
-  if (!Number.isFinite(target)) {
+  const target = parseGoalTarget(targetValue.value);
+  if (target === null) {
     formError.value = "Cible invalide : entre un nombre.";
     return;
   }
@@ -97,6 +136,21 @@ async function submit() {
   } finally {
     submitting.value = false;
   }
+}
+
+/** Pre-fills the form from a suggestion so the player can adjust the target
+ * before creating the goal -- a suggestion never creates anything by itself. */
+function applySuggestion(suggestion: GoalSuggestion) {
+  metricKey.value = suggestion.metricKey;
+  direction.value = suggestion.direction;
+  targetValue.value = String(suggestion.targetValue);
+  scopeHeroId.value = suggestion.heroId ?? "";
+  scopeMapId.value = "";
+  dueAt.value = "";
+  formError.value = null;
+  void nextTick(() => {
+    document.getElementById("nouvel-objectif")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 }
 
 const deletingId = ref<string | null>(null);
@@ -126,7 +180,68 @@ function metricLabel(goal: PlayerGoal): string {
       </p>
     </div>
 
-    <UiPanel title="Nouvel objectif" :scrollable="false">
+    <UiPanel title="Objectifs suggérés" :scrollable="false">
+      <p class="text-sm text-muted">
+        Deux axes de travail calculés sur tes {{ suggestionWindowDays }} derniers jours, puis un jeu par
+        héros le plus joué. Clique sur « Utiliser » pour pré-remplir le formulaire.
+      </p>
+
+      <div class="mt-3">
+        <UiStateCard v-if="suggestionsPending" state="loading" message="Calcul de tes axes de travail…" />
+        <p v-else-if="suggestions.length === 0" class="text-sm text-muted">
+          Pas encore assez de parties sur les {{ suggestionWindowDays }} derniers jours pour proposer des
+          objectifs adaptés.
+        </p>
+
+        <div v-else class="flex flex-col gap-4">
+          <section v-for="group in suggestionGroups" :key="group.key" class="flex flex-col gap-2">
+            <h3 class="text-xs font-medium uppercase tracking-wide text-muted">{{ group.label }}</h3>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <article
+                v-for="suggestion in group.items"
+                :key="`${group.key}-${suggestion.metricKey}`"
+                class="flex flex-col gap-2 rounded-lg border border-border bg-background p-3"
+              >
+                <div class="flex flex-wrap items-start justify-between gap-2">
+                  <p class="font-medium">
+                    {{ suggestion.metricLabel }}
+                    <span class="text-muted">{{ directionLabel[suggestion.direction] }}</span>
+                    {{ formatDriverMetric(suggestion.metricKey, suggestion.targetValue) }}
+                  </p>
+                  <span
+                    v-if="!suggestion.reliable"
+                    class="shrink-0 rounded-full bg-surface px-2 py-0.5 text-[11px] text-muted"
+                  >
+                    Indicatif
+                  </span>
+                </div>
+                <p class="text-xs text-muted">{{ suggestion.rationale }}</p>
+                <p class="text-xs text-muted">
+                  Moyenne actuelle :
+                  {{
+                    suggestion.baselineValue === null
+                      ? "—"
+                      : formatDriverMetric(suggestion.metricKey, suggestion.baselineValue)
+                  }}
+                  · {{ suggestion.sampleSize }} partie(s) mesurée(s)
+                </p>
+                <UButton
+                  size="xs"
+                  color="primary"
+                  variant="soft"
+                  class="self-start"
+                  @click="applySuggestion(suggestion)"
+                >
+                  Utiliser
+                </UButton>
+              </article>
+            </div>
+          </section>
+        </div>
+      </div>
+    </UiPanel>
+
+    <UiPanel id="nouvel-objectif" title="Nouvel objectif" :scrollable="false">
       <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <div class="flex flex-col gap-1">
           <label class="text-xs uppercase tracking-wide text-muted">Statistique</label>

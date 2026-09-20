@@ -1,14 +1,17 @@
-import { db, playerGoals, type PlayerGoalRow } from "@hots-stats/db";
-import type {
-  GoalInput,
-  GoalsResponse,
-  GoalUpdate,
-  PlayerGoal,
+import { db, heroes, matchPlayers, matches, playerGoals, type PlayerGoalRow } from "@hots-stats/db";
+import {
+  GOAL_SUGGESTION_WINDOW_DAYS,
+  type GoalInput,
+  type GoalsResponse,
+  type GoalSuggestionsResponse,
+  type GoalUpdate,
+  type PlayerGoal,
 } from "@hots-stats/shared-types";
-import { and, desc, eq } from "drizzle-orm";
-import type { Scope } from "../lib/account-selection";
+import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { type Scope, scopeConditions } from "../lib/account-selection";
 import { DRIVER_METRIC_CATALOG } from "../lib/driver-analysis";
 import { computeGoalProgress } from "../lib/goal-progress";
+import { type GoalSuggestionInput, buildGoalSuggestions } from "../lib/goal-suggestions";
 import { type DriversFilters, loadDriverMatchInputs } from "./drivers.service";
 
 function toIso(value: Date | null): string | null {
@@ -136,4 +139,63 @@ export async function deleteGoal(userId: string, goalId: string): Promise<boolea
     .where(and(eq(playerGoals.userId, userId), eq(playerGoals.id, goalId)))
     .returning({ id: playerGoals.id });
   return deleted.length > 0;
+}
+
+interface TopHero {
+  heroId: string;
+  heroName: string;
+}
+
+/**
+ * The two heroes the player has played the most distinct matches with over the
+ * suggestion window, most played first. Counts distinct matches (not rows) so a
+ * match never counts twice when two linked accounts are in it.
+ */
+async function loadTopHeroes(scope: Scope, from: Date): Promise<TopHero[]> {
+  const conditions = scopeConditions([gte(matches.playedAt, from)], scope, matchPlayers.battletag);
+  const games = sql<number>`count(distinct ${matchPlayers.matchId})`;
+  return db
+    .select({ heroId: matchPlayers.heroId, heroName: heroes.name })
+    .from(matchPlayers)
+    .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
+    .innerJoin(heroes, eq(heroes.id, matchPlayers.heroId))
+    .where(and(...conditions))
+    .groupBy(matchPlayers.heroId, heroes.name)
+    .orderBy(desc(games), matchPlayers.heroId)
+    .limit(2);
+}
+
+/**
+ * Pre-configured objectives adapted to the player's last 30 days: two across
+ * every hero, then two per top-2 most-played hero. Reuses the exact A4 match
+ * loading the goal progress uses, so a suggestion and the goal it pre-fills
+ * read the same numbers. Nothing is written: the web pre-fills the form.
+ */
+export async function suggestGoals(scope: Scope, now = new Date()): Promise<GoalSuggestionsResponse> {
+  const from = new Date(now.getTime() - GOAL_SUGGESTION_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const fromIso = from.toISOString();
+
+  const topHeroes = await loadTopHeroes(scope, from);
+  const [globalMatches, ...heroMatchSets] = await Promise.all([
+    loadDriverMatchInputs(scope, { from: fromIso }),
+    ...topHeroes.map((hero) => loadDriverMatchInputs(scope, { from: fromIso, heroId: hero.heroId })),
+  ]);
+
+  const inputs: GoalSuggestionInput[] = [
+    { scope: { group: "global", heroId: null, heroName: null }, matches: globalMatches ?? [] },
+    ...topHeroes.map((hero, index) => ({
+      scope: {
+        group: index === 0 ? ("topHero" as const) : ("secondHero" as const),
+        heroId: hero.heroId,
+        heroName: hero.heroName,
+      },
+      matches: heroMatchSets[index] ?? [],
+    })),
+  ];
+
+  return {
+    scope: scope.mode,
+    windowDays: GOAL_SUGGESTION_WINDOW_DAYS,
+    suggestions: buildGoalSuggestions(inputs),
+  };
 }

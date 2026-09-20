@@ -1,6 +1,13 @@
 import { describe, expect, test } from "vitest";
 import type { GoalProgress, PlayerGoal } from "@hots-stats/shared-types";
-import { formatGoalTarget, formatGoalValue, goalPercent, goalTone } from "./goalDisplay";
+import {
+  formatGoalTarget,
+  formatGoalValue,
+  goalPercent,
+  goalTone,
+  hasGoalTarget,
+  parseGoalTarget,
+} from "./goalDisplay";
 
 function progress(overrides: Partial<GoalProgress> = {}): GoalProgress {
   return {
@@ -50,5 +57,31 @@ describe("goalDisplay", () => {
   test("an unmet goal is neutral, a met one is a success", () => {
     expect(goalTone(goal({ progress: progress({ achieved: false }) }))).toBe("default");
     expect(goalTone(goal({ progress: progress({ achieved: true }) }))).toBe("success");
+  });
+});
+
+// Regression: UInput type="number" emits a number, so the Cible field can no
+// longer be treated as a string (the old `targetValue.trim()` crashed the
+// whole page as soon as a target was typed).
+describe("goal target input", () => {
+  test("accepts the number UInput emits for type=number", () => {
+    expect(hasGoalTarget(450)).toBe(true);
+    expect(parseGoalTarget(450)).toBe(450);
+  });
+
+  test("treats an empty or missing field as no target", () => {
+    expect(hasGoalTarget("")).toBe(false);
+    expect(hasGoalTarget("   ")).toBe(false);
+    expect(hasGoalTarget(null)).toBe(false);
+    expect(hasGoalTarget(undefined)).toBe(false);
+    expect(parseGoalTarget("")).toBeNull();
+  });
+
+  test("accepts a comma decimal separator", () => {
+    expect(parseGoalTarget("12,5")).toBe(12.5);
+  });
+
+  test("rejects text that is not a number", () => {
+    expect(parseGoalTarget("abc")).toBeNull();
   });
 });
