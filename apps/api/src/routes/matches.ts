@@ -13,13 +13,14 @@ import {
   maps,
   talentPicks,
 } from "@hots-stats/db";
-import { UNKNOWN_GAME_VERSION, type Grid, gridToWireArrays } from "@hots-stats/shared-types";
+import { MATCH_EXPORT_MAX_ROWS, UNKNOWN_GAME_VERSION, type Grid, gridToWireArrays } from "@hots-stats/shared-types";
 import { and, asc, desc, eq, exists, gte, ilike, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { Hono } from "hono";
 import { z } from "zod";
 import { MIN_RELIABLE_STATS_PARSER_VERSION } from "../constants";
 import { type Scope, scopeConditions } from "../lib/account-selection";
+import { MATCH_EXPORT_CHUNK_ROWS, buildMatchCsvHeader, capExportRows, matchExportCsvLine } from "../lib/match-csv";
 import { gameModeListSchema, gameVersionListSchema } from "../lib/query";
 import { isVersionAtLeast } from "../lib/parser-version";
 import { isAllZeroCombat } from "../lib/replay-plausibility";
@@ -66,6 +67,13 @@ const listQuerySchema = filtersQuerySchema.extend({
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(50).default(20),
 });
+
+/**
+ * `GET /matches/export.csv` accepts the exact list filters (mode/hero/map/
+ * period/crossed player/version) plus the sort, and nothing else: pagination
+ * does not apply to an export, which always starts at the first filtered row.
+ */
+const exportQuerySchema = listQuerySchema.omit({ page: true, pageSize: true });
 
 /**
  * `GET /matches/trend` filters, plus an optional `limit` -- the "form
@@ -506,6 +514,61 @@ export const matchesRoute = new Hono<Env>()
           normalized: normalize(perf?.survivalMinutes ?? 0, range?.survivalMin ?? 0, range?.survivalMax ?? 0),
         },
       },
+    });
+  })
+  // CSV export of the same filtered list the page shows (F4). Reuses
+  // buildMatchConditions so scope and filters are identical to GET /matches,
+  // reads at most MATCH_EXPORT_MAX_ROWS + 1 rows (the +1 only detects
+  // truncation), then streams the file in bounded chunks. The cap and the
+  // truncation flag are reported in response headers (spec F4 AC2).
+  .get("/export.csv", async (c) => {
+    const parsed = exportQuerySchema.safeParse(c.req.query());
+    if (!parsed.success) {
+      return c.json({ error: parsed.error.flatten() }, 400);
+    }
+    const { sortBy, sortDir, ...filters } = parsed.data;
+    const where = buildMatchConditions(c.get("scope"), filters);
+
+    const rows = await db
+      .select({
+        playedAt: matches.playedAt,
+        mapName: maps.name,
+        gameMode: matches.gameMode,
+        heroName: heroes.name,
+        durationSeconds: matches.durationSeconds,
+        winner: matchPlayers.winner,
+        gameVersion: matches.gameVersion,
+      })
+      .from(matchPlayers)
+      .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
+      .innerJoin(maps, eq(maps.id, matches.mapId))
+      .innerJoin(heroes, eq(heroes.id, matchPlayers.heroId))
+      .where(where)
+      .orderBy((sortDir === "asc" ? asc : desc)(SORTABLE_COLUMNS[sortBy]))
+      .limit(MATCH_EXPORT_MAX_ROWS + 1);
+
+    const { rows: capped, truncated } = capExportRows(rows, MATCH_EXPORT_MAX_ROWS);
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(buildMatchCsvHeader()));
+        for (let i = 0; i < capped.length; i += MATCH_EXPORT_CHUNK_ROWS) {
+          const chunk = capped
+            .slice(i, i + MATCH_EXPORT_CHUNK_ROWS)
+            .map(matchExportCsvLine)
+            .join("");
+          controller.enqueue(encoder.encode(chunk));
+        }
+        controller.close();
+      },
+    });
+
+    return c.body(body, 200, {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": 'attachment; filename="hots-matches.csv"',
+      "X-Export-Row-Limit": String(MATCH_EXPORT_MAX_ROWS),
+      "X-Export-Row-Count": String(capped.length),
+      "X-Export-Truncated": truncated ? "true" : "false",
     });
   })
   .get("/:id", async (c) => {

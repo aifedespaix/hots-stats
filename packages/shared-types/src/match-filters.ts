@@ -7,3 +7,11 @@
  * on the exact string without importing from one another.
  */
 export const UNKNOWN_GAME_VERSION = "unknown" as const;
+
+/**
+ * Server-side row cap for GET /matches/export.csv. Lives here so the API
+ * enforces exactly the limit the web announces, and cannot drift (cross-cutting
+ * "constants" rule). Exceeding it yields the first MATCH_EXPORT_MAX_ROWS rows
+ * in the requested order, plus an X-Export-Truncated: true header.
+ */
+export const MATCH_EXPORT_MAX_ROWS = 5000;
