@@ -89,6 +89,42 @@ export const matchTimelineLevelSnapshotSchema = z.object({
 });
 export type MatchTimelineLevelSnapshot = z.infer<typeof matchTimelineLevelSnapshotSchema>;
 
+/** One objective/camp capture the daemon extracted from a tracker
+ * SStatGameEvent (see daemon-python/src/parser.py's
+ * _extract_objective_events, PARSER_VERSION 1.15). team is null when the
+ * event carries no unambiguous side (see the G1 design spec's table); detail
+ * is a free-text camp/punisher type. */
+export const objectiveEventKindSchema = z.enum([
+  "mercenaryCamp",
+  "dragonKnight",
+  "tribute",
+  "curse",
+  "templeCaptured",
+  "templeActivated",
+  "altarCaptured",
+  "townCaptured",
+  "ghostShipCaptured",
+  "nukeCollected",
+  "nukeFired",
+  "nukeDropped",
+  "golemsSpawned",
+  "capturePoint",
+  "shrineCaptured",
+  "punisherKilled",
+  "soulEatersSpawned",
+  "immortalDefeated",
+  "sixTownStart",
+]);
+export type ObjectiveEventKind = z.infer<typeof objectiveEventKindSchema>;
+
+export const matchObjectiveEventSchema = z.object({
+  kind: objectiveEventKindSchema,
+  team: z.union([z.literal(0), z.literal(1)]).nullable(),
+  atSeconds: z.number().int().nonnegative(),
+  detail: z.string().nullable().optional(),
+});
+export type MatchObjectiveEvent = z.infer<typeof matchObjectiveEventSchema>;
+
 export const matchTimelineSchema = z.object({
   deaths: z.array(matchTimelineDeathSchema),
   levelSnapshots: z.array(matchTimelineLevelSnapshotSchema),
@@ -96,6 +132,10 @@ export const matchTimelineSchema = z.object({
   // doesn't send this yet) still validates -- see replay-upsert.service.ts,
   // which simply skips writing structure-event rows when it's absent.
   structureEvents: z.array(matchStructureEventSchema).optional(),
+  // Optional so a daemon older than PARSER_VERSION 1.15 (which doesn't send
+  // this yet) still validates -- see replay-upsert.service.ts, which simply
+  // skips writing objective rows when it's absent.
+  objectives: z.array(matchObjectiveEventSchema).optional(),
 });
 export type MatchTimeline = z.infer<typeof matchTimelineSchema>;
 
