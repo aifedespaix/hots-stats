@@ -707,6 +707,20 @@ export interface SessionBaselineDelta {
   xpPerMinute: number;
 }
 
+/** One entry of the session picker: a session's identity and headline record,
+ * without its matches. GET /stats/session returns one per selectable session so
+ * the web picker can list them without a second round-trip; the 90-minute
+ * boundary is the same `clusterSessions` rule that built the selected session. */
+export interface SessionSummary {
+  /** ISO datetime of the first match. */
+  startedAt: string;
+  /** ISO datetime of the last match. */
+  endedAt: string;
+  gamesPlayed: number;
+  wins: number;
+  losses: number;
+}
+
 /** The selected session, oldest match first. */
 export interface SessionRecap {
   /** ISO datetime of the first match. */
@@ -725,6 +739,11 @@ export interface SessionRecap {
 export interface SessionRecapResponse {
   scope: "personal" | "global";
   session: SessionRecap | null;
+  /** Every selectable session, most recent first, so the web picker can offer
+   * them without a second round-trip. Built from the same clustering that
+   * produced `session`, so the two can never disagree. Empty when the scope
+   * has no match at all. */
+  sessions: SessionSummary[];
   /** One row per pre-session scope match, or null with no session. */
   baseline: SessionRecapStats | null;
   baselineDelta: SessionBaselineDelta | null;

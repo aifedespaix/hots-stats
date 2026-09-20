@@ -130,4 +130,47 @@ describe("buildSessionRecap", () => {
     expect(recap.baseline?.kda).toBeNull();
     expect(recap.baselineDelta?.kda).toBeNull();
   });
+
+  test("lists every session most recent first, with its record", () => {
+    const recap = buildSessionRecap([
+      ...block("2026-09-01T20:00:00.000Z", 2, "older"),
+      ...block("2026-09-02T20:00:00.000Z", 3, "newer", false),
+    ]);
+    expect(recap.sessions.map((entry) => entry.gamesPlayed)).toEqual([3, 2]);
+    expect(recap.sessions[0]).toMatchObject({
+      startedAt: "2026-09-02T20:00:00.000Z",
+      endedAt: "2026-09-02T20:30:00.000Z",
+      gamesPlayed: 3,
+      wins: 0,
+      losses: 3,
+    });
+    expect(recap.sessions[1]).toMatchObject({
+      startedAt: "2026-09-01T20:00:00.000Z",
+      endedAt: "2026-09-01T20:15:00.000Z",
+      gamesPlayed: 2,
+      wins: 2,
+      losses: 0,
+    });
+    // The default recap is the one the picker shows first.
+    expect(recap.session?.startedAt).toBe(recap.sessions[0]?.startedAt);
+  });
+
+  test("still lists every session when at selects an older one", () => {
+    const recap = buildSessionRecap(
+      [
+        ...block("2026-09-01T20:00:00.000Z", 2, "older"),
+        ...block("2026-09-02T20:00:00.000Z", 2, "newer"),
+      ],
+      "2026-09-01T22:00:00.000Z",
+    );
+    expect(recap.session?.startedAt).toBe("2026-09-01T20:00:00.000Z");
+    expect(recap.sessions.map((entry) => entry.startedAt)).toEqual([
+      "2026-09-02T20:00:00.000Z",
+      "2026-09-01T20:00:00.000Z",
+    ]);
+  });
+
+  test("lists no session at all with no match", () => {
+    expect(buildSessionRecap([]).sessions).toEqual([]);
+  });
 });

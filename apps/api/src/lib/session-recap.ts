@@ -5,6 +5,7 @@ import {
   type SessionRecap,
   type SessionRecapResponse,
   type SessionRecapStats,
+  type SessionSummary,
 } from "@hots-stats/shared-types";
 import { computePeriodStats, type TrendMatchInput } from "./trend-series";
 
@@ -99,17 +100,40 @@ function buildSession(matches: SessionMatchInput[], stats: SessionRecapStats): S
   };
 }
 
+/** Identity + record of one session, for the picker. Reuses the session's own
+ * match list so the counts in the dropdown always match the recap that opens
+ * when that session is picked. */
+function summarizeSession(matches: SessionMatchInput[]): SessionSummary {
+  const wins = matches.filter((entry) => entry.winner).length;
+  return {
+    startedAt: matches[0]!.playedAt,
+    endedAt: matches[matches.length - 1]!.playedAt,
+    gamesPlayed: matches.length,
+    wins,
+    losses: matches.length - wins,
+  };
+}
+
 /**
- * Builds the E1 recap: the selected session, the player's baseline (every scope
- * match strictly before the session), and the deltas between them. The deltas
- * are exposed only when BOTH sides clear PROGRESSION_MIN_MATCHES, so the
- * endpoint never claims a trend on a thin sample.
+ * Builds the E1 recap: the selected session, every selectable session for the
+ * picker (most recent first), the player's baseline (every scope match strictly
+ * before the session), and the deltas between them. The deltas are exposed only
+ * when BOTH sides clear PROGRESSION_MIN_MATCHES, so the endpoint never claims a
+ * trend on a thin sample.
  */
 export function buildSessionRecap(matches: SessionMatchInput[], at?: string): SessionRecapCore {
   const ordered = chronological(matches);
-  const session = selectSession(clusterSessions(ordered), at);
+  const clustered = clusterSessions(ordered);
+  const sessions = clustered.map(summarizeSession).reverse();
+  const session = selectSession(clustered, at);
   if (!session) {
-    return { session: null, baseline: null, baselineDelta: null, insufficientSample: true };
+    return {
+      session: null,
+      sessions,
+      baseline: null,
+      baselineDelta: null,
+      insufficientSample: true,
+    };
   }
   const sessionStart = Date.parse(session[0]!.playedAt);
   const baselineMatches = ordered.filter((entry) => Date.parse(entry.playedAt) < sessionStart);
@@ -120,6 +144,7 @@ export function buildSessionRecap(matches: SessionMatchInput[], at?: string): Se
     baseline.gamesPlayed >= PROGRESSION_MIN_MATCHES;
   return {
     session: buildSession(session, stats),
+    sessions,
     baseline,
     baselineDelta: sufficientSample ? computeDelta(stats, baseline) : null,
     insufficientSample: !sufficientSample,

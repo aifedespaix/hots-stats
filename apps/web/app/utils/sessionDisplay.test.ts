@@ -1,5 +1,13 @@
+import type { SessionSummary } from "@hots-stats/shared-types";
 import { describe, expect, test } from "vitest";
-import { deltaTone, formatSignedNumber } from "./sessionDisplay";
+import { formatDate } from "~/composables/useFormat";
+import {
+  SESSION_PICKER_WINDOW_DAYS,
+  deltaTone,
+  formatSessionOption,
+  formatSignedNumber,
+  selectableSessions,
+} from "./sessionDisplay";
 
 describe("deltaTone", () => {
   test("no movement or missing value is neutral", () => {
@@ -27,5 +35,52 @@ describe("formatSignedNumber", () => {
   test("does not print a negative zero", () => {
     expect(formatSignedNumber(-0.01)).toBe("0.0");
     expect(formatSignedNumber(0)).toBe("0.0");
+  });
+});
+
+function session(startedAt: string, overrides: Partial<SessionSummary> = {}): SessionSummary {
+  return { startedAt, endedAt: startedAt, gamesPlayed: 3, wins: 2, losses: 1, ...overrides };
+}
+
+describe("selectableSessions", () => {
+  const NOW = Date.parse("2026-09-12T12:00:00.000Z");
+  const DAY = 24 * 60 * 60 * 1000;
+
+  test("keeps only the sessions inside the window, in the order given", () => {
+    const recent = session("2026-09-10T20:00:00.000Z");
+    const edge = session("2026-08-14T20:00:00.000Z");
+    const tooOld = session("2026-08-01T20:00:00.000Z");
+    expect(selectableSessions([recent, edge, tooOld], null, NOW)).toEqual([recent, edge]);
+  });
+
+  test("always keeps the session currently displayed, even older than the window", () => {
+    const recent = session("2026-09-10T20:00:00.000Z");
+    const old = session("2026-01-01T20:00:00.000Z");
+    expect(selectableSessions([recent, old], old.startedAt, NOW)).toEqual([recent, old]);
+  });
+
+  test("uses the 30-day window, boundary included", () => {
+    expect(SESSION_PICKER_WINDOW_DAYS).toBe(30);
+    const exactlyAtThreshold = session(new Date(NOW - 30 * DAY).toISOString());
+    const justOutside = session(new Date(NOW - 30 * DAY - 1000).toISOString());
+    expect(selectableSessions([exactlyAtThreshold, justOutside], null, NOW)).toEqual([
+      exactlyAtThreshold,
+    ]);
+  });
+
+  test("returns nothing for no session", () => {
+    expect(selectableSessions([], null, NOW)).toEqual([]);
+  });
+});
+
+describe("formatSessionOption", () => {
+  test("labels a session with its date, game count and record", () => {
+    const entry = session("2026-09-12T20:15:00.000Z", { gamesPlayed: 5, wins: 3, losses: 2 });
+    expect(formatSessionOption(entry)).toBe(`${formatDate(entry.startedAt)} · 5 parties · 3V-2D`);
+  });
+
+  test("singularises a one-game session", () => {
+    const entry = session("2026-09-12T20:15:00.000Z", { gamesPlayed: 1, wins: 0, losses: 1 });
+    expect(formatSessionOption(entry)).toBe(`${formatDate(entry.startedAt)} · 1 partie · 0V-1D`);
   });
 });

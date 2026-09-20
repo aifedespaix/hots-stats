@@ -1,29 +1,79 @@
 <script setup lang="ts">
 import { PROGRESSION_MIN_MATCHES } from "@hots-stats/shared-types";
 import { useSessionRecap } from "~/composables/useSessionRecap";
-import { deltaTone, formatSignedNumber } from "~/utils/sessionDisplay";
+import {
+  deltaTone,
+  formatSessionOption,
+  formatSignedNumber,
+  selectableSessions,
+} from "~/utils/sessionDisplay";
 
 definePageMeta({ middleware: "auth" });
 
 useSeoMeta({
   title: "Récap de session",
   description:
-    "Le bilan de ta dernière session Heroes of the Storm : record, écart à ta moyenne et détail des parties.",
+    "Le bilan d'une de tes sessions Heroes of the Storm : record, écart à ta moyenne et détail des parties.",
   ogTitle: "Récap de session - HotS Analytics",
   ogDescription:
-    "Le bilan de ta dernière session Heroes of the Storm : record, écart à ta moyenne et détail des parties.",
+    "Le bilan d'une de tes sessions Heroes of the Storm : record, écart à ta moyenne et détail des parties.",
   ogImage: "/og/index.png",
   twitterCard: "summary_large_image",
   twitterImage: "/og/index.png",
   robots: "noindex, follow",
 });
 
-const { data, pending, error } = await useSessionRecap();
+const route = useRoute();
+const router = useRouter();
+
+/** `?at=<ISO>` picks the session to recap; absent means the latest one. A value
+ * is only trusted when it parses: the API answers 400 on a malformed datetime,
+ * which would replace the whole page with an error card. */
+function readAt(value: unknown): string {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return typeof raw === "string" && !Number.isNaN(Date.parse(raw)) ? raw : "";
+}
+
+const at = ref(readAt(route.query.at));
+
+const { data, pending, error } = await useSessionRecap(
+  computed<Record<string, unknown>>(() => (at.value ? { at: at.value } : {})),
+);
 
 const session = computed(() => data.value?.session ?? null);
 const stats = computed(() => session.value?.stats ?? null);
 const baseline = computed(() => data.value?.baseline ?? null);
 const delta = computed(() => data.value?.baselineDelta ?? null);
+
+/** The picker stays on the picked session until the matching recap lands, so
+ * the control never snaps back to the previous session mid-fetch. */
+const pickedAt = ref<string | null>(null);
+watch([session, () => error.value], () => {
+  pickedAt.value = null;
+});
+
+const selectedStartedAt = computed(() => pickedAt.value ?? session.value?.startedAt ?? "");
+
+const sessionItems = computed(() =>
+  selectableSessions(data.value?.sessions ?? [], session.value?.startedAt ?? null, Date.now()).map(
+    (entry) => ({ value: entry.startedAt, label: formatSessionOption(entry) }),
+  ),
+);
+
+function pickSession(startedAt?: string) {
+  if (!startedAt || startedAt === at.value) return;
+  pickedAt.value = startedAt;
+  at.value = startedAt;
+}
+
+// The URL is a projection of the selection: a shared or reloaded link reopens
+// the same session. Unmanaged query params are kept.
+watch(at, (value) => {
+  const query = { ...route.query };
+  if (value) query.at = value;
+  else delete query.at;
+  void router.replace({ query });
+});
 
 const record = computed(() =>
   stats.value ? stats.value.wins + " V · " + stats.value.losses + " D" : "—",
@@ -48,8 +98,21 @@ const insufficientMessage = computed(() => {
     <div class="min-w-0">
       <h1 class="font-heading text-2xl font-semibold">Récap de session</h1>
       <p class="mt-1 text-sm text-muted">
-        Le bilan de ta dernière session : record, écart à ta moyenne et détail des parties.
+        Le bilan d'une de tes sessions : choisis celle à analyser parmi les 30 derniers jours.
       </p>
+    </div>
+
+    <div v-if="sessionItems.length > 0 && !error" class="flex min-w-0 flex-col gap-1 sm:max-w-md">
+      <span class="text-xs uppercase tracking-wide text-muted">Session analysée</span>
+      <USelectMenu
+        :model-value="selectedStartedAt"
+        value-key="value"
+        label-key="label"
+        :items="sessionItems"
+        placeholder="Dernière session"
+        :loading="pending"
+        @update:model-value="pickSession"
+      />
     </div>
 
     <UiStateCard v-if="pending" state="loading" message="Chargement de ta session…" />
