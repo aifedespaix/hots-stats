@@ -348,6 +348,12 @@ rappelle donc le contexte nécessaire plutôt que de supposer une continuité.
   réponse en flux) + actions « Exporter en CSV » et « Copier le lien » sur
   `/matches` (le lien copié est l'URL de la vue, F2). Aucune migration, aucune
   dépendance.
+- **Suite Progression — G1 (événements d'objectifs)** : extraction daemon
+  allowlistée des `SStatGameEvent` (camps + objectifs par carte) dans
+  `timeline.objectives` (PARSER_VERSION 1.15, `MIN_PARSER_VERSION` inchangé),
+  table additive `match_objective_events`, exposition sur `GET /matches/:id`,
+  marqueurs + résumé FR sur la Chronologie de `/matches/[id]`. Aucune
+  dépendance.
 
 ## À faire
 

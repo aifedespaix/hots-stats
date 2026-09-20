@@ -679,10 +679,33 @@ Légende : `[ ]` à faire · `[~]` en cours · `[x]` terminé · `[!]` bloqué
 
 ### Lot G — Backlog (spec séparée requise)
 
-- [ ] **G1 — Événements d'objectifs (captures, camps)**
+- [x] **G1 — Événements d'objectifs (captures, camps)**
   Nécessite une extraction `heroprotocol` côté daemon, un bump
   `PARSER_VERSION`, une décision `MIN_PARSER_VERSION`, une table et un
-  chemin d'upsert. **Ne pas démarrer sans sa propre spec.** Spec § G1.
+  chemin d'upsert. **Ne pas démarrer sans sa propre spec.** Spec ` G1.
+  **Fait** (2026-09-20), même session que la spec dédiée
+  `docs/superpowers/specs/2026-09-20-g1-objective-events-design.md`. Écarts /
+  précisions vs spec :
+  - L'allowlist `OBJECTIVE_EVENT_SPECS` (19 `m_eventName`) est le seul point
+    de vérité : tout nom absent est ignoré, jamais deviné ; l'équipe est lue
+    selon sa source déclarée (`fixed` /4096 -> 1/2, `int` 1/2) puis ramenée
+    en 0/1, et un événement dont l'équipe ne se résout pas à {0, 1} est
+    **abandonné** (skip plutôt que deviner). Noms exclus listés dans la spec :
+    `SkyTempleShotsFired`, `Boss Duel Started`, `GolemLanes`,
+    `BraxisHoldoutMapEventComplete`, `Pickup Spawned/Used`,
+    `TownStructureInit/Death`, `PlayerDeath`.
+  - `PARSER_VERSION` bumpé en **1.15** ; `MIN_PARSER_VERSION` laissé à
+    **1.10** (bloc additif/optionnel, précédent 1.8/1.11/1.13 : bump =
+    resync de masse inutile pour les daemons qui ne peuvent pas l'enrichir).
+  - Table `match_objective_events` keyée sur `matchId` (cascade), colonne
+    `kind` en `text` (vocabulaire ouvert par carte) ; migration
+    `0022_chilly_zuras.sql` purement additive (CREATE TABLE/INDEX + FK).
+  - Les stats objectif par joueur déjà transmises mais jetées par zod
+    (`mercCampCaptures`, `dragonShrinesCaptured`, ...) restent **hors
+    périmètre** (ni horodatage ni équipe) ; l'agrégat par carte aussi.
+  - UI : marqueurs + résumé FR dans un composant frère `MatchObjectives.vue`
+    monté dans l'onglet Chronologie (même onglet, pas de reflow du layout C2
+    de 851 lignes) plutôt que dans le SVG du graphe.
 
 ---
 
