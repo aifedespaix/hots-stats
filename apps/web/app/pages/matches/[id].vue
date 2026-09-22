@@ -37,6 +37,11 @@ const matchSeoDescription = computed(() =>
     : "Scoreboard enrichi et analyse Coach d'une partie Heroes of the Storm.",
 );
 
+// Scoped to this page only (unhead tears it down on unmount): lets the
+// heatmaps tab's shell "magnetize" scrolling toward it (`snap-start` below)
+// instead of the page settling wherever a scroll gesture happens to stop.
+useHead({ htmlAttrs: { class: "snap-y snap-proximity" } });
+
 useSeoMeta({
   title: () => matchTitle.value,
   description: () => matchSeoDescription.value,
@@ -82,6 +87,11 @@ const scoreboardRows = computed(() => buildScoreboardRows(allPlayers.value, myBa
 const performerBadges = computed(() => topPerformerBadges(scoreboardRows.value));
 const viewerAllyRows = computed(() => scoreboardRows.value.filter((r) => r.isAlly));
 const viewerEnemyRows = computed(() => scoreboardRows.value.filter((r) => !r.isAlly));
+
+/** Null when the viewer isn't a participant in this match (e.g. viewing a
+ * teammate's upload third-hand) -- shown next to the title, above the tabs,
+ * so it reads the same on every tab (recap/heatmap/chronology). */
+const viewerWon = computed<boolean | null>(() => scoreboardRows.value.find((r) => r.isMe)?.winner ?? null);
 
 // --- Tab 3: chronology -----------------------------------------------------
 
@@ -149,27 +159,24 @@ function onTimelineZoomAround(payload: { anchorSeconds: number; factor: number }
  * page title and the tab list all sit above it, and their heights are not ours
  * to assume. The fallback keeps SSR and the first paint sane. */
 const chronologyShell = ref<HTMLElement | null>(null);
-const chronologyOffset = ref<number | null>(null);
+const { offset: chronologyOffset, measure: measureChronologyOffset } = useViewportOffset(chronologyShell);
 
-function measureChronologyOffset() {
-  const element = chronologyShell.value;
-  // `offsetParent` is null for a display:none element -- the tab body while
-  // another tab is active -- whose rect would read as a 0 top and collapse the
-  // whole panel to a sliver.
-  if (!element || element.offsetParent === null) return;
-  chronologyOffset.value = Math.round(element.getBoundingClientRect().top + 24);
-}
+/** Same idea for the heatmaps tab: pinned to `100dvh - offset` so the map and
+ * its controls fit in one screen on common viewports; `overflow-y-auto` is
+ * the fallback for a comparison-mode layout or a tall map that doesn't. */
+const heatmapsShell = ref<HTMLElement | null>(null);
+const { offset: heatmapsOffset, measure: measureHeatmapsOffset } = useViewportOffset(heatmapsShell);
 
-function onTimelineTabChange() {
+function onTabChange() {
   stopTimelinePlayback();
   nextTick(measureChronologyOffset);
+  nextTick(measureHeatmapsOffset);
 }
 
-onMounted(() => window.addEventListener("resize", measureChronologyOffset));
-onBeforeUnmount(() => window.removeEventListener("resize", measureChronologyOffset));
 // The tab body only mounts once its tab is active, and the match data arrives
 // asynchronously (which can reflow the title above it).
 watch([chronologyShell, data], () => nextTick(measureChronologyOffset));
+watch([heatmapsShell, data], () => nextTick(measureHeatmapsOffset));
 
 /** The team the viewer played on, so the chronology says "mon équipe" rather
  * than "équipe 0"; null when the viewer isn't in this match. */
@@ -280,7 +287,17 @@ const displayedInsights = computed(() =>
   <div v-else-if="data" class="space-y-6">
     <div>
       <UiBackLink to="/matches" label="Retour à l'historique" />
-      <h1 class="mt-2 font-heading text-2xl font-semibold">{{ data.match.mapName }}</h1>
+      <div class="mt-2 flex flex-wrap items-center gap-3">
+        <h1 class="font-heading text-2xl font-semibold">{{ data.match.mapName }}</h1>
+        <span
+          v-if="viewerWon !== null"
+          class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold"
+          :class="viewerWon ? 'border-success/30 bg-success/10 text-success' : 'border-danger/30 bg-danger/10 text-danger'"
+        >
+          <span aria-hidden="true">{{ outcomeGlyph(viewerWon) }}</span>
+          {{ viewerWon ? "Victoire" : "Défaite" }}
+        </span>
+      </div>
       <p class="mt-1 text-sm text-muted">
         {{ formatGameMode(data.match.gameMode) }} · {{ formatDate(data.match.playedAt) }} ·
         {{ formatDuration(data.match.durationSeconds) }} · {{ data.match.region }}
@@ -296,7 +313,7 @@ const displayedInsights = computed(() =>
       description="Cette partie a été analysée par une ancienne version du parseur, qui pouvait mal attribuer certaines stats de combat (dégâts, soins, XP figés à 0 ou dupliqués entre joueurs). Elle sera corrigée automatiquement à la prochaine synchronisation du daemon du joueur qui l'a envoyée, si le fichier de replay est encore présent sur son disque."
     />
 
-    <UTabs :items="tabItems" variant="pill" class="w-full" @update:model-value="onTimelineTabChange">
+    <UTabs :items="tabItems" variant="pill" class="w-full" @update:model-value="onTabChange">
       <template #scoreboard>
         <div class="mt-4 space-y-6">
           <CoachTeamTotalsBar :my-team="viewerAllyRows" :enemy-team="viewerEnemyRows" />
@@ -315,7 +332,11 @@ const displayedInsights = computed(() =>
       </template>
 
       <template #heatmaps>
-        <div class="mt-4">
+        <div
+          ref="heatmapsShell"
+          class="mt-4 snap-start scroll-mt-[65px] lg:h-[calc(100dvh-var(--heatmaps-offset))] lg:overflow-y-auto"
+          :style="{ '--heatmaps-offset': (heatmapsOffset ?? 304) + 'px' }"
+        >
           <SpatialSlotGroup
             v-if="spatialGrid && spatialMatchHeroes.length > 0"
             :map-id="data.match.mapId"
