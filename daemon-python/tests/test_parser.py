@@ -25,6 +25,7 @@ from src.parser import (
     _hero_from_unit_type_name,
     _hero_unit_tags_by_toon,
     _iter_unit_positions,
+    _latest_calibration_timestamp,
     _normalized_position_samples_by_toon,
     _position_at_or_before,
     _presence_seconds_by_cell,
@@ -1513,6 +1514,53 @@ def test_extract_spatial_splits_one_hero_across_two_layers():
     bottom_entry = next(e for e in entries if e["layer"] == "bottom")
     assert sum(default_entry["secondsInCell"]) == pytest.approx(10.0, abs=0.1)
     assert bottom_entry["cellIndex"]
+
+
+def test_latest_calibration_timestamp_picks_the_max_across_layers():
+    calibrations = {
+        "": {"minX": 0.0, "maxX": 100.0, "minY": 0.0, "maxY": 100.0, "updatedAt": "2026-01-01T00:00:00.000Z"},
+        "bottom": {"minX": 0.0, "maxX": 100.0, "minY": 0.0, "maxY": 100.0, "updatedAt": "2026-06-15T12:30:00.000Z"},
+    }
+
+    assert _latest_calibration_timestamp(calibrations) == "2026-06-15T12:30:00Z"
+
+
+def test_latest_calibration_timestamp_none_without_any_updated_at():
+    calibrations = {"": {"minX": 0.0, "maxX": 100.0, "minY": 0.0, "maxY": 100.0}}
+
+    assert _latest_calibration_timestamp(calibrations) is None
+
+
+def test_extract_spatial_includes_calibrated_at_from_calibrations():
+    events = [
+        *_base_tracker_events(),
+        _unit_born_event(1, "HeroLiMing"),
+        _unit_positions_event(610, [(1, 10.0, 10.0)]),
+        _unit_positions_event(610 + 16 * 10, [(1, 20.0, 20.0)]),
+    ]
+
+    payload = build_payload(
+        header=_header(610 + 16 * 600),
+        details=_details(),
+        initdata=_initdata(),
+        tracker_events=events,
+        attributes_events=_base_attributes_events(),
+        battletags=_battletags(),
+        replay_hash="a" * 64,
+        calibrations_by_map={
+            "cursed-hollow": {
+                "": {
+                    "minX": 0.0,
+                    "maxX": 100.0,
+                    "minY": 0.0,
+                    "maxY": 100.0,
+                    "updatedAt": "2026-09-20T08:00:00.000Z",
+                }
+            }
+        },
+    )
+
+    assert payload["spatial"]["calibratedAt"] == "2026-09-20T08:00:00Z"
 
 
 def test_extract_deaths_tags_death_layer():

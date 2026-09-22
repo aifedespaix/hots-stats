@@ -1,0 +1,1 @@
+ALTER TABLE "matches" ADD COLUMN "spatial_calibrated_at" timestamp with time zone;

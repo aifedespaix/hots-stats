@@ -207,6 +207,18 @@ export const spatialSchema = z.object({
   // doesn't send this yet) still validates -- see replay-upsert.service.ts,
   // which simply skips writing trajectory rows when it's absent.
   trajectories: z.array(matchHeroTrajectorySchema).optional(),
+  // ISO timestamp of the map/layer calibration(s) used to normalize this
+  // payload's coordinates -- the max `updatedAt` across every layer the
+  // daemon had calibrations for when it parsed this replay (see
+  // `_extract_spatial` in daemon-python/src/parser.py, PARSER_VERSION
+  // 1.18). Lets replay-upsert.service.ts tell "this re-upload has spatial
+  // data normalized against a *newer* calibration than what's stored" apart
+  // from "this is just the same replay being re-sent" -- the former should
+  // overwrite existing spatial rows even at an unchanged parserVersion, the
+  // latter shouldn't. Optional so an older daemon build's payload still
+  // validates; absent means "can't prove this is fresher", never treated as
+  // newer than a stored value.
+  calibratedAt: z.string().optional(),
 });
 export type Spatial = z.infer<typeof spatialSchema>;
 

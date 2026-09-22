@@ -244,7 +244,27 @@ from __future__ import annotations
 # NOT paired with a `MIN_PARSER_VERSION` bump, same reasoning as 1.12: this
 # only changes what gets POSTed to `/spatial/samples` for *uncalibrated*
 # maps, never the `spatial` block of an already-ingested match.
-PARSER_VERSION = "1.17"
+# 1.18: fixes recalibrating an already-calibrated map never actually fixing
+# a previously-ingested match's spatial data. `ingestion.
+# sync_spatial_calibrations` already invalidated (and thus reparsed) matches
+# for a recalibrated map, but the re-upload silently no-opped server-side:
+# `replay-upsert.service.ts`'s stale-version guard only let a same-
+# `parserVersion` re-upload overwrite a match's spatial data when that match
+# had *zero* spatial rows yet, never when it already had rows from before
+# the calibration fix (confirmed live on production, 2026-09: a re-parsed
+# "Les tours du destin" replay with corrected Towers of Doom coordinates was
+# skipped as `stale_version`, leaving the wrong points on screen). `spatial`
+# now carries `calibratedAt` (`_extract_spatial`'s new
+# `_latest_calibration_timestamp` helper -- the max `updatedAt` across the
+# map's calibration layers) so the server can tell "this payload was
+# normalized against a newer calibration than what's stored" apart from
+# "this is the same replay being re-sent for some unrelated reason", and
+# allow the former through. Deliberately NOT paired with a
+# `MIN_PARSER_VERSION` bump: an old daemon build simply omits `calibratedAt`,
+# which the server treats as "can't prove this is fresher" and falls back to
+# the pre-1.18 zero-rows check -- no worse than today, and every daemon that
+# self-updates gets the real fix on its next natural resync.
+PARSER_VERSION = "1.18"
 
 
 # How many times a single replay is allowed to fail with a parse error (a

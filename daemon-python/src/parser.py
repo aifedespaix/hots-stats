@@ -1056,11 +1056,37 @@ def _extract_spatial(
     if not presence:
         return None
 
-    return {
+    result: dict[str, Any] = {
         "schemaVersion": constants.SPATIAL_SCHEMA_VERSION,
         "grid": {"cols": cols, "rows": rows},
         "presence": presence,
     }
+    calibrated_at = _latest_calibration_timestamp(calibrations)
+    if calibrated_at is not None:
+        result["calibratedAt"] = calibrated_at
+    return result
+
+
+def _latest_calibration_timestamp(calibrations: dict[str, dict[str, float]]) -> str | None:
+    """Max `updatedAt` across every layer in one map's calibrations dict (see
+    `api_client.fetch_calibrations`'s docstring for the dict shape), used as
+    `spatial.calibratedAt` so replay-upsert.service.ts can tell a re-upload
+    normalized against a newer calibration apart from a same-calibration
+    re-send -- see PARSER_VERSION 1.18's changelog entry. Returns None if no
+    layer has an `updatedAt` (shouldn't happen for a real API response, but
+    a layer dict built by a test fixture may omit it)."""
+    timestamps: list[dt.datetime] = []
+    for layer_bounds in calibrations.values():
+        raw = layer_bounds.get("updatedAt")
+        if not raw:
+            continue
+        try:
+            timestamps.append(dt.datetime.fromisoformat(str(raw).replace("Z", "+00:00")))
+        except ValueError:
+            continue
+    if not timestamps:
+        return None
+    return max(timestamps).isoformat().replace("+00:00", "Z")
 
 
 def _extract_trajectories(

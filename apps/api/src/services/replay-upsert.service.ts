@@ -35,25 +35,33 @@ export type UpsertResult =
   | { upserted: false; reason: "stale_version"; matchId: string };
 
 /**
- * True if `matchId` already has at least one `match_spatial_grids` row.
- * Only queried on the "otherwise would be a stale-version no-op" path in
- * `upsertReplay` below, to detect the one case where a same-version
- * re-upload must still go through: a map getting calibrated *after* a
- * match was first ingested doesn't bump PARSER_VERSION at all (calibration
- * is server-side data, not parser code), so without this check a replay
- * re-parsed specifically to pick up that new calibration -- daemon-side via
- * `sync_state.invalidate_stale_for_maps`, or a manual web re-upload -- would
- * arrive with a non-null `payload.spatial` and still be silently dropped as
- * "stale_version", never actually backfilling the heatmap it was re-sent for.
+ * True if a same-or-older-`parserVersion` re-upload should still be let
+ * through the stale-version guard in `upsertReplay` below, because it
+ * carries spatial data this match doesn't have the equivalent of yet. Two
+ * cases, both driven by server-side calibration state rather than parser
+ * code (so neither one is expected to bump PARSER_VERSION on its own):
+ *  - the match has no spatial rows at all (`existingSpatialCalibratedAt` is
+ *    null both for that case and for a match whose spatial rows predate
+ *    this column's existence, i.e. every match as of the migration that
+ *    added it -- either way treated as "older than anything", refreshed
+ *    once the first calibratedAt-aware payload arrives for it).
+ *  - the match already has spatial rows, but from a calibration older than
+ *    the one this payload was normalized against -- an admin fixed a
+ *    mistake in an *already*-calibrated map's bounds, and this re-upload is
+ *    a daemon resync specifically re-sent to pick that fix up (see
+ *    `ingestion.sync_spatial_calibrations`'s `invalidate_stale_for_maps`).
+ * A payload from a daemon older than PARSER_VERSION 1.18 has no
+ * `spatial.calibratedAt` at all -- treated as "can't prove this is fresher"
+ * (returns false), same as the guard behaved before this field existed.
  */
-async function matchHasSpatialData(matchId: string): Promise<boolean> {
-  const [row] = await db
-    .select({ matchPlayerId: matchSpatialGrids.matchPlayerId })
-    .from(matchSpatialGrids)
-    .innerJoin(matchPlayers, eq(matchPlayers.id, matchSpatialGrids.matchPlayerId))
-    .where(eq(matchPlayers.matchId, matchId))
-    .limit(1);
-  return row !== undefined;
+function needsSpatialRefresh(
+  existingSpatialCalibratedAt: Date | null,
+  incomingSpatial: ReplayPayload["spatial"],
+): boolean {
+  if (incomingSpatial == null) return false;
+  if (existingSpatialCalibratedAt == null) return true;
+  if (!incomingSpatial.calibratedAt) return false;
+  return new Date(incomingSpatial.calibratedAt) > existingSpatialCalibratedAt;
 }
 
 interface PlayerSpatialContribution {
@@ -169,14 +177,18 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
   // still finds its existing row too. See lib/game-fingerprint.ts.
   const gameFingerprint = computeGameFingerprint(payload);
   const [existing] = await db
-    .select({ id: matches.id, parserVersion: matches.parserVersion, mapId: matches.mapId })
+    .select({
+      id: matches.id,
+      parserVersion: matches.parserVersion,
+      mapId: matches.mapId,
+      spatialCalibratedAt: matches.spatialCalibratedAt,
+    })
     .from(matches)
     .where(or(eq(matches.replayHash, payload.replayHash), eq(matches.gameFingerprint, gameFingerprint)))
     .limit(1);
 
   if (existing && !isVersionGreater(payload.parserVersion, existing.parserVersion)) {
-    const addsSpatialData = payload.spatial != null && !(await matchHasSpatialData(existing.id));
-    if (!addsSpatialData) {
+    if (!needsSpatialRefresh(existing.spatialCalibratedAt, payload.spatial)) {
       return { upserted: false, reason: "stale_version", matchId: existing.id };
     }
   }
@@ -271,6 +283,7 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
           gameVersion: payload.gameVersion,
           playedAt: new Date(payload.playedAt),
           durationSeconds: payload.durationSeconds,
+          spatialCalibratedAt: payload.spatial?.calibratedAt ? new Date(payload.spatial.calibratedAt) : null,
           updatedAt: new Date(),
         })
         .where(eq(matches.id, matchId));
@@ -298,6 +311,7 @@ export async function upsertReplay(payload: ReplayPayload, uploadedByUserId: str
           gameVersion: payload.gameVersion,
           playedAt: new Date(payload.playedAt),
           durationSeconds: payload.durationSeconds,
+          spatialCalibratedAt: payload.spatial?.calibratedAt ? new Date(payload.spatial.calibratedAt) : null,
           uploadedByUserId,
         })
         .returning({ id: matches.id });

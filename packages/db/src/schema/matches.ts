@@ -40,6 +40,13 @@ export const matches = pgTable("matches", {
   uploadedByUserId: uuid("uploaded_by_user_id").references(() => users.id, {
     onDelete: "set null",
   }),
+  // The `spatial.calibratedAt` the currently-stored spatial rows (matchSpatialGrids,
+  // matchHeroTrajectories) were normalized against -- see replay-payload.ts's
+  // `spatialSchema`. Null for a match with no spatial data yet, or one whose
+  // spatial rows predate this column (migration backfill) -- either way
+  // replay-upsert.service.ts's staleness guard treats null as "older than
+  // anything", so the first post-fix re-upload for a match always refreshes it.
+  spatialCalibratedAt: timestamp("spatial_calibrated_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
