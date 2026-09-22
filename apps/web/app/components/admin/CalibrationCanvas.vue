@@ -1,11 +1,19 @@
 <script setup lang="ts">
 import { useResizeObserver } from "@vueuse/core";
 import type { MapBoundsInput } from "~/utils/mapProjection";
+import { ALLY_TEAM_RGB, ENEMY_TEAM_RGB } from "~/utils/spatialColors";
+
+interface CalibrationPoint {
+  x: number;
+  y: number;
+  team?: 0 | 1 | null;
+  kind?: "scatter" | "spawn";
+}
 
 const props = defineProps<{
   mapId: string;
   layer?: string | null;
-  points: { x: number; y: number }[];
+  points: CalibrationPoint[];
   bounds: MapBoundsInput;
 }>();
 
@@ -75,6 +83,20 @@ function drawCornerLabels(ctx: CanvasRenderingContext2D, width: number, height: 
   ctx.fillText(maxLabel, width - maxWidth - pad, 15);
 }
 
+// Fallback for a point with no `team` -- a raw sample uploaded by a daemon
+// older than PARSER_VERSION "1.17" has none, and must still render. Same red
+// every point used unconditionally before team colors existed.
+const NEUTRAL_RGB: [number, number, number] = [239, 68, 68];
+// Gold outline that makes a "spawn" point (a hero's earliest recorded
+// position -- see rawMapPointSchema in shared-types) visually pop out of
+// the much larger "scatter" cloud, regardless of its team fill color.
+const SPAWN_RING_RGB = "rgba(234, 179, 8, 0.95)";
+
+function fillColorFor(point: CalibrationPoint): string {
+  const rgb = point.team === 0 ? ALLY_TEAM_RGB : point.team === 1 ? ENEMY_TEAM_RGB : NEUTRAL_RGB;
+  return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.85)`;
+}
+
 function redraw() {
   const canvas = canvasEl.value;
   const ctx = canvas?.getContext("2d");
@@ -83,16 +105,29 @@ function redraw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawGrid(ctx, canvas.width, canvas.height);
 
-  // Static red, matching the app's --color-danger family, kept literal
-  // (canvas can't read CSS custom properties) -- larger radius + a dark
-  // outline than the original 3px so points stay visible over light map art.
-  ctx.fillStyle = "rgba(239, 68, 68, 0.85)";
-  ctx.strokeStyle = "rgba(15, 23, 42, 0.6)";
+  // Draw the scatter cloud first, then spawn anchors on top, so a spawn
+  // point's gold ring is never occluded by an overlapping scatter point.
+  const scatterPoints = props.points.filter((p) => p.kind !== "spawn");
+  const spawnPoints = props.points.filter((p) => p.kind === "spawn");
+
   ctx.lineWidth = 1;
-  for (const point of props.points) {
+  ctx.strokeStyle = "rgba(15, 23, 42, 0.6)";
+  for (const point of scatterPoints) {
     const { pxX, pxY } = projectRawPoint(point, props.bounds, canvas.width, canvas.height);
+    ctx.fillStyle = fillColorFor(point);
     ctx.beginPath();
     ctx.arc(pxX, pxY, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = SPAWN_RING_RGB;
+  for (const point of spawnPoints) {
+    const { pxX, pxY } = projectRawPoint(point, props.bounds, canvas.width, canvas.height);
+    ctx.fillStyle = fillColorFor(point);
+    ctx.beginPath();
+    ctx.arc(pxX, pxY, 7, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
   }

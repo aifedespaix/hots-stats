@@ -767,15 +767,28 @@ def _hero_unit_tags_by_index(tracker_events: list[dict], tracker_id_to_toon: dic
 def _collect_calibration_samples(
     tracker_events: list[dict],
     tracker_id_to_toon: dict[int, str],
+    players: dict[str, dict[str, Any]],
     target_count: int = constants.CALIBRATION_SAMPLE_TARGET,
-) -> list[dict[str, float]]:
-    """Evenly-strided subsample of every raw (unnormalized) *hero* position
-    observed in the replay -- spread across the whole match rather than
-    front-loaded, since a calibration admin needs points from every part of
-    the map, not just wherever the laning phase happened to be (see
-    tasks/epic-10-analyse-spatiale.md). Returns `[]` if the replay has no
-    `SUnitPositionsEvent` at all (older build -- not an error, see
-    `build_payload`'s known/unknown-map branch).
+) -> list[dict[str, Any]]:
+    """Raw (unnormalized) *hero* positions for the admin calibration tool --
+    two kinds, both team-tagged so the tool can color-code them:
+
+    - `kind: "spawn"`: each hero's *earliest* recorded position, one per
+      tag. Since a hero unit is born (and starts getting position samples)
+      as soon as the loading screen ends -- well before `GatesOpen` --
+      this lands during the pre-game staging phase where all 10 heroes
+      stand lined up at their team's spawn, not "position at second 0"
+      (which is already mid-preparation-countdown movement). Exactly 10
+      points on a normal match, a strong, easy-to-eyeball calibration
+      anchor (two straight 5-hero lines) alongside the scatter cloud below.
+    - `kind: "scatter"`: an evenly-strided subsample of every other
+      position, spread across the whole match rather than front-loaded,
+      since a calibration admin needs points from every part of the map,
+      not just wherever the laning phase happened to be (see
+      tasks/epic-10-analyse-spatiale.md).
+
+    Returns `[]` if the replay has no `SUnitPositionsEvent` at all (older
+    build -- not an error, see `build_payload`'s known/unknown-map branch).
 
     Filtered to hero units via `_hero_unit_tags_by_index`, same as
     `_normalized_position_samples_by_toon` already does for the real
@@ -789,15 +802,38 @@ def _collect_calibration_samples(
     (2026-08) on Towers of Doom's altar/structure layout.
     """
     hero_tags = _hero_unit_tags_by_index(tracker_events, tracker_id_to_toon)
-    all_points = [
-        (x, y) for _, tag_index, x, y in _iter_unit_positions(tracker_events) if tag_index in hero_tags
+    all_samples = [
+        (gameloop, tag_index, x, y)
+        for gameloop, tag_index, x, y in _iter_unit_positions(tracker_events)
+        if tag_index in hero_tags
     ]
-    if not all_points:
+    if not all_samples:
         return []
-    if len(all_points) <= target_count:
-        return [{"x": x, "y": y} for x, y in all_points]
-    step = len(all_points) / target_count
-    return [{"x": all_points[int(i * step)][0], "y": all_points[int(i * step)][1]} for i in range(target_count)]
+
+    def team_for_tag(tag_index: int) -> int | None:
+        toon_handle = hero_tags.get(tag_index)
+        player = players.get(toon_handle) if toon_handle else None
+        return player["team"] if player else None
+
+    earliest_by_tag: dict[int, tuple[int, float, float]] = {}
+    for gameloop, tag_index, x, y in all_samples:
+        current = earliest_by_tag.get(tag_index)
+        if current is None or gameloop < current[0]:
+            earliest_by_tag[tag_index] = (gameloop, x, y)
+    spawn_points = [
+        {"x": x, "y": y, "kind": "spawn", "team": team_for_tag(tag_index)}
+        for tag_index, (_, x, y) in earliest_by_tag.items()
+    ]
+
+    scatter_source = [(tag_index, x, y) for _, tag_index, x, y in all_samples]
+    if len(scatter_source) > target_count:
+        step = len(scatter_source) / target_count
+        scatter_source = [scatter_source[int(i * step)] for i in range(target_count)]
+    scatter_points = [
+        {"x": x, "y": y, "kind": "scatter", "team": team_for_tag(tag_index)} for tag_index, x, y in scatter_source
+    ]
+
+    return spawn_points + scatter_points
 
 
 def _normalized_position_samples_by_toon(
@@ -1611,7 +1647,7 @@ def build_payload(
         if calibrations
         else []
     )
-    pending_points = None if calibrations else _collect_calibration_samples(tracker_events, tracker_id_to_toon)
+    pending_points = None if calibrations else _collect_calibration_samples(tracker_events, tracker_id_to_toon, players)
 
     # Which player is "me": the account folder names the toon handle, so this
     # is a lookup, not a guess. Absent when the folder's account did not play
