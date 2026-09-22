@@ -1349,40 +1349,63 @@ def test_iter_unit_positions_decodes_delta_encoded_tags():
 
 
 def test_collect_calibration_samples_returns_empty_without_position_events():
-    assert _collect_calibration_samples(_base_tracker_events(), tracker_id_to_toon={}) == []
+    assert _collect_calibration_samples(_base_tracker_events(), tracker_id_to_toon={}, players={}) == []
 
 
 def test_collect_calibration_samples_subsamples_evenly_above_target():
     tracker_id_to_toon = {1: "1-Hero-1-1001"}
+    players = {"1-Hero-1-1001": {"battletag": "Foo#1111", "team": 0, "heroId": "li-ming"}}
+    # Ten samples at the same gameloop: none is a distinguishable "earliest"
+    # one, so this exercises the scatter subsampling in isolation, undisturbed
+    # by the one spawn point every tag also contributes.
     points = [(float(i), float(i)) for i in range(10)]
     events = [
         _unit_born_event(1, "HeroLiMing", unit_tag_index=1),
         _unit_positions_event(100, [(1, x, y) for x, y in points]),
     ]
 
-    sampled = _collect_calibration_samples(events, tracker_id_to_toon, target_count=5)
+    sampled = _collect_calibration_samples(events, tracker_id_to_toon, players, target_count=5)
 
-    assert len(sampled) == 5
+    scatter = [p for p in sampled if p["kind"] == "scatter"]
+    spawn = [p for p in sampled if p["kind"] == "spawn"]
+    assert len(scatter) == 5
     # Spread across the whole range, not front-loaded from the first 5 points.
-    assert sampled[0]["x"] == 0.0
-    assert sampled[-1]["x"] == 8.0
+    assert scatter[0]["x"] == 0.0
+    assert scatter[-1]["x"] == 8.0
+    assert all(p["team"] == 0 for p in scatter)
+    # The single earliest (tied) sample for the tag, reported once more as
+    # its own "spawn" anchor point.
+    assert spawn == [{"x": 0.0, "y": 0.0, "kind": "spawn", "team": 0}]
 
 
 def test_collect_calibration_samples_returns_every_point_below_target():
     tracker_id_to_toon = {1: "1-Hero-1-1001", 2: "1-Hero-1-1002"}
+    players = {
+        "1-Hero-1-1001": {"battletag": "Foo#1111", "team": 0, "heroId": "li-ming"},
+        "1-Hero-1-1002": {"battletag": "Bar#2222", "team": 1, "heroId": "malfurion"},
+    }
     events = [
         _unit_born_event(1, "HeroLiMing", unit_tag_index=1),
         _unit_born_event(2, "HeroMalfurion", unit_tag_index=2),
         _unit_positions_event(100, [(1, 1.0, 1.0), (2, 2.0, 2.0)]),
     ]
 
-    sampled = _collect_calibration_samples(events, tracker_id_to_toon, target_count=1000)
+    sampled = _collect_calibration_samples(events, tracker_id_to_toon, players, target_count=1000)
 
-    assert sampled == [{"x": 1.0, "y": 1.0}, {"x": 2.0, "y": 2.0}]
+    scatter = [p for p in sampled if p["kind"] == "scatter"]
+    spawn = [p for p in sampled if p["kind"] == "spawn"]
+    assert scatter == [
+        {"x": 1.0, "y": 1.0, "kind": "scatter", "team": 0},
+        {"x": 2.0, "y": 2.0, "kind": "scatter", "team": 1},
+    ]
+    # A single sample per tag is also its earliest one, so it's reported both
+    # ways: once as part of the scatter cloud, once as that hero's spawn anchor.
+    assert {(p["x"], p["y"], p["team"]) for p in spawn} == {(1.0, 1.0, 0), (2.0, 2.0, 1)}
 
 
 def test_collect_calibration_samples_excludes_non_hero_units():
     tracker_id_to_toon = {1: "1-Hero-1-1001"}
+    players = {"1-Hero-1-1001": {"battletag": "Foo#1111", "team": 0, "heroId": "li-ming"}}
     events = [
         _unit_born_event(1, "HeroLiMing", unit_tag_index=1),
         # Tag 99 never appears in a SUnitBornEvent for a hero -- stands in
@@ -1391,9 +1414,30 @@ def test_collect_calibration_samples_excludes_non_hero_units():
         _unit_positions_event(100, [(1, 10.0, 10.0), (99, 500.0, 500.0)]),
     ]
 
-    sampled = _collect_calibration_samples(events, tracker_id_to_toon)
+    sampled = _collect_calibration_samples(events, tracker_id_to_toon, players)
 
-    assert sampled == [{"x": 10.0, "y": 10.0}]
+    assert [p for p in sampled if p["kind"] == "scatter"] == [
+        {"x": 10.0, "y": 10.0, "kind": "scatter", "team": 0}
+    ]
+
+
+def test_collect_calibration_samples_marks_each_hero_earliest_position_as_spawn():
+    tracker_id_to_toon = {1: "1-Hero-1-1001"}
+    players = {"1-Hero-1-1001": {"battletag": "Foo#1111", "team": 0, "heroId": "li-ming"}}
+    events = [
+        _unit_born_event(1, "HeroLiMing", unit_tag_index=1),
+        # Staged at spawn (gameloop 10), then moves during/after the
+        # preparation countdown (gameloop 500) -- the spawn anchor must be
+        # the *earlier* one, not "position at second 0" (gates-open-relative)
+        # or the latest sample.
+        _unit_positions_event(10, [(1, 0.0, 0.0)]),
+        _unit_positions_event(500, [(1, 50.0, 50.0)]),
+    ]
+
+    sampled = _collect_calibration_samples(events, tracker_id_to_toon, players, target_count=1000)
+
+    spawn = [p for p in sampled if p["kind"] == "spawn"]
+    assert spawn == [{"x": 0.0, "y": 0.0, "kind": "spawn", "team": 0}]
 
 
 def test_build_payload_includes_spatial_block_for_calibrated_map():
@@ -1521,8 +1565,9 @@ def test_build_payload_collects_calibration_sample_for_unmapped_map():
     assert "spatial" not in payload
     pending = payload["_pendingSpatialSample"]
     assert pending["mapId"] == "cursed-hollow"
-    assert {"x": 10.0, "y": 10.0} in pending["points"]
-    assert {"x": 90.0, "y": 90.0} in pending["points"]
+    xy_pairs = {(p["x"], p["y"]) for p in pending["points"]}
+    assert (10.0, 10.0) in xy_pairs
+    assert (90.0, 90.0) in xy_pairs
 
 
 def test_build_payload_excludes_non_hero_positions_from_calibration_sample():
@@ -1545,9 +1590,10 @@ def test_build_payload_excludes_non_hero_positions_from_calibration_sample():
     )
 
     pending = payload["_pendingSpatialSample"]
-    assert {"x": 10.0, "y": 10.0} in pending["points"]
-    assert {"x": 90.0, "y": 90.0} in pending["points"]
-    assert {"x": 5000.0, "y": 5000.0} not in pending["points"]
+    xy_pairs = {(p["x"], p["y"]) for p in pending["points"]}
+    assert (10.0, 10.0) in xy_pairs
+    assert (90.0, 90.0) in xy_pairs
+    assert (5000.0, 5000.0) not in xy_pairs
 
 
 def test_build_payload_omits_spatial_without_any_position_events():

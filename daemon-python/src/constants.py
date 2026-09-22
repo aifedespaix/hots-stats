@@ -227,7 +227,24 @@ from __future__ import annotations
 # (core/bastion/tower/gate); TownWall segments are not reported. Paired with a
 # MIN_PARSER_VERSION bump so matches that predate it -- every match, since none
 # ever had structure data -- get reparsed.
-PARSER_VERSION = "1.16"
+# 1.17: `_collect_calibration_samples` (the raw points POSTed to
+# `/spatial/samples` for the admin calibration tool) used to return a bare,
+# undifferentiated `{x, y}` cloud -- no way to tell which point belonged to
+# which side, and no way to isolate the pre-game staging positions, both of
+# which make eyeballing the correct world-bounds rectangle in
+# apps/web/app/pages/admin/calibrate.vue harder than it needs to be. Every
+# point is now tagged `team` (0/1, from the owning hero's `players[...].
+# team`) and `kind`: `"spawn"` for each hero's single earliest recorded
+# position -- which lands during the pre-game staging phase (heroes exist
+# and are already being tracked well before `GatesOpen`, lined up at their
+# team's spawn), not "position at second 0" -- alongside the existing
+# evenly-strided `"scatter"` cloud across the rest of the match. Old
+# already-stored raw samples (and an older daemon's plain `{x, y}` payload)
+# still work: both new fields are optional on the wire schema. Deliberately
+# NOT paired with a `MIN_PARSER_VERSION` bump, same reasoning as 1.12: this
+# only changes what gets POSTed to `/spatial/samples` for *uncalibrated*
+# maps, never the `spatial` block of an already-ingested match.
+PARSER_VERSION = "1.17"
 
 
 # How many times a single replay is allowed to fail with a parse error (a

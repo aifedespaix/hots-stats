@@ -72,7 +72,10 @@ const mapOptions = computed<MapOption[]>(() => [
 const selectedOptionKey = ref<string | undefined>(undefined);
 const selectedOption = computed(() => mapOptions.value.find((m) => m.value === selectedOptionKey.value) ?? null);
 const selectedMapId = computed(() => selectedOption.value?.mapId);
-const points = ref<{ x: number; y: number }[]>([]);
+// `team`/`kind` are optional -- absent on a raw sample uploaded by a daemon
+// older than PARSER_VERSION "1.17", or one collected before this shape
+// existed. See CalibrationCanvas.vue for how each is rendered.
+const points = ref<{ x: number; y: number; team?: 0 | 1 | null; kind?: "scatter" | "spawn" }[]>([]);
 const loadingSample = ref(false);
 
 const minX = ref(0);
@@ -97,7 +100,7 @@ const newLayerKey = ref("");
 async function loadSampleFor(mapId: string) {
   loadingSample.value = true;
   try {
-    const sample = await $fetch<{ mapId: string; points: { x: number; y: number }[] }>(
+    const sample = await $fetch<{ mapId: string; points: typeof points.value }>(
       `/admin/spatial/samples/${mapId}`,
       { baseURL: config.public.apiBase, credentials: "include" },
     );
@@ -274,8 +277,13 @@ async function save() {
     <p class="max-w-2xl text-sm text-muted">
       Choisis une carte ci-dessous -- en attente de calibration (données réelles envoyées par des daemons) ou déjà
       calibrée (pour corriger une erreur) -- clique "Auto-ajuster aux points" pour partir d'une estimation
-      raisonnable, affine les 4 bornes jusqu'à ce que les points rouges se superposent correctement à la carte, puis
+      raisonnable, affine les 4 bornes jusqu'à ce que les points se superposent correctement à la carte, puis
       sauvegarde. Répète pour chaque carte listée.
+    </p>
+    <p class="max-w-2xl text-sm text-muted">
+      Les points sont colorés par équipe (bleu / rouge). Les points cerclés en or sont la position de chaque héros au
+      tout début de la phase de préparation (pas à la seconde 0) -- deux lignes de 5, un repère fiable pour aligner
+      précisément les bornes avant d'affiner avec le reste du nuage de points.
     </p>
 
     <section class="space-y-4 rounded-lg border border-border p-4 sm:p-6">

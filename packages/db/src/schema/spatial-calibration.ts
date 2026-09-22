@@ -43,11 +43,17 @@ export type NewMapCalibration = typeof mapCalibrations.$inferInsert;
 // saveCalibration) so the admin calibration tool always has *something* to
 // render when re-opening an already-calibrated map to fix a mistake or add
 // another level.
+// `team`/`kind` are optional: additive fields from PARSER_VERSION "1.17" --
+// see the wire schema's `rawMapPointSchema` (packages/shared-types/src/
+// spatial-calibration.ts) for what they mean. A row written by an older
+// daemon, or before 1.17, simply has both fields absent on every point.
 export const rawMapSamples = pgTable("raw_map_samples", {
   mapId: text("map_id")
     .primaryKey()
     .references(() => maps.id, { onDelete: "cascade" }),
-  rawPoints: jsonb("raw_points").notNull().$type<{ x: number; y: number }[]>(),
+  rawPoints: jsonb("raw_points")
+    .notNull()
+    .$type<{ x: number; y: number; team?: 0 | 1 | null; kind?: "scatter" | "spawn" }[]>(),
   receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

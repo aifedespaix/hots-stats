@@ -1,5 +1,5 @@
 import { type MapCalibration, type RawMapSample, db, mapCalibrations, maps, rawMapSamples } from "@hots-stats/db";
-import type { MapBounds } from "@hots-stats/shared-types";
+import type { MapBounds, RawMapPoint } from "@hots-stats/shared-types";
 import { eq, isNull } from "drizzle-orm";
 import { ensureMapExists } from "../lib/ensure-map";
 import { DEFAULT_LAYER_KEY } from "../lib/spatial-layer";
@@ -55,7 +55,7 @@ export async function getDefaultLayerCalibrations(): Promise<Record<string, MapB
  * guards against the Daemon reporting a brand new map slug before it's ever
  * been through POST /ingest (see lib/ensure-map.ts).
  */
-export async function upsertRawSamples(mapId: string, points: { x: number; y: number }[]): Promise<void> {
+export async function upsertRawSamples(mapId: string, points: RawMapPoint[]): Promise<void> {
   await ensureMapExists(mapId);
   await db
     .insert(rawMapSamples)
@@ -74,6 +74,7 @@ export async function upsertRawSamples(mapId: string, points: { x: number; y: nu
 const EXAMPLE_WORLD_BOUNDS = { minX: -200, maxX: 200, minY: -150, maxY: 150 };
 const EXAMPLE_SCATTER_COUNT = 200;
 const EXAMPLE_CLUSTER_COUNT = 50;
+const EXAMPLE_SPAWN_HEROES_PER_TEAM = 5;
 // Scattered points stay this far inset from the true bounds (real player
 // positions rarely touch the literal map edge) -- also means "Auto-ajuster
 // aux points" won't trivially reproduce EXAMPLE_WORLD_BOUNDS exactly,
@@ -92,37 +93,59 @@ function randomInRange(min: number, max: number): number {
  * calibration aid: the whole point cloud lives inside an arbitrary fixed
  * rectangle (`EXAMPLE_WORLD_BOUNDS`) that has no relationship whatsoever to
  * any real map's actual coordinate system, so nothing in it -- including
- * the denser corner cluster below -- corresponds to any real in-game
- * location. Only ever use this to verify the tool itself renders and saves
- * correctly, never to calibrate a map for production use.
+ * the denser corner cluster and the two spawn lines below -- corresponds to
+ * any real in-game location. Only ever use this to verify the tool itself
+ * renders and saves correctly, never to calibrate a map for production use.
  *
  * The point cloud is deliberately asymmetric: most points scattered evenly
  * across an inset rectangle, plus a denser cluster near the `(minX, minY)`
  * corner -- once calibrated, that cluster should visibly land at the
  * *bottom-left* of the canvas, a concrete, checkable confirmation that the
  * Y-axis inversion in `utils/mapProjection.ts` is behaving as intended, not
- * just "some points appeared somewhere". That's its only purpose: it is
- * *not* a stand-in for a real hero spawn, and must not be presented as one.
+ * just "some points appeared somewhere". It is *not* a stand-in for a real
+ * hero spawn.
+ *
+ * Two straight 5-point lines near the top and bottom edges, tagged
+ * `kind: "spawn"` and `team: 0`/`team: 1`, stand in for the real daemon's
+ * pre-game staging-position anchors (see `_collect_calibration_samples` in
+ * parser.py) -- again fake coordinates, only here to exercise the
+ * calibration tool's team-color/spawn-highlight rendering without a real
+ * replay.
  */
-export async function generateExampleSample(mapId: string): Promise<{ mapId: string; points: { x: number; y: number }[] }> {
+export async function generateExampleSample(mapId: string): Promise<{ mapId: string; points: RawMapPoint[] }> {
   const { minX, maxX, minY, maxY } = EXAMPLE_WORLD_BOUNDS;
   const insetX = (maxX - minX) * EXAMPLE_INSET_RATIO;
   const insetY = (maxY - minY) * EXAMPLE_INSET_RATIO;
 
-  const scattered = Array.from({ length: EXAMPLE_SCATTER_COUNT }, () => ({
+  const scattered: RawMapPoint[] = Array.from({ length: EXAMPLE_SCATTER_COUNT }, () => ({
     x: randomInRange(minX + insetX, maxX - insetX),
     y: randomInRange(minY + insetY, maxY - insetY),
+    kind: "scatter",
+    team: Math.random() < 0.5 ? 0 : 1,
   }));
 
   // The dense corner cluster stays inside the same inset rectangle's
   // bottom-left quarter, not right at the literal (minX, minY) corner --
   // still unambiguously "the bottom-left region" once rendered.
-  const clustered = Array.from({ length: EXAMPLE_CLUSTER_COUNT }, () => ({
+  const clustered: RawMapPoint[] = Array.from({ length: EXAMPLE_CLUSTER_COUNT }, () => ({
     x: randomInRange(minX + insetX, minX + insetX + (maxX - minX) / 4),
     y: randomInRange(minY + insetY, minY + insetY + (maxY - minY) / 4),
+    kind: "scatter",
+    team: Math.random() < 0.5 ? 0 : 1,
   }));
 
-  const points = [...scattered, ...clustered];
+  // Team 0 lined up near the top edge, team 1 near the bottom -- five evenly
+  // spaced points each, standing in for "5 heroes lined up at spawn".
+  const spawnLine = (team: 0 | 1, y: number): RawMapPoint[] =>
+    Array.from({ length: EXAMPLE_SPAWN_HEROES_PER_TEAM }, (_, i) => ({
+      x: minX + insetX + ((maxX - minX - 2 * insetX) * i) / (EXAMPLE_SPAWN_HEROES_PER_TEAM - 1),
+      y,
+      kind: "spawn",
+      team,
+    }));
+  const spawned = [...spawnLine(0, minY + insetY / 2), ...spawnLine(1, maxY - insetY / 2)];
+
+  const points = [...scattered, ...clustered, ...spawned];
   await upsertRawSamples(mapId, points);
   return { mapId, points };
 }
