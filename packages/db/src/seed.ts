@@ -141,6 +141,7 @@ const HEROES: { name: string; role: HeroRole }[] = [
   { name: "Valeera", role: "MeleeAssassin" },
   { name: "Valla", role: "RangedAssassin" },
   { name: "Varian", role: "Bruiser" },
+  { name: "Xalatath", role: "RangedAssassin" },
   { name: "Xul", role: "Bruiser" },
   { name: "Whitemane", role: "Healer" },
   { name: "Yrel", role: "Bruiser" },
