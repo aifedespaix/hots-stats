@@ -4,6 +4,7 @@ import pytest
 
 from src import constants
 from src._protocol_versions import KNOWN_PROTOCOL_BUILDS
+from src.constants import HERO_DISPLAY_NAMES
 from src.parser import (
     ReplayParseError,
     ReplaySkipped,
@@ -1017,6 +1018,13 @@ def test_hero_from_talent_prefix_matches_the_butcher_without_its_article():
     # Blizzard's internal name drops "The" entirely (confirmed via
     # `HeroButcher`'s `SUnitBornEvent` unit type name).
     assert _hero_from_talent_prefix("ButcherFreshMeat") == "The Butcher"
+
+
+def test_hero_from_talent_prefix_matches_xalatath():
+    # Xalatath (build 98285) had no `HERO_DISPLAY_NAMES` entry, so both her
+    # attribute code ("HXAL") and talent ids failed to resolve.
+    assert _hero_from_talent_prefix("XalatathVoidAdept") == "Xalatath"
+    assert HERO_DISPLAY_NAMES["HXAL"] == "Xalatath"
 
 
 def test_hero_from_talent_prefix_returns_none_for_unrecognized_talent():

@@ -18,7 +18,7 @@ const HERO_NAMES = [
   "Malthael", "Medivh", "Mei", "Mephisto", "Muradin", "Murky", "Nazeebo", "Nova", "Orphea", "Probius",
   "Qhira", "Ragnaros", "Raynor", "Rehgar", "Rexxar", "Samuro", "Sgt. Hammer", "Sonya", "Stitches", "Stukov",
   "Sylvanas", "Tassadar", "The Butcher", "The Lost Vikings", "Thrall", "Tracer", "Tychus", "Tyrael", "Tyrande", "Uther",
-  "Valeera", "Valla", "Varian", "Xul", "Whitemane", "Yrel", "Zagara", "Zarya", "Zeratul", "Zul'jin",
+  "Valeera", "Valla", "Varian", "Xalatath", "Xul", "Whitemane", "Yrel", "Zagara", "Zarya", "Zeratul", "Zul'jin",
 ];
 
 const SOURCE_BASE = "https://raw.githubusercontent.com/Heroes-Profile/heroesprofile/develop/public/images/heroes";

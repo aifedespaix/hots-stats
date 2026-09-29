@@ -264,7 +264,15 @@ from __future__ import annotations
 # which the server treats as "can't prove this is fresher" and falls back to
 # the pre-1.18 zero-rows check -- no worse than today, and every daemon that
 # self-updates gets the real fix on its next natural resync.
-PARSER_VERSION = "1.18"
+# 1.19: adds Xalatath (new hero, first seen 2026-09-29 on build 98285) to
+# `HERO_DISPLAY_NAMES` under her `HeroAttributeId` "HXAL". Before this every
+# replay containing her failed with "Could not determine hero for player"
+# (4 replays in that day's debug report): the attribute code resolved to
+# nothing and her talent ids ("XalatathVoidAdept...") matched no known hero
+# prefix either. Found via `scripts/diagnose_hero_mapping.py`. Not paired
+# with a `MIN_PARSER_VERSION` bump: those replays were never ingested, so
+# the daemon's normal retry picks them up.
+PARSER_VERSION = "1.19"
 
 
 # How many times a single replay is allowed to fail with a parse error (a
@@ -472,6 +480,7 @@ HERO_DISPLAY_NAMES: dict[str, str] = {
     "VALE": "Valeera",
     "Demo": "Valla",
     "Vari": "Varian",
+    "HXAL": "Xalatath",
     "Necr": "Xul",
     "WHIT": "Whitemane",
     "YREL": "Yrel",
