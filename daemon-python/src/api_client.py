@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
+from typing import Sequence
 
 import requests
 
@@ -180,6 +181,31 @@ class ApiClient:
             logger.debug("Ingestion error report rejected (%d): %s", response.status_code, _safe_json(response))
             return False
         return True
+
+    def lookup_matches(
+        self, *, replay_hashes: Sequence[str] = (), match_ids: Sequence[str] = (), timeout: float = 15.0
+    ) -> list[dict] | None:
+        """`POST /ingest/matches/lookup`: display data (map, hero, mode, date, result) the server
+        already holds for replays this daemon tracks, so the Sync tab can fill its table without
+        reparsing. Best-effort like `post_ingest_error`: returns None when the API can't answer,
+        and the caller simply tries again on its next pass."""
+        try:
+            response = self._session.post(
+                f"{self._base_url}/ingest/matches/lookup",
+                json={"replayHashes": list(replay_hashes), "matchIds": list(match_ids)},
+                timeout=timeout,
+            )
+        except requests.RequestException as err:
+            logger.debug("Match lookup failed: %s", err)
+            return None
+        if response.status_code >= 400:
+            logger.debug("Match lookup rejected (%d): %s", response.status_code, _safe_json(response))
+            return None
+        try:
+            return list(response.json()["matches"])
+        except (ValueError, KeyError, TypeError):
+            logger.debug("Match lookup returned an unexpected body")
+            return None
 
 
 def _safe_json(response: requests.Response) -> object:

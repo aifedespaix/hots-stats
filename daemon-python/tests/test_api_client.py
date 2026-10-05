@@ -348,3 +348,22 @@ def test_post_daemon_token_returns_none_on_network_error(monkeypatch):
 
     monkeypatch.setattr(api_client.requests, "post", boom)
     assert api_client.post_daemon_token("https://api.test", "c", "v") is None
+
+
+def test_lookup_matches_posts_ids_and_returns_the_matches(tmp_path):
+    client = api_client.ApiClient(_config(tmp_path))
+    response = MagicMock(status_code=200)
+    response.json.return_value = {"matches": [{"matchId": "m1"}]}
+    with patch.object(client._session, "post", return_value=response) as post:
+        result = client.lookup_matches(match_ids=["m1"], replay_hashes=["h" * 64])
+    assert result == [{"matchId": "m1"}]
+    assert post.call_args.kwargs["json"] == {"replayHashes": ["h" * 64], "matchIds": ["m1"]}
+    assert post.call_args.args[0].endswith("/ingest/matches/lookup")
+
+
+def test_lookup_matches_returns_none_when_unreachable_or_rejected(tmp_path):
+    client = api_client.ApiClient(_config(tmp_path))
+    with patch.object(client._session, "post", side_effect=requests.ConnectionError("down")):
+        assert client.lookup_matches(match_ids=["m1"]) is None
+    with patch.object(client._session, "post", return_value=MagicMock(status_code=400)):
+        assert client.lookup_matches(match_ids=["m1"]) is None

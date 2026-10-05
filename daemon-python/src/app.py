@@ -22,6 +22,7 @@ from . import accounts_discovery, api_client, draft_capture, draft_layout, hotke
 from .config import Config, ConfigError, config_exists, is_auto_update_enabled, load_config
 from .error_reporter import ErrorReporter, ReportingHandler, install_logging_handler, uninstall_logging_handler
 from .game_process import GameDetector
+from .history_enricher import HistoryEnricher
 from .ingestion import IngestOutcome, ingest_file, sync_spatial_calibrations
 from .status import StatusTracker
 from .sync_state import SyncState
@@ -45,6 +46,9 @@ logger = logging.getLogger(__name__)
 # request) don't trigger it, low enough to still notify well before a whole
 # large backlog silently fails end to end (e.g. a revoked token).
 _PERSISTENT_FAILURE_THRESHOLD = 5
+
+# How often the maintenance thread (`_DaemonRunner.start`) re-runs the history enrichment.
+_MAINTENANCE_INTERVAL_SECONDS = 600
 
 
 def _lower_worker_priority() -> None:
@@ -202,6 +206,7 @@ class _DaemonRunner:
 
     def __init__(self) -> None:
         self._thread: threading.Thread | None = None
+        self._maintenance_thread: threading.Thread | None = None
         self._stop_event: threading.Event | None = None
         self.status = StatusTracker()
         self.sync_state: SyncState | None = None
@@ -390,6 +395,23 @@ class _DaemonRunner:
         self._stop_event = stop_event
         thread.start()
 
+        enricher = HistoryEnricher(client, sync_state)
+
+        def _maintenance() -> None:
+            # Runs once shortly after start, then every 10 minutes: fills the Sync table's
+            # display data and reconciles replays whose quarantined build the API has since
+            # verified. Cheap (one small request per 200 rows) and best-effort.
+            while not stop_event.is_set():
+                try:
+                    enricher.run_once()
+                except Exception:  # noqa: BLE001
+                    logger.warning("History enrichment failed", exc_info=True)
+                if stop_event.wait(_MAINTENANCE_INTERVAL_SECONDS):
+                    return
+
+        self._maintenance_thread = threading.Thread(target=_maintenance, name="hots-maintenance", daemon=True)
+        self._maintenance_thread.start()
+
     def _notify_auth_blocked(self) -> None:
         if self._tray_notify is not None:
             self._tray_notify(
@@ -411,6 +433,9 @@ class _DaemonRunner:
         if self._thread is None or self._stop_event is None:
             return
         self._stop_event.set()
+        if self._maintenance_thread is not None:
+            self._maintenance_thread.join(timeout=timeout)
+            self._maintenance_thread = None
         self._thread.join(timeout=timeout)
         if self._thread.is_alive():
             logger.warning("Replay watcher thread did not stop within %.0fs", timeout)
