@@ -1,10 +1,11 @@
 import type { User } from "@hots-stats/db";
-import { daemonErrorReportInputSchema } from "@hots-stats/shared-types";
+import { daemonErrorReportInputSchema, matchLookupInputSchema } from "@hots-stats/shared-types";
 import { Hono } from "hono";
 import { API_VERSION, MIN_PARSER_VERSION } from "../constants";
 import { resolveScope } from "../lib/account-scope";
 import { authToken } from "../middleware/auth-token";
 import { recordDaemonError } from "../services/daemon-errors.service";
+import { lookupMatches } from "../services/match-lookup.service";
 import { listAccounts } from "../services/player-accounts.service";
 import { ingestReplayPayload } from "../services/replay-ingest.service";
 import { getStatsSummary } from "../services/stats.service";
@@ -12,7 +13,7 @@ import { getStatsSummary } from "../services/stats.service";
 type Env = { Variables: { user: User } };
 
 /**
- * POST /ingest, GET /ingest/summary, GET /ingest/version — called by the
+ * POST /ingest, POST /ingest/matches/lookup, GET /ingest/summary, GET /ingest/version — called by the
  * Python daemon, authenticated via Personal Access Token (Bearer), not the
  * session cookie (unlike every other route, which the web dashboard calls
  * with a cookie via `authSession`).
@@ -73,6 +74,16 @@ export const ingestRoute = new Hono<Env>()
           result.upserted ? 201 : 200,
         );
     }
+  })
+  .post("/matches/lookup", async (c) => {
+    // Fills the daemon's Sync table for replays synced before it tracked display data locally
+    // (see daemon-python/src/history_enricher.py); only ever returns the caller's own matches.
+    const parsed = matchLookupInputSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: parsed.error.flatten() }, 400);
+    }
+    const user = c.get("user");
+    return c.json({ matches: await lookupMatches(user.id, parsed.data) });
   })
   .post("/errors", async (c) => {
     // Best-effort report of a *local* ingestion failure the daemon already
