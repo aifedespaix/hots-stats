@@ -86,6 +86,21 @@ def _report_error(
     )
 
 
+def display_fields(payload: dict) -> dict:
+    """The few payload fields the Sync tab shows, so a freshly uploaded replay's row is complete
+    without asking the API. Hero/result are the *account owner's* (`selfBattletag`), absent when
+    the replay's folder account didn't play in it."""
+    self_tag = payload.get("selfBattletag")
+    me = next((p for p in payload.get("players", []) if self_tag and p.get("battletag") == self_tag), None)
+    return {
+        "base_build": payload.get("m_baseBuild"),
+        "game_mode": payload.get("gameMode"),
+        "played_at": payload.get("playedAt"),
+        "hero": me.get("heroId") if me else None,
+        "won": me.get("winner") if me else None,
+    }
+
+
 def ingest_file(
     client: api_client.ApiClient,
     path: Path,
@@ -255,7 +270,10 @@ def ingest_file(
         # automatically once the build is verified server-side.
         logger.warning("%s: %s", path, err)
         if sync_state is not None:
-            sync_state.mark_error(payload["replayHash"], str(path), str(err), traceback.format_exc())
+            sync_state.mark_error(
+                payload["replayHash"], str(path), str(err), traceback.format_exc(),
+                error_kind="quarantine", base_build=err.base_build,
+            )
         _report_error(
             client,
             sync_state,
@@ -329,6 +347,7 @@ def ingest_file(
                 api_version=api_version,
                 match_id=result.match_id,
                 map_slug=payload.get("map"),
+                **display_fields(payload),
             )
         except Exception:
             # The upload itself already succeeded server-side (`result` is

@@ -130,6 +130,14 @@ def test_sync_api_version_invalidates_stale_replays(tmp_path):
     assert sync_state.get_meta("api_version") == "1.5.0"
 
 
+def test_sync_api_version_remembers_the_api_minimum_parser_version(tmp_path):
+    state = SyncState(tmp_path / "s.db")
+    info = {"apiVersion": "9", "minParserVersion": "1.16", "dataResetAt": None}
+    with patch("src.app.api_client.fetch_version", return_value=info):
+        _sync_api_version(_config(tmp_path), state)
+    assert state.get_meta("min_parser_version") == "1.16"
+
+
 def test_sync_api_version_leaves_state_untouched_when_api_unreachable(tmp_path):
     sync_state = SyncState(tmp_path / "sync_state.db")
     sync_state.mark_synced("old", "1.0", file_path="a")

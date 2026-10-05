@@ -160,6 +160,27 @@ def _ensure_map_slug_column(conn: sqlite3.Connection) -> None:
             raise
 
 
+def _ensure_display_columns(conn: sqlite3.Connection) -> None:
+    """Adds the columns the Sync tab's table shows (see sync_view.py) plus `error_kind`, which
+    is how a quarantined replay is told apart from other errors without widening `status`'s
+    CHECK constraint (see `_ensure_skip_reason_column` for why that matters). Same ADD COLUMN
+    + ignore-duplicate pattern as the other `_ensure_*` migrations."""
+    for ddl in (
+        "ALTER TABLE replays ADD COLUMN error_kind TEXT",
+        "ALTER TABLE replays ADD COLUMN base_build INTEGER",
+        "ALTER TABLE replays ADD COLUMN hero TEXT",
+        "ALTER TABLE replays ADD COLUMN game_mode TEXT",
+        "ALTER TABLE replays ADD COLUMN played_at TEXT",
+        "ALTER TABLE replays ADD COLUMN won INTEGER",
+    ):
+        try:
+            conn.execute(ddl)
+            conn.commit()
+        except sqlite3.OperationalError as err:
+            if "duplicate column" not in str(err).lower():
+                raise
+
+
 def sync_state_file_path() -> Path:
     """Path to the local sync-state database, next to `config.json`."""
     return config_file_path().with_name("sync_state.db")
@@ -203,6 +224,29 @@ class ReplaySkippedRecord:
     file_exists: bool
 
 
+@dataclass(frozen=True)
+class ReplayRow:
+    """One tracked replay as the Sync tab's table needs it (see sync_view.py)."""
+
+    replay_hash: str
+    file_path: str = ""
+    status: str = "synced"
+    parser_version: str | None = None
+    match_id: str | None = None
+    synced_at: str | None = None
+    last_attempt_at: str = ""
+    error_message: str | None = None
+    error_kind: str | None = None
+    skip_reason: str | None = None
+    file_exists: bool = True
+    map_slug: str | None = None
+    base_build: int | None = None
+    hero: str | None = None
+    game_mode: str | None = None
+    played_at: str | None = None
+    won: bool | None = None
+
+
 class SyncState:
     """Tracks, per replay (keyed by content hash), whether it's synced or
     errored, at which parser/API version, when, and (for errors) why --
@@ -238,6 +282,7 @@ class SyncState:
         _ensure_skip_reason_column(conn)
         _ensure_attempt_tracking_columns(conn)
         _ensure_map_slug_column(conn)
+        _ensure_display_columns(conn)
         return conn
 
     # -- sync status ----------------------------------------------------
@@ -262,6 +307,11 @@ class SyncState:
         api_version: str | None = None,
         match_id: str | None = None,
         map_slug: str | None = None,
+        base_build: int | None = None,
+        hero: str | None = None,
+        game_mode: str | None = None,
+        played_at: str | None = None,
+        won: bool | None = None,
     ) -> None:
         now = _now()
         with self._lock:
@@ -269,8 +319,9 @@ class SyncState:
                 """
                 INSERT INTO replays
                     (replay_hash, file_path, status, parser_version, api_version,
-                     match_id, synced_at, last_attempt_at, error_message, error_log, file_exists, map_slug)
-                VALUES (?, ?, 'synced', ?, ?, ?, ?, ?, NULL, NULL, 1, ?)
+                     match_id, synced_at, last_attempt_at, error_message, error_log, file_exists, map_slug,
+                     base_build, hero, game_mode, played_at, won, error_kind)
+                VALUES (?, ?, 'synced', ?, ?, ?, ?, ?, NULL, NULL, 1, ?, ?, ?, ?, ?, ?, NULL)
                 ON CONFLICT(replay_hash) DO UPDATE SET
                     file_path = excluded.file_path,
                     status = 'synced',
@@ -281,11 +332,20 @@ class SyncState:
                     last_attempt_at = excluded.last_attempt_at,
                     error_message = NULL,
                     error_log = NULL,
+                    error_kind = NULL,
                     file_exists = 1,
                     skip_reason = NULL,
-                    map_slug = excluded.map_slug
+                    map_slug = excluded.map_slug,
+                    base_build = COALESCE(excluded.base_build, base_build),
+                    hero = COALESCE(excluded.hero, hero),
+                    game_mode = COALESCE(excluded.game_mode, game_mode),
+                    played_at = COALESCE(excluded.played_at, played_at),
+                    won = COALESCE(excluded.won, won)
                 """,
-                (replay_hash, file_path, parser_version, api_version, match_id, now, now, map_slug),
+                (
+                    replay_hash, file_path, parser_version, api_version, match_id, now, now, map_slug,
+                    base_build, hero, game_mode, played_at, None if won is None else int(won),
+                ),
             )
             self._conn.commit()
 
@@ -341,12 +401,15 @@ class SyncState:
         file_path: str,
         error_message: str,
         error_log: str | None = None,
+        error_kind: str | None = None,
+        base_build: int | None = None,
     ) -> None:
         """Records a failed parse/upload attempt so it shows up in the Debug
         report. A replay that errors keeps `status='error'` (never
         `is_up_to_date`), so the next run retries it -- fixing the
         underlying issue (a daemon update, a reachable API) is exactly what
-        should make it sync next time.
+        should make it sync next time. `error_kind="quarantine"` marks the
+        server-quarantined unknown-build case (see `rows_quarantined`).
         """
         now = _now()
         with self._lock:
@@ -354,8 +417,9 @@ class SyncState:
                 """
                 INSERT INTO replays
                     (replay_hash, file_path, status, parser_version, api_version,
-                     match_id, synced_at, last_attempt_at, error_message, error_log, file_exists)
-                VALUES (?, ?, 'error', NULL, NULL, NULL, NULL, ?, ?, ?, 1)
+                     match_id, synced_at, last_attempt_at, error_message, error_log, file_exists,
+                     error_kind, base_build)
+                VALUES (?, ?, 'error', NULL, NULL, NULL, NULL, ?, ?, ?, 1, ?, ?)
                 ON CONFLICT(replay_hash) DO UPDATE SET
                     file_path = excluded.file_path,
                     status = 'error',
@@ -363,9 +427,11 @@ class SyncState:
                     error_message = excluded.error_message,
                     error_log = excluded.error_log,
                     file_exists = 1,
-                    skip_reason = NULL
+                    skip_reason = NULL,
+                    error_kind = excluded.error_kind,
+                    base_build = COALESCE(excluded.base_build, base_build)
                 """,
-                (replay_hash, file_path, now, error_message, error_log),
+                (replay_hash, file_path, now, error_message, error_log, error_kind, base_build),
             )
             self._conn.commit()
 
@@ -435,6 +501,78 @@ class SyncState:
             return False
         status, attempt_count, attempt_parser_version = row
         return status == "error" and attempt_parser_version == parser_version and attempt_count >= max_attempts
+
+    _ROW_COLUMNS = (
+        "replay_hash, file_path, status, parser_version, match_id, synced_at, last_attempt_at, "
+        "error_message, error_kind, skip_reason, file_exists, map_slug, base_build, hero, "
+        "game_mode, played_at, won"
+    )
+
+    @staticmethod
+    def _to_row(r: tuple) -> ReplayRow:
+        return ReplayRow(
+            replay_hash=r[0], file_path=r[1], status=r[2], parser_version=r[3], match_id=r[4],
+            synced_at=r[5], last_attempt_at=r[6], error_message=r[7], error_kind=r[8],
+            skip_reason=r[9], file_exists=bool(r[10]), map_slug=r[11], base_build=r[12],
+            hero=r[13], game_mode=r[14], played_at=r[15], won=None if r[16] is None else bool(r[16]),
+        )
+
+    def _rows(self, where: str = "") -> list[ReplayRow]:
+        with self._lock:
+            rows = self._conn.execute(f"SELECT {self._ROW_COLUMNS} FROM replays {where}").fetchall()
+        return [self._to_row(r) for r in rows]
+
+    def all_rows(self) -> list[ReplayRow]:
+        """Every tracked replay, for the Sync tab's table (thousands of small rows: one query)."""
+        return self._rows()
+
+    def rows_needing_enrichment(self) -> list[ReplayRow]:
+        """Synced rows with a known match but missing display data (anything synced before the
+        display columns existed) -- filled by `HistoryEnricher` from the API, without reparsing."""
+        return self._rows(
+            "WHERE status = 'synced' AND skip_reason IS NULL AND match_id IS NOT NULL AND "
+            "(hero IS NULL OR game_mode IS NULL OR played_at IS NULL OR won IS NULL)"
+        )
+
+    def rows_quarantined(self) -> list[ReplayRow]:
+        return self._rows("WHERE status = 'error' AND error_kind = 'quarantine'")
+
+    def apply_match_info(
+        self, match_id: str, *, map_slug: str | None, game_mode: str | None,
+        played_at: str | None, hero: str | None, won: bool | None,
+    ) -> None:
+        with self._lock:
+            self._conn.execute(
+                """
+                UPDATE replays SET
+                    map_slug = COALESCE(?, map_slug), game_mode = COALESCE(?, game_mode),
+                    played_at = COALESCE(?, played_at), hero = COALESCE(?, hero), won = COALESCE(?, won)
+                WHERE match_id = ?
+                """,
+                (map_slug, game_mode, played_at, hero, None if won is None else int(won), match_id),
+            )
+            self._conn.commit()
+
+    def reconcile_quarantined(
+        self, replay_hash: str, match_id: str, parser_version: str, *, map_slug: str | None,
+        game_mode: str | None, played_at: str | None, hero: str | None, won: bool | None,
+    ) -> None:
+        """The server verified the build and inserted the quarantined replay: record it as
+        synced (at the parser version the *server* stored) without re-parsing or re-uploading."""
+        now = _now()
+        with self._lock:
+            self._conn.execute(
+                """
+                UPDATE replays SET status = 'synced', parser_version = ?, match_id = ?, synced_at = ?,
+                    last_attempt_at = ?, error_message = NULL, error_log = NULL, error_kind = NULL,
+                    map_slug = COALESCE(?, map_slug), game_mode = COALESCE(?, game_mode),
+                    played_at = COALESCE(?, played_at), hero = COALESCE(?, hero), won = COALESCE(?, won)
+                WHERE replay_hash = ? AND status = 'error' AND error_kind = 'quarantine'
+                """,
+                (parser_version, match_id, now, now, map_slug, game_mode, played_at, hero,
+                 None if won is None else int(won), replay_hash),
+            )
+            self._conn.commit()
 
     # -- API-version-driven resync ---------------------------------------
 

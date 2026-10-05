@@ -183,6 +183,7 @@ def _sync_api_version(config: Config, sync_state: SyncState) -> str | None:
     api_version = info.get("apiVersion")
     min_parser_version = info.get("minParserVersion")
     if min_parser_version:
+        sync_state.set_meta("min_parser_version", min_parser_version)
         invalidated = sync_state.invalidate_stale(min_parser_version)
         if invalidated:
             logger.info(
