@@ -11,6 +11,7 @@ from __future__ import annotations
 import ctypes
 import logging
 import sys
+import threading
 import time
 from ctypes import wintypes
 from typing import Callable
@@ -21,9 +22,7 @@ GAME_PROCESS_NAMES = frozenset({"heroesofthestorm_x64.exe", "heroesofthestorm.ex
 _TH32CS_SNAPPROCESS = 0x00000002
 
 
-def _list_process_names() -> list[str]:
-    if sys.platform != "win32":
-        return []
+if sys.platform == "win32":
 
     class PROCESSENTRY32W(ctypes.Structure):
         _fields_ = [
@@ -39,27 +38,40 @@ def _list_process_names() -> list[str]:
             ("szExeFile", ctypes.c_wchar * 260),
         ]
 
-    kernel32 = ctypes.windll.kernel32
-    kernel32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
-    kernel32.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
-    kernel32.Process32FirstW.argtypes = [wintypes.HANDLE, ctypes.POINTER(PROCESSENTRY32W)]
-    kernel32.Process32NextW.argtypes = [wintypes.HANDLE, ctypes.POINTER(PROCESSENTRY32W)]
-    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    # A private handle to kernel32 (not the shared `ctypes.windll.kernel32`, whose function
+    # objects are process-wide): the argtypes below are set once at import so no call ever
+    # rewrites them while another thread is mid-call.
+    _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    _kernel32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+    _kernel32.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
+    _kernel32.Process32FirstW.argtypes = [wintypes.HANDLE, ctypes.POINTER(PROCESSENTRY32W)]
+    _kernel32.Process32NextW.argtypes = [wintypes.HANDLE, ctypes.POINTER(PROCESSENTRY32W)]
+    _kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
 
-    snapshot = kernel32.CreateToolhelp32Snapshot(_TH32CS_SNAPPROCESS, 0)
-    if snapshot in (None, ctypes.c_void_p(-1).value):
+# Called from the scheduler thread (GameDetector) and the Tk thread (sync window), so the
+# snapshot walk is serialised.
+_snapshot_lock = threading.Lock()
+
+
+def _list_process_names() -> list[str]:
+    if sys.platform != "win32":
         return []
-    names: list[str] = []
-    try:
-        entry = PROCESSENTRY32W()
-        entry.dwSize = ctypes.sizeof(entry)
-        ok = kernel32.Process32FirstW(snapshot, ctypes.byref(entry))
-        while ok:
-            names.append(entry.szExeFile)
-            ok = kernel32.Process32NextW(snapshot, ctypes.byref(entry))
-    finally:
-        kernel32.CloseHandle(snapshot)
-    return names
+
+    with _snapshot_lock:
+        snapshot = _kernel32.CreateToolhelp32Snapshot(_TH32CS_SNAPPROCESS, 0)
+        if snapshot in (None, ctypes.c_void_p(-1).value):
+            return []
+        names: list[str] = []
+        try:
+            entry = PROCESSENTRY32W()
+            entry.dwSize = ctypes.sizeof(entry)
+            ok = _kernel32.Process32FirstW(snapshot, ctypes.byref(entry))
+            while ok:
+                names.append(entry.szExeFile)
+                ok = _kernel32.Process32NextW(snapshot, ctypes.byref(entry))
+        finally:
+            _kernel32.CloseHandle(snapshot)
+        return names
 
 
 class GameDetector:

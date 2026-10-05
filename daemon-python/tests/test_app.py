@@ -524,3 +524,19 @@ def test_start_builds_the_upload_scheduler_with_the_priority_hook(tmp_path):
     scheduler_cls.return_value.start.assert_called_once()
     scheduler_cls.return_value.stop.assert_called_once()
     assert runner.scheduler is None
+
+
+def test_stop_stops_the_scheduler_before_persisting_and_uninstalls_the_handler_last():
+    runner = _DaemonRunner()
+    calls: list[str] = []
+    runner.hotkey_manager = MagicMock()
+    runner.scheduler = MagicMock()
+    runner.scheduler.stop.side_effect = lambda *a, **k: calls.append("scheduler.stop")
+    runner._reporter = MagicMock()
+    runner._reporter.persist_pending.side_effect = lambda: calls.append("persist")
+    runner._log_handler = MagicMock()
+
+    with patch("src.app.uninstall_logging_handler", side_effect=lambda h: calls.append("uninstall")):
+        runner.stop()
+
+    assert calls == ["scheduler.stop", "persist", "uninstall"]

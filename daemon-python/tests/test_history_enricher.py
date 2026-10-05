@@ -72,3 +72,22 @@ def test_a_quarantined_row_the_server_does_not_have_yet_stays_quarantined(tmp_pa
     client.lookup_matches.return_value = []
     HistoryEnricher(client, state, wait=lambda _s: None).run_once()
     assert [r.replay_hash for r in state.rows_quarantined()] == ["hq"]
+
+
+def test_a_set_stop_event_makes_run_once_return_without_further_lookups(tmp_path: Path):
+    import threading
+
+    state = SyncState(tmp_path / "s.db")
+    for i in range(450):
+        state.mark_synced(f"h{i}", "1.19", file_path=f"f{i}", match_id=f"m{i}")
+    state.mark_error("hq", "a", "unknown build", None, error_kind="quarantine")
+    client = MagicMock()
+    stop = threading.Event()
+
+    def lookup(**_kw):
+        stop.set()  # the app is shutting down while the first batch is in flight
+        return []
+
+    client.lookup_matches.side_effect = lookup
+    HistoryEnricher(client, state, stop_event=stop).run_once()
+    assert client.lookup_matches.call_count == 1

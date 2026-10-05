@@ -455,7 +455,7 @@ class _DaemonRunner:
         self._stop_event = stop_event
         thread.start()
 
-        enricher = HistoryEnricher(client, sync_state)
+        enricher = HistoryEnricher(client, sync_state, stop_event=stop_event)
 
         def _maintenance() -> None:
             # Runs once shortly after start, then every 10 minutes: fills the Sync table's
@@ -483,14 +483,16 @@ class _DaemonRunner:
 
     def stop(self, timeout: float = 10.0) -> None:
         self.hotkey_manager.stop()
+        # Stop the scheduler first: an in-flight upload can still produce reports (and log
+        # records), which must exist before they are persisted / before the handler goes away.
+        if self.scheduler is not None:
+            self.scheduler.stop()
+            self.scheduler = None
         if self._reporter is not None:
             self._reporter.persist_pending()
         if self._log_handler is not None:
             uninstall_logging_handler(self._log_handler)
             self._log_handler = None
-        if self.scheduler is not None:
-            self.scheduler.stop()
-            self.scheduler = None
         if self._thread is None or self._stop_event is None:
             return
         self._stop_event.set()

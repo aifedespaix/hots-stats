@@ -11,6 +11,7 @@ Also closes the loop for builds the API didn't recognise: a replay the daemon ma
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from typing import Callable
 
@@ -33,13 +34,20 @@ class HistoryEnricher:
         *,
         batch_size: int = 200,
         pause_seconds: float = 0.5,
-        wait: Callable[[float], object] = time.sleep,
+        wait: Callable[[float], object] | None = None,
+        stop_event: threading.Event | None = None,
     ) -> None:
         self._client = client
         self._state = sync_state
         self._batch = batch_size
         self._pause = pause_seconds
-        self._wait = wait
+        # With a stop event the pause doubles as the shutdown signal, so `_DaemonRunner.stop()`
+        # isn't left waiting on a pass that is mid-sleep or mid-way through thousands of rows.
+        self._stop = stop_event
+        self._wait = wait or (stop_event.wait if stop_event is not None else time.sleep)
+
+    def _stopping(self) -> bool:
+        return self._stop is not None and self._stop.is_set()
 
     def run_once(self) -> int:
         """One pass over everything that needs filling. Each row is asked about at most once
@@ -65,7 +73,11 @@ class HistoryEnricher:
                 )
                 updated += 1
             self._wait(self._pause)
+            if self._stopping():
+                return updated
 
+        if self._stopping():
+            return updated
         for chunk in _chunks(self._state.rows_quarantined(), self._batch):
             found = self._client.lookup_matches(replay_hashes=[row.replay_hash for row in chunk])
             if found is None:
@@ -87,4 +99,6 @@ class HistoryEnricher:
                 )
                 updated += 1
             self._wait(self._pause)
+            if self._stopping():
+                return updated
         return updated
