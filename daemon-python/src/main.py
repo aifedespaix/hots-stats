@@ -15,6 +15,7 @@ from pathlib import Path
 from . import accounts_discovery, api_client, updater
 from .accounts_discovery import WatchDir
 from .config import ConfigError, load_config
+from .error_reporter import ErrorReporter
 from .ingestion import resync, sync_spatial_calibrations
 from .sync_state import SyncState
 
@@ -54,7 +55,8 @@ def main(argv: list[str] | None = None) -> int:
         # that was newly or re-calibrated since the last run, not just
         # fetch calibrations for parsing replays that were already pending.
         calibrations = sync_spatial_calibrations(config, sync_state)
-        resync(client, watch_dirs, sync_state, calibrations=calibrations)
+        reporter = ErrorReporter(client.post_ingest_error, sync_state)
+        resync(client, watch_dirs, sync_state, calibrations=calibrations, reporter=reporter)
         return 0
 
     # One-time pre-Velopack -> Velopack migration shim (TEMPORARY -- see

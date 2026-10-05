@@ -21,6 +21,7 @@ from typing import Callable, Sequence
 
 from . import accounts_discovery, api_client, draft_capture, draft_layout, hotkey, ocr, single_instance
 from .config import Config, ConfigError, config_exists, is_auto_update_enabled, load_config
+from .error_reporter import ErrorReporter, ReportingHandler, install_logging_handler, uninstall_logging_handler
 from .ingestion import ingest_file, sync_spatial_calibrations
 from .status import StatusTracker
 from .sync_state import SyncState
@@ -230,6 +231,8 @@ class _DaemonRunner:
         self._stop_event: threading.Event | None = None
         self.status = StatusTracker()
         self.sync_state: SyncState | None = None
+        self._reporter: ErrorReporter | None = None
+        self._log_handler: ReportingHandler | None = None
         # `_client` is swapped by every `start()` call; the hotkey manager
         # and draft-capture coordinator are built once and kept for the
         # app's whole lifetime so settings-window rebinds (`start()` again
@@ -330,6 +333,11 @@ class _DaemonRunner:
             self.hotkey_manager.stop()
         sync_state = SyncState()
         self.sync_state = sync_state
+        reporter = ErrorReporter(client.post_ingest_error, sync_state)
+        self._reporter = reporter
+        if self._log_handler is not None:
+            uninstall_logging_handler(self._log_handler)
+        self._log_handler = install_logging_handler(reporter)
         stop_event = threading.Event()
         # Resolved on the background thread itself (see `_run` below), not
         # here, so a slow/unreachable API doesn't hold up returning from
@@ -348,6 +356,7 @@ class _DaemonRunner:
                 api_version=api_version_box["value"],
                 calibrations=calibrations_box["value"],
                 toon_handle=toon_handle,
+                reporter=reporter,
             )
             self.status.finish_syncing(
                 path.name,
@@ -356,6 +365,7 @@ class _DaemonRunner:
                 skip_reason=outcome.skip_reason,
             )
             self._maybe_notify_persistent_failure()
+            reporter.flush()
 
         def _on_initial_scan(found: int) -> None:
             if announce_initial_scan and found > 0 and self._tray_notify is not None:
@@ -393,6 +403,9 @@ class _DaemonRunner:
 
     def stop(self, timeout: float = 10.0) -> None:
         self.hotkey_manager.stop()
+        if self._log_handler is not None:
+            uninstall_logging_handler(self._log_handler)
+            self._log_handler = None
         if self._thread is None or self._stop_event is None:
             return
         self._stop_event.set()

@@ -435,14 +435,14 @@ def test_ingest_file_reports_auth_error_with_base_build(tmp_path):
     assert report["baseBuild"] == 93943
 
 
-def test_ingest_file_quarantined_returns_error_outcome_without_reporting_error(tmp_path):
+def test_ingest_file_quarantined_returns_error_outcome_and_reports_a_quarantine_error(tmp_path):
     """Regression test for the KeyError('upserted') crash: the server
     quarantines replays whose game build isn't verified yet (202 with
     `{quarantined: true, baseBuild}`, no `upserted`/`matchId` keys) instead
     of ingesting them. That must come back as a clear, retryable error --
-    not an unhandled KeyError -- and must not double-report the failure via
-    `_report_error`, since the server already recorded it server-side as
-    part of quarantining it (see `raw_replays_quarantine`)."""
+    not an unhandled KeyError. The server keeps the raw payload, but the
+    daemon still reports a `quarantine` error so unhandled builds show up in
+    the same triage view as every other failure."""
     client = api_client.ApiClient(_config(tmp_path))
     replay = tmp_path / "game.StormReplay"
     replay.write_bytes(b"some replay bytes")
@@ -455,7 +455,10 @@ def test_ingest_file_quarantined_returns_error_outcome_without_reporting_error(t
                 outcome = ingest_file(client, replay, sync_state)
 
     assert outcome.status == "error"
-    post_ingest_error.assert_not_called()
+    post_ingest_error.assert_called_once()
+    report = post_ingest_error.call_args.args[0]
+    assert report["errorType"] == "quarantine"
+    assert report["baseBuild"] == 93943
     records = sync_state.get_error_records()
     assert len(records) == 1
     assert records[0].replay_hash == "abc"

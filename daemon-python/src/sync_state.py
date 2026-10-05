@@ -37,6 +37,8 @@ from .config import config_file_path
 
 logger = logging.getLogger(__name__)
 
+_MAX_QUEUED_ERROR_REPORTS = 500
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS replays (
     replay_hash TEXT PRIMARY KEY,
@@ -93,6 +95,15 @@ CREATE TABLE IF NOT EXISTS file_hash_cache (
     file_size INTEGER NOT NULL,
     mtime REAL NOT NULL,
     replay_hash TEXT NOT NULL
+);
+
+-- Error reports the daemon couldn't deliver (API unreachable), retried by
+-- `error_reporter.ErrorReporter.flush`. Capped (see `enqueue_error_report`).
+CREATE TABLE IF NOT EXISTS pending_error_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fingerprint TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    created_at TEXT NOT NULL
 );
 """
 
@@ -621,4 +632,35 @@ class SyncState:
                 "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                 (key, value),
             )
+            self._conn.commit()
+
+    # -- offline error-report queue ---------------------------------------
+
+    def enqueue_error_report(self, fingerprint: str, payload: str) -> None:
+        """Persists one undelivered error report, dropping the oldest ones past the cap
+        so a long outage can't grow this table without bound."""
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO pending_error_reports (fingerprint, payload, created_at) VALUES (?, ?, ?)",
+                (fingerprint, payload, _now()),
+            )
+            self._conn.execute(
+                "DELETE FROM pending_error_reports WHERE id NOT IN "
+                "(SELECT id FROM pending_error_reports ORDER BY id DESC LIMIT ?)",
+                (_MAX_QUEUED_ERROR_REPORTS,),
+            )
+            self._conn.commit()
+
+    def peek_error_reports(self, limit: int) -> list[tuple[int, str]]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id, payload FROM pending_error_reports ORDER BY id LIMIT ?", (limit,)
+            ).fetchall()
+        return [(int(row[0]), str(row[1])) for row in rows]
+
+    def delete_error_reports(self, ids: list[int]) -> None:
+        if not ids:
+            return
+        with self._lock:
+            self._conn.executemany("DELETE FROM pending_error_reports WHERE id = ?", [(i,) for i in ids])
             self._conn.commit()

@@ -18,6 +18,7 @@ from . import api_client, constants
 from .accounts_discovery import WatchDir
 from . import parser as replay_parser
 from .config import Config
+from .error_reporter import ErrorReporter
 from .hasher import hash_replay_file
 from .sync_state import SyncState
 
@@ -43,10 +44,11 @@ def _report_error(
     client: api_client.ApiClient,
     sync_state: SyncState | None,
     *,
-    error_type: Literal["parse", "auth", "validation", "server"],
+    error_type: Literal["parse", "auth", "validation", "server", "quarantine"],
     replay_hash: str | None,
     base_build: int | None,
     message: str,
+    reporter: ErrorReporter | None = None,
 ) -> None:
     """Best-effort forwards one local ingestion failure to the API (`POST
     /ingest/errors`, see `daemonErrorReportInputSchema`) so it's triageable
@@ -61,6 +63,15 @@ def _report_error(
     exception, which is only available within that block's dynamic extent.
     """
     if sync_state is None:
+        return
+    if reporter is not None:
+        reporter.report(
+            error_type,
+            message,
+            replay_hash=replay_hash,
+            base_build=base_build,
+            error_log=traceback.format_exc(),
+        )
         return
     client.post_ingest_error(
         {
@@ -82,6 +93,7 @@ def ingest_file(
     api_version: str | None = None,
     calibrations: dict[str, dict] | None = None,
     toon_handle: str | None = None,
+    reporter: ErrorReporter | None = None,
 ) -> IngestOutcome:
     """Parses and uploads one replay.
 
@@ -210,7 +222,13 @@ def ingest_file(
                 replay_hash, str(path), str(err), traceback.format_exc(), constants.PARSER_VERSION
             )
         _report_error(
-            client, sync_state, error_type="parse", replay_hash=replay_hash, base_build=None, message=str(err)
+            client,
+            sync_state,
+            error_type="parse",
+            replay_hash=replay_hash,
+            base_build=None,
+            message=str(err),
+            reporter=reporter,
         )
         return IngestOutcome("error", str(err))
     except api_client.AuthError as err:
@@ -227,20 +245,26 @@ def ingest_file(
             replay_hash=payload["replayHash"],
             base_build=payload.get("m_baseBuild"),
             message=str(err),
+            reporter=reporter,
         )
         return IngestOutcome("error", str(err))
     except api_client.QuarantinedError as err:
-        # The server already recorded this replay server-side for review
-        # (`raw_replays_quarantine`, see apps/api/src/services/
-        # quarantine.service.ts) as part of returning this response --
-        # forwarding it again via `_report_error` would just duplicate that
-        # under a misleading "server error" label with a less complete copy
-        # (no raw payload), so unlike the branches below this deliberately
-        # skips it. Still recorded locally via `mark_error` so it's retried
+        # The server also keeps the raw payload (raw_replays_quarantine); the report
+        # here is the index entry that puts unhandled builds in the same triage view as
+        # every other failure. Still recorded locally via `mark_error` so it's retried
         # automatically once the build is verified server-side.
         logger.warning("%s: %s", path, err)
         if sync_state is not None:
             sync_state.mark_error(payload["replayHash"], str(path), str(err), traceback.format_exc())
+        _report_error(
+            client,
+            sync_state,
+            error_type="quarantine",
+            replay_hash=payload["replayHash"],
+            base_build=err.base_build,
+            message=str(err),
+            reporter=reporter,
+        )
         return IngestOutcome("error", str(err))
     except api_client.ValidationError as err:
         logger.error("Server rejected %s: %s (detail: %s)", path, err, err.detail)
@@ -254,6 +278,7 @@ def ingest_file(
             replay_hash=payload["replayHash"],
             base_build=payload.get("m_baseBuild"),
             message=message,
+            reporter=reporter,
         )
         return IngestOutcome("error", message)
     except api_client.ApiClientError as err:
@@ -267,6 +292,7 @@ def ingest_file(
             replay_hash=payload["replayHash"],
             base_build=payload.get("m_baseBuild"),
             message=str(err),
+            reporter=reporter,
         )
         return IngestOutcome("error", str(err))
     except Exception as err:  # noqa: BLE001 -- deliberate catch-all, see docstring
@@ -290,6 +316,7 @@ def ingest_file(
             replay_hash=error_hash,
             base_build=(payload or {}).get("m_baseBuild"),
             message=message,
+            reporter=reporter,
         )
         return IngestOutcome("error", message)
 
@@ -325,6 +352,7 @@ def resync(
     watch_dirs: Sequence[WatchDir],
     sync_state: SyncState | None = None,
     calibrations: dict[str, dict] | None = None,
+    reporter: ErrorReporter | None = None,
 ) -> None:
     """Parses and (re-)uploads every replay in every watched folder.
 
@@ -345,7 +373,12 @@ def resync(
     uploaded = skipped = failed = 0
     for path, toon_handle in replay_files:
         outcome = ingest_file(
-            client, path, sync_state, calibrations=calibrations, toon_handle=toon_handle
+            client,
+            path,
+            sync_state,
+            calibrations=calibrations,
+            toon_handle=toon_handle,
+            reporter=reporter,
         )
         if outcome.status == "uploaded":
             uploaded += 1
@@ -353,6 +386,10 @@ def resync(
             skipped += 1
         else:
             failed += 1
+    # A headless resync has no scheduler, so this is its only flush; reports beyond the
+    # rate limit stay in the offline queue for the tray daemon.
+    if reporter is not None:
+        reporter.flush()
     logger.info(
         "Resync complete: %d uploaded, %d already up to date, %d failed", uploaded, skipped, failed
     )

@@ -328,6 +328,11 @@ CALIBRATION_SAMPLE_TARGET = 1000
 
 # Shown in the settings window. Bump alongside `[project].version` in pyproject.toml.
 APP_VERSION = "1.0.55"
+# The `heroprotocol` release pinned in pyproject.toml (`heroprotocol @ git+...@v<this>`).
+# Hard-coded rather than read via importlib.metadata, which is unreliable inside the
+# Nuitka-built exe; tests/test_error_reporter.py fails if it drifts from the pin.
+# Compared against the API's `minHeroprotocolVersion` (see dependency_guard.py).
+HEROPROTOCOL_VERSION = "2.55.15.96477"
 
 # HotS talent tiers are always at these character levels, in pick order.
 TALENT_TIER_LEVELS = (1, 4, 7, 10, 13, 16, 20)
