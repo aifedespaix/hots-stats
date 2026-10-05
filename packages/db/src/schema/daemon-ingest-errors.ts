@@ -1,7 +1,16 @@
+import { sql } from "drizzle-orm";
 import { integer, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { users } from "./users";
 
-export const daemonErrorTypeEnum = pgEnum("daemon_error_type", ["parse", "auth", "validation", "server"]);
+export const daemonErrorTypeEnum = pgEnum("daemon_error_type", [
+  "parse",
+  "auth",
+  "validation",
+  "server",
+  "quarantine",
+  "runtime",
+  "dependency",
+]);
 
 export const daemonErrorStatusEnum = pgEnum("daemon_error_status", ["open", "resolved"]);
 
@@ -37,6 +46,9 @@ export const daemonIngestErrors = pgTable(
     errorLog: text("error_log"),
     parserVersion: text("parser_version"),
     daemonVersion: text("daemon_version"),
+    heroprotocolVersion: text("heroprotocol_version"),
+    // Only set for reports with no `replayHash` (runtime/dependency): the dedup key for those.
+    fingerprint: text("fingerprint"),
     status: daemonErrorStatusEnum("status").notNull().default("open"),
     // Bumped instead of inserting a new row on every retry -- a failing
     // replay is retried on every daemon restart (see sync_state.py's
@@ -53,6 +65,9 @@ export const daemonIngestErrors = pgTable(
     // as distinct, so the rare hash-failure case always inserts a fresh row
     // instead of colliding with unrelated ones.
     userReplayUnique: uniqueIndex("daemon_ingest_errors_user_replay_idx").on(table.userId, table.replayHash),
+    userFingerprintUnique: uniqueIndex("daemon_ingest_errors_user_fingerprint_idx")
+      .on(table.userId, table.fingerprint)
+      .where(sql`${table.fingerprint} IS NOT NULL`),
   }),
 );
 

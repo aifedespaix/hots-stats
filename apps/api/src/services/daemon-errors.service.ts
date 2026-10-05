@@ -2,6 +2,42 @@ import { daemonIngestErrors, db } from "@hots-stats/db";
 import type { DaemonErrorReportInput } from "@hots-stats/shared-types";
 import { desc, eq, inArray, sql } from "drizzle-orm";
 
+type ErrorValues = typeof daemonIngestErrors.$inferInsert;
+
+export interface ErrorUpsertPlan {
+  kind: "replay" | "fingerprint" | "insert";
+  values: ErrorValues;
+}
+
+/**
+ * Decides how one report is stored. Pure so it's unit-testable without a database.
+ * A report with a `replayHash` keeps the original (user, replay) dedup; one without
+ * (runtime / dependency errors have no replay) dedups on (user, fingerprint) instead,
+ * since Postgres treats every NULL `replayHash` as distinct.
+ */
+export function buildErrorUpsert(userId: string, input: DaemonErrorReportInput, now: Date): ErrorUpsertPlan {
+  const hasReplay = input.replayHash !== null;
+  const fingerprint = hasReplay ? null : (input.fingerprint ?? null);
+  return {
+    kind: hasReplay ? "replay" : fingerprint !== null ? "fingerprint" : "insert",
+    values: {
+      userId,
+      replayHash: input.replayHash,
+      baseBuild: input.baseBuild,
+      errorType: input.errorType,
+      errorMessage: input.errorMessage,
+      errorLog: input.errorLog,
+      parserVersion: input.parserVersion,
+      daemonVersion: input.daemonVersion,
+      heroprotocolVersion: input.heroprotocolVersion ?? null,
+      fingerprint,
+      occurrenceCount: input.occurrences,
+      firstOccurredAt: now,
+      lastOccurredAt: now,
+    },
+  };
+}
+
 /**
  * Records one daemon-reported ingestion failure (see `POST /ingest/errors`),
  * collapsing repeats of the same (user, replay) into a single row -- a
@@ -14,35 +50,35 @@ import { desc, eq, inArray, sql } from "drizzle-orm";
  */
 export async function recordDaemonError(userId: string, input: DaemonErrorReportInput): Promise<void> {
   const now = new Date();
-  await db
-    .insert(daemonIngestErrors)
-    .values({
-      userId,
-      replayHash: input.replayHash,
-      baseBuild: input.baseBuild,
-      errorType: input.errorType,
-      errorMessage: input.errorMessage,
-      errorLog: input.errorLog,
-      parserVersion: input.parserVersion,
-      daemonVersion: input.daemonVersion,
-      firstOccurredAt: now,
-      lastOccurredAt: now,
-    })
-    .onConflictDoUpdate({
+  const plan = buildErrorUpsert(userId, input, now);
+  const set = {
+    baseBuild: input.baseBuild,
+    errorType: input.errorType,
+    errorMessage: input.errorMessage,
+    errorLog: input.errorLog,
+    parserVersion: input.parserVersion,
+    daemonVersion: input.daemonVersion,
+    heroprotocolVersion: input.heroprotocolVersion ?? null,
+    status: "open" as const,
+    occurrenceCount: sql`${daemonIngestErrors.occurrenceCount} + ${input.occurrences}`,
+    lastOccurredAt: now,
+    resolvedAt: null,
+  };
+  const insert = db.insert(daemonIngestErrors).values(plan.values);
+  if (plan.kind === "replay") {
+    await insert.onConflictDoUpdate({
       target: [daemonIngestErrors.userId, daemonIngestErrors.replayHash],
-      set: {
-        baseBuild: input.baseBuild,
-        errorType: input.errorType,
-        errorMessage: input.errorMessage,
-        errorLog: input.errorLog,
-        parserVersion: input.parserVersion,
-        daemonVersion: input.daemonVersion,
-        status: "open",
-        occurrenceCount: sql`${daemonIngestErrors.occurrenceCount} + 1`,
-        lastOccurredAt: now,
-        resolvedAt: null,
-      },
+      set,
     });
+  } else if (plan.kind === "fingerprint") {
+    await insert.onConflictDoUpdate({
+      target: [daemonIngestErrors.userId, daemonIngestErrors.fingerprint],
+      targetWhere: sql`${daemonIngestErrors.fingerprint} IS NOT NULL`,
+      set,
+    });
+  } else {
+    await insert;
+  }
 }
 
 export interface DaemonErrorGroup {
@@ -53,6 +89,7 @@ export interface DaemonErrorGroup {
   errorLog: string | null;
   parserVersion: string | null;
   daemonVersion: string | null;
+  heroprotocolVersion: string | null;
   occurrences: number;
   affectedUsers: number;
   firstOccurredAt: string;
@@ -80,6 +117,7 @@ export async function getDaemonErrorGroups(limit: number): Promise<DaemonErrorGr
       errorLog: daemonIngestErrors.errorLog,
       parserVersion: daemonIngestErrors.parserVersion,
       daemonVersion: daemonIngestErrors.daemonVersion,
+      heroprotocolVersion: daemonIngestErrors.heroprotocolVersion,
       occurrenceCount: daemonIngestErrors.occurrenceCount,
       firstOccurredAt: daemonIngestErrors.firstOccurredAt,
       lastOccurredAt: daemonIngestErrors.lastOccurredAt,
@@ -113,6 +151,7 @@ export async function getDaemonErrorGroups(limit: number): Promise<DaemonErrorGr
         errorLog: row.errorLog,
         parserVersion: row.parserVersion,
         daemonVersion: row.daemonVersion,
+        heroprotocolVersion: row.heroprotocolVersion,
         occurrences: row.occurrenceCount,
         affectedUsers: 0,
         firstOccurredAt: row.firstOccurredAt.toISOString(),

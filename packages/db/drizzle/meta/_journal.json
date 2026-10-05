@@ -183,6 +183,13 @@
       "when": 1790091136802,
       "tag": "0025_great_winter_soldier",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1791228622564,
+      "tag": "0026_mixed_goliath",
+      "breakpoints": true
     }
   ]
 }
