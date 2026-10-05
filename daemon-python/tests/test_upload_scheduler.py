@@ -55,6 +55,23 @@ def test_backlog_files_are_followed_by_a_pause_but_new_ones_are_not():
     assert h.waits == [1.0]
 
 
+def test_backlog_pause_is_skipped_after_a_cheap_skip_but_not_after_an_upload():
+    h = Harness(backlog_pause=1.0)
+    h.outcomes[_p("synced")] = IngestOutcome("skipped", "already synced")
+    h.outcomes[_p("budget")] = IngestOutcome("skipped", "parse retry budget exhausted")
+    h.scheduler.enqueue_backlog([(_p("synced"), None), (_p("budget"), None), (_p("up"), None)])
+    h.drain()
+    assert h.waits == [1.0]  # only the upload
+
+
+def test_backlog_pause_still_applies_after_an_ai_player_skip():
+    h = Harness(backlog_pause=1.0)
+    h.outcomes[_p("ai")] = IngestOutcome("skipped", "ai", skip_reason="ai_player")
+    h.scheduler.enqueue_backlog([(_p("ai"), None)])
+    h.drain()
+    assert h.waits == [1.0]
+
+
 def test_backlog_waits_while_the_game_runs_but_new_replays_still_upload():
     h = Harness()
     h.game = True

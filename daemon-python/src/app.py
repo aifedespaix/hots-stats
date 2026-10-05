@@ -74,6 +74,25 @@ def _lower_worker_priority() -> None:
         logger.warning("Could not lower sync worker thread priority", exc_info=True)
 
 
+def _is_provably_known(path: Path, sync_state: SyncState | None) -> bool:
+    """True when `ingest_file` would skip `path` without parsing or uploading it: its cached
+    hash (same path/size/mtime) is synced at the current parser version, or its parse retry
+    budget is spent. Anything uncertain (no state, no stat, never hashed) is *not* known, so
+    it gets enqueued. Mirrors `ingest_file`'s own skip conditions on purpose."""
+    if sync_state is None:
+        return False
+    try:
+        stat = path.stat()
+    except OSError:
+        return False
+    replay_hash = sync_state.cached_hash(str(path), stat.st_size, stat.st_mtime)
+    if replay_hash is None:
+        return False
+    return sync_state.is_up_to_date(replay_hash, constants.PARSER_VERSION) or sync_state.parse_retry_budget_exhausted(
+        replay_hash, constants.PARSER_VERSION, constants.MAX_PARSE_RETRY_ATTEMPTS
+    )
+
+
 def _run_sync_loop(
     watch_dirs: Sequence[WatchDir],
     scheduler,
@@ -82,10 +101,19 @@ def _run_sync_loop(
     sync_state: SyncState | None = None,
     on_initial_scan: Callable[[int], None] | None = None,
 ) -> None:
-    """Hands every replay already on disk to `scheduler` as backlog, then
-    watches for new ones, which it hands over as high-priority work (see
-    upload_scheduler.py: one worker uploads them, backlog paused while the
-    game runs).
+    """Hands every replay already on disk *that isn't provably up to date* to
+    `scheduler` as backlog, then watches for new ones, which it hands over as
+    high-priority work (see upload_scheduler.py: one worker uploads them,
+    backlog paused while the game runs).
+
+    Replays already synced at the current parser version (or whose parse
+    retry budget is spent) are not enqueued: each backlog item costs a
+    pause and a "pending" row in the Sync table, which for thousands of
+    already-synced files meant ~1 s each on every start. This relies on the
+    caller having run `_sync_api_version` and the calibration sync first --
+    they delete stale rows, so stale/recalibrated replays are no longer
+    "known" here and get enqueued. The found count (status and
+    `on_initial_scan`) still covers every file on disk.
 
     Without this initial pass, a folder full of replays from before the
     daemon was ever configured would sit there forever: `watch_replays` only
@@ -120,8 +148,9 @@ def _run_sync_loop(
         # deleted, or a replays folder that got repointed elsewhere).
         sync_state.refresh_file_existence({str(path) for path in existing})
 
-    if existing and not stop_event.is_set():
-        scheduler.enqueue_backlog([(path, toon_by_path.get(str(path))) for path in existing])
+    to_sync = [path for path in existing if not _is_provably_known(path, sync_state)]
+    if to_sync and not stop_event.is_set():
+        scheduler.enqueue_backlog([(path, toon_by_path.get(str(path))) for path in to_sync])
     if stop_event.is_set():
         return
 

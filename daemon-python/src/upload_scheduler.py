@@ -215,5 +215,8 @@ class UploadScheduler:
                 self._live[str(item.path)] = "pending"
             else:
                 self._live.pop(str(item.path), None)
-        if item.backlog and not requeue:
+        # A cheap skip ("already synced", "parse retry budget exhausted") costs no network or
+        # CPU, so pacing it only slows the drain down for nothing.
+        cheap_skip = outcome.status == "skipped" and outcome.skip_reason is None
+        if item.backlog and not requeue and not cheap_skip:
             self._wait(self._backlog_pause)

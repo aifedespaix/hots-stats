@@ -3,7 +3,7 @@ import threading
 import time
 from unittest.mock import MagicMock, patch
 
-from src import app
+from src import app, constants
 from src.accounts_discovery import WatchDir
 from src.app import (
     _PERSISTENT_FAILURE_THRESHOLD,
@@ -115,6 +115,70 @@ def test_run_sync_loop_new_replay_callback_bumps_found_and_ingests(tmp_path):
 
     assert scheduler.new == [new_file]
     assert status.snapshot().found == 1
+
+
+def _mark_known(sync_state: SyncState, path, replay_hash: str, parser_version: str) -> None:
+    stat = path.stat()
+    sync_state.cache_hash(str(path), stat.st_size, stat.st_mtime, replay_hash)
+    sync_state.mark_synced(replay_hash, parser_version, file_path=str(path))
+
+
+def test_run_sync_loop_does_not_enqueue_replays_already_up_to_date(tmp_path):
+    """100 synced replays on disk must not each cost a backlog slot (and a 1 s pause)."""
+    sync_state = SyncState(tmp_path / "s.db")
+    for i in range(100):
+        _mark_known(sync_state, _touch_replay(tmp_path, f"S{i}.StormReplay"), f"hash{i}", constants.PARSER_VERSION)
+    stale = _touch_replay(tmp_path, "Stale.StormReplay")
+    _mark_known(sync_state, stale, "stalehash", "0.1")
+    fresh = _touch_replay(tmp_path, "Fresh.StormReplay")  # never seen: no cached hash
+    scheduler = _RecordingScheduler()
+    status = StatusTracker()
+    on_initial_scan = MagicMock()
+
+    with patch("src.app.watch_replays"):
+        _run_sync_loop(
+            [WatchDir(tmp_path, None)],
+            scheduler,
+            threading.Event(),
+            status,
+            sync_state,
+            on_initial_scan=on_initial_scan,
+        )
+
+    assert sorted(p for p, _ in scheduler.backlog) == sorted([stale, fresh])
+    assert status.snapshot().found == 102
+    on_initial_scan.assert_called_once_with(102)
+
+
+def test_run_sync_loop_does_not_enqueue_replays_whose_parse_retry_budget_is_spent(tmp_path):
+    sync_state = SyncState(tmp_path / "s.db")
+    path = _touch_replay(tmp_path, "Broken.StormReplay")
+    stat = path.stat()
+    sync_state.cache_hash(str(path), stat.st_size, stat.st_mtime, "brokenhash")
+    for _ in range(constants.MAX_PARSE_RETRY_ATTEMPTS):
+        sync_state.mark_parse_error("brokenhash", str(path), "boom", None, constants.PARSER_VERSION)
+    scheduler = _RecordingScheduler()
+
+    with patch("src.app.watch_replays"):
+        _run_sync_loop([WatchDir(tmp_path, None)], scheduler, threading.Event(), StatusTracker(), sync_state)
+
+    assert scheduler.backlog == []
+
+
+def test_run_sync_loop_with_real_scheduler_shows_no_pending_rows_for_synced_replays(tmp_path):
+    from src.upload_scheduler import UploadScheduler
+
+    sync_state = SyncState(tmp_path / "s.db")
+    for i in range(10):
+        _mark_known(sync_state, _touch_replay(tmp_path, f"S{i}.StormReplay"), f"h{i}", constants.PARSER_VERSION)
+    scheduler = UploadScheduler(
+        lambda p, t: None, stop_event=threading.Event(), is_game_running=lambda: False
+    )
+
+    with patch("src.app.watch_replays"):
+        _run_sync_loop([WatchDir(tmp_path, None)], scheduler, threading.Event(), StatusTracker(), sync_state)
+
+    assert scheduler.snapshot().live == {}
 
 
 def _config(tmp_path) -> Config:
