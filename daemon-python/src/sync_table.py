@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 PAGE_SIZE = 500
 # Caps the hover line under the table: error messages are unbounded, and the settings window has a
 # fixed size that gui.py sizes with a worst-case line of exactly this length.
-DETAIL_MAX_CHARS = 200
+DETAIL_MAX_CHARS = 120
 _REFRESH_MIN_SECONDS = 3.0
 _ALL = "Toutes"
 _COLUMNS = (
@@ -92,7 +92,7 @@ class SyncTable(ttk.Frame):
         scheduler: UploadScheduler | None,
         min_parser_version: Callable[[], str | None],
         reveal: Callable[[str], None] = reveal_in_explorer,
-        height: int = 8,
+        height: int = 6,
     ) -> None:
         super().__init__(parent)
         self._state = sync_state
@@ -106,6 +106,9 @@ class SyncTable(ttk.Frame):
         self._filter_state: str | None = None
         self._sort: tuple[str, bool] = ("played", True)
         self._last_refresh = 0.0
+        self._signature: tuple | None = None
+        self._page_pending = False
+        self._filter_values: list[str] = []
         self._build(height)
         self.refresh(force=True)
 
@@ -157,7 +160,7 @@ class SyncTable(ttk.Frame):
 
         bottom = ttk.Frame(self)
         bottom.pack(fill="x", pady=(6, 0))
-        self._detail = ttk.Label(bottom, text="", style="Muted.TLabel", wraplength=520, justify="left")
+        self._detail = ttk.Label(bottom, text="", style="Muted.TLabel", wraplength=520, justify="left")  # 120 chars = 2 lines
         self._detail.pack(side="left", fill="x", expand=True)
         self._reveal_button = ttk.Button(
             bottom, text="Afficher dans l'explorateur", command=self._reveal_selected
@@ -182,19 +185,20 @@ class SyncTable(ttk.Frame):
         self._update_filter_choices()
         self._update_controls(snapshot)
         if force or self._tree.yview()[0] == 0.0:
-            self._reload()
+            self._reload(only_if_changed=not force)
 
     def _update_filter_choices(self) -> None:
         counts = count_by_state(self._all)
         values = [f"{_ALL} ({len(self._all)})"] + [
             f"{STATE_LABELS[s]} ({counts[s]})" for s in STATES if counts.get(s)
         ]
-        self._filter_box.configure(values=values)
+        if values != self._filter_values:
+            self._filter_values = values
+            self._filter_box.configure(values=values)
         current = STATE_LABELS.get(self._filter_state, None) if self._filter_state else None
-        if current is None:
-            self._filter_var.set(values[0])
-        else:
-            self._filter_var.set(f"{current} ({counts.get(self._filter_state, 0)})")
+        wanted = values[0] if current is None else f"{current} ({counts.get(self._filter_state, 0)})"
+        if self._filter_var.get() != wanted:
+            self._filter_var.set(wanted)
 
     def _update_controls(self, snapshot) -> None:
         if snapshot is None:
@@ -210,14 +214,30 @@ class SyncTable(ttk.Frame):
         }
         self._blocked_label.configure(text=reasons.get(snapshot.blocked or "", ""))
 
-    def _reload(self) -> None:
-        self._visible = sort_views(
+    def _reload(self, only_if_changed: bool = False) -> None:
+        visible = sort_views(
             filter_views(self._all, self._filter_state), self._sort[0], descending=self._sort[1]
         )
-        self._by_key = {view.key: view for view in self._visible}
+        signature = tuple(
+            (v.key, v.state, v.label, v.played, v.uploaded, v.result, v.build) for v in visible
+        )
+        if only_if_changed and signature == self._signature:
+            # Nothing the user can see changed: leave the tree (selection, scroll) alone.
+            self._visible = visible
+            self._by_key = {view.key: view for view in visible}
+            return
+        self._signature = signature
+        self._visible = visible
+        self._by_key = {view.key: view for view in visible}
+        selected = self._tree.selection()
         self._tree.delete(*self._tree.get_children())
         self._shown = 0
         self._append_page()
+        # The periodic refresh must not drop the user's selection; a row beyond the shown page
+        # simply stays unselected.
+        if selected and self._tree.exists(selected[0]):
+            self._tree.selection_set(selected[0])
+        self._sync_reveal_state()
 
     def _append_page(self) -> None:
         for view in visible_page(self._visible, self._shown, PAGE_SIZE):
@@ -234,8 +254,13 @@ class SyncTable(ttk.Frame):
 
     def _on_yscroll(self, first: str, last: str) -> None:
         self._vsb.set(first, last)
-        if float(last) >= 0.98 and self._shown < len(self._visible):
-            self.after_idle(self._append_page)
+        if float(last) >= 0.98 and self._shown < len(self._visible) and not self._page_pending:
+            self._page_pending = True
+            self.after_idle(self._append_page_once)
+
+    def _append_page_once(self) -> None:
+        self._page_pending = False
+        self._append_page()
 
     def _on_filter(self, _event: object) -> None:
         chosen = self._filter_var.get().rsplit(" (", 1)[0]
@@ -264,6 +289,9 @@ class SyncTable(ttk.Frame):
         self._detail.configure(text=text)
 
     def _on_select(self, _event: object) -> None:
+        self._sync_reveal_state()
+
+    def _sync_reveal_state(self) -> None:
         view = self._selected()
         enabled = view is not None and view.file_exists and bool(view.file_path)
         self._reveal_button.state(["!disabled"] if enabled else ["disabled"])

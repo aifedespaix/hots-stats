@@ -2061,7 +2061,10 @@ class _SettingsWindow:
         """
         width, height = self._measure_worst_case_size()
         x = (self._root.winfo_screenwidth() - width) // 2
-        y = (self._root.winfo_screenheight() - height) // 3
+        # The window is not resizable, so a height beyond the screen would push the title bar or
+        # the bottom buttons out of reach: clamp it, and never place the title bar above the top.
+        height = min(height, self._root.winfo_screenheight() - 80)
+        y = max(0, (self._root.winfo_screenheight() - height) // 3)
         self._root.geometry(f"{width}x{height}+{x}+{y}")
 
     def _measure_worst_case_size(self) -> tuple[int, int]:
