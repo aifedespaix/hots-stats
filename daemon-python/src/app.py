@@ -504,6 +504,7 @@ def run_app() -> int:
             draft_capture_status=daemon.draft_capture_status,
             hotkey_manager=daemon.hotkey_manager,
             on_manual_capture=daemon.trigger_draft_capture,
+            scheduler=daemon.scheduler,
         ):
             try:
                 new_config = load_config()

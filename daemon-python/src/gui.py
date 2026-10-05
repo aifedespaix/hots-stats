@@ -52,7 +52,9 @@ from .draft_layout import TeamCropResult
 from .ocr import OcrResult
 from .status import StatusTracker
 from .sync_state import SyncState
+from .sync_table import DETAIL_MAX_CHARS, SyncTable
 from .updater import UpdatePhase, UpdateStatus, UpdateStatusTracker
+from .upload_scheduler import UploadScheduler
 from .urls import DEFAULT_API_BASE_URL, guess_settings_url
 
 logger = logging.getLogger(__name__)
@@ -212,6 +214,7 @@ def run_settings_window(
     draft_capture_status: DraftCaptureCoordinator | None = None,
     hotkey_manager: "hotkey.HotkeyManager | None" = None,
     on_manual_capture: Callable[[], None] | None = None,
+    scheduler: UploadScheduler | None = None,
 ) -> bool:
     """Opens the settings window and blocks (on the calling thread) until
     it's closed. Returns True if the user saved a valid configuration.
@@ -229,7 +232,8 @@ def run_settings_window(
     registration status (error message, last-triggered timestamp) and its
     "Réessayer" action. `on_manual_capture`, same condition, is what the
     Draft Live tab's "Capturer maintenant" button calls to trigger a real
-    (non-dry-run) capture on demand.
+    (non-dry-run) capture on demand. `scheduler`, same condition, backs the
+    Synchronisation tab's pause button and its live pending/uploading rows.
     """
     result = {"saved": False}
     root = tk.Tk()
@@ -243,6 +247,7 @@ def run_settings_window(
         draft_capture_status=draft_capture_status,
         hotkey_manager=hotkey_manager,
         on_manual_capture=on_manual_capture,
+        scheduler=scheduler,
     )
     root.mainloop()
     return result["saved"]
@@ -478,6 +483,7 @@ class _SettingsWindow:
         draft_capture_status: DraftCaptureCoordinator | None = None,
         hotkey_manager: "hotkey.HotkeyManager | None" = None,
         on_manual_capture: Callable[[], None] | None = None,
+        scheduler: UploadScheduler | None = None,
     ) -> None:
         self._root = root
         self._is_first_run = is_first_run
@@ -488,8 +494,10 @@ class _SettingsWindow:
         self._draft_capture_status = draft_capture_status
         self._hotkey_manager = hotkey_manager
         self._on_manual_capture = on_manual_capture
+        self._scheduler = scheduler
         self._debounce_job: str | None = None
         self._live_stats_job: str | None = None
+        self._sync_table: SyncTable | None = None
         self._update_status_job: str | None = None
         self._draft_capture_status_job: str | None = None
         self._connect_busy = False
@@ -1474,6 +1482,16 @@ class _SettingsWindow:
                 row=7, column=0, columnspan=4, sticky="w", pady=(6, 0)
             )
 
+        if self._sync_state is not None:
+            sync_state = self._sync_state
+            self._sync_table = SyncTable(
+                parent,
+                sync_state=sync_state,
+                scheduler=self._scheduler,
+                min_parser_version=lambda: sync_state.get_meta("min_parser_version"),
+            )
+            self._sync_table.pack(fill="both", expand=True, pady=(12, 0))
+
     def _refresh_live_stats(self) -> None:
         assert self._status_tracker is not None
         status = self._status_tracker.snapshot()
@@ -1523,6 +1541,8 @@ class _SettingsWindow:
         else:
             self._sync_error_label.configure(text="")
 
+        if self._sync_table is not None:
+            self._sync_table.refresh()
         self._live_stats_job = self._root.after(
             _LIVE_STATS_POLL_MS, self._refresh_live_stats
         )
@@ -2065,6 +2085,12 @@ class _SettingsWindow:
                     "✗ Dernière erreur de synchronisation : "
                     + "x" * _ERROR_LABEL_MAX_CHARS,
                 )
+            )
+        if self._sync_table is not None:
+            # The hover line under the sync table wraps over several lines
+            # for a long error message.
+            placeholders.append(
+                (self._sync_table.detail_label, "x " * (DETAIL_MAX_CHARS // 2))
             )
         if hasattr(self, "_update_status_label"):
             placeholders.append(
