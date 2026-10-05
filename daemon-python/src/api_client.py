@@ -170,7 +170,14 @@ class ApiClient:
         raises and isn't retried, since a failed *error report* must not
         itself become a second failure for the sync loop to handle, and the
         underlying failure is already recorded locally (sync_state.py's
-        `mark_error`) regardless of whether this call succeeds."""
+        `mark_error`) regardless of whether this call succeeds.
+
+        Returns True when the report was delivered *or is undeliverable*: any
+        4xx other than 401/408/429 is a permanent rejection (an older API not
+        knowing this `errorType`, text over the server's length limit), and
+        retrying it would block the offline queue's head forever, so the caller
+        should drop it. False (retry later) for 401/408/429, 5xx and network
+        errors."""
         try:
             response = self._session.post(f"{self._base_url}/ingest/errors", json=report, timeout=timeout)
         except requests.RequestException as err:
@@ -179,7 +186,7 @@ class ApiClient:
 
         if response.status_code >= 400:
             logger.debug("Ingestion error report rejected (%d): %s", response.status_code, _safe_json(response))
-            return False
+            return 400 <= response.status_code < 500 and response.status_code not in (401, 408, 429)
         return True
 
     def lookup_matches(

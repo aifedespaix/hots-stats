@@ -220,12 +220,21 @@ def test_post_ingest_error_success(tmp_path):
     assert post.call_args.kwargs["json"] == {"errorType": "parse", "errorMessage": "boom"}
 
 
-def test_post_ingest_error_false_on_rejection(tmp_path):
+def test_post_ingest_error_true_on_permanent_rejection(tmp_path):
+    """A 400 will never succeed on retry (old API not knowing the errorType, oversized text):
+    True means "delivered or undeliverable -- drop it" so the offline queue isn't blocked."""
     client = ApiClient(_config(tmp_path))
     bad_response = _response(400, {"error": "invalid"})
 
     with patch.object(client._session, "post", return_value=bad_response):
-        assert client.post_ingest_error({"errorType": "parse", "errorMessage": "boom"}) is False
+        assert client.post_ingest_error({"errorType": "parse", "errorMessage": "boom"}) is True
+
+
+def test_post_ingest_error_false_on_retryable_statuses(tmp_path):
+    client = ApiClient(_config(tmp_path))
+    for status in (401, 408, 429, 500, 503):
+        with patch.object(client._session, "post", return_value=_response(status, {"error": "x"})):
+            assert client.post_ingest_error({"errorType": "parse", "errorMessage": "boom"}) is False, status
 
 
 def test_post_ingest_error_false_on_network_error_not_retried(tmp_path):

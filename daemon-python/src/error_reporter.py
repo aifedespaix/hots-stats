@@ -50,6 +50,16 @@ class _State(Protocol):
     def delete_error_reports(self, ids: list[int]) -> None: ...
 
 
+def _truncate(text: str, limit: int) -> str:
+    """Caps `text` at `limit` code points, then shrinks until it also fits `limit` UTF-16 code
+    units: the server's zod `.max()` counts UTF-16 units, so non-BMP characters (emoji) count
+    twice there and a code-point cut alone could still be rejected."""
+    text = text[:limit]
+    while len(text.encode("utf-16-le", "surrogatepass")) // 2 > limit:
+        text = text[:-1]
+    return text
+
+
 def scrub_paths(text: str) -> str:
     """`C:\\Users\\<name>\\...` -> `~\\...`: tracebacks must not carry the player's Windows login."""
     return _USER_DIR_RE.sub("~", text)
@@ -98,8 +108,8 @@ class ErrorReporter:
         base_build: int | None = None,
         error_log: str | None = None,
     ) -> None:
-        message = scrub_paths(message)[:_MAX_MESSAGE_CHARS] or "(no message)"
-        log = scrub_paths(error_log)[:_MAX_LOG_CHARS] if error_log else None
+        message = _truncate(scrub_paths(message), _MAX_MESSAGE_CHARS) or "(no message)"
+        log = _truncate(scrub_paths(error_log), _MAX_LOG_CHARS) if error_log else None
         fingerprint = make_fingerprint(error_type, message, replay_hash)
         with self._lock:
             existing = self._pending.get(fingerprint)

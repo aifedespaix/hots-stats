@@ -245,3 +245,28 @@ def test_flush_never_raises_and_keeps_the_report_when_send_raises(tmp_path: Path
     clock.advance(2.0)
     assert reporter.flush() == 1
     assert sent[0]["errorMessage"] == "keep me"
+
+
+def test_a_rejected_head_of_line_report_is_dropped_and_the_next_one_still_delivered(tmp_path):
+    """`send` answering True for a report the API will never accept (4xx) must not block the queue."""
+    state = SyncState(tmp_path / "s.db")
+    state.enqueue_error_report("rejected", '{"errorType": "quarantine", "fingerprint": "rejected"}')
+    state.enqueue_error_report("ok", '{"errorType": "parse", "fingerprint": "ok"}')
+    sent: list = []
+    clock = FakeClock()
+    reporter = _reporter(sent, state=state, clock=clock, min_interval=0.0)
+
+    assert reporter.flush() == 2
+    assert [r["fingerprint"] for r in sent] == ["rejected", "ok"]
+    assert state.peek_error_reports(10) == []
+
+
+def test_message_and_log_fit_the_servers_utf16_limits_with_non_bmp_characters():
+    sent: list = []
+    reporter = _reporter(sent)
+    reporter.report("runtime", "😀" * 3000, error_log="😀" * 9000)
+    reporter.flush()
+    report = sent[0]
+    assert len(report["errorMessage"].encode("utf-16-le")) // 2 <= 2000
+    assert len(report["errorLog"].encode("utf-16-le")) // 2 <= 8000
+    assert report["errorMessage"] and report["errorLog"]
