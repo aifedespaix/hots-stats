@@ -22,23 +22,34 @@ def _touch_replay(tmp_path, name: str):
     return path
 
 
+class _RecordingScheduler:
+    """Stands in for UploadScheduler: records what `_run_sync_loop` hands it."""
+
+    def __init__(self) -> None:
+        self.backlog: list = []
+        self.new: list = []
+
+    def enqueue_backlog(self, items) -> None:
+        self.backlog.extend(items)
+
+    def enqueue_new(self, path, toon) -> None:
+        self.new.append(path)
+
+
 def test_run_sync_loop_ingests_existing_replays_before_watching(tmp_path):
     """Regression test for the bug this branch fixes: a folder that already
     had replays in it before the daemon was ever configured must still get
     them uploaded, not just future ones."""
     a = _touch_replay(tmp_path, "A.StormReplay")
     b = _touch_replay(tmp_path, "B.StormReplay")
-    ingested: list = []
+    scheduler = _RecordingScheduler()
     status = StatusTracker()
     stop_event = threading.Event()
 
     with patch("src.app.watch_replays") as watch:
-        _run_sync_loop([WatchDir(tmp_path, None)], lambda p, _t: ingested.append(p), stop_event, status)
+        _run_sync_loop([WatchDir(tmp_path, None)], scheduler, stop_event, status)
 
-    # The initial backlog is now ingested by a small thread pool (see
-    # _INITIAL_SYNC_WORKERS), so both are still ingested exactly once each,
-    # but not necessarily in on-disk order.
-    assert sorted(ingested) == sorted([a, b])
+    assert sorted(p for p, _ in scheduler.backlog) == sorted([a, b])
     assert status.snapshot().found == 2
     watch.assert_called_once()
     # Every watch dir is handed over at once (multi-account support), not
@@ -56,7 +67,7 @@ def test_run_sync_loop_calls_on_initial_scan_once_with_the_found_count(tmp_path)
 
     with patch("src.app.watch_replays"):
         _run_sync_loop(
-            [WatchDir(tmp_path, None)], lambda _p, _t: None, stop_event, status, on_initial_scan=on_initial_scan
+            [WatchDir(tmp_path, None)], _RecordingScheduler(), stop_event, status, on_initial_scan=on_initial_scan
         )
 
     on_initial_scan.assert_called_once_with(2)
@@ -69,7 +80,7 @@ def test_run_sync_loop_calls_on_initial_scan_with_zero_when_folder_is_empty(tmp_
 
     with patch("src.app.watch_replays"):
         _run_sync_loop(
-            [WatchDir(tmp_path, None)], lambda _p, _t: None, stop_event, status, on_initial_scan=on_initial_scan
+            [WatchDir(tmp_path, None)], _RecordingScheduler(), stop_event, status, on_initial_scan=on_initial_scan
         )
 
     on_initial_scan.assert_called_once_with(0)
@@ -78,31 +89,31 @@ def test_run_sync_loop_calls_on_initial_scan_with_zero_when_folder_is_empty(tmp_
 def test_run_sync_loop_stops_early_when_stop_event_set(tmp_path):
     _touch_replay(tmp_path, "A.StormReplay")
     _touch_replay(tmp_path, "B.StormReplay")
-    ingested: list = []
+    scheduler = _RecordingScheduler()
     status = StatusTracker()
     stop_event = threading.Event()
     stop_event.set()
 
     with patch("src.app.watch_replays") as watch:
-        _run_sync_loop([WatchDir(tmp_path, None)], lambda p, _t: ingested.append(p), stop_event, status)
+        _run_sync_loop([WatchDir(tmp_path, None)], scheduler, stop_event, status)
 
-    assert ingested == []
+    assert scheduler.backlog == []
     assert status.snapshot().found == 2  # still reported, just not ingested
     watch.assert_not_called()
 
 
 def test_run_sync_loop_new_replay_callback_bumps_found_and_ingests(tmp_path):
-    ingested: list = []
+    scheduler = _RecordingScheduler()
     status = StatusTracker()
     stop_event = threading.Event()
 
     with patch("src.app.watch_replays") as watch:
-        _run_sync_loop([WatchDir(tmp_path, None)], lambda p, _t: ingested.append(p), stop_event, status)
+        _run_sync_loop([WatchDir(tmp_path, None)], scheduler, stop_event, status)
         on_replay_ready = watch.call_args.kwargs["on_replay_ready"]
         new_file = tmp_path / "New.StormReplay"
         on_replay_ready(new_file)
 
-    assert ingested == [new_file]
+    assert scheduler.new == [new_file]
     assert status.snapshot().found == 1
 
 
@@ -430,13 +441,22 @@ def test_lower_worker_priority_swallows_a_failed_call(monkeypatch):
     app._lower_worker_priority()  # must not raise
 
 
-def test_run_sync_loop_initial_pool_uses_the_priority_initializer(tmp_path):
-    _touch_replay(tmp_path, "A.StormReplay")
-    status = StatusTracker()
-    stop_event = threading.Event()
+def test_start_builds_the_upload_scheduler_with_the_priority_hook(tmp_path):
+    config = Config(
+        api_base_url="https://api.example.com",
+        access_token="hots_pat_abc",
+        hots_dir=None,
+        extra_replay_dirs=(tmp_path,),
+        draft_feature_enabled=False,  # keeps this test off the real `keyboard` hook
+    )
+    runner = _DaemonRunner()
 
-    with patch("src.app.watch_replays"), patch("src.app.ThreadPoolExecutor") as pool_cls:
-        pool_cls.return_value.__enter__.return_value.submit.return_value = MagicMock()
-        _run_sync_loop([WatchDir(tmp_path, None)], lambda _p, _t: None, stop_event, status)
+    with patch("src.app.SyncState"), patch("src.app.UploadScheduler") as scheduler_cls:
+        with patch("src.app._run_sync_loop"), patch("src.app.api_client.fetch_version", return_value=None):
+            runner.start(config)
+            runner.stop()
 
-    assert pool_cls.call_args.kwargs["initializer"] is app._lower_worker_priority
+    assert scheduler_cls.call_args.kwargs["on_thread_start"] is app._lower_worker_priority
+    scheduler_cls.return_value.start.assert_called_once()
+    scheduler_cls.return_value.stop.assert_called_once()
+    assert runner.scheduler is None

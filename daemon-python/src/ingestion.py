@@ -38,6 +38,10 @@ class IngestOutcome:
     # the plain "already synced" / server no-op skips, which stay `None`
     # here since there's nothing notable to report about them.
     skip_reason: str | None = None
+    # Set on `status == "error"` for the two kinds the scheduler reacts to: "auth" (every later
+    # request will fail the same way -- stop) and "server" (network/5xx after `post_replay`'s own
+    # retries -- back off). None for everything else (a bad replay says nothing about the API).
+    error_kind: str | None = None
 
 
 def _report_error(
@@ -262,7 +266,7 @@ def ingest_file(
             message=str(err),
             reporter=reporter,
         )
-        return IngestOutcome("error", str(err))
+        return IngestOutcome("error", str(err), error_kind="auth")
     except api_client.QuarantinedError as err:
         # The server also keeps the raw payload (raw_replays_quarantine); the report
         # here is the index entry that puts unhandled builds in the same triage view as
@@ -312,7 +316,7 @@ def ingest_file(
             message=str(err),
             reporter=reporter,
         )
-        return IngestOutcome("error", str(err))
+        return IngestOutcome("error", str(err), error_kind="server")
     except Exception as err:  # noqa: BLE001 -- deliberate catch-all, see docstring
         # Not something any handler above recognizes -- e.g. the server (or
         # a proxy/WAF in front of it) returning a 2xx response with a

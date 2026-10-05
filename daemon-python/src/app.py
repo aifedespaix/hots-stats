@@ -15,16 +15,17 @@ from __future__ import annotations
 import logging
 import sys
 import threading
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable, Sequence
 
 from . import accounts_discovery, api_client, draft_capture, draft_layout, hotkey, ocr, single_instance
 from .config import Config, ConfigError, config_exists, is_auto_update_enabled, load_config
 from .error_reporter import ErrorReporter, ReportingHandler, install_logging_handler, uninstall_logging_handler
-from .ingestion import ingest_file, sync_spatial_calibrations
+from .game_process import GameDetector
+from .ingestion import IngestOutcome, ingest_file, sync_spatial_calibrations
 from .status import StatusTracker
 from .sync_state import SyncState
+from .upload_scheduler import SYNC_DURING_GAME_META_KEY, UploadScheduler
 from .updater import AvailableUpdate, UpdateStatusTracker, watch_for_updates
 from .accounts_discovery import WatchDir
 from .watcher import watch_replays
@@ -37,18 +38,6 @@ from .watcher import watch_replays
 
 logger = logging.getLogger(__name__)
 
-# Concurrency for the *initial backlog* pass only (see `_run_sync_loop`) --
-# new replays trickling in afterwards via `watch_replays` still go through
-# one at a time inline, since they arrive too slowly to need it. Kept
-# deliberately modest rather than "as many as the CPU allows": each worker's
-# `ingest_file` call ends in a network POST to the API, so this number is
-# also how many of those can be in flight at once -- a library of thousands
-# of replays must not turn into thousands of concurrent requests. A
-# separately-tuned (likely higher) limit just for the CPU-bound hash+parse
-# step, decoupled from the upload step, is possible future work -- see
-# tasks/daemon-audit-2026-08-12.md, 2.3.
-_INITIAL_SYNC_WORKERS = 4
-
 # How many *consecutive* ingestion failures (no success in between) it takes
 # before the tray gets a one-time "something's persistently wrong" toast --
 # see `_DaemonRunner._maybe_notify_persistent_failure`. High enough that a
@@ -59,8 +48,8 @@ _PERSISTENT_FAILURE_THRESHOLD = 5
 
 
 def _lower_worker_priority() -> None:
-    """Runs once per initial-sync pool worker thread (`ThreadPoolExecutor`'s
-    `initializer`, see `_run_sync_loop`) so replay parsing yields CPU to
+    """Runs once on the upload scheduler's worker thread (`UploadScheduler`'s
+    `on_thread_start`) so replay parsing yields CPU to
     whatever's in the foreground -- typically the game itself, if the
     player starts one while the initial backlog is still draining. No
     detection of "is a game running": lowering the *background* work's
@@ -82,15 +71,16 @@ def _lower_worker_priority() -> None:
 
 def _run_sync_loop(
     watch_dirs: Sequence[WatchDir],
-    ingest: Callable[[Path, str | None], None],
+    scheduler,
     stop_event: threading.Event,
     status: StatusTracker,
     sync_state: SyncState | None = None,
     on_initial_scan: Callable[[int], None] | None = None,
 ) -> None:
-    """Uploads every replay already on disk -- via a small pool of worker
-    threads, see `_INITIAL_SYNC_WORKERS` -- then hands off to `watch_replays`
-    for new ones.
+    """Hands every replay already on disk to `scheduler` as backlog, then
+    watches for new ones, which it hands over as high-priority work (see
+    upload_scheduler.py: one worker uploads them, backlog paused while the
+    game runs).
 
     Without this initial pass, a folder full of replays from before the
     daemon was ever configured would sit there forever: `watch_replays` only
@@ -125,32 +115,15 @@ def _run_sync_loop(
         # deleted, or a replays folder that got repointed elsewhere).
         sync_state.refresh_file_existence({str(path) for path in existing})
 
-    if existing:
-        # `ingest` (really `_DaemonRunner.start`'s `_ingest_and_track`) is
-        # what actually does the hashing/parsing/uploading -- parallelizing
-        # this loop is what parallelizes that work. `SyncState` already
-        # tolerates concurrent callers (its own internal lock + a
-        # `check_same_thread=False` connection), so no changes were needed
-        # there for this to be safe.
-        with ThreadPoolExecutor(
-            max_workers=_INITIAL_SYNC_WORKERS,
-            thread_name_prefix="hots-initial-sync",
-            initializer=_lower_worker_priority,
-        ) as pool:
-            futures = []
-            for path in existing:
-                if stop_event.is_set():
-                    break
-                futures.append(pool.submit(ingest, path, toon_by_path.get(str(path))))
-            for future in futures:
-                future.result()  # propagate anything unexpected; ingest_file itself never raises
+    if existing and not stop_event.is_set():
+        scheduler.enqueue_backlog([(path, toon_by_path.get(str(path))) for path in existing])
     if stop_event.is_set():
         return
 
     def _on_new_replay(path: Path) -> None:
         status.bump_found()
         toon_handle = toon_by_path.get(str(path), toon_by_dir.get(str(path.parent)))
-        ingest(path, toon_handle)
+        scheduler.enqueue_new(path, toon_handle)
 
     watch_replays(
         [watch_dir.path for watch_dir in watch_dirs],
@@ -232,6 +205,7 @@ class _DaemonRunner:
         self._stop_event: threading.Event | None = None
         self.status = StatusTracker()
         self.sync_state: SyncState | None = None
+        self.scheduler: UploadScheduler | None = None
         self._reporter: ErrorReporter | None = None
         self._log_handler: ReportingHandler | None = None
         # `_client` is swapped by every `start()` call; the hotkey manager
@@ -348,7 +322,7 @@ class _DaemonRunner:
         api_version_box: dict[str, str | None] = {"value": None}
         calibrations_box: dict[str, dict | None] = {"value": None}
 
-        def _ingest_and_track(path: Path, toon_handle: str | None) -> None:
+        def _ingest_and_track(path: Path, toon_handle: str | None) -> IngestOutcome:
             self.status.start_syncing(path.name)
             outcome = ingest_file(
                 client,
@@ -367,6 +341,7 @@ class _DaemonRunner:
             )
             self._maybe_notify_persistent_failure()
             reporter.flush()
+            return outcome
 
         def _on_initial_scan(found: int) -> None:
             if announce_initial_scan and found > 0 and self._tray_notify is not None:
@@ -385,12 +360,25 @@ class _DaemonRunner:
                 config.extra_replay_dirs,
             )
 
+        detector = GameDetector()
+        scheduler = UploadScheduler(
+            _ingest_and_track,
+            stop_event=stop_event,
+            is_game_running=detector.is_running,
+            sync_during_game=lambda: sync_state.get_meta(SYNC_DURING_GAME_META_KEY) == "1",
+            on_idle=reporter.flush,
+            on_auth_blocked=self._notify_auth_blocked,
+            on_thread_start=_lower_worker_priority,
+        )
+        self.scheduler = scheduler
+        scheduler.start()
+
         def _run() -> None:
             api_version_box["value"] = _sync_api_version(config, sync_state)
             calibrations_box["value"] = sync_spatial_calibrations(config, sync_state)
             _run_sync_loop(
                 watch_dirs,
-                _ingest_and_track,
+                scheduler,
                 stop_event,
                 self.status,
                 sync_state,
@@ -402,6 +390,14 @@ class _DaemonRunner:
         self._stop_event = stop_event
         thread.start()
 
+    def _notify_auth_blocked(self) -> None:
+        if self._tray_notify is not None:
+            self._tray_notify(
+                "Le jeton d'accès a été refusé : la synchronisation est suspendue. "
+                "Reconnectez-vous dans les paramètres.",
+                "HotS Analytics",
+            )
+
     def stop(self, timeout: float = 10.0) -> None:
         self.hotkey_manager.stop()
         if self._reporter is not None:
@@ -409,6 +405,9 @@ class _DaemonRunner:
         if self._log_handler is not None:
             uninstall_logging_handler(self._log_handler)
             self._log_handler = None
+        if self.scheduler is not None:
+            self.scheduler.stop()
+            self.scheduler = None
         if self._thread is None or self._stop_event is None:
             return
         self._stop_event.set()
