@@ -87,3 +87,31 @@ def test_display_fields_picks_the_players_own_hero_and_result():
 def test_display_fields_without_a_self_battletag_leaves_hero_and_result_empty():
     fields = display_fields({"gameMode": "ARAM", "players": [{"battletag": "A#1", "heroId": "X", "winner": True}]})
     assert (fields["hero"], fields["won"]) == (None, None)
+
+
+def _quarantined(state: SyncState) -> None:
+    state.mark_error("h", "a", "unknown build", "tb", error_kind="quarantine", base_build=93943)
+
+
+def test_parse_error_after_quarantine_clears_the_quarantine_kind(tmp_path: Path):
+    state = SyncState(tmp_path / "s.db")
+    _quarantined(state)
+    state.mark_parse_error("h", "a", "corrupt", "tb", "1.19")
+    assert state.all_rows()[0].error_kind is None
+    assert state.rows_quarantined() == []
+
+
+def test_plain_error_after_quarantine_clears_the_quarantine_kind(tmp_path: Path):
+    state = SyncState(tmp_path / "s.db")
+    _quarantined(state)
+    state.mark_error("h", "a", "server down", "tb")
+    assert state.all_rows()[0].error_kind is None
+    assert state.rows_quarantined() == []
+
+
+def test_skip_after_quarantine_clears_the_quarantine_kind(tmp_path: Path):
+    state = SyncState(tmp_path / "s.db")
+    _quarantined(state)
+    state.mark_skipped("h", "a", "ai_player", "AI", "1.19")
+    assert state.all_rows()[0].error_kind is None
+    assert state.rows_quarantined() == []

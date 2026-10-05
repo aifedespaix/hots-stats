@@ -389,6 +389,7 @@ class SyncState:
                     error_message = excluded.error_message,
                     error_log = NULL,
                     file_exists = 1,
+                    error_kind = NULL,
                     skip_reason = excluded.skip_reason
                 """,
                 (replay_hash, file_path, parser_version, now, message, reason),
@@ -471,6 +472,7 @@ class SyncState:
                     error_log = excluded.error_log,
                     file_exists = 1,
                     skip_reason = NULL,
+                    error_kind = NULL,
                     attempt_count = CASE
                         WHEN replays.attempt_parser_version IS excluded.attempt_parser_version
                         THEN replays.attempt_count + 1

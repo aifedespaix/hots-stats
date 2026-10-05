@@ -98,3 +98,13 @@ def test_format_when_renders_local_time_or_a_dash():
     assert re.fullmatch(r"\d\d/\d\d/\d{4} \d\d:\d\d", format_when("2026-09-30T19:14:03Z"))
     assert format_when(None) == "—"
     assert format_when("not a date") == "—"
+
+
+def test_build_sorts_numerically_with_the_placeholder_lowest():
+    rows = [
+        _row(replay_hash="big", base_build=96477),
+        _row(replay_hash="small", base_build=9999),
+        _row(replay_hash="none"),
+    ]
+    views = build_views(rows, {}, None)
+    assert [v.key for v in sort_views(views, "build", descending=False)] == ["none", "small", "big"]

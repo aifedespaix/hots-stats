@@ -144,7 +144,8 @@ _SORT_KEYS = {
     "uploaded": lambda v: v.uploaded_raw,
     "result": lambda v: v.result,
     "state": lambda v: v.state,
-    "build": lambda v: v.build,
+    # Numeric, not lexicographic ("9999" < "96477"); the "—" placeholder sorts lowest.
+    "build": lambda v: int(v.build) if v.build.isdigit() else -1,
 }
 
 
