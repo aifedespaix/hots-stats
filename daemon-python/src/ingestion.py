@@ -386,10 +386,12 @@ def resync(
             skipped += 1
         else:
             failed += 1
-    # A headless resync has no scheduler, so this is its only flush; reports beyond the
-    # rate limit stay in the offline queue for the tray daemon.
+    # A headless resync has no scheduler, so this is its only flush. flush() delivers at
+    # most one report per rate-limit interval, so the rest are persisted to the offline
+    # queue, where the tray daemon's reporter delivers them on its next run.
     if reporter is not None:
         reporter.flush()
+        reporter.persist_pending()
     logger.info(
         "Resync complete: %d uploaded, %d already up to date, %d failed", uploaded, skipped, failed
     )

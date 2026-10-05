@@ -36,6 +36,11 @@ def test_scrub_paths_replaces_the_windows_user_directory():
     assert scrub_paths(text) == r"File ~\AppData\Roaming\x.py, line 3"
 
 
+def test_scrub_paths_handles_user_names_containing_spaces():
+    assert scrub_paths(r"bad C:\Users\John Smith\x.StormReplay") == r"bad ~\x.StormReplay"
+    assert scrub_paths(r"open 'C:\Users\bob' failed") == "open '~' failed"
+
+
 def test_fingerprint_ignores_digits_but_not_type_or_replay():
     a = make_fingerprint("runtime", "failed after 3 tries", None)
     assert a == make_fingerprint("runtime", "failed after 9 tries", None)
@@ -143,6 +148,11 @@ def test_logging_handler_reports_warnings_and_skips_info_and_excluded_loggers():
     finally:
         log.removeHandler(handler)
         ingestion_log.removeHandler(handler)
+    clock = reporter._clock
+    reporter.flush()
+    clock.advance(2.0)
+    reporter.flush()
+    clock.advance(2.0)
     reporter.flush()
     assert len(sent) == 1
     assert sent[0]["errorType"] == "runtime"
@@ -177,3 +187,61 @@ def test_heroprotocol_constant_matches_the_pin_in_pyproject():
     match = re.search(r"heroprotocol @ git\+https://[^@\s\"]+@v([\d.]+)", text)
     assert match is not None
     assert constants.HEROPROTOCOL_VERSION == match.group(1)
+
+
+def test_persist_pending_moves_reports_to_the_queue_and_a_later_reporter_delivers_them(tmp_path: Path):
+    state = SyncState(tmp_path / "s.db")
+    reporter = _reporter([], state=state)
+    for i in range(3):
+        reporter.report("runtime", f"problem-{chr(97 + i)}")
+    assert reporter.persist_pending() == 3
+    assert reporter.persist_pending() == 0
+    assert len(state.peek_error_reports(10)) == 3
+
+    sent: list = []
+    clock = FakeClock()
+    later = _reporter(sent, state=state, clock=clock)
+    for _ in range(3):
+        later.flush()
+        clock.advance(2.0)
+    assert len(sent) == 3
+    assert state.peek_error_reports(10) == []
+
+
+def test_persist_pending_without_a_state_db_is_a_no_op():
+    reporter = _reporter([])
+    reporter.report("runtime", "x")
+    assert reporter.persist_pending() == 0
+
+
+def test_flush_drops_a_corrupt_queued_row_and_continues(tmp_path: Path):
+    state = SyncState(tmp_path / "s.db")
+    state.enqueue_error_report("bad", "{not json")
+    sent: list = []
+    reporter = _reporter(sent, state=state)
+    reporter.report("runtime", "good")
+    assert reporter.flush() == 1
+    assert state.peek_error_reports(10) == []
+    assert sent[0]["errorMessage"] == "good"
+
+
+def test_flush_never_raises_and_keeps_the_report_when_send_raises(tmp_path: Path):
+    state = SyncState(tmp_path / "s.db")
+    boom = {"on": True}
+    sent: list = []
+
+    def send(report: dict) -> bool:
+        if boom["on"]:
+            raise RuntimeError("network exploded")
+        sent.append(report)
+        return True
+
+    clock = FakeClock()
+    reporter = ErrorReporter(send, state, clock=clock)
+    reporter.report("runtime", "keep me")
+    assert reporter.flush() == 0
+    assert len(state.peek_error_reports(10)) == 1
+    boom["on"] = False
+    clock.advance(2.0)
+    assert reporter.flush() == 1
+    assert sent[0]["errorMessage"] == "keep me"

@@ -554,6 +554,21 @@ def test_ingest_file_mark_synced_failure_does_not_turn_success_into_error(tmp_pa
     assert sync_state.get_error_records() == []
 
 
+def test_resync_persists_undelivered_error_reports_to_the_offline_queue(tmp_path):
+    from src.error_reporter import ErrorReporter
+
+    client = api_client.ApiClient(_config(tmp_path))
+    state = SyncState(tmp_path / "synced.json")
+    sent: list = []
+    reporter = ErrorReporter(lambda r: sent.append(r) or True, state, clock=lambda: 1000.0)
+    reporter.report("runtime", "one")
+    reporter.report("runtime", "two")
+    reporter.report("runtime", "three")
+    resync(client, [], state, reporter=reporter)
+    assert len(sent) == 1
+    assert len(state.peek_error_reports(10)) == 2
+
+
 def test_resync_logs_summary(tmp_path, caplog):
     client = MagicMock()
     (tmp_path / "a.StormReplay").write_bytes(b"")

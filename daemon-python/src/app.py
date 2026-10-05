@@ -403,6 +403,8 @@ class _DaemonRunner:
 
     def stop(self, timeout: float = 10.0) -> None:
         self.hotkey_manager.stop()
+        if self._reporter is not None:
+            self._reporter.persist_pending()
         if self._log_handler is not None:
             uninstall_logging_handler(self._log_handler)
             self._log_handler = None

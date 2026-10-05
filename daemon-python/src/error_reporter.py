@@ -32,7 +32,7 @@ from . import constants
 
 logger = logging.getLogger(__name__)
 
-_USER_DIR_RE = re.compile(r"[A-Za-z]:[\\/]+Users[\\/]+[^\\/\s\"']+", re.IGNORECASE)
+_USER_DIR_RE = re.compile(r"[A-Za-z]:[\\/]+Users[\\/]+[^\\/\"']+", re.IGNORECASE)
 _NUMBER_RE = re.compile(r"\d+")
 _MAX_PENDING_IN_MEMORY = 500
 _MAX_MESSAGE_CHARS = 2000
@@ -133,7 +133,13 @@ class ErrorReporter:
                 queued = self._state.peek_error_reports(1) if self._state is not None else []
                 if queued:
                     row_id, payload = queued[0]
-                    if not self._send(json.loads(payload)):
+                    try:
+                        queued_report = json.loads(payload)
+                    except ValueError:
+                        # A corrupt row would otherwise block the queue forever.
+                        self._state.delete_error_reports([row_id])
+                        continue
+                    if not self._safe_send(queued_report):
                         break
                     self._state.delete_error_reports([row_id])
                 else:
@@ -142,7 +148,7 @@ class ErrorReporter:
                             break
                         fingerprint, report = next(iter(self._pending.items()))
                         del self._pending[fingerprint]
-                    if not self._send(report):
+                    if not self._safe_send(report):
                         self._requeue(fingerprint, report)
                         break
                 self._sent_at.append(self._clock())
@@ -151,6 +157,27 @@ class ErrorReporter:
         finally:
             self._local.flushing = False
             self._flush_lock.release()
+
+    def _safe_send(self, report: dict) -> bool:
+        """`send` raising is treated like a failed send: flush() must never raise."""
+        try:
+            return bool(self._send(report))
+        except Exception:  # noqa: BLE001
+            logger.debug("error report send raised", exc_info=True)
+            return False
+
+    def persist_pending(self) -> int:
+        """Moves every in-memory pending report into the offline queue. A flush delivers at
+        most one report per `min_interval`, so a short-lived process (headless --resync,
+        daemon stop) calls this at the end so the rest survive for the next run."""
+        if self._state is None:
+            return 0
+        with self._lock:
+            items = list(self._pending.items())
+            self._pending.clear()
+        for fingerprint, report in items:
+            self._state.enqueue_error_report(fingerprint, json.dumps(report))
+        return len(items)
 
     def _may_send(self) -> bool:
         now = self._clock()
