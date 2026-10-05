@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
+from pathlib import PureWindowsPath
 
 from .sync_state import ReplayRow, _version_gte
 
@@ -83,7 +83,7 @@ def _label(row: ReplayRow) -> str:
         row.game_mode or None,
     ]
     shown = [p for p in parts if p]
-    return " · ".join(shown) if shown else Path(row.file_path).stem or row.replay_hash[:8]
+    return " · ".join(shown) if shown else PureWindowsPath(row.file_path).stem or row.replay_hash[:8]
 
 
 def _result(won: bool | None) -> str:
@@ -119,7 +119,7 @@ def build_views(
             continue
         views.append(
             SyncRowView(
-                key=f"path:{path}", state=state, label=Path(path).stem, played=_DASH, uploaded=_DASH,
+                key=f"path:{path}", state=state, label=PureWindowsPath(path).stem, played=_DASH, uploaded=_DASH,
                 result=_DASH, build=_DASH, file_path=path, file_exists=True, detail=None,
                 sort_at="", played_raw="", uploaded_raw="",
             )
