@@ -18,8 +18,9 @@ import threading
 from pathlib import Path
 from typing import Callable, Sequence
 
-from . import accounts_discovery, api_client, draft_capture, draft_layout, hotkey, ocr, single_instance
+from . import accounts_discovery, api_client, constants, draft_capture, draft_layout, hotkey, ocr, single_instance, updater
 from .config import Config, ConfigError, config_exists, is_auto_update_enabled, load_config
+from .dependency_guard import DependencyGuard
 from .error_reporter import ErrorReporter, ReportingHandler, install_logging_handler, uninstall_logging_handler
 from .game_process import GameDetector
 from .history_enricher import HistoryEnricher
@@ -233,6 +234,35 @@ class _DaemonRunner:
         # next `start()` (fresh run, fresh judgment).
         self._failure_notified = False
         self._notify_lock = threading.Lock()
+        self.dependency_guard = DependencyGuard()
+        self._trigger_dependency_update: Callable[[], None] | None = None
+
+    def set_dependency_update_trigger(self, trigger: Callable[[], None]) -> None:
+        """Wired by `run_app()` to `updater.trigger_manual_update(update_status)`: what the
+        dependency guard calls to fetch a newer daemon when `heroprotocol` is too old."""
+        self._trigger_dependency_update = trigger
+
+    def _refresh_dependency_requirement(
+        self, config: Config, sync_state: SyncState, reporter: ErrorReporter
+    ) -> None:
+        info = api_client.fetch_version(config.api_base_url, config.access_token)
+        if info is None:
+            # Unreachable API is "unknown", not "no requirement": leave the guard as it was.
+            return
+        minimum = info.get("minHeroprotocolVersion")
+        sync_state.set_meta("min_heroprotocol_version", minimum or "")
+        if not self.dependency_guard.update(minimum):
+            return
+        message = f"heroprotocol {constants.HEROPROTOCOL_VERSION} is older than the required {minimum}"
+        logger.info("%s; holding the backlog until the daemon is updated.", message)
+        reporter.report("dependency", message)
+        if self._tray_notify is not None:
+            self._tray_notify(
+                "Une mise à jour de HotS Analytics est nécessaire pour lire les nouvelles parties.",
+                "HotS Analytics",
+            )
+        if is_auto_update_enabled() and updater.IS_FROZEN and self._trigger_dependency_update is not None:
+            self._trigger_dependency_update()
 
     def set_tray_notify(self, notify: Callable[[str, str], None]) -> None:
         """Wires up `TrayController.notify` (message, title) so this runner
@@ -371,6 +401,7 @@ class _DaemonRunner:
             stop_event=stop_event,
             is_game_running=detector.is_running,
             sync_during_game=lambda: sync_state.get_meta(SYNC_DURING_GAME_META_KEY) == "1",
+            backlog_gate=lambda: not self.dependency_guard.blocked,
             on_idle=reporter.flush,
             on_auth_blocked=self._notify_auth_blocked,
             on_thread_start=_lower_worker_priority,
@@ -403,9 +434,10 @@ class _DaemonRunner:
             # verified. Cheap (one small request per 200 rows) and best-effort.
             while not stop_event.is_set():
                 try:
+                    self._refresh_dependency_requirement(config, sync_state, reporter)
                     enricher.run_once()
                 except Exception:  # noqa: BLE001
-                    logger.warning("History enrichment failed", exc_info=True)
+                    logger.warning("Maintenance pass failed", exc_info=True)
                 if stop_event.wait(_MAINTENANCE_INTERVAL_SECONDS):
                     return
 
@@ -505,6 +537,7 @@ def run_app() -> int:
             hotkey_manager=daemon.hotkey_manager,
             on_manual_capture=daemon.trigger_draft_capture,
             scheduler=daemon.scheduler,
+            dependency_guard=daemon.dependency_guard,
         ):
             try:
                 new_config = load_config()
@@ -537,6 +570,7 @@ def run_app() -> int:
     # the daemon was started before the tray existed at all.
     tray = TrayController(on_open_settings=_on_open_settings, on_quit=_on_quit, window_lock=window_lock)
     daemon.set_tray_notify(tray.notify)
+    daemon.set_dependency_update_trigger(lambda: updater.trigger_manual_update(update_status))
     daemon.start(config, announce_initial_scan=first_run)
 
     if config.draft_feature_enabled:

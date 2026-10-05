@@ -131,3 +131,29 @@ def test_filter_values_are_not_rewritten_when_unchanged(table_env):
         table._last_refresh = 0.0
         table.refresh()
     assert configure.call_count == 0
+
+
+def test_banner_shows_only_while_a_dependency_update_is_required(tk_root):
+    required = {"value": None}
+    table = SyncTable(
+        tk_root,
+        sync_state=_FakeState([_row(0)]),
+        scheduler=None,
+        min_parser_version=lambda: None,
+        dependency_required=lambda: required["value"],
+    )
+    table.pack()
+    tk_root.update()
+    try:
+        assert table._banner.winfo_manager() == ""
+        required["value"] = "2.55.16.1"
+        table.refresh(force=True)
+        tk_root.update()
+        assert table._banner.winfo_manager() == "pack"
+        assert "2.55.16.1" in table._banner.cget("text")
+        required["value"] = None
+        table.refresh(force=True)
+        tk_root.update()
+        assert table._banner.winfo_manager() == ""
+    finally:
+        table.destroy()

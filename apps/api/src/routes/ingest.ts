@@ -1,7 +1,7 @@
 import type { User } from "@hots-stats/db";
 import { daemonErrorReportInputSchema, matchLookupInputSchema } from "@hots-stats/shared-types";
 import { Hono } from "hono";
-import { API_VERSION, MIN_PARSER_VERSION } from "../constants";
+import { API_VERSION, MIN_HEROPROTOCOL_VERSION, MIN_PARSER_VERSION } from "../constants";
 import { resolveScope } from "../lib/account-scope";
 import { authToken } from "../middleware/auth-token";
 import { recordDaemonError } from "../services/daemon-errors.service";
@@ -48,6 +48,7 @@ export const ingestRoute = new Hono<Env>()
     return c.json({
       apiVersion: API_VERSION,
       minParserVersion: MIN_PARSER_VERSION,
+      minHeroprotocolVersion: MIN_HEROPROTOCOL_VERSION,
       dataResetAt: user.dataResetAt ? user.dataResetAt.toISOString() : null,
     });
   })

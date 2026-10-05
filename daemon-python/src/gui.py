@@ -54,6 +54,7 @@ from .status import StatusTracker
 from .sync_state import SyncState
 from .sync_table import DETAIL_MAX_CHARS, SyncTable
 from .updater import UpdatePhase, UpdateStatus, UpdateStatusTracker
+from .dependency_guard import DependencyGuard
 from .upload_scheduler import UploadScheduler
 from .urls import DEFAULT_API_BASE_URL, guess_settings_url
 
@@ -215,6 +216,7 @@ def run_settings_window(
     hotkey_manager: "hotkey.HotkeyManager | None" = None,
     on_manual_capture: Callable[[], None] | None = None,
     scheduler: UploadScheduler | None = None,
+    dependency_guard: DependencyGuard | None = None,
 ) -> bool:
     """Opens the settings window and blocks (on the calling thread) until
     it's closed. Returns True if the user saved a valid configuration.
@@ -248,6 +250,7 @@ def run_settings_window(
         hotkey_manager=hotkey_manager,
         on_manual_capture=on_manual_capture,
         scheduler=scheduler,
+        dependency_guard=dependency_guard,
     )
     root.mainloop()
     return result["saved"]
@@ -484,6 +487,7 @@ class _SettingsWindow:
         hotkey_manager: "hotkey.HotkeyManager | None" = None,
         on_manual_capture: Callable[[], None] | None = None,
         scheduler: UploadScheduler | None = None,
+        dependency_guard: DependencyGuard | None = None,
     ) -> None:
         self._root = root
         self._is_first_run = is_first_run
@@ -495,6 +499,7 @@ class _SettingsWindow:
         self._hotkey_manager = hotkey_manager
         self._on_manual_capture = on_manual_capture
         self._scheduler = scheduler
+        self._dependency_guard = dependency_guard
         self._debounce_job: str | None = None
         self._live_stats_job: str | None = None
         self._sync_table: SyncTable | None = None
@@ -1484,11 +1489,13 @@ class _SettingsWindow:
 
         if self._sync_state is not None:
             sync_state = self._sync_state
+            guard = self._dependency_guard
             self._sync_table = SyncTable(
                 parent,
                 sync_state=sync_state,
                 scheduler=self._scheduler,
                 min_parser_version=lambda: sync_state.get_meta("min_parser_version"),
+                dependency_required=lambda: guard.required if guard is not None and guard.blocked else None,
             )
             self._sync_table.pack(fill="both", expand=True, pady=(12, 0))
 

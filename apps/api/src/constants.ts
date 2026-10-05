@@ -54,3 +54,13 @@ export const MIN_RELIABLE_STATS_PARSER_VERSION = "1.7";
  * other friendship; only applied once, at account creation.
  */
 export const DEFAULT_FRIEND_USER_ID = "8732db6d-0749-4edf-85a6-e23212a24b86";
+
+/**
+ * Oldest `heroprotocol` the daemon may run with, announced by `GET /ingest/version`
+ * (`minHeroprotocolVersion`). Bump by hand ONLY when a replay build needs a protocol file the
+ * currently shipped daemon lacks -- builds the existing decoder reads fine just need
+ * `bun run check-build`, never this. A daemon below it holds its backlog and self-updates
+ * (daemon-python/src/dependency_guard.py). Same value as `HEROPROTOCOL_VERSION` in
+ * daemon-python/src/constants.py until that happens.
+ */
+export const MIN_HEROPROTOCOL_VERSION = "2.55.15.96477";

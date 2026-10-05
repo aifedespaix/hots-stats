@@ -91,6 +91,7 @@ class SyncTable(ttk.Frame):
         sync_state: SyncState,
         scheduler: UploadScheduler | None,
         min_parser_version: Callable[[], str | None],
+        dependency_required: Callable[[], str | None] = lambda: None,
         reveal: Callable[[str], None] = reveal_in_explorer,
         height: int = 6,
     ) -> None:
@@ -98,6 +99,7 @@ class SyncTable(ttk.Frame):
         self._state = sync_state
         self._scheduler = scheduler
         self._min_version = min_parser_version
+        self._dependency_required = dependency_required
         self._reveal = reveal
         self._all: list[SyncRowView] = []
         self._visible: list[SyncRowView] = []
@@ -140,6 +142,9 @@ class SyncTable(ttk.Frame):
         ).pack(side="left")
         self._blocked_label = ttk.Label(options, text="", style="Muted.TLabel")
         self._blocked_label.pack(side="right")
+
+        # Shown (packed above the table) only while the daemon's heroprotocol is too old.
+        self._banner = ttk.Label(self, text="", foreground="#e0a84e", wraplength=560, justify="left")
 
         body = ttk.Frame(self)
         body.pack(fill="both", expand=True, pady=(6, 0))
@@ -201,6 +206,15 @@ class SyncTable(ttk.Frame):
             self._filter_var.set(wanted)
 
     def _update_controls(self, snapshot) -> None:
+        required = self._dependency_required()
+        if required:
+            self._banner.configure(
+                text=f"⚠ Mise à jour requise (heroprotocol ≥ {required}) : la synchronisation des anciennes "
+                "parties est suspendue. Ouvrez l'onglet Mise à jour."
+            )
+            self._banner.pack(fill="x", before=self._tree.master, pady=(0, 6))
+        else:
+            self._banner.pack_forget()
         if snapshot is None:
             return
         self._pause_button.configure(

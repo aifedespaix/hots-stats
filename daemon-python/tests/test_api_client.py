@@ -367,3 +367,12 @@ def test_lookup_matches_returns_none_when_unreachable_or_rejected(tmp_path):
         assert client.lookup_matches(match_ids=["m1"]) is None
     with patch.object(client._session, "post", return_value=MagicMock(status_code=400)):
         assert client.lookup_matches(match_ids=["m1"]) is None
+
+
+def test_fetch_version_passes_the_min_heroprotocol_version_through():
+    body = {"apiVersion": "9", "minParserVersion": "1.16", "minHeroprotocolVersion": "2.55.16.1"}
+    response = MagicMock(status_code=200)
+    response.json.return_value = body
+    with patch("src.api_client.requests.get", return_value=response):
+        info = api_client.fetch_version("https://api.example.com", "tok")
+    assert info["minHeroprotocolVersion"] == "2.55.16.1"
