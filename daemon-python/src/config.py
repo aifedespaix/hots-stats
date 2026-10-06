@@ -113,6 +113,27 @@ def read_config_file() -> dict:
         raise ConfigError(f"Failed to read config file at {path}: {err}") from err
 
 
+def has_access_token() -> bool:
+    """True when a token is available (environment override or config file)."""
+    if os.environ.get("HOTS_ACCESS_TOKEN"):
+        return True
+    try:
+        return bool(read_config_file().get("accessToken"))
+    except ConfigError:
+        return False
+
+
+def clear_access_token() -> None:
+    """Signs this PC out: blanks the stored token and keeps every other setting.
+    `load_config()` raises on a blank token, so `run_app` checks
+    `has_access_token()` before loading (see app.py)."""
+    values = read_config_file()
+    if not values:
+        return
+    values["accessToken"] = ""
+    config_file_path().write_text(json.dumps(values, indent=2), encoding="utf-8")
+
+
 def save_config(
     api_base_url: str,
     access_token: str,

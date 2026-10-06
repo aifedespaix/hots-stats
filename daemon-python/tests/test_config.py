@@ -259,3 +259,38 @@ def test_open_config_folder_swallows_errors(monkeypatch, tmp_path):
     monkeypatch.setattr(config.subprocess, "Popen", MagicMock(side_effect=OSError("no xdg-open")))
 
     open_config_folder()  # must not raise
+
+
+def _write_config(tmp_path, monkeypatch, values):
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps(values), encoding="utf-8")
+    monkeypatch.setattr(config, "config_file_path", lambda: path)
+    monkeypatch.delenv("HOTS_ACCESS_TOKEN", raising=False)
+    return path
+
+
+def test_clear_access_token_blanks_only_the_token(tmp_path, monkeypatch):
+    path = _write_config(
+        tmp_path, monkeypatch,
+        {"apiBaseUrl": "https://a", "accessToken": "hots_pat_x", "hotsDir": "C:/h", "draftHotkey": "F9"},
+    )
+    assert config.has_access_token() is True
+    config.clear_access_token()
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    assert saved["accessToken"] == ""
+    assert saved["hotsDir"] == "C:/h" and saved["draftHotkey"] == "F9" and saved["apiBaseUrl"] == "https://a"
+    assert config.has_access_token() is False
+
+
+def test_clear_access_token_without_a_config_file_does_nothing(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "config_file_path", lambda: tmp_path / "missing.json")
+    monkeypatch.delenv("HOTS_ACCESS_TOKEN", raising=False)
+    config.clear_access_token()
+    assert not (tmp_path / "missing.json").exists()
+    assert config.has_access_token() is False
+
+
+def test_has_access_token_accepts_the_environment_override(tmp_path, monkeypatch):
+    _write_config(tmp_path, monkeypatch, {"accessToken": ""})
+    monkeypatch.setenv("HOTS_ACCESS_TOKEN", "hots_pat_env")
+    assert config.has_access_token() is True
