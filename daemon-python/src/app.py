@@ -569,6 +569,7 @@ def run_app() -> int:
             on_manual_capture=daemon.trigger_draft_capture,
             scheduler=daemon.scheduler,
             dependency_guard=daemon.dependency_guard,
+            on_quit=lambda: tray.quit(),
         ):
             try:
                 new_config = load_config()

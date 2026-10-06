@@ -124,7 +124,9 @@ class SyncTable(ttk.Frame):
         self._filter_box = ttk.Combobox(top, textvariable=self._filter_var, state="readonly", width=24)
         self._filter_box.pack(side="left", padx=(6, 12))
         self._filter_box.bind("<<ComboboxSelected>>", self._on_filter)
-        self._pause_button = ttk.Button(top, text="Mettre en pause", command=self._toggle_pause)
+        self._pause_button = ttk.Button(
+            top, text="Mettre en pause", style="Warn.TButton", command=self._toggle_pause
+        )
         self._pause_button.pack(side="right")
         if self._scheduler is None:
             self._pause_button.state(["disabled"])
@@ -168,7 +170,10 @@ class SyncTable(ttk.Frame):
         self._detail = ttk.Label(bottom, text="", style="Muted.TLabel", wraplength=520, justify="left")  # 120 chars = 2 lines
         self._detail.pack(side="left", fill="x", expand=True)
         self._reveal_button = ttk.Button(
-            bottom, text="Afficher dans l'explorateur", command=self._reveal_selected
+            bottom,
+            text="Afficher dans l'explorateur",
+            style="Secondary.TButton",
+            command=self._reveal_selected,
         )
         self._reveal_button.pack(side="right")
         self._reveal_button.state(["disabled"])
@@ -217,8 +222,10 @@ class SyncTable(ttk.Frame):
             self._banner.pack_forget()
         if snapshot is None:
             return
+        paused = snapshot.mode == MODE_PAUSED
         self._pause_button.configure(
-            text="Reprendre" if snapshot.mode == MODE_PAUSED else "Mettre en pause"
+            text="Reprendre" if paused else "Mettre en pause",
+            style="Success.TButton" if paused else "Warn.TButton",
         )
         reasons = {
             "auth": "Suspendu : jeton refusé",

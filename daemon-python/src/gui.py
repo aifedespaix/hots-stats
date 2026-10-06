@@ -47,6 +47,23 @@ from .config import (
     save_config,
 )
 from .constants import APP_VERSION
+from ._icon_data import TRAY_ICON_PNG_BASE64
+from .gui_widgets import (
+    ACCENT as _ACCENT,
+    BG as _BG,
+    ERROR as _ERROR,
+    FIELD_BG as _FIELD_BG,
+    FIELD_BG_FOCUS as _FIELD_BG_FOCUS,
+    NEUTRAL as _NEUTRAL,
+    OK as _OK,
+    PANEL as _PANEL,
+    TEXT as _TEXT,
+    TEXT_MUTED as _TEXT_MUTED,
+    CollapsibleCard,
+    ScrollPage,
+    TabView,
+    mix as _mix,
+)
 from .draft_capture import CapturePhase, DraftCaptureCoordinator
 from .draft_layout import TeamCropResult
 from .ocr import OcrResult
@@ -61,6 +78,7 @@ from .urls import DEFAULT_API_BASE_URL, guess_settings_url
 logger = logging.getLogger(__name__)
 
 _DEBOUNCE_MS = 600
+_AUTOSAVE_MS = 600
 _LIVE_STATS_POLL_MS = 500
 
 # Dynamic labels (currently-syncing filename, last sync error) are fed
@@ -88,19 +106,6 @@ _TEST_CAPTURE_DELAY_SECONDS = 3
 # boxes, see draft_layout.py), so shown at native size they'd be nearly
 # unreadable.
 _TEST_CAPTURE_THUMB_WIDTH = 220
-
-# A small, dark, "gamer tool" palette. Kept in one place so the whole window
-# reads as one deliberate look rather than default-tk gray.
-_BG = "#1c1f2e"
-_PANEL = "#252a3d"
-_FIELD_BG = "#2f3550"
-_FIELD_BG_FOCUS = "#394069"
-_TEXT = "#e8eaf6"
-_TEXT_MUTED = "#8b90ad"
-_ACCENT = "#6c8cff"
-_OK = "#4cd97b"
-_ERROR = "#ef5b5b"
-_NEUTRAL = "#8b90ad"
 
 # Human-readable explanation per `parser.ReplaySkipped` / `IngestOutcome`
 # skip-reason code (see `ingestion.py`/`sync_state.py`, which persist the
@@ -217,6 +222,7 @@ def run_settings_window(
     on_manual_capture: Callable[[], None] | None = None,
     scheduler: UploadScheduler | None = None,
     dependency_guard: DependencyGuard | None = None,
+    on_quit: Callable[[], None] | None = None,
 ) -> bool:
     """Opens the settings window and blocks (on the calling thread) until
     it's closed. Returns True if the user saved a valid configuration.
@@ -236,6 +242,11 @@ def run_settings_window(
     Draft Live tab's "Capturer maintenant" button calls to trigger a real
     (non-dry-run) capture on demand. `scheduler`, same condition, backs the
     Synchronisation tab's pause button and its live pending/uploading rows.
+
+    Settings are written as they change, so there is no save button: the
+    return value is True if any change was written. `on_quit`, when given,
+    is what the "Fermer" button calls (after closing the window) to stop the
+    whole daemon; "Réduire" just closes the window.
     """
     result = {"saved": False}
     root = tk.Tk()
@@ -251,6 +262,7 @@ def run_settings_window(
         on_manual_capture=on_manual_capture,
         scheduler=scheduler,
         dependency_guard=dependency_guard,
+        on_quit=on_quit,
     )
     root.mainloop()
     return result["saved"]
@@ -288,6 +300,7 @@ class _UpdateProgressWindow:
 
         root.title("HotS Analytics - Mise à jour")
         root.configure(bg=_BG)
+        _set_window_icon(root)
         root.resizable(False, False)
         root.attributes("-topmost", True)
         root.protocol(
@@ -323,7 +336,7 @@ class _UpdateProgressWindow:
         self._open_fallback_button = ttk.Button(
             outer,
             text="📁 Ouvrir le dossier",
-            style="Ghost.TButton",
+            style="Secondary.TButton",
             command=self._open_fallback_folder,
         )
 
@@ -336,12 +349,12 @@ class _UpdateProgressWindow:
         self._manual_download_button = ttk.Button(
             outer,
             text="⬇ Mise à jour manuelle",
-            style="Accent.TButton",
+            style="Warn.TButton",
             command=lambda: webbrowser.open(updater.release_page_url()),
         )
 
         self._close_button = ttk.Button(
-            outer, text="Fermer", style="Ghost.TButton", command=root.destroy
+            outer, text="Fermer", style="Danger.TButton", command=root.destroy
         )
         # Only shown on error -- on any other phase the process is either
         # still working or about to exit on its own (see `_poll`).
@@ -376,6 +389,89 @@ class _UpdateProgressWindow:
             return  # stop polling -- wait for the user to dismiss it
 
         self._poll_job = self._root.after(300, self._poll)
+
+
+# Button variants: (base color, text color on a solid fill). Each gets a solid
+# style `<Name>.TButton` and an outlined one `<Name>.Ghost.TButton` (transparent
+# fill on the window background, border + text in the variant color).
+_BUTTON_VARIANTS = {
+    "Primary": (_ACCENT, "#0f1220"),
+    "Secondary": (_FIELD_BG, _TEXT),
+    "Info": ("#4fa3f7", "#0b1220"),
+    "Success": (_OK, "#0b1a10"),
+    "Warn": ("#e0a84e", "#1c1405"),
+    "Danger": (_ERROR, "#1f0808"),
+}
+
+
+def _configure_button_styles(style: ttk.Style) -> None:
+    font = ("Segoe UI", 10)
+    padding = (14, 7)
+    disabled_fg = "#5d6280"
+    style.configure(
+        "TButton", font=font, padding=padding, borderwidth=1, focuscolor=_BG
+    )
+    for name, (base, on_base) in _BUTTON_VARIANTS.items():
+        hover = _mix(base, "#ffffff", 0.14)
+        pressed = _mix(base, "#000000", 0.18)
+        secondary = name == "Secondary"
+        solid_fg = _TEXT if secondary else on_base
+        if secondary:
+            hover = _FIELD_BG_FOCUS
+            pressed = _mix(_FIELD_BG, "#000000", 0.2)
+        solid = f"{name}.TButton"
+        style.configure(
+            solid,
+            background=base,
+            foreground=solid_fg,
+            bordercolor=base,
+            lightcolor=base,
+            darkcolor=base,
+            focuscolor=base,
+            font=font,
+            padding=padding,
+        )
+        style.map(
+            solid,
+            background=[("disabled", _PANEL), ("pressed", pressed), ("active", hover)],
+            bordercolor=[("disabled", _PANEL), ("pressed", pressed), ("active", hover)],
+            lightcolor=[("pressed", pressed), ("active", hover)],
+            darkcolor=[("pressed", pressed), ("active", hover)],
+            foreground=[("disabled", disabled_fg)],
+        )
+        ghost = f"{name}.Ghost.TButton"
+        edge = _TEXT_MUTED if secondary else base
+        text = _TEXT_MUTED if secondary else base
+        style.configure(
+            ghost,
+            background=_BG,
+            foreground=text,
+            bordercolor=edge,
+            lightcolor=edge,
+            darkcolor=edge,
+            borderwidth=1,
+            focuscolor=_BG,
+            font=font,
+            padding=padding,
+        )
+        tint = _mix(_BG, edge, 0.16)
+        tint_pressed = _mix(_BG, edge, 0.3)
+        style.map(
+            ghost,
+            background=[("disabled", _BG), ("pressed", tint_pressed), ("active", tint)],
+            bordercolor=[("disabled", _PANEL)],
+            lightcolor=[("disabled", _PANEL)],
+            darkcolor=[("disabled", _PANEL)],
+            foreground=[("disabled", disabled_fg), ("active", _TEXT if secondary else base)],
+        )
+
+
+def _set_window_icon(root: tk.Tk) -> None:
+    """The tray icon, as the window/taskbar icon (instead of Tk's feather).
+    `default=True` also covers every Toplevel opened later."""
+    photo = tk.PhotoImage(data=TRAY_ICON_PNG_BASE64)
+    root.iconphoto(True, photo)
+    root._hots_icon = photo  # type: ignore[attr-defined]  # Tk drops unreferenced images
 
 
 def _apply_dark_style() -> None:
@@ -430,26 +526,7 @@ def _apply_dark_style() -> None:
         foreground=_ACCENT,
         font=("Segoe UI", 9, "underline"),
     )
-    style.configure(
-        "Accent.TButton",
-        background=_ACCENT,
-        foreground="#0f1220",
-        font=("Segoe UI", 10, "bold"),
-        padding=(14, 8),
-        borderwidth=0,
-    )
-    style.map(
-        "Accent.TButton", background=[("active", "#8aa3ff"), ("disabled", "#3a4066")]
-    )
-    style.configure(
-        "Ghost.TButton",
-        background=_BG,
-        foreground=_TEXT_MUTED,
-        font=("Segoe UI", 10),
-        padding=(14, 8),
-        borderwidth=0,
-    )
-    style.map("Ghost.TButton", background=[("active", _PANEL)])
+    _configure_button_styles(style)
     style.configure("TNotebook", background=_BG, borderwidth=0)
     style.configure(
         "TNotebook.Tab",
@@ -471,6 +548,88 @@ def _apply_dark_style() -> None:
         borderwidth=0,
         thickness=8,
     )
+    # Sync tab widgets (sync_table.py): plain ttk "clam" defaults are light.
+    style.configure(
+        "Treeview",
+        background=_PANEL,
+        fieldbackground=_PANEL,
+        foreground=_TEXT,
+        bordercolor=_PANEL,
+        lightcolor=_PANEL,
+        darkcolor=_PANEL,
+        borderwidth=0,
+        rowheight=24,
+        font=("Segoe UI", 9),
+    )
+    style.map(
+        "Treeview",
+        background=[("selected", _FIELD_BG_FOCUS)],
+        foreground=[("selected", _TEXT)],
+    )
+    style.configure(
+        "Treeview.Heading",
+        background=_FIELD_BG,
+        foreground=_TEXT_MUTED,
+        bordercolor=_BG,
+        lightcolor=_FIELD_BG,
+        darkcolor=_FIELD_BG,
+        relief="flat",
+        padding=(6, 4),
+        font=("Segoe UI", 9, "bold"),
+    )
+    style.map(
+        "Treeview.Heading",
+        background=[("active", _FIELD_BG_FOCUS)],
+        foreground=[("active", _TEXT)],
+    )
+    style.configure(
+        "TCheckbutton",
+        background=_BG,
+        foreground=_TEXT,
+        indicatorbackground=_FIELD_BG,
+        indicatorforeground=_ACCENT,
+        focuscolor=_BG,
+        font=("Segoe UI", 10),
+    )
+    style.map(
+        "TCheckbutton",
+        background=[("active", _BG)],
+        indicatorbackground=[("selected", _FIELD_BG), ("active", _FIELD_BG_FOCUS)],
+    )
+    style.configure(
+        "TCombobox",
+        fieldbackground=_FIELD_BG,
+        background=_FIELD_BG,
+        foreground=_TEXT,
+        arrowcolor=_TEXT,
+        bordercolor=_FIELD_BG,
+        lightcolor=_FIELD_BG,
+        darkcolor=_FIELD_BG,
+        selectbackground=_FIELD_BG,
+        selectforeground=_TEXT,
+    )
+    style.map(
+        "TCombobox",
+        fieldbackground=[("readonly", _FIELD_BG)],
+        foreground=[("readonly", _TEXT)],
+        background=[("active", _FIELD_BG_FOCUS)],
+    )
+    style.configure(
+        "Vertical.TScrollbar",
+        background=_FIELD_BG,
+        troughcolor=_PANEL,
+        bordercolor=_PANEL,
+        lightcolor=_FIELD_BG,
+        darkcolor=_FIELD_BG,
+        arrowcolor=_TEXT_MUTED,
+    )
+    style.map("Vertical.TScrollbar", background=[("active", _FIELD_BG_FOCUS)])
+    # The combobox dropdown is a plain tk Listbox, outside ttk styling.
+    root = style.master
+    root.option_add("*TCombobox*Listbox.background", _FIELD_BG)
+    root.option_add("*TCombobox*Listbox.foreground", _TEXT)
+    root.option_add("*TCombobox*Listbox.selectBackground", _ACCENT)
+    root.option_add("*TCombobox*Listbox.selectForeground", "#0f1220")
 
 
 class _SettingsWindow:
@@ -488,8 +647,14 @@ class _SettingsWindow:
         on_manual_capture: Callable[[], None] | None = None,
         scheduler: UploadScheduler | None = None,
         dependency_guard: DependencyGuard | None = None,
+        on_quit: Callable[[], None] | None = None,
     ) -> None:
         self._root = root
+        self._on_quit = on_quit
+        self._autosave_job: str | None = None
+        # What's currently on disk (None until the first successful write on a
+        # first run), so an autosave that wouldn't change anything is skipped.
+        self._last_saved: tuple | None = None
         self._is_first_run = is_first_run
         self._result = result
         self._status_tracker = status_tracker
@@ -522,11 +687,13 @@ class _SettingsWindow:
         # title), so `_set_tab_problem` can toggle a marker on a tab's
         # label without needing every call site to pass the notebook/frame
         # around itself.
-        self._tabs: dict[str, tuple[ttk.Notebook, ttk.Frame, str]] = {}
+        self._tabs: dict[str, tuple[TabView, ScrollPage, str]] = {}
+        self._pages: list[ScrollPage] = []
 
-        root.title("HotS Analytics - Configuration")
+        root.title(f"HotS Analytics v{APP_VERSION} - Configuration")
         root.configure(bg=_BG)
-        root.resizable(False, False)
+        root.resizable(True, True)
+        _set_window_icon(root)
         root.protocol("WM_DELETE_WINDOW", self._on_close)
         root.bind("<Escape>", lambda _e: self._on_close())
 
@@ -539,6 +706,20 @@ class _SettingsWindow:
 
         self._build_ui()
         self._prefill()
+        self._last_saved = None if is_first_run else self._validated_config()[0]
+        # Armed only after the prefill so loading the stored values doesn't
+        # count as a change.
+        autosaved_vars = [
+            self._api_var,
+            self._token_var,
+            self._replays_var,
+            self._draft_enabled_var,
+            self._draft_hotkey_var,
+        ]
+        if hasattr(self, "_auto_update_var"):
+            autosaved_vars.append(self._auto_update_var)
+        for var in autosaved_vars:
+            var.trace_add("write", lambda *_: self._schedule_autosave())
         self._center()
         self._check_connection()
         if not is_first_run:
@@ -557,45 +738,25 @@ class _SettingsWindow:
 
     # -- layout ---------------------------------------------------------
 
-    def _build_tab(self, notebook: ttk.Notebook, key: str, title: str) -> ttk.Frame:
-        tab = ttk.Frame(notebook, style="TFrame", padding=18)
-        notebook.add(tab, text=title)
-        self._tabs[key] = (notebook, tab, title)
-        return tab
+    def _build_tab(self, notebook: TabView, key: str, title: str, icon: str) -> ttk.Frame:
+        page = ScrollPage(notebook)
+        notebook.add(page, text=title, icon=icon)
+        self._tabs[key] = (notebook, page, title)
+        self._pages.append(page)
+        return page.inner
 
     def _build_ui(self) -> None:
         outer = ttk.Frame(self._root, padding=24)
         outer.pack(fill="both", expand=True)
 
-        header = ttk.Frame(outer, style="TFrame")
-        header.pack(fill="x")
-        ttk.Label(header, text="HotS Analytics", style="Title.TLabel").pack(
-            side="left", anchor="w"
-        )
-        ttk.Button(
-            header,
-            text="📁 Dossier de données",
-            style="Ghost.TButton",
-            command=self._open_data_folder,
-        ).pack(side="right")
-
-        subtitle = (
-            "Première configuration du daemon de synchronisation"
-            if self._is_first_run
-            else f"Paramètres du daemon de synchronisation · v{APP_VERSION}"
-        )
-        ttk.Label(outer, text=subtitle, style="Muted.TLabel").pack(
-            anchor="w", pady=(2, 14)
-        )
-
-        notebook = ttk.Notebook(outer)
+        notebook = TabView(outer)
         notebook.pack(fill="both", expand=True)
 
-        self._build_config_tab(self._build_tab(notebook, "config", "Config"))
-        self._build_draft_tab(self._build_tab(notebook, "draft_live", "Draft Live"))
-        self._build_sync_tab(self._build_tab(notebook, "sync", "Synchronisation"))
+        self._build_config_tab(self._build_tab(notebook, "config", "Config", "⚙"))
+        self._build_draft_tab(self._build_tab(notebook, "draft_live", "Draft Live", "🎮"))
+        self._build_sync_tab(self._build_tab(notebook, "sync", "Synchronisation", "🔄"))
         if updater.IS_FROZEN:
-            self._build_update_tab(self._build_tab(notebook, "update", "Update"))
+            self._build_update_tab(self._build_tab(notebook, "update", "Update", "⬆"))
 
         self._error_label = ttk.Label(
             outer,
@@ -612,18 +773,26 @@ class _SettingsWindow:
         if not self._is_first_run and self._sync_state is not None:
             ttk.Button(
                 buttons,
-                text="Debug",
-                style="Ghost.TButton",
+                text="🐞 Debug",
+                style="Secondary.Ghost.TButton",
                 command=self._open_debug_window,
             ).pack(side="left")
-        cancel_text = "Quitter" if self._is_first_run else "Annuler"
         ttk.Button(
-            buttons, text=cancel_text, style="Ghost.TButton", command=self._on_close
+            buttons,
+            text="📁 Dossier de données",
+            style="Secondary.Ghost.TButton",
+            command=self._open_data_folder,
+        ).pack(side="left", padx=(10, 0))
+        ttk.Button(
+            buttons, text="Fermer", style="Danger.TButton", command=self._on_quit_clicked
         ).pack(side="right")
         ttk.Button(
-            buttons, text="Enregistrer", style="Accent.TButton", command=self._save
+            buttons, text="Réduire", style="Info.Ghost.TButton", command=self._on_close
         ).pack(side="right", padx=(0, 10))
-        self._root.bind("<Return>", lambda _e: self._save())
+        # Every setting is saved as soon as it changes (see `_autosave`);
+        # this is the only feedback.
+        self._saved_label = ttk.Label(buttons, text="", style="Muted.TLabel")
+        self._saved_label.pack(side="right", padx=(0, 14))
 
     def _open_data_folder(self) -> None:
         open_config_folder()
@@ -657,15 +826,11 @@ class _SettingsWindow:
     # -- Config tab: Connexion -----------------------------------------------
 
     def _build_connexion_section(self, parent: ttk.Frame) -> None:
-        card = tk.Frame(parent, bg=_PANEL)
+        card = CollapsibleCard(parent, "CONNEXION", "🔌")
         card.pack(fill="x", pady=(0, 12))
-        inner = ttk.Frame(card, style="Panel.TFrame", padding=18)
-        inner.pack(fill="x")
+        inner = card.body
         inner.grid_columnconfigure(0, weight=1, minsize=340)
 
-        ttk.Label(inner, text="CONNEXION", style="SectionHeader.TLabel").grid(
-            row=0, column=0, columnspan=3, sticky="w", pady=(0, 10)
-        )
 
         connect_row = ttk.Frame(inner, style="Panel.TFrame")
         connect_row.grid(row=1, column=0, columnspan=3, sticky="w", pady=(0, 4))
@@ -673,7 +838,7 @@ class _SettingsWindow:
         self._connect_button = ttk.Button(
             connect_row,
             text="Connecter ce PC via le navigateur",
-            style="Accent.TButton",
+            style="Primary.TButton",
             command=self._connect_via_browser,
         )
         self._connect_button.pack(side="left")
@@ -711,15 +876,11 @@ class _SettingsWindow:
     # -- Config tab: Stockage -------------------------------------------------
 
     def _build_stockage_section(self, parent: ttk.Frame) -> None:
-        card = tk.Frame(parent, bg=_PANEL)
+        card = CollapsibleCard(parent, "STOCKAGE", "💾")
         card.pack(fill="x", pady=(0, 12))
-        inner = ttk.Frame(card, style="Panel.TFrame", padding=18)
-        inner.pack(fill="x")
+        inner = card.body
         inner.grid_columnconfigure(0, weight=1, minsize=340)
 
-        ttk.Label(inner, text="STOCKAGE", style="SectionHeader.TLabel").grid(
-            row=0, column=0, columnspan=3, sticky="w", pady=(0, 10)
-        )
 
         self._replays_entry, self._replays_status, grid_row = self._build_field(
             inner,
@@ -729,7 +890,7 @@ class _SettingsWindow:
             on_change=self._on_replays_changed,
         )
         browse = ttk.Button(
-            inner, text="Parcourir…", style="Ghost.TButton", command=self._browse_replays_dir
+            inner, text="Parcourir…", style="Secondary.TButton", command=self._browse_replays_dir
         )
         browse.grid(row=grid_row, column=0, columnspan=3, sticky="w")
 
@@ -749,14 +910,9 @@ class _SettingsWindow:
     def _build_demarrage_section(self, parent: ttk.Frame) -> None:
         if not autostart.is_supported():
             return
-        card = tk.Frame(parent, bg=_PANEL)
+        card = CollapsibleCard(parent, "DÉMARRAGE", "🚀")
         card.pack(fill="x")
-        inner = ttk.Frame(card, style="Panel.TFrame", padding=18)
-        inner.pack(fill="x")
-
-        ttk.Label(inner, text="DÉMARRAGE", style="SectionHeader.TLabel").grid(
-            row=0, column=0, sticky="w", pady=(0, 10)
-        )
+        inner = card.body
 
         # If Windows silently disabled this entry (Task Manager's Startup
         # tab, or its own startup-impact policy -- see
@@ -878,15 +1034,11 @@ class _SettingsWindow:
     # -- Draft Live tab: Raccourci ------------------------------------------
 
     def _build_raccourci_section(self, parent: ttk.Frame) -> None:
-        card = tk.Frame(parent, bg=_PANEL)
+        card = CollapsibleCard(parent, "RACCOURCI", "⌨")
         card.pack(fill="x", pady=(0, 12))
-        inner = ttk.Frame(card, style="Panel.TFrame", padding=18)
-        inner.pack(fill="x")
+        inner = card.body
         inner.grid_columnconfigure(0, weight=1, minsize=340)
 
-        ttk.Label(inner, text="RACCOURCI", style="SectionHeader.TLabel").grid(
-            row=0, column=0, columnspan=3, sticky="w", pady=(0, 10)
-        )
 
         self._draft_enabled_var = tk.BooleanVar(value=True)
         enabled_check = self._checkbutton(
@@ -925,7 +1077,7 @@ class _SettingsWindow:
         self._draft_hotkey_record_btn = ttk.Button(
             hotkey_row,
             text="Modifier…",
-            style="Ghost.TButton",
+            style="Secondary.TButton",
             command=self._start_hotkey_capture,
         )
         self._draft_hotkey_record_btn.pack(side="left", padx=(10, 0))
@@ -962,7 +1114,7 @@ class _SettingsWindow:
             self._hotkey_retry_btn = ttk.Button(
                 status_row,
                 text="Réessayer",
-                style="Ghost.TButton",
+                style="Warn.TButton",
                 command=self._retry_hotkey_registration,
             )
             # Not packed here -- only shown while there's an error to retry,
@@ -984,14 +1136,10 @@ class _SettingsWindow:
     # -- Draft Live tab: Capture ---------------------------------------------
 
     def _build_capture_section(self, parent: ttk.Frame) -> None:
-        card = tk.Frame(parent, bg=_PANEL)
+        card = CollapsibleCard(parent, "CAPTURE", "📸")
         card.pack(fill="x", pady=(0, 12))
-        inner = ttk.Frame(card, style="Panel.TFrame", padding=18)
-        inner.pack(fill="x")
+        inner = card.body
 
-        ttk.Label(inner, text="CAPTURE", style="SectionHeader.TLabel").grid(
-            row=0, column=0, columnspan=2, sticky="w", pady=(0, 10)
-        )
 
         # "Tester la capture" -- runs the same screenshot -> crop -> OCR
         # pipeline against whatever window has focus, without ever POSTing
@@ -1005,7 +1153,7 @@ class _SettingsWindow:
         self._test_capture_btn = ttk.Button(
             test_col,
             text="🔍 Tester la capture",
-            style="Ghost.TButton",
+            style="Info.TButton",
             command=self._start_test_capture,
         )
         self._test_capture_btn.pack(anchor="w")
@@ -1027,7 +1175,7 @@ class _SettingsWindow:
             ttk.Button(
                 capture_col,
                 text="📤 Capturer maintenant",
-                style="Accent.TButton",
+                style="Primary.TButton",
                 command=self._start_manual_capture,
             ).pack(anchor="w")
             ttk.Label(
@@ -1053,14 +1201,9 @@ class _SettingsWindow:
     def _build_etat_section(self, parent: ttk.Frame) -> None:
         if self._draft_capture_status is None:
             return
-        card = tk.Frame(parent, bg=_PANEL)
+        card = CollapsibleCard(parent, "ÉTAT", "📊")
         card.pack(fill="x")
-        inner = ttk.Frame(card, style="Panel.TFrame", padding=18)
-        inner.pack(fill="x")
-
-        ttk.Label(inner, text="ÉTAT", style="SectionHeader.TLabel").grid(
-            row=0, column=0, columnspan=3, sticky="w", pady=(0, 10)
-        )
+        inner = card.body
 
         self._draft_capture_animating = False
         self._draft_capture_status_label = ttk.Label(inner, text="", style="PanelMuted.TLabel")
@@ -1384,7 +1527,7 @@ class _SettingsWindow:
         _build_team_column("Équipe droite", result.right, result.right_results, 1)
 
         ttk.Button(
-            body, text="Fermer", style="Ghost.TButton", command=win.destroy
+            body, text="Fermer", style="Secondary.TButton", command=win.destroy
         ).grid(row=6, column=0, columnspan=2, sticky="e", pady=(18, 0))
 
     # -- Synchronisation tab ------------------------------------------------
@@ -1400,10 +1543,9 @@ class _SettingsWindow:
             ).pack(anchor="w")
             return
 
-        card = tk.Frame(parent, bg=_PANEL)
+        card = CollapsibleCard(parent, "SYNCHRONISATION", "🔄")
         card.pack(fill="x")
-        inner = ttk.Frame(card, style="Panel.TFrame", padding=18)
-        inner.pack(fill="x")
+        inner = card.body
 
         ttk.Label(inner, text="Version daemon", style="PanelMuted.TLabel").grid(
             row=0, column=0, sticky="w"
@@ -1557,10 +1699,9 @@ class _SettingsWindow:
     # -- Update tab -----------------------------------------------------------
 
     def _build_update_tab(self, parent: ttk.Frame) -> None:
-        card = tk.Frame(parent, bg=_PANEL)
+        card = CollapsibleCard(parent, "MISE À JOUR", "⬆")
         card.pack(fill="x")
-        inner = ttk.Frame(card, style="Panel.TFrame", padding=18)
-        inner.pack(fill="x")
+        inner = card.body
         inner.grid_columnconfigure(0, weight=1, minsize=340)
 
         self._auto_update_var = tk.BooleanVar(value=True)
@@ -1579,7 +1720,7 @@ class _SettingsWindow:
             self._check_update_button = ttk.Button(
                 button_row,
                 text="Vérifier les mises à jour",
-                style="Accent.TButton",
+                style="Primary.TButton",
                 command=self._on_check_update_clicked,
             )
             self._check_update_button.pack(side="left")
@@ -1587,7 +1728,7 @@ class _SettingsWindow:
         self._view_log_button = ttk.Button(
             button_row,
             text="Voir le journal",
-            style="Ghost.TButton",
+            style="Secondary.TButton",
             command=self._open_update_log,
         )
         self._view_log_button.pack(
@@ -1599,13 +1740,13 @@ class _SettingsWindow:
         # completely different failure surface than the automatic Velopack
         # install: downloading the release page's Setup.exe by hand, see
         # `updater.release_page_url`.
-        # `_refresh_update_status` switches it to `Accent.TButton` while the
+        # `_refresh_update_status` switches it to `Warn.TButton` while the
         # last automatic attempt is in `UpdatePhase.ERROR`, so it's easy to
         # spot exactly when it's actually needed.
         self._manual_download_button = ttk.Button(
             button_row,
             text="⬇ Mise à jour manuelle",
-            style="Ghost.TButton",
+            style="Secondary.TButton",
             command=self._open_manual_download,
         )
         self._manual_download_button.pack(side="left", padx=(10, 0))
@@ -1622,7 +1763,7 @@ class _SettingsWindow:
             self._open_fallback_button = ttk.Button(
                 button_row,
                 text="📁 Ouvrir le dossier",
-                style="Ghost.TButton",
+                style="Secondary.TButton",
                 command=self._open_fallback_folder,
             )
 
@@ -1688,9 +1829,9 @@ class _SettingsWindow:
         self._check_update_button.configure(state="disabled" if busy else "normal")
 
         self._manual_download_button.configure(
-            style="Accent.TButton"
+            style="Warn.TButton"
             if status.phase is UpdatePhase.ERROR
-            else "Ghost.TButton"
+            else "Secondary.TButton"
         )
 
         if status.manual_fallback_path is not None:
@@ -1960,10 +2101,10 @@ class _SettingsWindow:
             win.after(2000, lambda: copy_status.configure(text=""))
 
         ttk.Button(
-            button_row, text="Fermer", style="Ghost.TButton", command=win.destroy
+            button_row, text="Fermer", style="Secondary.TButton", command=win.destroy
         ).pack(side="right")
         ttk.Button(
-            button_row, text="Copier", style="Accent.TButton", command=_copy
+            button_row, text="Copier", style="Primary.TButton", command=_copy
         ).pack(side="right", padx=(0, 10))
 
     def _format_debug_report(self, records: list, skipped: list) -> str:
@@ -2047,14 +2188,14 @@ class _SettingsWindow:
         label.configure(text=text, foreground=color)
 
     def _set_tab_problem(self, key: str, has_problem: bool) -> None:
-        notebook, tab, title = self._tabs[key]
-        notebook.tab(tab, text=title + self._TAB_PROBLEM_MARKER if has_problem else title)
+        notebook, page, title = self._tabs[key]
+        notebook.tab(page, text=title + self._TAB_PROBLEM_MARKER if has_problem else title)
 
     def _open_token_link(self) -> None:
         webbrowser.open(guess_settings_url(self._api_var.get() or DEFAULT_API_BASE_URL))
 
     def _center(self) -> None:
-        """Locks the window to a fixed size and centers it.
+        """Sets the window's initial size (large enough for every tab's content) and centers it.
 
         Without an explicit "WxH", Tk keeps auto-growing the window every
         time a dynamic label's text changes (see `_refresh_live_stats`) --
@@ -2067,9 +2208,11 @@ class _SettingsWindow:
         already accounts for every tab's content, not just the active one.
         """
         width, height = self._measure_worst_case_size()
+        # Resizable (and maximizable): pages scroll when the window is smaller
+        # than their content, so the minimum can be well below the preferred size.
+        self._root.minsize(min(width, 640), min(height, 480))
         x = (self._root.winfo_screenwidth() - width) // 2
-        # The window is not resizable, so a height beyond the screen would push the title bar or
-        # the bottom buttons out of reach: clamp it, and never place the title bar above the top.
+        # Never open taller than the screen, and never place the title bar above the top.
         height = min(height, self._root.winfo_screenheight() - 80)
         y = max(0, (self._root.winfo_screenheight() - height) // 3)
         self._root.geometry(f"{width}x{height}+{x}+{y}")
@@ -2149,6 +2292,9 @@ class _SettingsWindow:
             self._open_fallback_button.pack(side="left", padx=(10, 0))
 
         self._root.update_idletasks()
+        for page in self._pages:
+            page.fit_request_to_content()
+        self._root.update_idletasks()
         width, height = self._root.winfo_reqwidth(), self._root.winfo_reqheight()
 
         for label, original in originals:
@@ -2160,37 +2306,30 @@ class _SettingsWindow:
 
         return width, height
 
-    def _save(self) -> None:
-        if self._hotkey_capturing:
-            self._show_error(
-                "Terminez la capture du raccourci (appuyez sur une combinaison de touches, "
-                "ou Échap pour annuler) avant d'enregistrer."
-            )
-            return
-
+    def _validated_config(self) -> tuple[tuple | None, str | None]:
+        """The form's current values as a config tuple, or `(None, reason)`
+        when something isn't valid yet. Has no UI side effect: the fields
+        already show their own inline status while the user types."""
         api_base_url = self._api_var.get().strip()
         access_token = self._token_var.get().strip()
         hots_dir = self._replays_var.get().strip()
 
         if not api_base_url:
-            self._show_error("L'URL de l'API est requise.")
-            return
+            return None, "L'URL de l'API est requise."
         if not access_token:
-            self._show_error("Le token d'accès est requis.")
-            return
+            return None, "Le token d'accès est requis."
         if not hots_dir or not (Path(hots_dir) / "Accounts").is_dir():
-            self._show_error(
+            return None, (
                 "Le dossier Heroes of the Storm est invalide (il doit contenir un sous-dossier Accounts)."
             )
-            return
 
         draft_feature_enabled = self._draft_enabled_var.get()
         draft_hotkey = self._draft_hotkey_var.get().strip()
         if draft_feature_enabled:
-            if not self._check_draft_hotkey():
-                self._show_error("Le raccourci de capture de draft est invalide.")
-                return
-            draft_hotkey = hotkey.validate(draft_hotkey)
+            try:
+                draft_hotkey = hotkey.validate(draft_hotkey)
+            except hotkey.InvalidHotkeyError:
+                return None, "Le raccourci de capture de draft est invalide."
         elif not draft_hotkey:
             # Disabled with a blank field (e.g. never touched on first
             # run): keep a sane default around in case it's re-enabled later.
@@ -2199,20 +2338,81 @@ class _SettingsWindow:
         auto_update_enabled = (
             self._auto_update_var.get() if hasattr(self, "_auto_update_var") else True
         )
+        return (
+            api_base_url.rstrip("/"),
+            access_token,
+            hots_dir,
+            draft_feature_enabled,
+            draft_hotkey,
+            auto_update_enabled,
+        ), None
 
+    def _schedule_autosave(self) -> None:
+        if self._closed:
+            return
+        if self._autosave_job is not None:
+            self._root.after_cancel(self._autosave_job)
+        self._autosave_job = self._root.after(_AUTOSAVE_MS, self._autosave)
+
+    def _autosave(self) -> str | None:
+        """Writes the form to the config file if it is valid and differs from
+        what's on disk. Returns the validation error, if any, so `_on_close`
+        can tell the user why a first-run setup isn't complete."""
+        self._autosave_job = None
+        if self._closed or self._hotkey_capturing:
+            return None
+        config, error = self._validated_config()
+        if config is None:
+            return error
+        self._show_error("")
+        if config == self._last_saved:
+            return None
+        api_base_url, access_token, hots_dir, draft_enabled, draft_hotkey, auto_update = config
         save_config(
             api_base_url,
             access_token,
             hots_dir,
-            existing.get("extraReplayDirs", ()) or (),
-            draft_feature_enabled=draft_feature_enabled,
+            read_config_file().get("extraReplayDirs", ()) or (),
+            draft_feature_enabled=draft_enabled,
             draft_hotkey=draft_hotkey,
-            auto_update_enabled=auto_update_enabled,
+            auto_update_enabled=auto_update,
         )
         logger.info("Configuration saved to %s", config_file_path())
+        self._last_saved = config
         self._result["saved"] = True
+        self._saved_label.configure(text="✓ Enregistré")
+        return None
+
+    def _flush_autosave(self) -> str | None:
+        if self._autosave_job is not None:
+            self._root.after_cancel(self._autosave_job)
+        return self._autosave()
+
+    def _on_quit_clicked(self) -> None:
+        """"Fermer": stops the whole daemon (not just this window)."""
+        if self._hotkey_capturing:
+            messagebox.showinfo(
+                "HotS Analytics",
+                "Terminez la capture du raccourci (appuyez sur une combinaison de touches, "
+                "ou Échap pour annuler) avant de fermer.",
+                parent=self._root,
+            )
+            return
+        if self._on_quit is not None and not messagebox.askyesno(
+            "Fermer HotS Analytics",
+            "Fermer complètement HotS Analytics ? La synchronisation des parties s'arrêtera.",
+            parent=self._root,
+        ):
+            return
+        self._flush_autosave()
+        self._auth_cancel.set()
         self._stop_background_jobs()
+        # Settings already written are applied on the next launch; restarting
+        # the watcher here would just be undone by the quit.
+        self._result["saved"] = False
         self._root.destroy()
+        if self._on_quit is not None:
+            self._on_quit()
 
     def _show_error(self, message: str) -> None:
         self._error_label.configure(text=_truncate(message, _ERROR_LABEL_MAX_CHARS))
@@ -2224,6 +2424,9 @@ class _SettingsWindow:
         # and `_on_close` call right before `root.destroy()`) rather than in
         # each of them separately.
         self._closed = True
+        if self._autosave_job is not None:
+            self._root.after_cancel(self._autosave_job)
+            self._autosave_job = None
         if self._live_stats_job is not None:
             self._root.after_cancel(self._live_stats_job)
             self._live_stats_job = None
@@ -2258,12 +2461,11 @@ class _SettingsWindow:
                 parent=self._root,
             )
             return
-        if self._is_first_run:
-            if not messagebox.askyesno(
-                "Quitter",
-                "Aucune configuration n'a été enregistrée. Quitter quand même ?",
-                parent=self._root,
-            ):
-                return
+        error = self._flush_autosave()
+        if error is not None and self._last_saved is None:
+            # First run and nothing valid to keep yet: closing now would
+            # leave the daemon without a configuration to start with.
+            self._show_error(f"{error} Complétez la configuration, ou utilisez « Fermer » pour quitter.")
+            return
         self._stop_background_jobs()
         self._root.destroy()

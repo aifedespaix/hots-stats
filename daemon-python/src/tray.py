@@ -97,3 +97,10 @@ class TrayController:
         logger.info("Quit requested from the tray menu.")
         self._on_quit()
         icon.stop()
+
+    def quit(self) -> None:
+        """Same as the tray menu's "Quitter", for callers outside the menu
+        (the settings window's "Fermer" button)."""
+        logger.info("Quit requested from the settings window.")
+        self._on_quit()
+        self._icon.stop()
