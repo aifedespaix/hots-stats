@@ -1325,16 +1325,7 @@ from src import gui
 from src.status import StatusTracker
 
 
-@pytest.fixture(scope="module")
-def tk_root():
-    try:
-        root = tk.Tk()
-    except tk.TclError:
-        pytest.skip("Tk cannot create a root window here")
-    root.attributes("-alpha", 0.0)  # invisible but mapped: a withdrawn root never maps its children
-    yield root
-    root.destroy()
-
+# `tk_root` (session-scoped, invisible but mapped) comes from tests/conftest.py.
 
 @pytest.fixture
 def window(tk_root, tmp_path):
