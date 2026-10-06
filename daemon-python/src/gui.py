@@ -578,7 +578,7 @@ def _apply_dark_style() -> None:
         lightcolor=_PANEL,
         darkcolor=_PANEL,
         borderwidth=0,
-        rowheight=24,
+        rowheight=28,
         font=("Segoe UI", 9),
     )
     style.map(
@@ -1742,7 +1742,7 @@ class _SettingsWindow:
             syncing_text = "—"
         self._currently_syncing_label.configure(text=syncing_text)
 
-        progress = progress_summary(status.found, status.synced, status.failed)
+        progress = progress_summary(status.found, status.synced, status.failed, status.up_to_date)
         self._sync_progress_bar["value"] = progress.percent
         self._sync_progress_label.configure(text=progress.label)
 

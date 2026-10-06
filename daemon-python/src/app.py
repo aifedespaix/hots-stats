@@ -149,6 +149,7 @@ def _run_sync_loop(
         sync_state.refresh_file_existence({str(path) for path in existing})
 
     to_sync = [path for path in existing if not _is_provably_known(path, sync_state)]
+    status.set_up_to_date(len(existing) - len(to_sync))
     if to_sync and not stop_event.is_set():
         scheduler.enqueue_backlog([(path, toon_by_path.get(str(path))) for path in to_sync])
     if stop_event.is_set():

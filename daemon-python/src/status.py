@@ -25,6 +25,9 @@ class DaemonStatus:
     # the settings window can tell the player *why* fewer replays than
     # `found` show up server-side, instead of that gap looking unexplained.
     skipped_ai_player: int = 0
+    # Replays found on disk at startup that were already synced at the current parser version, so
+    # they're never enqueued: counted as done so a fully synced library reads 100%, not 0%.
+    up_to_date: int = 0
     # How many ingestions have failed *in a row*, reset to 0 on the next
     # success -- unlike `failed` (a lifetime total for this run), this is
     # what `app.py` watches to notify the tray once a run of failures looks
@@ -48,6 +51,9 @@ class StatusTracker:
 
     def set_found(self, found: int) -> None:
         self._update(found=found)
+
+    def set_up_to_date(self, up_to_date: int) -> None:
+        self._update(up_to_date=up_to_date)
 
     def bump_found(self, by: int = 1) -> None:
         with self._lock:

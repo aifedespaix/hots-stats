@@ -32,3 +32,9 @@ def test_progress_done_with_failures_reports_them():
 
 def test_progress_never_exceeds_100_when_counts_race_ahead_of_found():
     assert progress_summary(5, 7, 0).percent == 100
+
+
+def test_already_synced_replays_count_as_done_so_a_fully_synced_library_reads_100():
+    p = progress_summary(40, 0, 0, up_to_date=40)
+    assert (p.percent, p.state, p.label) == (100, "done", "Tout est à jour")
+    assert progress_summary(40, 5, 0, up_to_date=30).percent == 88

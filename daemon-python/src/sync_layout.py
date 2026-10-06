@@ -21,10 +21,10 @@ class Progress:
     state: str  # "idle" | "running" | "done"
 
 
-def progress_summary(found: int, synced: int, failed: int) -> Progress:
+def progress_summary(found: int, synced: int, failed: int, up_to_date: int = 0) -> Progress:
     if found <= 0:
         return Progress(0, "Aucune partie trouvée", "idle")
-    done = synced + failed
+    done = synced + failed + up_to_date
     percent = min(100, round(done / found * 100))
     if done >= found:
         label = "Tout est à jour" if failed == 0 else f"Terminé — {failed} échec(s)"

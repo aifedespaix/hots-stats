@@ -1,12 +1,9 @@
-from src.sync_table import PAGE_SIZE, explorer_select_args, visible_page
+from src.sync_table import PAGE_SIZE, explorer_select_command, visible_page
 
 
-def test_explorer_gets_the_path_as_one_argument_even_with_spaces_and_accents():
-    args = explorer_select_args(r"C:\Users\Zoé Dupont\Documents\Heroes of the Storm\a b.StormReplay")
-    assert args[0] == "explorer"
-    assert len(args) == 2
-    assert args[1].startswith("/select,")
-    assert args[1].endswith("a b.StormReplay")
+def test_explorer_gets_the_path_quoted_in_a_raw_command_line_even_with_spaces_and_accents():
+    cmd = explorer_select_command(r"C:\Users\Zoé Dupont\Documents\Heroes of the Storm\a b.StormReplay")
+    assert cmd == r'explorer /select,"C:\Users\Zoé Dupont\Documents\Heroes of the Storm\a b.StormReplay"'
 
 
 def test_pages_are_filled_500_at_a_time_so_opening_the_tab_stays_instant():

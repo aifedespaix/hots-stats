@@ -41,13 +41,19 @@ DETAIL_MAX_CHARS = 120
 _REFRESH_MIN_SECONDS = 3.0
 _ALL = "Toutes"
 _COLUMNS = (
-    ("label", "Partie", 230),
-    ("played", "Date de la partie", 115),
-    ("uploaded", "Date d'envoi", 115),
-    ("result", "Résultat", 70),
-    ("state", "Statut", 105),
-    ("build", "Build", 55),
+    ("label", "Partie", 230, "w"),
+    ("played", "Date de la partie", 125, "w"),
+    ("uploaded", "Date d'envoi", 125, "w"),
+    ("result", "Résultat", 75, "center"),
+    ("state", "Statut", 125, "w"),
+    ("build", "Build", 60, "e"),
 )
+# Rows visible at minimum: the page scrolls around the table, so without a floor the table
+# collapsed to a few rows whenever the cards above it were tall.
+MIN_VISIBLE_ROWS = 10
+_ZEBRA = "#1c2030"
+_HOVER = "#262b40"
+_SORT_ARROWS = {False: " ▲", True: " ▼"}
 _STATE_COLORS = {
     "synced": "#4ec9a0",
     "uploading": "#6c8cff",
@@ -66,17 +72,18 @@ def visible_page(views: Sequence[T], shown: int, page_size: int) -> list[T]:
     return list(views[shown : shown + page_size])
 
 
-def explorer_select_args(path: str) -> list[str]:
-    """Explorer needs `/select,<path>` as a *single* argument; passing it as a list (not a
-    shell string) keeps spaces and accents in the path intact."""
-    return ["explorer", f"/select,{os.path.normpath(path)}"]
+def explorer_select_command(path: str) -> str:
+    """The raw command line for `explorer /select,"<path>"`. It must be a string, not an argv
+    list: Python would quote the whole `/select,<path>` token when the path has spaces, and
+    Explorer then ignores the switch and opens the default folder instead."""
+    return f'explorer /select,"{os.path.normpath(path)}"'
 
 
 def reveal_in_explorer(path: str) -> None:
     if sys.platform == "win32":
         try:
             # Explorer exits non-zero even when it worked, so the exit code is deliberately ignored.
-            subprocess.Popen(explorer_select_args(path))
+            subprocess.Popen(explorer_select_command(path))
         except OSError:
             logger.warning("Could not open Explorer for %s", path, exc_info=True)
         return
@@ -93,7 +100,7 @@ class SyncTable(ttk.Frame):
         min_parser_version: Callable[[], str | None],
         dependency_required: Callable[[], str | None] = lambda: None,
         reveal: Callable[[str], None] = reveal_in_explorer,
-        height: int = 6,
+        height: int = MIN_VISIBLE_ROWS,
         pause_parent: tk.Misc | None = None,
     ) -> None:
         super().__init__(parent)
@@ -155,9 +162,13 @@ class SyncTable(ttk.Frame):
         self._tree = ttk.Treeview(
             body, columns=[c[0] for c in _COLUMNS], show="headings", height=height, selectmode="browse"
         )
-        for key, title, width in _COLUMNS:
+        for key, title, width, anchor in _COLUMNS:
             self._tree.heading(key, text=title, command=lambda k=key: self._sort_by(k))
-            self._tree.column(key, width=width, anchor="w", stretch=key == "label")
+            self._tree.column(key, width=width, minwidth=50, anchor=anchor, stretch=key == "label")
+        self._update_headings()
+        # Background-only tags: they merge with the per-state foreground tags below.
+        self._tree.tag_configure("odd", background=_ZEBRA)
+        self._tree.tag_configure("hover", background=_HOVER)
         for state, color in _STATE_COLORS.items():
             self._tree.tag_configure(state, foreground=color)
         self._vsb = ttk.Scrollbar(body, orient="vertical", command=self._tree.yview)
@@ -165,7 +176,12 @@ class SyncTable(ttk.Frame):
         self._tree.pack(side="left", fill="both", expand=True)
         self._vsb.pack(side="right", fill="y")
         self._tree.bind("<Motion>", self._on_hover)
+        self._tree.bind("<Leave>", self._on_leave)
         self._tree.bind("<<TreeviewSelect>>", self._on_select)
+        self._tree.bind("<Double-1>", self._on_double_click)
+        self._tree.bind("<Return>", lambda _e: self._reveal_selected())
+        self._empty = ttk.Label(self._tree, text="", style="Muted.TLabel", justify="center")
+        self._hovered: str | None = None
 
         bottom = ttk.Frame(self)
         bottom.pack(fill="x", pady=(6, 0))
@@ -268,10 +284,35 @@ class SyncTable(ttk.Frame):
                 "",
                 "end",
                 iid=view.key,
-                values=(view.label, view.played, view.uploaded, view.result, STATE_LABELS[view.state], view.build),
-                tags=(view.state,),
+                values=(
+                    view.label,
+                    view.played,
+                    view.uploaded,
+                    view.result,
+                    f"● {STATE_LABELS[view.state]}",
+                    view.build,
+                ),
+                tags=(view.state, "odd") if self._shown % 2 else (view.state,),
             )
             self._shown += 1
+        self._update_empty_state()
+
+    def _update_empty_state(self) -> None:
+        if self._visible:
+            self._empty.place_forget()
+            return
+        text = (
+            "Aucune partie ne correspond à ce filtre."
+            if self._filter_state is not None
+            else "Aucune partie pour l'instant.\nLes replays apparaîtront ici dès qu'ils sont détectés."
+        )
+        self._empty.configure(text=text)
+        self._empty.place(relx=0.5, rely=0.55, anchor="center")
+
+    def _update_headings(self) -> None:
+        for key, title, _width, _anchor in _COLUMNS:
+            arrow = _SORT_ARROWS[self._sort[1]] if key == self._sort[0] else ""
+            self._tree.heading(key, text=title + arrow)
 
     # -- events ---------------------------------------------------------
 
@@ -293,6 +334,7 @@ class SyncTable(ttk.Frame):
     def _sort_by(self, column: str) -> None:
         descending = not self._sort[1] if self._sort[0] == column else column in ("played", "uploaded")
         self._sort = (column, descending)
+        self._update_headings()
         self._reload()
 
     def _toggle_pause(self) -> None:
@@ -302,7 +344,9 @@ class SyncTable(ttk.Frame):
         self.refresh(force=True)
 
     def _on_hover(self, event: tk.Event) -> None:
-        view = self._by_key.get(self._tree.identify_row(event.y))
+        row = self._tree.identify_row(event.y)
+        self._set_hovered(row or None)
+        view = self._by_key.get(row)
         if view is None:
             return
         name = Path(view.file_path).name
@@ -310,6 +354,22 @@ class SyncTable(ttk.Frame):
         if len(text) > DETAIL_MAX_CHARS:
             text = text[: DETAIL_MAX_CHARS - 1] + "…"
         self._detail.configure(text=text)
+
+    def _set_hovered(self, row: str | None) -> None:
+        if row == self._hovered:
+            return
+        for iid, on in ((self._hovered, False), (row, True)):
+            if iid is not None and self._tree.exists(iid):
+                tags = [t for t in self._tree.item(iid, "tags") if t != "hover"]
+                self._tree.item(iid, tags=tags + ["hover"] if on else tags)
+        self._hovered = row
+
+    def _on_leave(self, _event: object) -> None:
+        self._set_hovered(None)
+
+    def _on_double_click(self, event: tk.Event) -> None:
+        if self._tree.identify_row(event.y):
+            self._reveal_selected()
 
     def _on_select(self, _event: object) -> None:
         self._sync_reveal_state()
