@@ -464,6 +464,9 @@ def _configure_button_styles(style: ttk.Style) -> None:
             darkcolor=[("disabled", _PANEL)],
             foreground=[("disabled", disabled_fg), ("active", _TEXT if secondary else base)],
         )
+    # Icon-only footer buttons (their meaning comes from a Tooltip): the
+    # Secondary ghost look, compact and with an emoji-capable font.
+    style.configure("Icon.Secondary.Ghost.TButton", padding=(9, 6), font=("Segoe UI Emoji", 12))
 
 
 def _set_window_icon(root: tk.Tk) -> None:

@@ -264,3 +264,72 @@ class CollapsibleCard(tk.Frame):
         for widget in (self._header, self._chevron, self._icon, self._title, self.header_actions):
             widget.configure(bg=bg)
         self._title.configure(fg=TEXT if hover else TEXT_MUTED)
+
+
+class Tooltip:
+    """A small popover shown after a short hover (or on keyboard focus) over
+    `widget`, hidden on leave, click, focus-out or destruction. Shown above the
+    widget (the footer buttons sit at the window's bottom edge), below it when
+    there is no room."""
+
+    def __init__(self, widget: tk.Misc, text: str, *, delay_ms: int = 400) -> None:
+        self._widget = widget
+        self.text = text
+        self._delay_ms = delay_ms
+        self._job: str | None = None
+        self._window: tk.Toplevel | None = None
+        widget.bind("<Enter>", self._schedule, add="+")
+        widget.bind("<FocusIn>", self._schedule, add="+")
+        for sequence in ("<Leave>", "<FocusOut>", "<ButtonPress>", "<Destroy>"):
+            widget.bind(sequence, self._cancel_and_hide, add="+")
+
+    @property
+    def visible(self) -> bool:
+        return self._window is not None
+
+    def _schedule(self, _event: tk.Event | None = None) -> None:
+        self._cancel()
+        self._job = self._widget.after(self._delay_ms, self.show)
+
+    def _cancel(self) -> None:
+        if self._job is not None:
+            try:
+                self._widget.after_cancel(self._job)
+            except tk.TclError:
+                pass
+            self._job = None
+
+    def _cancel_and_hide(self, _event: tk.Event | None = None) -> None:
+        self._cancel()
+        self.hide()
+
+    def show(self) -> None:
+        self._cancel()
+        if self._window is not None:
+            return
+        window = tk.Toplevel(self._widget)
+        window.wm_overrideredirect(True)
+        window.attributes("-topmost", True)
+        frame = tk.Frame(window, bg=ACCENT, padx=1, pady=1)
+        frame.pack()
+        tk.Label(
+            frame, text=self.text, bg=PANEL, fg=TEXT, font=(_FONT, 9), padx=10, pady=6,
+            justify="left", wraplength=260,
+        ).pack()
+        window.update_idletasks()
+        width, height = window.winfo_reqwidth(), window.winfo_reqheight()
+        x = self._widget.winfo_rootx() + (self._widget.winfo_width() - width) // 2
+        x = max(0, min(x, self._widget.winfo_screenwidth() - width))
+        y = self._widget.winfo_rooty() - height - 6
+        if y < 0:
+            y = self._widget.winfo_rooty() + self._widget.winfo_height() + 6
+        window.wm_geometry(f"+{x}+{y}")
+        self._window = window
+
+    def hide(self) -> None:
+        if self._window is not None:
+            try:
+                self._window.destroy()
+            except tk.TclError:
+                pass
+            self._window = None
