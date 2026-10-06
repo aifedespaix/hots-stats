@@ -327,7 +327,7 @@ SPATIAL_TRAJECTORY_SAMPLE_INTERVAL_SECONDS = 2
 CALIBRATION_SAMPLE_TARGET = 1000
 
 # Shown in the settings window. Bump alongside `[project].version` in pyproject.toml.
-APP_VERSION = "1.0.61"
+APP_VERSION = "1.0.62"
 # The `heroprotocol` release pinned in pyproject.toml (`heroprotocol @ git+...@v<this>`).
 # Hard-coded rather than read via importlib.metadata, which is unreliable inside the
 # Nuitka-built exe; tests/test_error_reporter.py fails if it drifts from the pin.
