@@ -22,17 +22,39 @@ from typing import Callable
 import pystray
 from PIL import Image
 
-from ._icon_data import TRAY_ICON_PNG_BASE64
+from ._icon_data import TRAY_ICON_DARK_PNG_BASE64, TRAY_ICON_LIGHT_PNG_BASE64
 
 logger = logging.getLogger(__name__)
 
 
+def _taskbar_uses_light_theme() -> bool:
+    """Whether the Windows taskbar/tray is light-themed (registry value
+    `SystemUsesLightTheme`). Defaults to dark when it can't be read (older
+    Windows, non-Windows dev machines)."""
+    try:
+        import winreg
+
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+        ) as key:
+            return bool(winreg.QueryValueEx(key, "SystemUsesLightTheme")[0])
+    except (ImportError, OSError):
+        return False
+
+
 def _build_icon_image() -> Image.Image:
-    """Loads the app's icon (the web app's favicon, composited onto a small
-    dark backdrop disc for legibility on any taskbar theme) from the PNG
-    embedded in `_icon_data.py`. Embedded rather than a bundled data file so
-    it survives Nuitka's --onefile packaging with no extra build flag."""
-    return Image.open(io.BytesIO(base64.b64decode(TRAY_ICON_PNG_BASE64)))
+    """Loads the app's icon (the web app's favicon, on a transparent
+    background) in the palette matching the current taskbar theme, from the
+    PNGs embedded in `_icon_data.py`. Embedded rather than a bundled data
+    file so it survives Nuitka's --onefile packaging with no extra build flag.
+    The theme is read once at startup; a switch mid-session shows on next launch."""
+    encoded = (
+        TRAY_ICON_LIGHT_PNG_BASE64
+        if _taskbar_uses_light_theme()
+        else TRAY_ICON_DARK_PNG_BASE64
+    )
+    return Image.open(io.BytesIO(base64.b64decode(encoded)))
 
 
 class TrayController:

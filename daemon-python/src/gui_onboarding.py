@@ -18,7 +18,7 @@ from typing import Callable
 
 from PIL import Image, ImageTk
 
-from ._icon_data import TRAY_ICON_PNG_BASE64
+from ._icon_data import TRAY_ICON_DARK_PNG_BASE64
 from .auth_flow import AuthorizationResult
 from .gui_widgets import ACCENT, BG, ERROR, FIELD_BG, FIELD_BG_FOCUS, OK, PANEL, TEXT, TEXT_MUTED
 from .onboarding import (
@@ -79,7 +79,7 @@ class Stepper(tk.Frame):
 
 
 def _load_logo(master: tk.Misc, size: int = 72) -> ImageTk.PhotoImage:
-    image = Image.open(io.BytesIO(base64.b64decode(TRAY_ICON_PNG_BASE64))).convert("RGBA")
+    image = Image.open(io.BytesIO(base64.b64decode(TRAY_ICON_DARK_PNG_BASE64))).convert("RGBA")
     return ImageTk.PhotoImage(image.resize((size, size), Image.LANCZOS), master=master)
 
 

@@ -47,7 +47,7 @@ from .config import (
     save_config,
 )
 from .constants import APP_VERSION
-from ._icon_data import TRAY_ICON_PNG_BASE64
+from ._icon_data import TRAY_ICON_DARK_PNG_BASE64
 from .gui_widgets import (
     ACCENT as _ACCENT,
     BG as _BG,
@@ -489,7 +489,7 @@ def _configure_button_styles(style: ttk.Style) -> None:
 def _set_window_icon(root: tk.Tk) -> None:
     """The tray icon, as the window/taskbar icon (instead of Tk's feather).
     `default=True` also covers every Toplevel opened later."""
-    photo = tk.PhotoImage(data=TRAY_ICON_PNG_BASE64)
+    photo = tk.PhotoImage(data=TRAY_ICON_DARK_PNG_BASE64)
     root.iconphoto(True, photo)
     root._hots_icon = photo  # type: ignore[attr-defined]  # Tk drops unreferenced images
 
