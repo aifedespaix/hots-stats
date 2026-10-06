@@ -540,3 +540,28 @@ def test_stop_stops_the_scheduler_before_persisting_and_uninstalls_the_handler_l
         runner.stop()
 
     assert calls == ["scheduler.stop", "persist", "uninstall"]
+
+
+def test_daemon_runner_start_and_stop_never_overlap():
+    import threading
+    import time
+    from unittest import mock
+
+    runner = _DaemonRunner()
+    inside = []
+    overlaps = []
+
+    def slow_stop(timeout=10.0):
+        inside.append(1)
+        if len(inside) > 1:
+            overlaps.append(1)
+        time.sleep(0.15)
+        inside.pop()
+
+    with mock.patch.object(runner, "_stop_locked", slow_stop):
+        threads = [threading.Thread(target=runner.stop) for _ in range(3)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+    assert overlaps == []

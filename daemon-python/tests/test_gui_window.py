@@ -151,7 +151,12 @@ def test_window_without_a_stored_token_opens_on_the_connect_step(tk_root, tmp_pa
     top.attributes("-alpha", 0.0)
     with (
         mock.patch.object(gui, "read_config_file", return_value=existing),
+        # Nothing here may touch the real config file / network.
+        mock.patch.object(gui, "save_config"),
+        mock.patch.object(gui, "open_config_folder"),
         mock.patch.object(gui.api_client, "ping_health", return_value=False),
+        mock.patch.object(gui.api_client, "fetch_summary", return_value=None),
+        mock.patch.object(gui.api_client, "fetch_version", return_value=None),
         mock.patch.object(gui.autostart, "is_supported", return_value=False),
         mock.patch.object(gui.updater, "IS_FROZEN", False),
     ):
@@ -240,3 +245,18 @@ def test_a_signed_out_window_reopened_from_the_tray_can_still_close(window):
     ):
         win._sign_out()
     assert win._close_blocked_by("Le token d'accès est requis.") is False
+
+
+def test_a_failed_save_at_the_end_of_the_wizard_falls_back_to_the_config_tab(window):
+    win, _top = window
+    win._show_view(View.WIZARD_CONNECT)
+    win._on_reconnected = mock.Mock()
+    win._on_close = mock.Mock()
+    with mock.patch.object(win, "_flush_autosave", return_value="Le dossier Heroes of the Storm est invalide."):
+        win._finish_onboarding()
+    assert win._current_view is View.MAIN
+    notebook, page, _title = win._tabs["config"]
+    assert notebook._selected is page
+    assert "invalide" in win._error_label.cget("text")
+    win._on_reconnected.assert_not_called()
+    win._on_close.assert_not_called()

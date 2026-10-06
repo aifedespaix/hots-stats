@@ -2250,6 +2250,13 @@ class _SettingsWindow:
     def _finish_onboarding(self) -> None:
         error = self._flush_autosave()
         if error is not None:
+            # The wizard (connect-only) has no way to fix e.g. a bad replays
+            # folder: fall back to the classic window on Config so the user
+            # can, with the error still visible. The token is already in
+            # `_token_var`, so autosave works normally from there.
+            self._show_view(View.MAIN)
+            notebook, page, _title = self._tabs["config"]
+            notebook.select(page)
             self._show_error(error)
             return
         # Always close, first run or reconnection: the daemon only picks the

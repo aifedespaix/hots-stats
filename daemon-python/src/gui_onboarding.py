@@ -233,7 +233,7 @@ class OnboardingView(tk.Frame):
         if self._full:
             self._heading("Connecte ton compte", "Autorise ce PC depuis ton navigateur. C'est rapide, et sans mot de passe à copier.")
         else:
-            self._heading("Reconnexion nécessaire", "Le token de ce PC n'est plus valide. Autorise-le à nouveau depuis ton navigateur.")
+            self._heading("Reconnexion nécessaire", "Connecte ce PC à ton compte pour reprendre la synchronisation de tes parties.")
 
         self._connect_button = ttk.Button(
             body, text=_CONNECT_TEXT, style="Primary.TButton", command=self._start_connect

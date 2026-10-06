@@ -235,6 +235,11 @@ class _DaemonRunner:
     """Starts/stops the background replay-watcher thread, one instance at a time."""
 
     def __init__(self) -> None:
+        # Serializes start()/stop(): the sign-out thread's stop(), a quick
+        # reconnect's start() and the tray's quit may otherwise overlap and
+        # trample each other's thread/scheduler/log-handler state. Reentrant
+        # because start() calls stop().
+        self._lifecycle_lock = threading.RLock()
         self._thread: threading.Thread | None = None
         self._maintenance_thread: threading.Thread | None = None
         self._stop_event: threading.Event | None = None
@@ -351,6 +356,14 @@ class _DaemonRunner:
         ).start()
 
     def start(self, config: Config, *, announce_initial_scan: bool = False) -> None:
+        with self._lifecycle_lock:
+            self._start_locked(config, announce_initial_scan=announce_initial_scan)
+
+    def stop(self, timeout: float = 10.0) -> None:
+        with self._lifecycle_lock:
+            self._stop_locked(timeout)
+
+    def _start_locked(self, config: Config, *, announce_initial_scan: bool = False) -> None:
         """`announce_initial_scan`, when True, has the tray post a one-time
         "found N replays, syncing" toast if the initial on-disk scan finds
         any -- see `_run_sync_loop`'s `on_initial_scan`. Deliberately opt-in
@@ -481,7 +494,7 @@ class _DaemonRunner:
                 "HotS Analytics",
             )
 
-    def stop(self, timeout: float = 10.0) -> None:
+    def _stop_locked(self, timeout: float = 10.0) -> None:
         self.hotkey_manager.stop()
         # Stop the scheduler first: an in-flight upload can still produce reports (and log
         # records), which must exist before they are persisted / before the handler goes away.
