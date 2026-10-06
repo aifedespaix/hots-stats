@@ -15,13 +15,17 @@ const newTokenId = ref<string | null>(null);
 const newToken = computed(() => (newTokenId.value ? (revealed.value[newTokenId.value] ?? "") : ""));
 const { copy, copied } = useClipboard({ source: newToken, copiedDuring: 5000 });
 const copyFailed = ref(false);
+// `copied` from useClipboard resets after `copiedDuring`; the banner must stay while the page is open.
+const wasCopied = ref(false);
 const failure = ref<string | null>(null);
 
 async function copyNow() {
   copyFailed.value = false;
+  wasCopied.value = false;
   try {
     await copy(newToken.value);
-    if (!copied.value) copyFailed.value = true;
+    if (copied.value) wasCopied.value = true;
+    else copyFailed.value = true;
   } catch {
     copyFailed.value = true;
   }
@@ -90,7 +94,7 @@ function formatDate(iso: string | null): string {
           <p v-if="failure" class="text-sm text-error">{{ failure }}</p>
 
           <div v-if="newToken" class="space-y-2 rounded-lg border border-brand/40 bg-brand/5 p-3">
-            <p v-if="copied" class="flex items-center gap-1.5 text-sm font-medium text-success">
+            <p v-if="wasCopied" class="flex items-center gap-1.5 text-sm font-medium text-success">
               <UIcon name="i-heroicons-check-circle" class="h-4 w-4" />
               Copié ! Colle-le maintenant dans la fenêtre du daemon.
             </p>
