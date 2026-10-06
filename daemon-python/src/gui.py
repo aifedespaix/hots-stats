@@ -7,8 +7,7 @@ nothing extra bundled into the Nuitka build (see build-daemon.yml's
 the extra packaging risk customtkinter's bundled theme/asset files add to a
 `--onefile` build.
 
-Laid out as a `ttk.Notebook` with one tab per concern (Config / Draft Live /
-Synchronisation / Update) instead of one long scroll of stacked sections —
+Laid out as a `ttk.Notebook` with one tab per concern (Synchronisation / Draft Live / Config) instead of one long scroll of stacked sections —
 each tab's widgets are still built up front (not lazily on first select),
 so the window's locked size (see `_center`) already accounts for every
 tab's worst-case content and never resizes when switching between them.
@@ -62,6 +61,7 @@ from .gui_widgets import (
     CollapsibleCard,
     ScrollPage,
     TabView,
+    Tooltip,
     mix as _mix,
 )
 from .draft_capture import CapturePhase, DraftCaptureCoordinator
@@ -69,11 +69,12 @@ from .draft_layout import TeamCropResult
 from .ocr import OcrResult
 from .status import StatusTracker
 from .sync_state import SyncState
+from .sync_layout import progress_summary, recap_columns
 from .sync_table import DETAIL_MAX_CHARS, SyncTable
 from .updater import UpdatePhase, UpdateStatus, UpdateStatusTracker
 from .dependency_guard import DependencyGuard
 from .upload_scheduler import UploadScheduler
-from .urls import DEFAULT_API_BASE_URL, guess_settings_url
+from .urls import DEFAULT_API_BASE_URL, guess_settings_url, guess_web_base_url
 
 logger = logging.getLogger(__name__)
 
@@ -175,7 +176,7 @@ class _ProgressBarDriver:
     """Switches a `ttk.Progressbar` between determinate (a known 0-100%)
     and indeterminate ("something's happening, no ETA") modes to match an
     `UpdateStatus`, and idles it back to empty once the update is neither
-    running nor pending. Used by both the settings window's Update tab and
+    running nor pending. Used by both the settings window's Config update section and
     the standalone update-progress popup (see `run_update_progress_window`)
     so the two share one rendering of "what does this phase look like".
     """
@@ -232,7 +233,7 @@ def run_settings_window(
     syncing counts instead of just the one-off "games recorded" summary
     fetched from the API. `sync_state`, same condition, backs the Debug
     button's error report. `update_status`, same condition, backs the
-    Update tab's live progress and lets its "Vérifier les mises à jour"
+    Config's update section's live progress and lets its "Vérifier les mises à jour"
     button report back to something. `draft_capture_status`, same
     condition, backs the Draft Live tab's "capture in progress" indicator.
 
@@ -692,6 +693,9 @@ class _SettingsWindow:
         # around itself.
         self._tabs: dict[str, tuple[TabView, ScrollPage, str]] = {}
         self._pages: list[ScrollPage] = []
+        # (container, labels) pairs whose wraplength follows the container's
+        # width; see `_arm_dynamic_wrap`.
+        self._wrap_targets: list[tuple[tk.Misc, tuple[ttk.Label, ...]]] = []
 
         root.title(f"HotS Analytics v{APP_VERSION} - Configuration")
         root.configure(bg=_BG)
@@ -724,14 +728,15 @@ class _SettingsWindow:
         for var in autosaved_vars:
             var.trace_add("write", lambda *_: self._schedule_autosave())
         self._center()
+        self._arm_dynamic_wrap()
         self._check_connection()
         if not is_first_run:
             self._load_stats()
             if self._status_tracker is not None:
                 self._refresh_live_stats()
-            # The Update tab (and `_update_status_label`/`_update_progress_bar`
+            # The Update section (and `_update_status_label`/`_update_progress_bar`
             # it would refresh) only actually gets built when `IS_FROZEN` --
-            # see `_build_ui` -- so this must stay in sync with that guard.
+            # see `_build_config_tab` -- so this must stay in sync with that guard.
             if updater.IS_FROZEN and self._update_status is not None:
                 self._refresh_update_status()
             if self._draft_capture_status is not None:
@@ -749,18 +754,14 @@ class _SettingsWindow:
         return page.inner
 
     def _build_ui(self) -> None:
-        outer = ttk.Frame(self._root, padding=24)
+        outer = ttk.Frame(self._root, padding=(24, 8, 24, 20))
         outer.pack(fill="both", expand=True)
 
-        notebook = TabView(outer)
-        notebook.pack(fill="both", expand=True)
-
-        self._build_config_tab(self._build_tab(notebook, "config", "Config", "⚙"))
-        self._build_draft_tab(self._build_tab(notebook, "draft_live", "Draft Live", "🎮"))
-        self._build_sync_tab(self._build_tab(notebook, "sync", "Synchronisation", "🔄"))
-        if updater.IS_FROZEN:
-            self._build_update_tab(self._build_tab(notebook, "update", "Update", "⬆"))
-
+        # Footer first, packed to the bottom: pack serves widgets in order, so
+        # the footer keeps its room however small the window gets and only
+        # the tab pages (ScrollPage) scroll, between the tab bar and here.
+        self._footer = ttk.Frame(outer, style="TFrame")
+        self._footer.pack(side="bottom", fill="x", pady=(14, 0))
         self._error_label = ttk.Label(
             outer,
             text="",
@@ -769,29 +770,49 @@ class _SettingsWindow:
             wraplength=_LABEL_WRAPLENGTH,
             justify="left",
         )
-        self._error_label.pack(anchor="w", pady=(10, 0))
+        self._error_label.pack(side="bottom", anchor="w", pady=(10, 0))
 
-        buttons = ttk.Frame(outer, style="TFrame")
-        buttons.pack(fill="x", pady=(14, 0))
+        # Holds either the tab notebook or the onboarding wizard (see `_show_view`).
+        self._content = ttk.Frame(outer, style="TFrame")
+        self._content.pack(fill="both", expand=True)
+        self._notebook = TabView(self._content)
+        self._notebook.pack(fill="both", expand=True)
+        notebook = self._notebook
+
+        self._build_sync_tab(self._build_tab(notebook, "sync", "Synchronisation", "🔄"))
+        self._build_draft_tab(self._build_tab(notebook, "draft_live", "Draft Live", "🎮"))
+        self._build_config_tab(self._build_tab(notebook, "config", "Config", "⚙"))
+
+        buttons = self._footer
+        self._footer_buttons: dict[str, ttk.Button] = {}
+        self._footer_tooltips: dict[str, Tooltip] = {}
+
+        def icon_button(key: str, icon: str, tip: str, command) -> None:
+            button = ttk.Button(
+                buttons, text=icon, style="Icon.Secondary.Ghost.TButton", command=command
+            )
+            button.pack(side="left", padx=(0, 8))
+            self._footer_buttons[key] = button
+            self._footer_tooltips[key] = Tooltip(button, tip)
+
         if not self._is_first_run and self._sync_state is not None:
-            ttk.Button(
-                buttons,
-                text="🐞 Debug",
-                style="Secondary.Ghost.TButton",
-                command=self._open_debug_window,
-            ).pack(side="left")
-        ttk.Button(
-            buttons,
-            text="📁 Dossier de données",
-            style="Secondary.Ghost.TButton",
-            command=self._open_data_folder,
-        ).pack(side="left", padx=(10, 0))
-        ttk.Button(
-            buttons, text="Fermer", style="Danger.TButton", command=self._on_quit_clicked
-        ).pack(side="right")
-        ttk.Button(
-            buttons, text="Réduire", style="Info.Ghost.TButton", command=self._on_close
-        ).pack(side="right", padx=(0, 10))
+            icon_button(
+                "debug", "🐞",
+                "Debug : parties en erreur ou ignorées, avec un rapport à copier",
+                self._open_debug_window,
+            )
+        icon_button("data_folder", "📁", "Ouvrir le dossier de données du daemon", self._open_data_folder)
+        icon_button("site", "🌐", "Ouvrir le site HotS Analytics", self._open_site)
+
+        # Fermer is the ghost one; Réduire (icon + text, solid) is the preferred action.
+        self._close_button = ttk.Button(
+            buttons, text="Fermer", style="Danger.Ghost.TButton", command=self._on_quit_clicked
+        )
+        self._close_button.pack(side="right")
+        self._minimize_button = ttk.Button(
+            buttons, text="🗕  Réduire", style="Primary.TButton", command=self._on_close
+        )
+        self._minimize_button.pack(side="right", padx=(0, 10))
         # Every setting is saved as soon as it changes (see `_autosave`);
         # this is the only feedback.
         self._saved_label = ttk.Label(buttons, text="", style="Muted.TLabel")
@@ -799,6 +820,9 @@ class _SettingsWindow:
 
     def _open_data_folder(self) -> None:
         open_config_folder()
+
+    def _open_site(self) -> None:
+        webbrowser.open(guess_web_base_url(self._api_var.get() or DEFAULT_API_BASE_URL))
 
     def _after_if_open(self, func, *args) -> None:
         """`self._root.after(0, func, *args)`, but a no-op once the window
@@ -822,6 +846,8 @@ class _SettingsWindow:
     # -- Config tab -------------------------------------------------------
 
     def _build_config_tab(self, parent: ttk.Frame) -> None:
+        if updater.IS_FROZEN:
+            self._build_update_section(parent)
         self._build_connexion_section(parent)
         self._build_stockage_section(parent)
         self._build_demarrage_section(parent)
@@ -1546,103 +1572,12 @@ class _SettingsWindow:
             ).pack(anchor="w")
             return
 
-        card = CollapsibleCard(parent, "SYNCHRONISATION", "🔄")
-        card.pack(fill="x")
-        inner = card.body
-
-        ttk.Label(inner, text="Version daemon", style="PanelMuted.TLabel").grid(
-            row=0, column=0, sticky="w"
-        )
-        ttk.Label(inner, text=APP_VERSION, style="Panel.TLabel").grid(
-            row=1, column=0, sticky="w"
-        )
-
-        ttk.Label(inner, text="Version API", style="PanelMuted.TLabel").grid(
-            row=0, column=1, sticky="w", padx=(40, 0)
-        )
-        self._api_version_label = ttk.Label(inner, text="…", style="Panel.TLabel")
-        self._api_version_label.grid(row=1, column=1, sticky="w", padx=(40, 0))
-
-        ttk.Label(inner, text="Parties enregistrées", style="PanelMuted.TLabel").grid(
-            row=0, column=2, sticky="w", padx=(40, 0)
-        )
-        self._games_count_label = ttk.Label(inner, text="…", style="Panel.TLabel")
-        self._games_count_label.grid(row=1, column=2, sticky="w", padx=(40, 0))
-
-        if self._status_tracker is not None:
-            ttk.Label(
-                inner, text="Trouvées dans le dossier", style="PanelMuted.TLabel"
-            ).grid(row=0, column=3, sticky="w", padx=(40, 0))
-            self._found_count_label = ttk.Label(inner, text="…", style="Panel.TLabel")
-            self._found_count_label.grid(row=1, column=3, sticky="w", padx=(40, 0))
-
-            ttk.Label(
-                inner,
-                text="Progression de la synchronisation",
-                style="PanelMuted.TLabel",
-            ).grid(row=2, column=0, columnspan=4, sticky="w", pady=(16, 4))
-            self._sync_progress_bar = ttk.Progressbar(
-                inner, orient="horizontal", mode="determinate", maximum=100
-            )
-            self._sync_progress_bar.grid(row=3, column=0, columnspan=4, sticky="ew")
-
-            ttk.Label(
-                inner, text="Synchronisées (cette session)", style="PanelMuted.TLabel"
-            ).grid(row=4, column=0, sticky="w", pady=(14, 0))
-            self._synced_count_label = ttk.Label(inner, text="…", style="Panel.TLabel")
-            self._synced_count_label.grid(row=5, column=0, sticky="w")
-
-            ttk.Label(
-                inner, text="En cours de synchronisation", style="PanelMuted.TLabel"
-            ).grid(
-                row=4, column=1, columnspan=3, sticky="w", pady=(14, 0), padx=(40, 0)
-            )
-            self._currently_syncing_label = ttk.Label(
-                inner,
-                text="—",
-                style="Panel.TLabel",
-                wraplength=_LABEL_WRAPLENGTH,
-                justify="left",
-            )
-            self._currently_syncing_label.grid(
-                row=5, column=1, columnspan=3, sticky="w", padx=(40, 0)
-            )
-
-            self._skipped_count_label = ttk.Label(
-                inner,
-                text="",
-                style="PanelMuted.TLabel",
-                foreground=_NEUTRAL,
-                wraplength=_LABEL_WRAPLENGTH,
-                justify="left",
-            )
-            self._skipped_count_label.grid(
-                row=6, column=0, columnspan=4, sticky="w", pady=(14, 0)
-            )
-
-            self._sync_error_label = ttk.Label(
-                inner,
-                text="",
-                style="PanelMuted.TLabel",
-                foreground=_ERROR,
-                wraplength=_LABEL_WRAPLENGTH,
-                justify="left",
-            )
-            self._sync_error_label.grid(
-                row=7, column=0, columnspan=4, sticky="w", pady=(6, 0)
-            )
-
-        if self._sync_state is not None:
-            sync_state = self._sync_state
-            guard = self._dependency_guard
-            self._sync_table = SyncTable(
-                parent,
-                sync_state=sync_state,
-                scheduler=self._scheduler,
-                min_parser_version=lambda: sync_state.get_meta("min_parser_version"),
-                dependency_required=lambda: guard.required if guard is not None and guard.blocked else None,
-            )
-            self._sync_table.pack(fill="both", expand=True, pady=(12, 0))
+    def _build_config_tab(self, parent: ttk.Frame) -> None:
+        if updater.IS_FROZEN:
+            self._build_update_section(parent)
+        self._build_connexion_section(parent)
+        self._build_stockage_section(parent)
+        self._build_demarrage_section(parent)
 
     def _refresh_live_stats(self) -> None:
         assert self._status_tracker is not None
@@ -1650,8 +1585,7 @@ class _SettingsWindow:
 
         self._found_count_label.configure(text=str(status.found))
         self._synced_count_label.configure(
-            text=f"{status.synced} ok"
-            + (f", {status.failed} échouées" if status.failed else "")
+            text=f"{status.synced} ok" + (f" · {status.failed} échouées" if status.failed else "")
         )
         if status.skipped_ai_player:
             # Already counted inside `synced` above (not a failure -- see
@@ -1680,10 +1614,9 @@ class _SettingsWindow:
             syncing_text = "—"
         self._currently_syncing_label.configure(text=syncing_text)
 
-        done = status.synced + status.failed
-        self._sync_progress_bar["value"] = (
-            round((done / status.found) * 100) if status.found else 0
-        )
+        progress = progress_summary(status.found, status.synced, status.failed)
+        self._sync_progress_bar["value"] = progress.percent
+        self._sync_progress_label.configure(text=progress.label)
 
         if status.last_error:
             error_text = _truncate(status.last_error, _ERROR_LABEL_MAX_CHARS)
@@ -1699,11 +1632,11 @@ class _SettingsWindow:
             _LIVE_STATS_POLL_MS, self._refresh_live_stats
         )
 
-    # -- Update tab -----------------------------------------------------------
+    # -- Config tab: Mises à jour -----------------------------------------------------------
 
-    def _build_update_tab(self, parent: ttk.Frame) -> None:
-        card = CollapsibleCard(parent, "MISE À JOUR", "⬆")
-        card.pack(fill="x")
+    def _build_update_section(self, parent: ttk.Frame) -> None:
+        card = CollapsibleCard(parent, "MISES À JOUR", "⬆")
+        card.pack(fill="x", pady=(0, 12))
         inner = card.body
         inner.grid_columnconfigure(0, weight=1, minsize=340)
 

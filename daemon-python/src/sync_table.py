@@ -217,7 +217,7 @@ class SyncTable(ttk.Frame):
         if required:
             self._banner.configure(
                 text=f"⚠ Mise à jour requise (heroprotocol ≥ {required}) : la synchronisation des anciennes "
-                "parties est suspendue. Ouvrez l'onglet Mise à jour."
+                "parties est suspendue. Ouvrez Config › Mises à jour."
             )
             self._banner.pack(fill="x", before=self._tree.master, pady=(0, 6))
         else:

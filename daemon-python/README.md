@@ -288,8 +288,7 @@ the UI.
 
 The packaged `.exe` checks GitHub Releases for a newer daemon build shortly
 after startup and every few hours after that (`src/updater.py`). If one is
-found, the settings window's **Mise à jour automatique** checkbox (Update
-tab) decides what happens next:
+found, the settings window's **Mise à jour automatique** checkbox (Config tab) decides what happens next:
 
 - **Checked (default):** it's downloaded and the app relaunches itself as
   the new version automatically.
@@ -297,12 +296,12 @@ tab) decides what happens next:
   below).
 
 Either way this is never invisible: a tray balloon announces the find, and
-— unless the settings window is already open, in which case its Update tab
+— unless the settings window is already open, in which case its Config update section
 already shows the same thing — a small always-on-top popup
 (`run_update_progress_window` in `gui.py`) pops up on its own with live
 download/install progress and stays up if something goes wrong, instead of
 the only visible sign of an update being the app quietly vanishing for a
-few seconds. The settings window's Update tab shows the same live phase
+few seconds. The settings window's Config update section shows the same live phase
 (checking / downloading with a percentage / installing) whenever it's open,
 via `UpdateStatusTracker` (`src/updater.py`); its **Vérifier les mises à
 jour** button runs a check on demand instead of waiting for the next
@@ -343,9 +342,9 @@ replacing `current\` cannot lose settings, sync state or logs.
 (update found, download failed, install failed) are appended with a
 timestamp to `%APPDATA%\hots-analytics\update.log`
 (`updater.update_log_file_path` / `_append_update_log_line`), one click away
-from the settings window's Update tab (**Voir le journal**). If
+from the settings window's Config update section (**Voir le journal**). If
 `download_updates()` or `apply_updates_and_restart()` raises, the failure is
-logged, the Update tab shows the error, **the daemon keeps running
+logged, the Config update section shows the error, **the daemon keeps running
 normally**, and the next scheduled cycle retries. The error message
 (`updater.manual_fallback_message`) points at the release page so the user
 can download and run `hots-analytics-daemon-Setup.exe` by hand — running an

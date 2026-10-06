@@ -87,8 +87,8 @@ def _get_update_manager() -> velopack.UpdateManager:
     """Lazily constructs (once) and returns the module-shared
     `UpdateManager`. Only ever actually called from code paths already
     gated on `IS_FROZEN` -- `watch_for_updates` returns immediately if not
-    `IS_FROZEN`, and the Update tab that wires up `trigger_manual_update` is
-    only built by gui.py's `_build_ui` when `IS_FROZEN` -- so by the time
+    `IS_FROZEN`, and the Config update section that wires up `trigger_manual_update` is
+    only built by gui.py's `_build_config_tab` when `IS_FROZEN` -- so by the time
     this runs, the process is expected to be a real Velopack-installed
     build, where `UpdateManager`'s install-layout auto-detection succeeds.
     """

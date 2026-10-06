@@ -634,7 +634,7 @@ def run_app() -> int:
             # platforms/configs where it doesn't work), so it's backed by a
             # small always-on-top popup with live download/install progress
             # -- unless the settings window is already open, in which case
-            # its own Update tab already shows the same thing and a second
+            # its own Config update section already shows the same thing and a second
             # window would just be noise. This is what used to make an
             # automatic update look like "the app closes and says nothing".
             tray.notify(f"Mise à jour v{update.version} trouvée, installation en cours…", "HotS Analytics")
