@@ -94,6 +94,7 @@ class SyncTable(ttk.Frame):
         dependency_required: Callable[[], str | None] = lambda: None,
         reveal: Callable[[str], None] = reveal_in_explorer,
         height: int = 6,
+        pause_parent: tk.Misc | None = None,
     ) -> None:
         super().__init__(parent)
         self._state = sync_state
@@ -111,6 +112,7 @@ class SyncTable(ttk.Frame):
         self._signature: tuple | None = None
         self._page_pending = False
         self._filter_values: list[str] = []
+        self._pause_parent = pause_parent
         self._build(height)
         self.refresh(force=True)
 
@@ -125,7 +127,7 @@ class SyncTable(ttk.Frame):
         self._filter_box.pack(side="left", padx=(6, 12))
         self._filter_box.bind("<<ComboboxSelected>>", self._on_filter)
         self._pause_button = ttk.Button(
-            top, text="Mettre en pause", style="Warn.TButton", command=self._toggle_pause
+            self._pause_parent or top, text="Mettre en pause", style="Warn.TButton", command=self._toggle_pause
         )
         self._pause_button.pack(side="right")
         if self._scheduler is None:

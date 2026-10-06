@@ -193,6 +193,12 @@ class CollapsibleCard(tk.Frame):
         self._title = tk.Label(
             self._header, text=title, bg=PANEL, fg=TEXT_MUTED, font=(_FONT, 9, "bold"), anchor="w"
         )
+        # Right-aligned slot for controls that belong to the card (e.g. a pause
+        # button). Packed before the title so the title's expand can't squeeze it,
+        # and left out of the toggle bindings below so clicking a control in it
+        # doesn't fold the card.
+        self.header_actions = tk.Frame(self._header, bg=PANEL)
+        self.header_actions.pack(side="right", padx=(0, 12))
         self._title.pack(side="left", fill="x", expand=True)
         for widget in (self._header, self._chevron, self._icon, self._title):
             widget.bind("<Button-1>", lambda _e: self.toggle())
@@ -255,6 +261,6 @@ class CollapsibleCard(tk.Frame):
 
     def _paint_header(self, hover: bool) -> None:
         bg = mix(PANEL, ACCENT, 0.10) if hover else PANEL
-        for widget in (self._header, self._chevron, self._icon, self._title):
+        for widget in (self._header, self._chevron, self._icon, self._title, self.header_actions):
             widget.configure(bg=bg)
         self._title.configure(fg=TEXT if hover else TEXT_MUTED)
