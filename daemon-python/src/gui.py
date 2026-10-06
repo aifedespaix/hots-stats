@@ -1572,12 +1572,106 @@ class _SettingsWindow:
             ).pack(anchor="w")
             return
 
-    def _build_config_tab(self, parent: ttk.Frame) -> None:
-        if updater.IS_FROZEN:
-            self._build_update_section(parent)
-        self._build_connexion_section(parent)
-        self._build_stockage_section(parent)
-        self._build_demarrage_section(parent)
+        card = CollapsibleCard(parent, "SYNCHRONISATION", "🔄")
+        card.pack(fill="x")
+        inner = card.body
+
+        head = ttk.Frame(inner, style="Panel.TFrame")
+        head.pack(fill="x")
+        ttk.Label(head, text=f"Daemon v{APP_VERSION}", style="PanelMuted.TLabel").pack(side="left")
+        ttk.Label(head, text="·  API", style="PanelMuted.TLabel").pack(side="left", padx=(8, 4))
+        self._api_version_label = ttk.Label(head, text="…", style="PanelMuted.TLabel")
+        self._api_version_label.pack(side="left")
+
+        tiles_spec: list[tuple[str, str]] = [("Parties enregistrées", "_games_count_label")]
+        if self._status_tracker is not None:
+            tiles_spec += [
+                ("Trouvées dans le dossier", "_found_count_label"),
+                ("Synchronisées (session)", "_synced_count_label"),
+            ]
+        self._tiles_frame = tk.Frame(inner, bg=_PANEL)
+        self._tiles_frame.pack(fill="x", pady=(12, 0))
+        self._tiles: list[tk.Frame] = []
+        for title, attr in tiles_spec:
+            tile = tk.Frame(self._tiles_frame, bg=_FIELD_BG)
+            tk.Label(tile, text=title, bg=_FIELD_BG, fg=_TEXT_MUTED, font=("Segoe UI", 8), anchor="w").pack(
+                fill="x", padx=12, pady=(8, 0)
+            )
+            value = tk.Label(tile, text="…", bg=_FIELD_BG, fg=_TEXT, font=("Segoe UI", 14, "bold"), anchor="w")
+            value.pack(fill="x", padx=12, pady=(0, 8))
+            setattr(self, attr, value)
+            self._tiles.append(tile)
+        self._tile_cols = 0
+        self._layout_tiles(self._tiles_frame.winfo_reqwidth())
+        self._tiles_frame.bind("<Configure>", lambda e: self._layout_tiles(e.width))
+
+        if self._status_tracker is not None:
+            progress_head = ttk.Frame(inner, style="Panel.TFrame")
+            progress_head.pack(fill="x", pady=(16, 4))
+            ttk.Label(progress_head, text="Progression", style="PanelMuted.TLabel").pack(side="left")
+            self._sync_progress_label = ttk.Label(progress_head, text="", style="Panel.TLabel")
+            self._sync_progress_label.pack(side="right")
+            self._sync_progress_bar = ttk.Progressbar(
+                inner, orient="horizontal", mode="determinate", maximum=100
+            )
+            self._sync_progress_bar.pack(fill="x")
+
+            ttk.Label(inner, text="En cours de synchronisation", style="PanelMuted.TLabel").pack(
+                anchor="w", pady=(14, 0)
+            )
+            self._currently_syncing_label = ttk.Label(
+                inner, text="—", style="Panel.TLabel", wraplength=_LABEL_WRAPLENGTH, justify="left"
+            )
+            self._currently_syncing_label.pack(fill="x")
+            self._skipped_count_label = ttk.Label(
+                inner, text="", style="PanelMuted.TLabel", foreground=_NEUTRAL,
+                wraplength=_LABEL_WRAPLENGTH, justify="left",
+            )
+            self._skipped_count_label.pack(fill="x", pady=(10, 0))
+            self._sync_error_label = ttk.Label(
+                inner, text="", style="PanelMuted.TLabel", foreground=_ERROR,
+                wraplength=_LABEL_WRAPLENGTH, justify="left",
+            )
+            self._sync_error_label.pack(fill="x", pady=(6, 0))
+            self._wrap_targets.append(
+                (inner, (self._currently_syncing_label, self._skipped_count_label, self._sync_error_label))
+            )
+
+        self._activity_card: CollapsibleCard | None = None
+        if self._sync_state is not None:
+            sync_state = self._sync_state
+            guard = self._dependency_guard
+            self._activity_card = CollapsibleCard(parent, "ACTIVITÉ EN COURS", "📋")
+            self._activity_card.pack(fill="both", expand=True, pady=(12, 0))
+            self._sync_table = SyncTable(
+                self._activity_card.body,
+                sync_state=sync_state,
+                scheduler=self._scheduler,
+                min_parser_version=lambda: sync_state.get_meta("min_parser_version"),
+                dependency_required=lambda: guard.required if guard is not None and guard.blocked else None,
+                pause_parent=self._activity_card.header_actions,
+            )
+            self._sync_table.pack(fill="both", expand=True)
+
+    def _layout_tiles(self, width: int) -> None:
+        cols = recap_columns(width)
+        if cols == self._tile_cols:
+            return
+        self._tile_cols = cols
+        for index in range(3):
+            self._tiles_frame.grid_columnconfigure(index, weight=1 if index < cols else 0, uniform="tile")
+        for index, tile in enumerate(self._tiles):
+            tile.grid(row=index // cols, column=index % cols, sticky="nsew", padx=4, pady=4)
+
+    def _arm_dynamic_wrap(self) -> None:
+        """Makes long labels re-wrap to the real width. Armed only after the
+        initial sizing pass (`_center`) so provisional widths during the
+        worst-case measurement can't shrink the measured size."""
+        for container, labels in self._wrap_targets:
+            def on_configure(event, labels=labels):
+                for label in labels:
+                    label.configure(wraplength=max(160, event.width - 8))
+            container.bind("<Configure>", on_configure, add="+")
 
     def _refresh_live_stats(self) -> None:
         assert self._status_tracker is not None

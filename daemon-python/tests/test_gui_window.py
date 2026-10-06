@@ -100,4 +100,21 @@ def test_progress_bar_never_overflows_a_narrow_window(window):
 
 def test_activity_panel_is_a_collapsible_card_titled_activite_en_cours(window):
     win, _top = window
-    assert win._activity_card is not None
+    card = win._activity_card
+    assert card is not None
+    assert card._title.cget("text").upper() == "ACTIVITÉ EN COURS"
+    pause = win._sync_table._pause_button
+    assert pause.master is card.header_actions
+
+
+def test_stat_tiles_reflow_as_the_window_narrows(window):
+    win, top = window
+    top.geometry("900x600")
+    top.update()
+    assert win._tile_cols == 3
+    # The window's minimum width is 640 (see `_center`), so 1 column is only
+    # reachable via `recap_columns` (tested in test_sync_layout); here we
+    # check the reflow down to the narrowest the window can get.
+    top.geometry("640x600")
+    top.update()
+    assert win._tile_cols == 2
