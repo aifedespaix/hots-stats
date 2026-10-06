@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 from . import accounts_discovery, api_client, constants, draft_capture, draft_layout, hotkey, ocr, single_instance, updater
-from .config import Config, ConfigError, config_exists, is_auto_update_enabled, load_config
+from .config import Config, ConfigError, config_exists, has_access_token, is_auto_update_enabled, load_config
 from .dependency_guard import DependencyGuard
 from .error_reporter import ErrorReporter, ReportingHandler, install_logging_handler, uninstall_logging_handler
 from .game_process import GameDetector
@@ -537,10 +537,18 @@ def run_app() -> int:
     # `_DaemonRunner.start`'s `announce_initial_scan`) to a genuine first
     # run, not every restart. See tasks/daemon-audit-2026-08-12.md, 2.1.
     first_run = not config_exists()
+    # Signed out (token blanked by the settings window's "Se déconnecter"):
+    # load_config() would raise, so ask for a connection instead of exiting.
+    needs_login = not first_run and not has_access_token()
     if first_run:
         logger.info("No configuration found, opening first-run setup window.")
         if not run_settings_window(is_first_run=True):
             logger.info("Setup was cancelled, exiting.")
+            return 1
+    elif needs_login:
+        logger.info("No access token (signed out), opening the connect window.")
+        if not run_settings_window(is_first_run=False, require_login=True):
+            logger.info("Connection was cancelled, exiting.")
             return 1
 
     try:
@@ -558,8 +566,15 @@ def run_app() -> int:
     daemon = _DaemonRunner()
     update_status = UpdateStatusTracker()
 
+    def _on_logout() -> None:
+        # `stop()` can block for several seconds: keep it off the Tk thread.
+        threading.Thread(target=daemon.stop, name="hots-logout-stop", daemon=True).start()
+
+    reopen_after_close = threading.Event()
+
     def _on_open_settings() -> None:
-        if run_settings_window(
+        reopen_after_close.clear()
+        saved = run_settings_window(
             is_first_run=False,
             status_tracker=daemon.status,
             sync_state=daemon.sync_state,
@@ -570,7 +585,10 @@ def run_app() -> int:
             scheduler=daemon.scheduler,
             dependency_guard=daemon.dependency_guard,
             on_quit=lambda: tray.quit(),
-        ):
+            on_logout=_on_logout,
+            on_reconnected=reopen_after_close.set,
+        )
+        if saved:
             try:
                 new_config = load_config()
             except ConfigError as err:
@@ -578,6 +596,10 @@ def run_app() -> int:
                 return
             logger.info("Configuration changed, restarting the replay watcher.")
             daemon.start(new_config)
+        if reopen_after_close.is_set():
+            # Reconnected: the watcher now runs with the new token, so land back
+            # on the classic window with fresh live stats.
+            _on_open_settings()
 
     update_stop_event = threading.Event()
 
@@ -604,6 +626,11 @@ def run_app() -> int:
     daemon.set_tray_notify(tray.notify)
     daemon.set_dependency_update_trigger(lambda: updater.trigger_manual_update(update_status))
     daemon.start(config, announce_initial_scan=first_run)
+
+    if first_run or needs_login:
+        # The wizard just closed: land on the classic window (with live sync
+        # stats) instead of leaving only a tray icon.
+        tray.open_settings()
 
     if config.draft_feature_enabled:
         # Pays the RapidOCR model-load cost (over a second, see ocr.py) now,

@@ -118,3 +118,101 @@ def test_stat_tiles_reflow_as_the_window_narrows(window):
     top.geometry("640x600")
     top.update()
     assert win._tile_cols == 2
+
+
+from src.onboarding import View
+
+
+def test_only_the_startup_token_check_can_open_the_wizard(window):
+    win, _top = window
+    win._startup_check_pending = False
+    win._show_view(View.MAIN)
+    win._apply_token_status("invalid")  # user typing a partial token in Config
+    assert win._current_view is View.MAIN
+
+    win._startup_check_pending = True
+    win._apply_token_status("invalid")  # the check made when the window opened
+    assert win._current_view is View.WIZARD_CONNECT
+    assert win._onboarding is not None
+
+
+def test_an_unreachable_api_at_startup_keeps_the_main_view(window):
+    win, _top = window
+    win._startup_check_pending = True
+    win._apply_token_status("unknown")
+    assert win._current_view is View.MAIN
+    assert win._startup_check_pending is False
+
+
+def test_window_without_a_stored_token_opens_on_the_connect_step(tk_root, tmp_path):
+    existing = {"apiBaseUrl": "https://api.example.com", "accessToken": "", "hotsDir": str(tmp_path)}
+    (tmp_path / "Accounts").mkdir()
+    top = tk.Toplevel(tk_root)
+    top.attributes("-alpha", 0.0)
+    with (
+        mock.patch.object(gui, "read_config_file", return_value=existing),
+        mock.patch.object(gui.api_client, "ping_health", return_value=False),
+        mock.patch.object(gui.autostart, "is_supported", return_value=False),
+        mock.patch.object(gui.updater, "IS_FROZEN", False),
+    ):
+        win = gui._SettingsWindow(top, is_first_run=False, result={"saved": False})
+        top.update()
+        assert win._current_view is View.WIZARD_CONNECT
+        win._stop_background_jobs()
+    top.destroy()
+
+
+def test_finishing_the_wizard_notifies_the_app_then_closes_the_window(window):
+    win, _top = window
+    win._on_reconnected = mock.Mock()
+    win._on_close = mock.Mock()
+    win._finish_onboarding()  # the saved config equals the form, so nothing is written
+    win._on_reconnected.assert_called_once_with()
+    win._on_close.assert_called_once_with()
+
+
+def test_sign_out_stops_the_watcher_clears_the_token_and_shows_the_connect_step(window):
+    win, _top = window
+    win._on_logout = mock.Mock()
+    with (
+        mock.patch.object(gui.messagebox, "askyesno", return_value=True),
+        mock.patch.object(gui, "clear_access_token") as cleared,
+    ):
+        win._sign_out()
+    win._on_logout.assert_called_once_with()
+    cleared.assert_called_once_with()
+    assert win._token_var.get() == ""
+    assert win._current_view is View.WIZARD_CONNECT
+
+
+def test_sign_out_does_nothing_when_the_user_declines(window):
+    win, _top = window
+    win._on_logout = mock.Mock()
+    with (
+        mock.patch.object(gui.messagebox, "askyesno", return_value=False),
+        mock.patch.object(gui, "clear_access_token") as cleared,
+    ):
+        win._sign_out()
+    win._on_logout.assert_not_called()
+    cleared.assert_not_called()
+    assert win._token_var.get() == "hots_pat_x"
+
+
+def test_sign_out_button_is_disabled_without_a_token(window):
+    win, _top = window
+    assert not win._signout_button.instate(["disabled"])
+    win._token_var.set("")
+    assert win._signout_button.instate(["disabled"])
+
+
+def test_closing_is_only_blocked_when_there_is_nothing_valid_to_keep(window):
+    win, _top = window
+    assert win._close_blocked_by(None) is False
+    win._last_saved = None  # nothing valid saved yet...
+    win._token_var.set("")  # ...and signed out, reopened from the tray
+    assert win._close_blocked_by("Le token d'accès est requis.") is False
+    win._require_login = True  # the startup window must not close unconnected
+    assert win._close_blocked_by("Le token d'accès est requis.") is True
+    win._require_login = False
+    win._token_var.set("hots_pat_x")  # a token but an invalid config (e.g. bad folder)
+    assert win._close_blocked_by("Le dossier Heroes of the Storm est invalide.") is True

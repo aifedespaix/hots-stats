@@ -79,6 +79,10 @@ class TrayController:
         except Exception:
             logger.debug("Tray notification failed (non-fatal)", exc_info=True)
 
+    def open_settings(self) -> None:
+        """Opens the settings window as a tray click would (no-op if one is already open)."""
+        self._handle_open_settings(self._icon, None)
+
     def _handle_open_settings(
         self, _icon: pystray.Icon, _item: pystray.MenuItem
     ) -> None:

@@ -38,6 +38,7 @@ from . import api_client, auth_flow, autostart, draft_capture, hotkey, updater
 from .accounts_discovery import discover_account_folders
 from .config import (
     DEFAULT_DRAFT_HOTKEY,
+    clear_access_token,
     config_file_path,
     default_hots_dir,
     open_config_folder,
@@ -74,7 +75,9 @@ from .sync_table import DETAIL_MAX_CHARS, SyncTable
 from .updater import UpdatePhase, UpdateStatus, UpdateStatusTracker
 from .dependency_guard import DependencyGuard
 from .upload_scheduler import UploadScheduler
-from .urls import DEFAULT_API_BASE_URL, guess_settings_url, guess_web_base_url
+from .gui_onboarding import OnboardingHooks, OnboardingView
+from .onboarding import View, describe_replays_dir, initial_view, view_after_token_check
+from .urls import DEFAULT_API_BASE_URL, guess_settings_url, guess_token_page_url, guess_web_base_url
 
 logger = logging.getLogger(__name__)
 
@@ -224,6 +227,9 @@ def run_settings_window(
     scheduler: UploadScheduler | None = None,
     dependency_guard: DependencyGuard | None = None,
     on_quit: Callable[[], None] | None = None,
+    on_logout: Callable[[], None] | None = None,
+    on_reconnected: Callable[[], None] | None = None,
+    require_login: bool = False,
 ) -> bool:
     """Opens the settings window and blocks (on the calling thread) until
     it's closed. Returns True if the user saved a valid configuration.
@@ -248,6 +254,13 @@ def run_settings_window(
     return value is True if any change was written. `on_quit`, when given,
     is what the "Fermer" button calls (after closing the window) to stop the
     whole daemon; "Réduire" just closes the window.
+
+    `on_logout`, when given, is called when the user signs out from the
+    Config tab (stop the watcher: nothing may sync without a token).
+    `on_reconnected` is called when the onboarding wizard finishes a
+    reconnection, just before the window closes, so the caller can restart
+    the watcher and reopen the full window. `require_login` marks a startup
+    window that must not close without a token.
     """
     result = {"saved": False}
     root = tk.Tk()
@@ -264,6 +277,9 @@ def run_settings_window(
         scheduler=scheduler,
         dependency_guard=dependency_guard,
         on_quit=on_quit,
+        on_logout=on_logout,
+        on_reconnected=on_reconnected,
+        require_login=require_login,
     )
     root.mainloop()
     return result["saved"]
@@ -652,9 +668,15 @@ class _SettingsWindow:
         scheduler: UploadScheduler | None = None,
         dependency_guard: DependencyGuard | None = None,
         on_quit: Callable[[], None] | None = None,
+        on_logout: Callable[[], None] | None = None,
+        on_reconnected: Callable[[], None] | None = None,
+        require_login: bool = False,
     ) -> None:
         self._root = root
         self._on_quit = on_quit
+        self._on_logout = on_logout
+        self._on_reconnected = on_reconnected
+        self._require_login = require_login
         self._autosave_job: str | None = None
         # What's currently on disk (None until the first successful write on a
         # first run), so an autosave that wouldn't change anything is skipped.
@@ -675,6 +697,9 @@ class _SettingsWindow:
         self._update_status_job: str | None = None
         self._draft_capture_status_job: str | None = None
         self._connect_busy = False
+        self._onboarding: OnboardingView | None = None
+        self._current_view = View.MAIN
+        self._startup_check_pending = True
         self._auth_cancel = threading.Event()
         self._test_capture_countdown_job: str | None = None
         self._test_capture_running = False
@@ -713,6 +738,8 @@ class _SettingsWindow:
 
         self._build_ui()
         self._prefill()
+        self._token_var.trace_add("write", self._refresh_signout_button)
+        self._refresh_signout_button()
         self._last_saved = None if is_first_run else self._validated_config()[0]
         # Armed only after the prefill so loading the stored values doesn't
         # count as a change.
@@ -729,6 +756,9 @@ class _SettingsWindow:
             var.trace_add("write", lambda *_: self._schedule_autosave())
         self._center()
         self._arm_dynamic_wrap()
+        # After `_center`: the window is sized from the notebook, which the
+        # wizard hides, so the order matters.
+        self._show_view(initial_view(is_first_run=is_first_run, token=self._token_var.get()))
         self._check_connection()
         if not is_first_run:
             self._load_stats()
@@ -871,6 +901,10 @@ class _SettingsWindow:
             command=self._connect_via_browser,
         )
         self._connect_button.pack(side="left")
+        self._signout_button = ttk.Button(
+            connect_row, text="Se déconnecter", style="Danger.Ghost.TButton", command=self._sign_out
+        )
+        self._signout_button.pack(side="left", padx=(10, 0))
 
         self._connect_status = ttk.Label(
             inner,
@@ -1915,37 +1949,9 @@ class _SettingsWindow:
         self._check_replays_dir()
 
     def _check_replays_dir(self) -> None:
-        value = self._replays_var.get().strip()
-        if not value:
-            self._set_status(self._replays_status, "Sélectionnez un dossier", _ERROR)
-            return
-        if not Path(value).is_dir():
-            self._set_status(self._replays_status, "✗ Introuvable", _ERROR)
-            return
-        # Must be the HotS root, not one account's Replays folder: everything
-        # is discovered under Accounts/<id>/<toon>/Replays from here.
-        accounts = discover_account_folders(Path(value))
-        if accounts:
-            self._set_status(
-                self._replays_status,
-                f"✓ {len(accounts)} compte(s) détecté(s)",
-                _OK,
-            )
-            self._accounts_var.set(
-                "\n".join(
-                    f"• {folder.toon_handle} — "
-                    f"{sum(1 for _ in folder.replays_dir.rglob('*.StormReplay'))} replay(s)"
-                    for folder in accounts
-                )
-            )
-        elif (Path(value) / "Accounts").is_dir():
-            self._set_status(self._replays_status, "✓ Dossier trouvé (aucun compte)", _OK)
-            self._accounts_var.set("Aucun compte détecté sous Accounts/.")
-        else:
-            self._set_status(
-                self._replays_status, "✗ Pas un dossier Heroes of the Storm", _ERROR
-            )
-            self._accounts_var.set("")
+        check = describe_replays_dir(self._replays_var.get())
+        self._set_status(self._replays_status, check.status, _OK if check.ok else _ERROR)
+        self._accounts_var.set(check.summary)
 
     def _browse_replays_dir(self) -> None:
         chosen = filedialog.askdirectory(
@@ -2046,6 +2052,14 @@ class _SettingsWindow:
             self._set_status(self._api_status, "✗ Injoignable", _ERROR)
 
     def _apply_token_status(self, state: dict | str) -> None:
+        token_state = state if isinstance(state, str) else "valid"
+        if self._startup_check_pending:
+            # Only the check made when the window opened may open the wizard:
+            # a half-typed token in Config is "invalid" too.
+            self._startup_check_pending = False
+            next_view = view_after_token_check(self._current_view, token_state)
+            if next_view is not self._current_view:
+                self._show_view(next_view)
         if state == "unknown":
             self._set_status(self._token_status, "", _NEUTRAL)
         elif state == "invalid":
@@ -2187,6 +2201,95 @@ class _SettingsWindow:
                 lines.append("")
 
         return "\n".join(lines)
+
+    # -- onboarding -----------------------------------------------------------
+
+    def _show_view(self, view: View) -> None:
+        """Swaps between the classic notebook and the wizard in the same window."""
+        self._current_view = view
+        if self._onboarding is not None:
+            self._onboarding.destroy()
+            self._onboarding = None
+        if view is View.MAIN:
+            self._notebook.pack(fill="both", expand=True)
+            return
+        self._notebook.pack_forget()
+        self._onboarding = OnboardingView(
+            self._content,
+            view=view,
+            replays_var=self._replays_var,
+            autostart_var=getattr(self, "_autostart_var", None),
+            hooks=self._wizard_hooks(),
+            version=APP_VERSION,
+        )
+        self._onboarding.pack(fill="both", expand=True)
+        self._onboarding.start()
+
+    def _wizard_hooks(self) -> OnboardingHooks:
+        return OnboardingHooks(
+            authorize=lambda cancel: auth_flow.request_authorization(
+                api_base_url=self._api_var.get().strip(), cancel_event=cancel
+            ),
+            verify_token=lambda token: api_client.fetch_summary(self._api_var.get().strip(), token) is not None,
+            open_token_page=lambda: webbrowser.open(
+                guess_token_page_url(self._api_var.get() or DEFAULT_API_BASE_URL)
+            ),
+            schedule=self._after_if_open,
+            browse_dir=self._browse_replays_dir,
+            on_autostart_toggled=self._on_autostart_toggled,
+            store_token=self._store_token,
+            finish=self._finish_onboarding,
+        )
+
+    def _store_token(self, token: str) -> None:
+        # Same path as the Config tab's browser button: fill the field and let
+        # the debounced check + autosave do the rest.
+        self._token_var.set(token)
+        self._on_api_or_token_changed()
+
+    def _finish_onboarding(self) -> None:
+        error = self._flush_autosave()
+        if error is not None:
+            self._show_error(error)
+            return
+        # Always close, first run or reconnection: the daemon only picks the
+        # new config/token up once this window returns, so the live trackers
+        # this window holds would be stale anyway. app.py restarts the watcher
+        # and reopens the full window (see `run_app` / `_on_open_settings`).
+        if self._on_reconnected is not None:
+            self._on_reconnected()
+        self._on_close()
+
+    def _refresh_signout_button(self, *_args) -> None:
+        self._signout_button.state(["!disabled"] if self._token_var.get().strip() else ["disabled"])
+
+    def _sign_out(self) -> None:
+        """Local sign-out: stops syncing and forgets the token on this PC. The
+        token itself stays in the user's list on the website."""
+        if not messagebox.askyesno(
+            "Se déconnecter",
+            "Se déconnecter de HotS Analytics sur ce PC ? La synchronisation s'arrêtera "
+            "jusqu'à la prochaine connexion.\n\n"
+            "Le token reste dans ta liste sur le site : supprime-le là-bas pour le révoquer.",
+            parent=self._root,
+        ):
+            return
+        self._auth_cancel.set()
+        if self._on_logout is not None:
+            self._on_logout()
+        clear_access_token()
+        self._token_var.set("")  # autosave refuses a blank token, so nothing is rewritten
+        self._set_status(self._token_status, "", _NEUTRAL)
+        self._show_view(View.WIZARD_CONNECT)
+
+    def _close_blocked_by(self, error: str | None) -> bool:
+        """First run / startup with nothing valid to keep: closing would leave
+        the daemon without a usable config. A signed-out PC reopened from the
+        tray may close freely (nothing is syncing anyway)."""
+        if error is None or self._last_saved is not None:
+            return False
+        signed_out = not self._token_var.get().strip()
+        return not signed_out or self._is_first_run or self._require_login
 
     # -- autostart --------------------------------------------------------
 
@@ -2454,6 +2557,9 @@ class _SettingsWindow:
         # and `_on_close` call right before `root.destroy()`) rather than in
         # each of them separately.
         self._closed = True
+        if self._onboarding is not None:
+            self._onboarding.destroy()
+            self._onboarding = None
         if self._autosave_job is not None:
             self._root.after_cancel(self._autosave_job)
             self._autosave_job = None
@@ -2492,7 +2598,7 @@ class _SettingsWindow:
             )
             return
         error = self._flush_autosave()
-        if error is not None and self._last_saved is None:
+        if self._close_blocked_by(error):
             # First run and nothing valid to keep yet: closing now would
             # leave the daemon without a configuration to start with.
             self._show_error(f"{error} Complétez la configuration, ou utilisez « Fermer » pour quitter.")
