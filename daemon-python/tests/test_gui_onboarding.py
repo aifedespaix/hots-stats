@@ -24,13 +24,20 @@ class _Env:
         self.replays_var = tk.StringVar(master=root, value="")
         self.autostart_var = tk.BooleanVar(master=root, value=False) if autostart else None
         self.auth_result = auth_result or AuthorizationResult(token="hots_pat_ok")
+        self.auth_calls = 0
+
+        def _authorize(cancel):
+            self.auth_calls += 1
+            return self.auth_result
+
+        self._authorize = _authorize
 
         def verify(token):
             self.verified.append(token)
             return verify_ok
 
         hooks = OnboardingHooks(
-            authorize=lambda cancel: self.auth_result,
+            authorize=self._authorize,
             verify_token=verify,
             open_token_page=lambda: setattr(self, "opened_token_page", self.opened_token_page + 1),
             schedule=lambda fn, *a: self.pending.append((fn, a)),
@@ -198,6 +205,37 @@ def test_a_second_manual_validation_during_the_connected_pause_is_ignored(tk_roo
     assert env.verified == ["hots_pat_abc"]
     assert env.view.flow.step is Step.STORAGE
     assert env.finished == 0
+    env.close()
+
+
+def test_back_from_storage_lets_the_user_reauthorize(tk_root):
+    env = _Env(tk_root, View.WIZARD_FULL)
+    env.view._start_connect()
+    env.pump(lambda: env.view.flow.step is Step.STORAGE)
+    assert env.auth_calls == 1
+    env.view._back()
+    tk_root.update()
+    assert env.view.flow.step is Step.CONNECT
+    assert not env.view._connect_button.instate(["disabled"])
+    env.view._start_connect()
+    env.pump(lambda: env.auth_calls == 2)
+    env.pump(lambda: env.view.flow.step is Step.STORAGE)
+    assert env.stored == ["hots_pat_ok", "hots_pat_ok"]
+    env.close()
+
+
+def test_back_from_storage_lets_the_user_validate_a_manual_token_again(tk_root):
+    env = _Env(tk_root, View.WIZARD_FULL)
+    env.view._start_connect()
+    env.pump(lambda: env.view.flow.step is Step.STORAGE)
+    env.view._back()
+    tk_root.update()
+    env.view._toggle_manual()
+    env.view._paste_var.set("hots_pat_abc")
+    env.view._validate_manual()
+    env.pump(lambda: env.verified == ["hots_pat_abc"])
+    env.pump(lambda: env.view.flow.step is Step.STORAGE)
+    assert env.stored[-1] == "hots_pat_abc"
     env.close()
 
 

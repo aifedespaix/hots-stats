@@ -227,6 +227,9 @@ class OnboardingView(tk.Frame):
 
     def _build_connect(self) -> None:
         body = self._body
+        # Fresh step-1 widgets: drop any connection state left over from a previous visit (Back from step 2).
+        self._busy = False
+        self._waiting = False
         if self._full:
             self._heading("Connecte ton compte", "Autorise ce PC depuis ton navigateur. C'est rapide, et sans mot de passe à copier.")
         else:
