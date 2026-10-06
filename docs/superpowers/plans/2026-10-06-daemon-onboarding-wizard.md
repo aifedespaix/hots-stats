@@ -483,7 +483,7 @@ def tk_root():
         root = tk.Tk()
     except tk.TclError:
         pytest.skip("Tk cannot create a root window here")
-    root.withdraw()
+    root.attributes("-alpha", 0.0)  # invisible but mapped: a withdrawn root never maps its children
     yield root
     root.destroy()
 
@@ -715,7 +715,7 @@ def tk_root():
         root = tk.Tk()
     except tk.TclError:
         pytest.skip("Tk cannot create a root window here")
-    root.withdraw()
+    root.attributes("-alpha", 0.0)  # invisible but mapped: a withdrawn root never maps its children
     gui._apply_dark_style()
     yield root
     root.destroy()
@@ -1331,7 +1331,7 @@ def tk_root():
         root = tk.Tk()
     except tk.TclError:
         pytest.skip("Tk cannot create a root window here")
-    root.withdraw()
+    root.attributes("-alpha", 0.0)  # invisible but mapped: a withdrawn root never maps its children
     yield root
     root.destroy()
 
@@ -1341,6 +1341,7 @@ def window(tk_root, tmp_path):
     (tmp_path / "Accounts" / "1" / "2-Hero-1-1" / "Replays" / "Multiplayer").mkdir(parents=True)
     existing = {"apiBaseUrl": "https://api.example.com", "accessToken": "hots_pat_x", "hotsDir": str(tmp_path)}
     top = tk.Toplevel(tk_root)
+    top.attributes("-alpha", 0.0)
     with (
         mock.patch.object(gui, "read_config_file", return_value=existing),
         mock.patch.object(gui.api_client, "ping_health", return_value=False),
@@ -1682,6 +1683,7 @@ def test_window_without_a_stored_token_opens_on_the_connect_step(tk_root, tmp_pa
     existing = {"apiBaseUrl": "https://api.example.com", "accessToken": "", "hotsDir": str(tmp_path)}
     (tmp_path / "Accounts").mkdir()
     top = tk.Toplevel(tk_root)
+    top.attributes("-alpha", 0.0)
     with (
         mock.patch.object(gui, "read_config_file", return_value=existing),
         mock.patch.object(gui.api_client, "ping_health", return_value=False),
