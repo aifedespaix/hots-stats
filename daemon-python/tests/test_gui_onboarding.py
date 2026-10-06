@@ -144,11 +144,78 @@ def test_storage_step_blocks_continue_until_the_folder_is_valid(tk_root, tmp_pat
 def test_a_late_auth_result_after_the_view_is_destroyed_is_dropped(tk_root):
     env = _Env(tk_root, View.WIZARD_FULL)
     env.view._start_connect()
+    deadline = time.monotonic() + 3.0
+    while not env.pending and time.monotonic() < deadline:
+        tk_root.update()
+        time.sleep(0.01)
+    assert env.pending, "the worker never queued its result"
     env.view.destroy()
-    for fn, args in env.pending or []:
+    for fn, args in env.pending:
         fn(*args)  # must not raise
-    env.pump(lambda: True)
+    assert env.stored == []
+    assert env.finished == 0
     env.frame.destroy()
+
+
+def test_a_second_submit_during_the_connected_pause_is_ignored(tk_root):
+    env = _Env(tk_root, View.WIZARD_FULL)
+    env.view._start_connect()
+    env.pump(lambda: env.stored == ["hots_pat_ok"])
+    env.view._start_connect()
+    env.view._start_connect()
+    env.view._paste_var.set("hots_pat_other")
+    env.view._validate_manual()
+    env.pump(lambda: env.view.flow.step is Step.STORAGE)
+    for _ in range(10):
+        tk_root.update()
+        while env.pending:
+            fn, args = env.pending.pop(0)
+            fn(*args)
+        time.sleep(0.01)
+    assert env.stored == ["hots_pat_ok"]
+    assert env.verified == []
+    assert env.view.flow.step is Step.STORAGE
+    assert env.finished == 0
+    env.close()
+
+
+def test_a_second_manual_validation_during_the_connected_pause_is_ignored(tk_root):
+    env = _Env(tk_root, View.WIZARD_FULL)
+    env.view._toggle_manual()
+    env.view._paste_var.set("hots_pat_abc")
+    env.view._validate_manual()
+    env.pump(lambda: env.stored == ["hots_pat_abc"])
+    env.view._validate_manual()
+    env.view._start_connect()
+    env.pump(lambda: env.view.flow.step is Step.STORAGE)
+    for _ in range(10):
+        tk_root.update()
+        while env.pending:
+            fn, args = env.pending.pop(0)
+            fn(*args)
+        time.sleep(0.01)
+    assert env.stored == ["hots_pat_abc"]
+    assert env.verified == ["hots_pat_abc"]
+    assert env.view.flow.step is Step.STORAGE
+    assert env.finished == 0
+    env.close()
+
+
+def test_waiting_for_the_browser_animates_the_button_and_restores_it_on_failure(tk_root):
+    env = _Env(tk_root, View.WIZARD_FULL, auth_result=AuthorizationResult(error="Échec"))
+    original = env.view._connect_button.cget("text")
+    env.view._start_connect()
+    assert "Connexion" in env.view._connect_button.cget("text")
+    frames = {env.view._connect_button.cget("text")}
+    deadline = time.monotonic() + 0.5
+    while time.monotonic() < deadline and len(frames) < 2 and not env.pending:
+        tk_root.update()
+        frames.add(env.view._connect_button.cget("text"))
+        time.sleep(0.01)
+    env.pump(lambda: env.view._manual_link.winfo_ismapped())
+    assert env.view._connect_button.cget("text") == original
+    assert not env.view._connect_button.instate(["disabled"])
+    env.close()
 
 
 def test_ready_step_finishes_the_wizard(tk_root, tmp_path):

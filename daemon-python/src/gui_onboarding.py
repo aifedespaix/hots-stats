@@ -33,6 +33,9 @@ from .onboarding import (
 _FONT = "Segoe UI"
 _CONNECTED_PAUSE_MS = 700
 _WRAP = 440
+_CONNECT_TEXT = "🌐  Se connecter via le navigateur"
+_SPINNER_FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+_SPINNER_MS = 120
 
 
 @dataclass
@@ -102,6 +105,8 @@ class OnboardingView(tk.Frame):
         self._alive = True
         self._jobs: list[str] = []
         self._busy = False
+        self._waiting = False
+        self._spin_index = 0
         self._cancel = threading.Event()
         self._paste_var = tk.StringVar(master=self)
         self._logo = _load_logo(self)
@@ -228,7 +233,7 @@ class OnboardingView(tk.Frame):
             self._heading("Reconnexion nécessaire", "Le token de ce PC n'est plus valide. Autorise-le à nouveau depuis ton navigateur.")
 
         self._connect_button = ttk.Button(
-            body, text="🌐  Se connecter via le navigateur", style="Primary.TButton", command=self._start_connect
+            body, text=_CONNECT_TEXT, style="Primary.TButton", command=self._start_connect
         )
         self._connect_button.pack(pady=(18, 6), ipadx=18, ipady=6)
         self._cancel_link = self._link(body, "Annuler", self._cancel_connect)
@@ -251,9 +256,12 @@ class OnboardingView(tk.Frame):
         if self._busy:
             return
         self._busy = True
+        self._waiting = True
         self._cancel = threading.Event()
         cancel = self._cancel
         self._connect_button.state(["disabled"])
+        self._spin_index = 0
+        self._spin()
         self._cancel_link.pack(after=self._connect_button)
         self._set_status("Navigateur ouvert : termine l'autorisation, puis reviens ici.", TEXT_MUTED)
 
@@ -263,23 +271,42 @@ class OnboardingView(tk.Frame):
 
         threading.Thread(target=work, name="hots-wizard-auth", daemon=True).start()
 
+    def _spin(self) -> None:
+        if not (self._alive and self._waiting and self.flow.step is Step.CONNECT):
+            return
+        frame = _SPINNER_FRAMES[self._spin_index % len(_SPINNER_FRAMES)]
+        self._spin_index += 1
+        self._connect_button.configure(text=f"{frame}  Connexion…")
+        self._later(_SPINNER_MS, self._spin)
+
+    def _stop_spinner(self) -> None:
+        self._waiting = False
+        self._connect_button.configure(text=_CONNECT_TEXT)
+
     def _cancel_connect(self) -> None:
         self._cancel.set()
 
     def _on_auth_result(self, result: AuthorizationResult) -> None:
-        if not self._alive:
+        if not self._alive or self.flow.step is not Step.CONNECT:
             return
-        self._busy = False
-        self._connect_button.state(["!disabled"])
+        self._stop_spinner()
         self._cancel_link.pack_forget()
         if result.token:
             self._token_accepted(result.token)
             return
+        self._busy = False
+        self._connect_button.state(["!disabled"])
         self._set_status(f"✗ {result.error or 'Échec de la connexion.'}", ERROR)
         if not self._manual_link.winfo_ismapped():
             self._manual_link.pack(pady=(0, 6))
 
     def _token_accepted(self, token: str) -> None:
+        # Stay busy and keep the buttons disabled until _advance: the pause must not allow a second submit.
+        self._busy = True
+        self._connect_button.state(["disabled"])
+        validate = getattr(self, "_validate_button", None)
+        if validate is not None and validate.winfo_exists():
+            validate.state(["disabled"])
         self._hooks.store_token(token)
         self._set_status("✓ Connecté !", OK)
         self._later(_CONNECTED_PAUSE_MS, self._advance)
@@ -317,10 +344,13 @@ class OnboardingView(tk.Frame):
         entry.focus_set()
 
     def _validate_manual(self) -> None:
+        if self._busy:
+            return
         token = normalize_pasted_token(self._paste_var.get())
         if token is None:
             self._set_status("✗ Ce n'est pas un token valide : il commence par « hots_pat_ » et ne contient pas d'espace.", ERROR)
             return
+        self._busy = True
         self._validate_button.state(["disabled"])
         self._set_status("Vérification du token…", TEXT_MUTED)
 
@@ -331,12 +361,13 @@ class OnboardingView(tk.Frame):
         threading.Thread(target=work, name="hots-wizard-verify", daemon=True).start()
 
     def _on_manual_result(self, token: str, ok: bool) -> None:
-        if not self._alive:
+        if not self._alive or self.flow.step is not Step.CONNECT:
             return
-        self._validate_button.state(["!disabled"])
         if ok:
             self._token_accepted(token)
         else:
+            self._busy = False
+            self._validate_button.state(["!disabled"])
             self._set_status("✗ Le serveur a refusé ce token. Génère-en un nouveau sur la page des tokens.", ERROR)
 
     # -- step 2: storage --------------------------------------------------
