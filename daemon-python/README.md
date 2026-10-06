@@ -64,33 +64,44 @@ From the tray icon: **Ouvrir les paramètres** reopens the settings window;
 saving restarts the background watcher with the new config. **Quitter**
 stops the watcher thread cleanly before exiting.
 
-The settings window is a `ttk.Notebook` with one tab per concern, so it
-stays readable as the feature set grows instead of one long scroll:
+On first run (no config), and whenever there is no valid token (signed out,
+or the token was revoked), the window opens on an **onboarding wizard**
+instead of the tabs: logo + a short « Préparation… » bar, then
+① Connexion (« Se connecter via le navigateur » runs the PKCE flow; if it
+fails, a manual fallback opens the website's `/daemon/token` page to
+generate a token and paste it), ② Stockage et démarrage (replays folder,
+« Lancer avec Windows »), ③ C'est prêt. When only the token is missing the
+wizard shows step ① alone; reconnecting closes the window, restarts the
+watcher and reopens the full window.
 
-- **Config** — API URL, access token (with a link to generate/manage it),
-  replays folder (autodetected, or browse manually), and the **"Lancer au
-  démarrage de Windows"** checkbox, which registers (or unregisters) the
-  built `.exe` under the current user's Run key
-  (`HKCU\...\CurrentVersion\Run`, `src/autostart.py`) — no admin rights
-  needed. Since the daemon only opens the settings window when it has no
-  config yet (see `app.run_app`), a configured daemon launched this way
-  starts straight into the tray and syncs in the background, no window
-  shown.
+The main window is a tabbed view, so it stays readable as the feature set
+grows instead of one long scroll:
+
+- **Synchronisation** (default tab) — daemon/API versions, games-recorded
+  count, and (while the daemon is running) live found/synced/currently-syncing
+  counters, a progress bar and the last sync error if any.
 - **Draft Live** — the live-draft capture toggle and its global hotkey; see
   [Live draft capture](#live-draft-capture) below.
-- **Synchronisation** — daemon/API versions, games-recorded count, and
-  (while the daemon is running) live found/synced/currently-syncing
-  counters, a progress bar, the last sync error if any, and a **Debug**
-  button: a read-only report of every replay currently in an error state
-  (file path, whether the source file still exists, the error, and its full
-  traceback), with a **Copier** button to grab it in one click for a bug
-  report.
-- **Update** — see [Auto-update](#auto-update) below.
+- **Config** — *Mises à jour* (see [Auto-update](#auto-update) below),
+  *Connexion* (API URL, access token with a link to generate/manage it, and
+  **« Se déconnecter »**: local sign-out that stops syncing and blanks the
+  token on this PC — the token stays in your list on the website, delete it
+  there to revoke it), *Stockage* (replays folder, autodetected or browsed)
+  and *Démarrage* (the **"Lancer au démarrage de Windows"** checkbox, which
+  registers (or unregisters) the built `.exe` under the current user's Run
+  key (`HKCU\...\CurrentVersion\Run`, `src/autostart.py`) — no admin
+  rights needed). A configured, signed-in daemon launched this way starts
+  straight into the tray and syncs in the background; the window only opens
+  at startup when there is no config or no token (see `app.run_app`).
 
-A **📁 Dossier de données** button in the window's header (visible from
-every tab) opens `%APPDATA%\hots-analytics\` directly in Explorer —
-`config.json`, `sync_state.db`, `update.log`, the crop config, and the
-live-draft debug folder all live there.
+A fixed footer (visible from every tab) has icon buttons with hover
+tooltips — **Debug** (a read-only report of every replay currently in an
+error state: file path, whether the source file still exists, the error and
+its full traceback, with a **Copier** button for bug reports), **Dossier de
+données** (opens `%APPDATA%\hots-analytics\` in Explorer: `config.json`,
+`sync_state.db`, `update.log`, the crop config, and the live-draft debug
+folder) and **Ouvrir le site** — plus **« Réduire »** (closes the window) and
+**« Fermer »** (stops the whole daemon).
 
 The live-draft hotkey field doesn't take typed text: click **Modifier…**
 and press the combo you want (Échap to cancel). It's captured with

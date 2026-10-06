@@ -29,20 +29,23 @@ shown whenever there is no valid token, not only on first launch).
 **Common chrome:** logo, "HotS Analytics" name, version, and a stepper
 `① Connexion — ② Stockage — ③ C'est prêt`.
 
-**Startup:** a ~1 s cosmetic progress bar on first run (no token to verify yet); the reconnect case
-already ran its token check before the wizard shows. Then step ①. A signed-out startup opens the
+**Startup:** a ~1 s cosmetic « Préparation… » progress bar in every wizard entry (first run and
+reconnect), then step ①. A signed-out startup opens the
 connect window (with `require_login`) instead of exiting.
 
 **① Connexion**
 - Primary button "Se connecter via le navigateur" runs `auth_flow.request_authorization` in a
   worker thread (results handed back via `_after_if_open`).
 - 3-line guidance: browser opens → sign in and authorize → come back, it is automatic.
-- While waiting: spinner on the button and an "Annuler" link (sets the existing `_auth_cancel`).
+- While waiting: spinner on the button and an "Annuler" link (cancels the wizard's own auth event, not the window's `_auth_cancel`).
 - On failure: the French error from `AuthorizationResult.error` is shown under the button, plus a
   link "Ça ne marche pas ? Récupérer le token manuellement".
 - Manual fallback sub-view: button "Ouvrir la page des tokens" (opens `<web>/daemon/token`), a paste
   field for the token, and "Valider" which verifies the token with an API call before saving it.
-- "Continuer" is enabled once the connection is validated.
+- No manual "Continuer": the wizard auto-advances ~700 ms after a successful connection (step ② on
+  a full wizard; finish on connect-only).
+- The connect-only subtitle is neutral: « Connecte ce PC à ton compte pour reprendre la
+  synchronisation de tes parties. » (it also shows after a deliberate sign-out).
 
 **② Stockage et démarrage**
 - Replays folder auto-detected (reuses `accounts_discovery`), accounts summary, "Changer" button.
@@ -57,9 +60,8 @@ connect window (with `require_login`) instead of exiting.
 **Invalid token later:** only step ① is shown (②/③ already done). Reconnecting closes the window,
 restarts the watcher with the new token and reopens the full window.
 
-**Shared fields:** Stockage and Démarrage widgets/vars are the same ones used in Config (see §3),
-built by shared builder functions so the wizard and Config use the same autosave path
-(`_schedule_autosave`). Config keeps both sections so they stay editable after install.
+**Shared fields:** the wizard shares the variables (`replays_var`, `autostart_var`) with Config but
+builds its own Entry widgets, so both use the same autosave path (`_schedule_autosave`). Config keeps both sections so they stay editable after install.
 
 ## 2. Web page `/daemon/token`
 
@@ -73,7 +75,7 @@ from the daemon after signing in).
   "Copié ! Colle-le maintenant dans la fenêtre du daemon" with a "Copier à nouveau" button while the
   page stays open. If clipboard access is denied, the banner falls back to "Copie-le ci-dessous".
 - Existing tokens listed (`GET /tokens`) with "Supprimer" (`DELETE /tokens/:id`) and
-  "Tout supprimer sauf celui-ci".
+  "Tout supprimer sauf celui-ci" (or "Tout supprimer" when no new token was generated).
 - No API change; reuses `/tokens`. A small composable may wrap the calls.
 
 ## 3. Main window
