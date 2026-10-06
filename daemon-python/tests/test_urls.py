@@ -20,7 +20,7 @@ def test_guess_settings_url_falls_back_for_unrecognized_host():
 def test_guess_settings_url_falls_back_for_empty_input():
     assert guess_settings_url("") == "https://hots-stats.aifedespaix.com/settings"
 
-from src.urls import daemon_authorize_url, guess_settings_url, guess_web_base_url
+from src.urls import daemon_authorize_url, daemon_token_url, guess_settings_url, guess_token_page_url, guess_web_base_url
 
 
 def test_guess_web_base_url_strips_api_dash_prefix():
@@ -43,4 +43,15 @@ def test_daemon_authorize_url_appends_the_path():
     assert (
         daemon_authorize_url("https://hots-stats.aifedespaix.com")
         == "https://hots-stats.aifedespaix.com/daemon/authorize"
+    )
+
+
+def test_daemon_token_url_strips_trailing_slash():
+    assert daemon_token_url("https://app.example.com/") == "https://app.example.com/daemon/token"
+
+
+def test_guess_token_page_url_follows_the_api_prefix_convention():
+    assert (
+        guess_token_page_url("https://api-hots-stats.aifedespaix.com")
+        == "https://hots-stats.aifedespaix.com/daemon/token"
     )

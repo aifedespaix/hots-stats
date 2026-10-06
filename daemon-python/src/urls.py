@@ -43,3 +43,12 @@ def guess_settings_url(api_base_url: str) -> str:
 def daemon_authorize_url(web_base_url: str) -> str:
     """The consent page the browser must open for the loopback handshake."""
     return f"{web_base_url.rstrip('/')}/daemon/authorize"
+
+
+def daemon_token_url(web_base_url: str) -> str:
+    """The dedicated manual-token page (fallback when the browser handshake fails)."""
+    return f"{web_base_url.rstrip('/')}/daemon/token"
+
+
+def guess_token_page_url(api_base_url: str) -> str:
+    return daemon_token_url(guess_web_base_url(api_base_url))
