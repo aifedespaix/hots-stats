@@ -294,3 +294,11 @@ def test_has_access_token_accepts_the_environment_override(tmp_path, monkeypatch
     _write_config(tmp_path, monkeypatch, {"accessToken": ""})
     monkeypatch.setenv("HOTS_ACCESS_TOKEN", "hots_pat_env")
     assert config.has_access_token() is True
+
+
+def test_has_access_token_is_true_for_a_corrupt_config_file(tmp_path, monkeypatch):
+    path = tmp_path / "config.json"
+    path.write_text("{not json", encoding="utf-8")
+    monkeypatch.setattr(config, "config_file_path", lambda: path)
+    monkeypatch.delenv("HOTS_ACCESS_TOKEN", raising=False)
+    assert config.has_access_token() is True

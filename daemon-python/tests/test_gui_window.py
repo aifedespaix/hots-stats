@@ -216,3 +216,27 @@ def test_closing_is_only_blocked_when_there_is_nothing_valid_to_keep(window):
     win._require_login = False
     win._token_var.set("hots_pat_x")  # a token but an invalid config (e.g. bad folder)
     assert win._close_blocked_by("Le dossier Heroes of the Storm est invalide.") is True
+
+
+def test_pasting_the_same_token_after_a_sign_out_is_written_again(window):
+    win, _top = window
+    with (
+        mock.patch.object(gui.messagebox, "askyesno", return_value=True),
+        mock.patch.object(gui, "clear_access_token"),
+    ):
+        win._sign_out()
+    gui.save_config.reset_mock()
+    win._token_var.set("hots_pat_x")
+    assert win._flush_autosave() is None
+    assert gui.save_config.called
+    assert "hots_pat_x" in gui.save_config.call_args.args + tuple(gui.save_config.call_args.kwargs.values())
+
+
+def test_a_signed_out_window_reopened_from_the_tray_can_still_close(window):
+    win, _top = window
+    with (
+        mock.patch.object(gui.messagebox, "askyesno", return_value=True),
+        mock.patch.object(gui, "clear_access_token"),
+    ):
+        win._sign_out()
+    assert win._close_blocked_by("Le token d'accès est requis.") is False

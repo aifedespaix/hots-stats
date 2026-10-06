@@ -2278,6 +2278,9 @@ class _SettingsWindow:
         if self._on_logout is not None:
             self._on_logout()
         clear_access_token()
+        # The file now holds a blank token: forget what we last wrote, or
+        # re-pasting the same token would look like "no change" to autosave.
+        self._last_saved = None
         self._token_var.set("")  # autosave refuses a blank token, so nothing is rewritten
         self._set_status(self._token_status, "", _NEUTRAL)
         self._show_view(View.WIZARD_CONNECT)

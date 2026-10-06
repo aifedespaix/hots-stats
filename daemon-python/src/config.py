@@ -114,13 +114,15 @@ def read_config_file() -> dict:
 
 
 def has_access_token() -> bool:
-    """True when a token is available (environment override or config file)."""
+    """True when a token is available (environment override or config file).
+    A corrupt config file counts as "not signed out": `load_config()` then
+    reports the problem as it always did."""
     if os.environ.get("HOTS_ACCESS_TOKEN"):
         return True
     try:
         return bool(read_config_file().get("accessToken"))
     except ConfigError:
-        return False
+        return True
 
 
 def clear_access_token() -> None:
