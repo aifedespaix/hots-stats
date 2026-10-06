@@ -29,8 +29,9 @@ shown whenever there is no valid token, not only on first launch).
 **Common chrome:** logo, "HotS Analytics" name, version, and a stepper
 `① Connexion — ② Stockage — ③ C'est prêt`.
 
-**Startup:** a short (~1 s) progress bar tied to the real connection check (`_check_connection`),
-then step ①. No fake loading beyond that minimum display time.
+**Startup:** a ~1 s cosmetic progress bar on first run (no token to verify yet); the reconnect case
+already ran its token check before the wizard shows. Then step ①. A signed-out startup opens the
+connect window (with `require_login`) instead of exiting.
 
 **① Connexion**
 - Primary button "Se connecter via le navigateur" runs `auth_flow.request_authorization` in a
@@ -50,10 +51,11 @@ then step ①. No fake loading beyond that minimum display time.
 
 **③ C'est prêt**
 - 3-line recap (account connected, folder watched, autostart on/off) and "Accéder à l'app", which
-  starts the first sync and switches to the classic window.
+  starts the first sync. On a first run the setup window closes, the daemon starts, and `app.py`
+  reopens the full settings window (`TrayController.open_settings()`).
 
-**Invalid token later:** only step ① is shown (②/③ already done); after reconnecting, go straight to
-the classic window.
+**Invalid token later:** only step ① is shown (②/③ already done). Reconnecting closes the window,
+restarts the watcher with the new token and reopens the full window.
 
 **Shared fields:** Stockage and Démarrage widgets/vars are the same ones used in Config (see §3),
 built by shared builder functions so the wizard and Config use the same autosave path
@@ -62,8 +64,9 @@ built by shared builder functions so the wizard and Config use the same autosave
 ## 2. Web page `/daemon/token`
 
 New `apps/web/app/pages/daemon/token.vue` (alongside `authorize.vue`), minimal layout without the
-dashboard navigation. Requires a session; unauthenticated users are redirected to `/login` and
-returned here afterwards.
+dashboard navigation. Requires a session; unauthenticated users are redirected to `/login` by the
+existing `auth` middleware (login has no return path, so the wizard tells them to reopen the page
+from the daemon after signing in).
 
 - One card with a large "Générer mon token" button → `POST /tokens` (secret returned once).
 - On success the token is shown and **copied to the clipboard automatically**; a banner says
@@ -77,7 +80,11 @@ returned here afterwards.
 
 - **Tabs:** Synchronisation (default), Draft Live, Config. The Update tab is removed.
 - **Config sections:** Mises à jour (moved from the Update tab; built only when `updater.IS_FROZEN`,
-  as today), Connexion, Stockage, Démarrage.
+  as today), Connexion, Stockage, Démarrage. Connexion has a « Se déconnecter » button: local
+  sign-out that stops syncing, blanks the token and keeps the other settings (the token stays in
+  the website list).
+- **Footer:** Debug / Dossier de données / Ouvrir le site are icon-only ghost buttons with hover
+  tooltips; « 🗕 Réduire » is solid primary; « Fermer » is ghost danger.
 - **Layout:** top margin above the tab strip reduced (outer padding 24 → ~8 px at the top). The tab
   strip and footer buttons are fixed; only each tab's content scrolls (`ScrollPage` between them).
 - **Sync recap panel:** stat cards reflow in a grid by available width; the progress bar is
