@@ -5,22 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from src import gui
 from src.auth_flow import AuthorizationResult
 from src.gui_onboarding import OnboardingHooks, OnboardingView
 from src.onboarding import Step, View
-
-
-@pytest.fixture(scope="module")
-def tk_root():
-    try:
-        root = tk.Tk()
-    except tk.TclError:
-        pytest.skip("Tk cannot create a root window here")
-    root.attributes("-alpha", 0.0)  # invisible but mapped: a withdrawn root never maps its children
-    gui._apply_dark_style()
-    yield root
-    root.destroy()
 
 
 class _Env:
